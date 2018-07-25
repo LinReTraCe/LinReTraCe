@@ -1,0 +1,10 @@
+these are all routines from the CERN mathlib for the polygamma 
+function wpsipg(z,n)
+
+changes wrt to CERN version:
+
+- converted to quad-precision
+- added Bernouli coefficients up to order 12, reaching deviations lower than 1E-27 to analytical Fermi function
+  (beta=2000)
+
+
