@@ -1,0 +1,6 @@
+FC = mpif90
+FFLAGS = -O3 -funroll-loops -ffast-math #-march=native -flto -fstack-arrays  # gfortran production run
+FPPFLAGS = -DMPI
+
+LAPACK= /home/maggio/lib/lapack/lapack-3.7.1/ -llapack
+BLAS= /home/maggio/lib/blas/BLAS-3.7.1/ -lblas

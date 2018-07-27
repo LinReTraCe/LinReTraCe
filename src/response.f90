@@ -1,145 +1,23 @@
-
-
-module response
-
-use mpi_org
-implicit none
-
-! DOUBLE PRECISION
-type dp_resp
-!integer,parameter :: iq=8
-!integer, kind :: iq=8
-!kernels
-real(8) ::  s_ker  ! for conductivity
-real(8) ::  sB_ker ! for conductivity in B-field
-real(8) ::  a_ker  ! for Peltier
-real(8) ::  aB_ker ! for Peltier in B-field          
-!response functions...
-real(8), allocatable :: s_tmp(:,:,:,:)   ! nk,nband,3,3 for conductivity
-real(8), allocatable :: sB_tmp(:,:,:,:)  ! nk,nband,3,3 for conductivity in B-field
-real(8), allocatable :: a_tmp(:,:,:,:)   ! nk,nband,3,3 for Peltier
-real(8), allocatable :: aB_tmp(:,:,:,:)  ! nk,nband,3,3 for Peltier in B-field     
-real(8), allocatable :: s(:,:,:)         ! nband,3,3 for conductivity
-real(8), allocatable :: sB(:,:,:)        ! nband,3,3 for conductivity in B-field
-real(8), allocatable :: a(:,:,:)         ! nband,3,3 for Peltier
-real(8), allocatable :: aB(:,:,:)        ! nband,3,3 for Peltier in B-field           
-real(8), allocatable :: s_local(:,:,:)   ! used only in the mpi version
-real(8), allocatable :: sB_local(:,:,:)  ! 
-real(8), allocatable :: a_local(:,:,:)   ! 
-real(8), allocatable :: aB_local(:,:,:)  ! 
-
-real(8) :: s_tot(3,3),  s_tet(3,3)
-real(8) :: sB_tot(3,3), sB_tet(3,3)
-real(8) :: a_tot(3,3),  a_tet(3,3)
-real(8) :: aB_tot(3,3), aB_tet(3,3)
-real(8) :: Seebeck(3),Nernst(3),RH(3)
-
-real(8) :: RePolyGamma(0:4),ImPolyGamma(0:4),gamma,aqp,z,tmp
-complex(8) :: ctmp,zarg
-end type
-
-!interband transitions functions
-type, extends(dp_resp) :: dp_respinter
-!variables for the second band
-real(8) :: RePolyGamma1(0:4),ImPolyGamma1(0:4)
-real(8) :: RePolyGamma2(0:4),ImPolyGamma2(0:4)
-real(8) :: gamma1,gamma2, aqp1,aqp2, z1,z2 
-end type
-
-type qp_resp
-!integer,parameter :: iq=16
-!integer, kind :: iq=16
-!kernels
-real(16) ::  s_ker  ! for conductivity
-real(16) ::  sB_ker ! nband,3,3 for conductivity in B-field
-real(16) ::  a_ker  ! nband,3,3 for Peltier
-real(16) ::  aB_ker ! nband,3,3 for Peltier in B-field          
-!response functions...
-real(16), allocatable :: s_tmp(:,:,:,:)   ! nk,nband,3,3 for conductivity
-real(16), allocatable :: sB_tmp(:,:,:,:)  ! nk,nband,3,3 for conductivity in B-field
-real(16), allocatable :: a_tmp(:,:,:,:)   ! nk,nband,3,3 for Peltier
-real(16), allocatable :: aB_tmp(:,:,:,:)  ! nk,nband,3,3 for Peltier in B-field     
-real(16), allocatable :: s(:,:,:)         ! nband,3,3 for conductivity
-real(16), allocatable :: sB(:,:,:)        ! nband,3,3 for conductivity in B-field
-real(16), allocatable :: a(:,:,:)         ! nband,3,3 for Peltier
-real(16), allocatable :: aB(:,:,:)        ! nband,3,3 for Peltier in B-field           
-real(16), allocatable :: s_local(:,:,:)   ! used only in the mpi version
-real(16), allocatable :: sB_local(:,:,:)  ! 
-real(16), allocatable :: a_local(:,:,:)   ! 
-real(16), allocatable :: aB_local(:,:,:)  ! 
-
-real(16) :: s_tot(3,3),  s_tet(3,3)
-real(16) :: sB_tot(3,3), sB_tet(3,3)
-real(16) :: a_tot(3,3),  a_tet(3,3)
-real(16) :: aB_tot(3,3), aB_tet(3,3)
-real(16) :: Seebeck(3),Nernst(3),RH(3),Nernstpart(2) ! nernstpart is axy sxx bzw axx sxy / sxx^2 
-
-real(16) :: RePolyGamma(0:4),ImPolyGamma(0:4),gamma,aqp,z,tmp
-complex(16) :: ctmp,zarg
-end type
-
-end module response
-
-
-subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, dderesp, dinter, respBl, qresp)
-  use response
-  use params 
-  use types
-  use estruct
+module Mresponse
+  use Mmpi_org
+  use Mtypes
+  use Mestruct
+  use Mparams
   implicit none
 
-  interface
-   subroutine initresp (lBfield, dresp, respBl, qresp)
-    use response
-    logical :: lBfield 
-    class(dp_resp) :: dresp
-    type(dp_resp) :: respBl
-    type(qp_resp),optional :: qresp
-   end subroutine
 
-   subroutine globfac (icubic, algo, mesh, resp, hpresp)
-    use params
-    use types
-    use response
-    use estruct, only:vol
-    integer :: icubic
-    type(algorithm) :: algo
-    type(kpointmesh) :: mesh
-    class(dp_resp) :: resp
-    type(qp_resp), optional ::hpresp
-   end subroutine
+contains
 
-   subroutine derresp (icubic, algo, resp, hpresp)
-    use response
-    use types
-    integer :: icubic
-    type(algorithm) :: algo
-    class(dp_resp) :: resp
-    type(qp_resp),optional :: hpresp
-   end subroutine
-
-   subroutine wrtresp (iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
-    use types
-    use response
-    integer, intent(in) :: iT, nalpha
-    type(algorithm) :: algo
-    type(scatrate)  :: sct
-    type(dp_resp)   :: resp
-    type(dp_respinter) :: respinter
-    type(dp_resp)   :: respBl
-    type(qp_resp),optional :: hpresp
-   end subroutine
-
-  end interface
-  
+subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, dderesp, dinter, respBl, qresp)
+  implicit none
   class(dp_resp), pointer :: pdpresp !local pointer to switch between datatypes
   type(algorithm) :: algo
   type(kpointmesh):: mesh
-  type(edisp)     :: ek  
+  type(edisp)     :: ek
   type(tetramesh) :: thdr
   type(scatrate)  :: sct
   type(dp_resp),target   :: dresp       !intraband response
-  type(dp_respinter),target  :: dderesp !derivatives of intraband conductivity 
+  type(dp_respinter),target  :: dderesp !derivatives of intraband conductivity
   type(dp_respinter), target :: dinter  !interband response
   type(dp_resp)   :: respBl !Boltzmann response
   type(qp_resp), optional :: qresp
@@ -150,28 +28,28 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
   integer :: itet, ik
   integer :: ialpha,ibeta,idiag,icubic,nalpha,ia
   integer :: ktot
-    
+
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 
   real(8) :: tmp1, tmp2
 
-  !what happens to the tight binding case? 
+  !what happens to the tight binding case?
   nalpha=3
   if ((mesh%a(1)==mesh%a(2)) .and. (mesh%a(3)==mesh%a(2))) then
-     icubic=1 
+     icubic=1
   else
      icubic=0
   endif
   if (icubic==1) nalpha=1
-    
+
   !initialise the datatype variables
-  ! eM: incredibly the qp_resp type seems to be there also when 
-  ! it is not passed by the summoning routine. I think this is a 
-  ! gfortran compiler glitch in the generation of the 
-  ! implicit interface, using ldebug instead of the 
-  ! intrinsic fortran present(qresp) solves the issue 
-   
+  ! eM: incredibly the qp_resp type seems to be there also when
+  ! it is not passed by the summoning routine. I think this is a
+  ! gfortran compiler glitch in the generation of the
+  ! implicit interface, using ldebug instead of the
+  ! intrinsic fortran present(qresp) solves the issue
+
   if (algo%ldebug) then
      pdpresp => dresp
      call initresp (algo%lBfield, pdpresp, respBl)
@@ -195,14 +73,14 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
   endif
 
 
-  ! outer k-loop   
+  ! outer k-loop
   ! (quantities inside the tetrahedra will be interpolated over)
   ! eM: I decided to treat the tetrahedron and the regular k-mesh cases
-  ! independently because later different parallelisation strategies can be 
-  ! devised for the two approaches 
+  ! independently because later different parallelisation strategies can be
+  ! devised for the two approaches
 
   if (algo%ltetra ) then
-  !!!!!!!!!! TEST (vltot must add up to 1 -whole BZ-) 
+  !!!!!!!!!! TEST (vltot must add up to 1 -whole BZ-)
      if (iT == sct%nT) then
         thdr%vltot=0.0d0
         tmp1=0.0d0
@@ -222,24 +100,24 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
      do itet=iqstr,iqend
 
         !intraband transitions
-        call respintet (mu, iT, itet, nalpha, thdr, algo, ek, sct, dresp ) 
-        call respintet_Bl (mu, iT, itet, nalpha, thdr, algo, ek, sct, respBl ) 
+        call respintet (mu, iT, itet, nalpha, thdr, algo, ek, sct, dresp )
+        call respintet_Bl (mu, iT, itet, nalpha, thdr, algo, ek, sct, respBl )
         if (.not.algo%ldebug) then
            call respintet_qp (mu, iT, itet, nalpha, thdr, algo, ek, sct, qresp)
         endif
 
         !evaluate the derivatives of the response functions
-        !if the chemical potential is fixed use a semplified kernel for the 
+        !if the chemical potential is fixed use a semplified kernel for the
         !derivatives (assuming also gamma to be not T dependent)
         !if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
            if (algo%ltbind .and. (algo%imurestart==2)) then
-              !since one has to evaluate the derivative of mu then the first point must be skipped 
-              if (iT < sct%nT) call resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, dderesp) 
+              !since one has to evaluate the derivative of mu then the first point must be skipped
+              if (iT < sct%nT) call resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, dderesp)
            else
-              !since one has to evaluate the derivative of mu then the first point must be skipped 
-              if (iT < sct%nT) call resdertet(iT, itet, nalpha, thdr, algo, ek, sct, dderesp) 
+              !since one has to evaluate the derivative of mu then the first point must be skipped
+              if (iT < sct%nT) call resdertet(iT, itet, nalpha, thdr, algo, ek, sct, dderesp)
            endif
-        !endif 
+        !endif
 
         !interband transitions
         if (algo%ldebug) then
@@ -247,58 +125,58 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            !if((iT==sct%nT) .and. (itet==1)) write(*,*)'test for 2-band symmetrical SC, check input parameters!!'
            !call respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, dinter)
            !!!!!!!!!!!!! TEST END
-           call respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, dinter) 
+           call respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, dinter)
         else
-           call respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, dinter) 
+           call respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, dinter)
         endif
 
 
         pdpresp => dresp
         !interpolate within tetrahedra intraband response
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
-        call interptra_mu (iT, itet, mu, nalpha, .true. , mesh, ek, thdr, sct, respBl )   
+        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )
+        call interptra_mu (iT, itet, mu, nalpha, .true. , mesh, ek, thdr, sct, respBl )
         if (.not.algo%ldebug) then
            call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp, qresp )
         endif
         nullify(pdpresp)
-        
+
         pdpresp => dderesp
         !interpolate within tetrahedra intraband response derivatives
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
+        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )
         nullify(pdpresp)
 
         pdpresp => dinter
         !interpolate within tetrahedra interband response
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
+        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )
         nullify(pdpresp)
 
-        ! add to tetrahedra-summed response functions (bands have been traced over in INTERPTRA_mu )   
-        ! 
+        ! add to tetrahedra-summed response functions (bands have been traced over in INTERPTRA_mu )
+        !
         ! functions had to be multiplied by 2 for spin multiplicity
-        
+
         do ialpha=1,nalpha
            do ibeta=ialpha,nalpha
               dresp%s_tot(ialpha,ibeta)=dresp%s_tot(ialpha,ibeta)+dresp%s_tet(ialpha,ibeta)*2.0d0
               dresp%a_tot(ialpha,ibeta)=dresp%a_tot(ialpha,ibeta)+dresp%a_tet(ialpha,ibeta)*2.0d0
-              
+
               dderesp%s_tot(ialpha,ibeta)=dderesp%s_tot(ialpha,ibeta)+dderesp%s_tet(ialpha,ibeta)*2.0d0
               dderesp%a_tot(ialpha,ibeta)=dderesp%a_tot(ialpha,ibeta)+dderesp%a_tet(ialpha,ibeta)*2.0d0
-              
+
               dinter%s_tot(ialpha,ibeta)=dinter%s_tot(ialpha,ibeta)+dinter%s_tet(ialpha,ibeta)*2.0d0
               dinter%a_tot(ialpha,ibeta)=dinter%a_tot(ialpha,ibeta)+dinter%a_tet(ialpha,ibeta)*2.0d0
-              
+
               if (algo%lBfield .and. algo%ltbind ) then
                  dresp%sB_tot(ialpha,ibeta)=dresp%sB_tot(ialpha,ibeta)+dresp%sB_tet(ialpha,ibeta)*2.0d0
                  dresp%aB_tot(ialpha,ibeta)=dresp%aB_tot(ialpha,ibeta)+dresp%aB_tet(ialpha,ibeta)*2.0d0
               endif
-              
+
               respBl%s_tot(ialpha,ibeta)=respBl%s_tot(ialpha,ibeta)+respBl%s_tet(ialpha,ibeta)*2.0d0
               respBl%a_tot(ialpha,ibeta)=respBl%a_tot(ialpha,ibeta)+respBl%a_tet(ialpha,ibeta)*2.0d0
               if (algo%lBfield .and. algo%ltbind ) then
                  respBl%sB_tot(ialpha,ibeta)=respBl%sB_tot(ialpha,ibeta)+respBl%sB_tet(ialpha,ibeta)*2.0d0
                  respBl%aB_tot(ialpha,ibeta)=respBl%aB_tot(ialpha,ibeta)+respBl%aB_tet(ialpha,ibeta)*2.0d0
               endif
-              
+
               if (.not.algo%ldebug) then
                  qresp%s_tot(ialpha,ibeta)=qresp%s_tot(ialpha,ibeta)+qresp%s_tet(ialpha,ibeta)*2.0q0
                  qresp%a_tot(ialpha,ibeta)=qresp%a_tot(ialpha,ibeta)+qresp%a_tet(ialpha,ibeta)*2.0q0
@@ -307,10 +185,10 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                     qresp%aB_tot(ialpha,ibeta)=qresp%aB_tot(ialpha,ibeta)+qresp%aB_tet(ialpha,ibeta)*2.0q0
                  endif
               endif
-           enddo !ibeta 
+           enddo !ibeta
         enddo    !ialpha
-     enddo ! loop over tetrahedra 
-     
+     enddo ! loop over tetrahedra
+
      !Distribute the accumulated variables and sum them up
      if (nproc > 1) then
         call MPI_ALLREDUCE(MPI_IN_PLACE, dresp%s_tot(1,1), 9, &
@@ -356,18 +234,18 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
               call MPI_ALLREDUCE(MPI_IN_PLACE, qresp%aB_tot(1,1), 9, &
                      MPI_REAL16, MPI_SUM, MPI_COMM_WORLD, mpierr)
            endif
-        endif 
+        endif
      endif   !nproc>1
-        
+
   else ! no tetrahedron method
-        
+
      if ((nproc > 1) .and.(.not. allocated(dresp%s_local))) then
         allocate (dresp%s_local(ek%nband_max, nalpha, nalpha) )
      endif
      if ( allocated(dresp%s_local)) then
         dresp%s_local(:,:,:) = 0.0d0
      endif
-     do ik =iqstr,iqend 
+     do ik =iqstr,iqend
      ! evaluate the trace over bands at each specific k-point of the mesh
         call respinkm (mu, iT, ik, nalpha, algo, ek, sct, dresp)
         call respinkm_Bl (mu, iT, ik, nalpha, algo, ek, sct, respBl)
@@ -375,14 +253,14 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            call respinkm_qp (mu, iT, ik, nalpha, algo, ek, sct, qresp)
         endif
         !evaluate the derivatives of the response functions
-        !if the chemical potential is fixed use a semplified kernel for the 
+        !if the chemical potential is fixed use a semplified kernel for the
         !derivatives (assuming also gamma to be not T dependent)
         !if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
            if (algo%ltbind .and. (algo%imurestart==2)) then
-              if (iT < sct%nT) call resderkm_symm(mu, iT, ik, algo, ek, sct, dderesp) 
+              if (iT < sct%nT) call resderkm_symm(mu, iT, ik, algo, ek, sct, dderesp)
            else
-              !since one has to evaluate the derivative of mu then the first point must be skipped 
-              if (iT < sct%nT) call resderkm(iT, ik, nalpha, algo, ek, sct, dderesp) 
+              !since one has to evaluate the derivative of mu then the first point must be skipped
+              if (iT < sct%nT) call resderkm(iT, ik, nalpha, algo, ek, sct, dderesp)
            endif
         !endif
 
@@ -392,9 +270,9 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            !if((iT==sct%nT) .and. (itet==1)) write(*,*)'test for 2-band symmetrical SC, check input parameters!!'
            !call respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, dinter)
            !!!!!!!!!!!!! TEST END
-           call respinterkm(mu, iT, ik, nalpha, algo, ek, sct, dinter) 
+           call respinterkm(mu, iT, ik, nalpha, algo, ek, sct, dinter)
         else
-           call respinterkm(mu, iT, ik, nalpha, algo, ek, sct, dinter) 
+           call respinterkm(mu, iT, ik, nalpha, algo, ek, sct, dinter)
         endif
      enddo
 
@@ -404,8 +282,8 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
               do ib=1,ek%nband_max
                  if(ib<ek%nbopt_min) cycle
                  if(ib>ek%nbopt_max) cycle
-                 do ik =iqstr,iqend 
-                    !multiply by spin multiplicity 
+                 do ik =iqstr,iqend
+                    !multiply by spin multiplicity
                     dresp%s(ib,ialpha,ibeta)=dresp%s(ib,ialpha,ibeta)+dresp%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     dresp%a(ib,ialpha,ibeta)=dresp%a(ib,ialpha,ibeta)+dresp%a_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     dderesp%s(ib,ialpha,ibeta)=dderesp%s(ib,ialpha,ibeta)+dderesp%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
@@ -416,14 +294,14 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                        dresp%sB(ib,ialpha,ibeta)=dresp%sB(ib,ialpha,ibeta)+dresp%sB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                        dresp%aB(ib,ialpha,ibeta)=dresp%aB(ib,ialpha,ibeta)+dresp%aB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     endif
-                 
+
                     respBl%s(ib,ialpha,ibeta)=respBl%s(ib,ialpha,ibeta)+respBl%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     respBl%a(ib,ialpha,ibeta)=respBl%a(ib,ialpha,ibeta)+respBl%a_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     if (algo%lBfield .and. algo%ltbind ) then
                        respBl%sB(ib,ialpha,ibeta)=respBl%sB(ib,ialpha,ibeta)+respBl%sB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                        respBl%aB(ib,ialpha,ibeta)=respBl%aB(ib,ialpha,ibeta)+respBl%aB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     endif
-                 
+
                     if (.not.algo%ldebug) then
                        qresp%s(ib,ialpha,ibeta)=qresp%s(ib,ialpha,ibeta)+qresp%s_tmp(ik,ib,ialpha,ibeta)*2.0q0
                        qresp%a(ib,ialpha,ibeta)=qresp%a(ib,ialpha,ibeta)+qresp%a_tmp(ik,ib,ialpha,ibeta)*2.0q0
@@ -445,7 +323,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                  if(ib<ek%nbopt_min) cycle
                  if(ib>ek%nbopt_max) cycle
                  !accumulate locally over k-points, then reduce over cores
-                 do ik=iqstr,iqend 
+                 do ik=iqstr,iqend
                     dresp%s_local(ib,ialpha,ibeta)=dresp%s_local(ib,ialpha,ibeta)+dresp%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     dresp%a_local(ib,ialpha,ibeta)=dresp%a_local(ib,ialpha,ibeta)+dresp%a_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     dderesp%s_local(ib,ialpha,ibeta)=dderesp%s_local(ib,ialpha,ibeta)+dderesp%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
@@ -456,14 +334,14 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                        dresp%sB_local(ib,ialpha,ibeta)=dresp%sB_local(ib,ialpha,ibeta)+dresp%sB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                        dresp%aB_local(ib,ialpha,ibeta)=dresp%aB_local(ib,ialpha,ibeta)+dresp%aB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     endif
-                 
+
                     respBl%s_local(ib,ialpha,ibeta)=respBl%s_local(ib,ialpha,ibeta)+respBl%s_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     respBl%a_local(ib,ialpha,ibeta)=respBl%a_local(ib,ialpha,ibeta)+respBl%a_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     if (algo%lBfield .and. algo%ltbind ) then
                        respBl%sB_local(ib,ialpha,ibeta)=respBl%sB_local(ib,ialpha,ibeta)+respBl%sB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                        respBl%aB_local(ib,ialpha,ibeta)=respBl%aB_local(ib,ialpha,ibeta)+respBl%aB_tmp(ik,ib,ialpha,ibeta)*2.0d0
                     endif
-                 
+
                     if (.not.algo%ldebug) then
                        qresp%s_local(ib,ialpha,ibeta)=qresp%s_local(ib,ialpha,ibeta)+qresp%s_tmp(ik,ib,ialpha,ibeta)*2.0q0
                        qresp%a_local(ib,ialpha,ibeta)=qresp%a_local(ib,ialpha,ibeta)+qresp%a_tmp(ik,ib,ialpha,ibeta)*2.0q0
@@ -523,9 +401,9 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
         enddo !ialpha
      endif !nproc
 
-     !the loop below has to be protected with myid.eq.master because the band resolved variables have been 
+     !the loop below has to be protected with myid.eq.master because the band resolved variables have been
      !accumulated already
-     if (myid.eq.master) then  
+     if (myid.eq.master) then
         ! at this point I need to multiply the factor beta/gamma (or beta/gamma^2 for magnetic responses)
         ! in the tetrahedron method this is done in the INTERPTRA_mu routine
         do ib=1,ek%nband_max
@@ -533,7 +411,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            if (ib > ek%nbopt_max) cycle
            dresp%gamma=real(sct%gam(iT,ib)*sct%z,8)
            if (.not.algo%ldebug) qresp%gamma=real(sct%gam(iT,ib)*sct%z,16)
-        
+
            dresp%s(ib,:,:)   = dresp%s(ib,:,:)*beta/dresp%gamma
            dresp%a(ib,:,:)   = dresp%a(ib,:,:)*(beta**2)/dresp%gamma
            dresp%s_tot(:,:)  = dresp%s_tot(:,:) + dresp%s(ib,:,:)
@@ -550,7 +428,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
               dresp%sB_tot(:,:)= dresp%sB_tot(:,:) + dresp%sB(ib,:,:)
               dresp%aB_tot(:,:)= dresp%aB_tot(:,:) + dresp%aB(ib,:,:)
            endif
-        
+
            respBl%s(ib,:,:) = respBl%s(ib,:,:)/dresp%gamma
            respBl%a(ib,:,:) = respBl%a(ib,:,:)/dresp%gamma
            respBl%s_tot(:,:)= respBl%s_tot(:,:) + respBl%s(ib,:,:)
@@ -561,7 +439,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
               respBl%sB_tot(:,:)= respBl%sB_tot(:,:) + dresp%sB(ib,:,:)
               respBl%aB_tot(:,:)= respBl%aB_tot(:,:) + dresp%aB(ib,:,:)
            endif
-        
+
            if (.not.algo%ldebug) then
               qresp%s(ib,:,:) = qresp%s(ib,:,:)*betaQ/qresp%gamma
               qresp%a(ib,:,:) = qresp%a(ib,:,:)*(betaQ**2)/qresp%gamma
@@ -574,7 +452,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                  qresp%aB_tot(:,:)= qresp%aB_tot(:,:) + qresp%aB(ib,:,:)
               endif
            endif
-        
+
         enddo !over bands
      endif
 
@@ -582,8 +460,8 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
 
   if (myid.eq.master) then
   ! At this stage solve the equation (d^2 rho)/(d beta^2) =0
-  ! since the following multiplications in globfac affect equally the 
-  ! conductivity and its derivatives there is  no impact on the 
+  ! since the following multiplications in globfac affect equally the
+  ! conductivity and its derivatives there is  no impact on the
   ! resulting T* temperature (T at which the resistivity has an inflection)
      !if (sct%Tstar == 0.0d0) then
         if (iT < sct%nT) call findrhoflex (iT, dresp, dderesp, sct)
@@ -594,32 +472,32 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
      !if ((iT<sct%nT) .and. (iT>1)) write(*,*)'calling finddrhomax'
      if ((iT<sct%nT) .and. (iT>1)) call finddrhomax (iT, dresp, dderesp, sct, drhodT)
   ! At this point the values in the response datatypes should be consistent (in terms of prefactors/dimensionality)
-  ! there are some global factors missing that are taken care of in the following routine 
+  ! there are some global factors missing that are taken care of in the following routine
      pdpresp => dresp
      if (algo%ldebug) then
-        call globfac(icubic, algo, mesh, pdpresp)  
-     else 
-        call globfac(icubic, algo, mesh, pdpresp, qresp)  
+        call globfac(icubic, algo, mesh, pdpresp)
+     else
+        call globfac(icubic, algo, mesh, pdpresp, qresp)
      endif
      nullify(pdpresp)
-     call globfac(icubic, algo, mesh, respBl) 
+     call globfac(icubic, algo, mesh, respBl)
      pdpresp => dinter
-     call globfac(icubic, algo, mesh, pdpresp)  
+     call globfac(icubic, algo, mesh, pdpresp)
      nullify(pdpresp)
 
   ! The derived variables (Seebeck, Nernst, R_H) are computed in the following routine
      pdpresp => dresp
      if (algo%ldebug) then
-        call derresp(icubic, algo, pdpresp) 
+        call derresp(icubic, algo, pdpresp)
      else
-        call derresp(icubic, algo, pdpresp, qresp) 
+        call derresp(icubic, algo, pdpresp, qresp)
      endif
      nullify(pdpresp)
-     call derresp(icubic, algo, respBl) 
+     call derresp(icubic, algo, respBl)
      pdpresp => dinter
-     call derresp(icubic, algo, pdpresp) 
+     call derresp(icubic, algo, pdpresp)
      nullify(pdpresp)
-     
+
      if (algo%ldebug) then
         call wrtresp(iT, nalpha, algo, sct, dresp, dinter, respBl)
      else
@@ -634,8 +512,6 @@ end subroutine calc_response
 ! This subroutine initialises the datatypes
 !
 subroutine initresp (lBfield, dresp, respBl, qresp)
-  use response
-  use types
   implicit none
   logical :: lBfield
   class(dp_resp) :: dresp
@@ -653,12 +529,12 @@ subroutine initresp (lBfield, dresp, respBl, qresp)
      dresp%aB = 0.d0; dresp%aB_tmp = 0.d0
   endif
 
-  respBl%s_tot = 0.0d0 
+  respBl%s_tot = 0.0d0
   respBl%s  = 0.d0; respBl%s_tmp  = 0.d0
   respBl%a_tot = 0.0d0
   respBl%a  = 0.d0; respBl%a_tmp  = 0.d0
   if (lBfield) then
-     respBl%sB_tot = 0.0d0 
+     respBl%sB_tot = 0.0d0
      respBl%sB = 0.d0; respBl%sB_tmp = 0.d0
      respBl%aB_tot = 0.0d0
      respBl%aB = 0.d0; respBl%aB_tmp = 0.d0
@@ -676,12 +552,12 @@ subroutine initresp (lBfield, dresp, respBl, qresp)
   endif
 
   if (present(qresp)) then
-     qresp%s_tot = 0.0q0 
+     qresp%s_tot = 0.0q0
      qresp%s  = 0.q0; qresp%s_tmp  = 0.q0
      qresp%a_tot = 0.0q0
      qresp%a  = 0.q0; qresp%a_tmp  = 0.q0
      if (lBfield) then
-        qresp%sB_tot = 0.0q0 
+        qresp%sB_tot = 0.0q0
         qresp%sB = 0.q0; qresp%sB_tmp = 0.q0
         qresp%aB_tot = 0.0q0
         qresp%aB = 0.q0; qresp%aB_tmp = 0.q0
@@ -694,22 +570,19 @@ subroutine initresp (lBfield, dresp, respBl, qresp)
            qresp%sB_local  = 0.d0; qresp%aB_local  = 0.d0
         endif
      endif
-  endif 
+  endif
 end subroutine initresp
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! RESPINTET
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (and the following one in QP)
-! evaluate the conduction kernel, and the 
+! evaluate the conduction kernel, and the
 ! full response functions on the vertices of a
 ! tetrahedron in the KUBO formalism
 !
 subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (dp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parent type,
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type.
                          ! To do so, the varaibles defined in the individual types must have had different names and since I
@@ -723,14 +596,14 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
   integer, intent(in) :: itet
   integer, intent(in) :: nalpha
   integer :: iband, ik, ipg
-  integer :: ialpha,ibeta 
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 !local variables
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
   real(8), allocatable :: sB_tmp_tetra(:,:,:,:), aB_tmp_tetra(:,:,:,:)
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   if (algo%lBfield .and. algo%ltbind) then
@@ -752,7 +625,7 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
          if (iband > ek%nbopt_max) cycle
          resp%z=real(sct%z,8)
          resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-         ! pre-compute all needed digamma functions   
+         ! pre-compute all needed digamma functions
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-mu,8)
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
          do ipg=1,3 ! XXX need 0 for alphaxy ????
@@ -760,60 +633,60 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             resp%RePolyGamma(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma(ipg)=imag(resp%ctmp)
          enddo
-         
+
          ! compute transport kernels (omega-part)
-         ! 
-         resp%tmp=resp%z**2 / (4.d0*pi**3) ! missing: beta/gamma (multiplied later to keep numbers reasonable here)        
+         !
+         resp%tmp=resp%z**2 / (4.d0*pi**3) ! missing: beta/gamma (multiplied later to keep numbers reasonable here)
          resp%s_ker = resp%tmp * (resp%RePolyGamma(1) - resp%gamma*beta2p * resp%RePolyGamma(2) )
          resp%a_ker = resp%tmp * ( resp%aqp * resp%RePolyGamma(1) - resp%aqp*resp%gamma*beta2p*resp%RePolyGamma(2) &
                     - resp%gamma**2.d0 * beta2p * resp%ImPolyGamma(2) )
-         
-         
+
+
          resp%tmp=resp%tmp*3.d0*resp%z/(4.d0*pi) ! additionally missing: 1/gamma (multiplied later) XXX
 
-         if(algo%lBfield .and. algo%ltbind) then        
+         if(algo%lBfield .and. algo%ltbind) then
             resp%sB_ker = resp%tmp*(-resp%RePolyGamma(1)-resp%gamma*beta2p*resp%RePolyGamma(2)-(beta2p*resp%gamma)**2.d0/3.d0 &
                           * resp%RePolyGamma(3))
-            
+
             resp%aB_ker=resp%tmp*(resp%aqp*resp%RePolyGamma(1)-resp%aqp*beta2p*resp%gamma*resp%RePolyGamma(2)+resp%gamma**2/3.d0 &
                  * beta2p * resp%ImPolyGamma(2) &
                  - resp%aqp*resp%gamma**2.d0 / 3.d0 * beta2p**2.d0 * resp%ImPolyGamma(3) &
                  + resp%gamma**3.d0 / 3.d0 * beta2p**2.d0 * resp%RePolyGamma(3) )
-          endif 
-         
-         ! B = 0  
+          endif
+
+         ! B = 0
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
-         
+
             if (algo%ltbind) then
                resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)
             else
                resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
             endif
-         
-            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-               
+
+            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
             do ibeta=ialpha+1,nalpha
                resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
-               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-            enddo !ibeta  
-         enddo ! ialpha           
-      
-         ! B .ne. 0 
+               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+            enddo !ibeta
+         enddo ! ialpha
+
+         ! B .ne. 0
          !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
          if (algo%lBfield .and. algo%ltbind ) then
             do ialpha=1,nalpha
                do ibeta=ialpha+1,3
-                  
+
                   resp%tmp =ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)* &
                     (ek%M2(ibeta, ialpha, thdr%idtet(ik,itet), iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) - &
                     ek%M2(ibeta, ibeta, thdr%idtet(ik,itet), iband)* ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) )
-                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-                  
-               enddo !ibeta  
+                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+               enddo !ibeta
             enddo ! ialpha
          endif !lBfield
 
@@ -824,10 +697,10 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
             resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
          endif
-         
+
       enddo ! iband
 
-   enddo ! ik   
+   enddo ! ik
 
   !!!!!!!!!!!!! TEST
   ! if ((mod(itet,100) ==0) .and. (sct%TT(iT)==90.00)) then
@@ -852,10 +725,7 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 end subroutine respintet
 
 subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (qp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parenttype
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
@@ -876,7 +746,7 @@ subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
   real(16), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
   real(16), allocatable :: sB_tmp_tetra(:,:,:,:), aB_tmp_tetra(:,:,:,:)
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   if (algo%lBfield .and. algo%ltbind) then
@@ -902,7 +772,7 @@ subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
          if (iband > ek%nbopt_max) cycle
          resp%z=real(sct%z,16)
          resp%gamma=resp%z*real(sct%gam(iT,iband),16)
-         ! pre-compute all needed digamma functions   
+         ! pre-compute all needed digamma functions
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-mu,16)
          resp%zarg=0.5q0+beta2pQ*(ciQ*resp%aqp+resp%gamma)
          do ipg=1,3 ! XXX need 0 for alphaxy ????
@@ -910,63 +780,63 @@ subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             resp%RePolyGamma(ipg)=real(resp%ctmp,16)
             resp%ImPolyGamma(ipg)=imag(resp%ctmp)
          enddo
-         
+
          ! compute transport kernels (omega-part)
-         ! 
-         resp%tmp=resp%z**2 / (4.q0*piQ**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)        
+         !
+         resp%tmp=resp%z**2 / (4.q0*piQ**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)
          resp%s_ker = resp%tmp * ( resp%RePolyGamma(1) - resp%gamma*beta2pQ * resp%RePolyGamma(2) )
          resp%a_ker = resp%tmp * ( resp%aqp * resp%RePolyGamma(1) - resp%aqp*resp%gamma*beta2pQ*resp%RePolyGamma(2) &
                     - resp%gamma**2.q0 * beta2pQ * resp%ImPolyGamma(2) )
-         
-         
+
+
          resp%tmp=resp%tmp*3.q0*resp%z/(4.q0*piQ) ! additionally missing: 1/gamma (multiplied later) XXX
 
-         if(algo%lBfield) then        
+         if(algo%lBfield) then
             resp%sB_ker=resp%tmp*(-resp%RePolyGamma(1)-resp%gamma*beta2pQ*resp%RePolyGamma(2)-(beta2pQ*resp%gamma)**2/3.q0 &
                        * resp%RePolyGamma(3))
-            
-            
+
+
             resp%aB_ker=resp%tmp*(resp%aqp*resp%RePolyGamma(1)-resp%aqp*beta2pQ*resp%gamma*resp%RePolyGamma(2)+resp%gamma**2/3.q0 &
                  * beta2pQ * resp%ImPolyGamma(2) &
                  - resp%aqp*resp%gamma**2.q0 / 3.q0 * beta2pQ**2.q0 * resp%ImPolyGamma(3) &
                  + resp%gamma**3.q0 / 3.q0 * beta2pQ**2.q0 * resp%RePolyGamma(3) )
-          endif 
-         
-         
-         ! B = 0  
+          endif
+
+
+         ! B = 0
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
-         
+
             if (algo%ltbind) then
                resp%tmp=real(ek%Mopt(ialpha,thdr%idtet(ik,itet),iband,iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet),iband,iband),16)
             else
                resp%tmp=real(ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband),16) !the optical matrix elements given by Wien2k are squared already
             endif
-         
-            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-               
-            do ibeta=ialpha+1,nalpha
-               resp%tmp=real(ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband),16) 
-               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-            enddo !ibeta  
-         enddo ! ialpha           
 
-      
-         ! B .ne. 0 
+            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
+            do ibeta=ialpha+1,nalpha
+               resp%tmp=real(ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband),16)
+               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+            enddo !ibeta
+         enddo ! ialpha
+
+
+         ! B .ne. 0
          if (algo%lBfield .and. algo%ltbind ) then
             do ialpha=1,nalpha
                do ibeta=ialpha+1,nalpha
-                  
+
                   !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
                   resp%tmp = real(ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)* &
                     (ek%M2(ibeta, ialpha, thdr%idtet(ik,itet), iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) - &
-                    ek%M2(ibeta, ibeta, thdr%idtet(ik,itet), iband)* ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) ),16) 
-                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-                  
-               enddo !ibeta  
+                    ek%M2(ibeta, ibeta, thdr%idtet(ik,itet), iband)* ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) ),16)
+                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+               enddo !ibeta
             enddo ! ialpha
          endif !lBfield
 
@@ -977,9 +847,9 @@ subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
             resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
          endif
-         
+
       enddo ! iband
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine respintet_qp
 
@@ -987,15 +857,12 @@ end subroutine respintet_qp
 ! RESPINTET_BL
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (and the following one in QP)
-! evaluate the conduction kernel, and the 
+! evaluate the conduction kernel, and the
 ! full response functions on the vertices of a
 ! tetrahedron in the BOLTZMANN formalism
 !
 subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (dp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parenttype
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
@@ -1014,9 +881,8 @@ subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
   real(8), allocatable :: sB_tmp_tetra(:,:,:,:), aB_tmp_tetra(:,:,:,:)
 !external variables
-  real(8), external :: dfermi
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   if (algo%lBfield .and. algo%ltbind) then
@@ -1036,28 +902,28 @@ subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
          if (iband < ek%nbopt_min) cycle
          if (iband > ek%nbopt_max) cycle
-        
+
          ! if the band is not contained in the optical matrices just do nothing
          resp%z=real(sct%z,8)
          resp%gamma=resp%z*real(sct%gam(iT,iband),8)
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-mu,8)
-         
+
          ! compute transport kernels (omega-part)
-         ! 
-         resp%tmp=resp%z**2 / (2.d0*pi) ! missing: 1/gamma (multiplied later to keep number reasonable here)        
-         resp%s_ker = resp%tmp * dfermi(resp%aqp, beta) 
+         !
+         resp%tmp=resp%z**2 / (2.d0*pi) ! missing: 1/gamma (multiplied later to keep number reasonable here)
+         resp%s_ker = resp%tmp * dfermi(resp%aqp, beta)
          resp%a_ker = resp%tmp * resp%aqp * dfermi(resp%aqp, beta)
-         
-         
+
+
          resp%tmp=resp%tmp*3.d0*resp%z/(4.d0*pi) ! additionally missing: 1/gamma (multiplied later) XXX
 
-         if(algo%lBfield .and. algo%ltbind) then        
+         if(algo%lBfield .and. algo%ltbind) then
             resp%sB_ker = resp%tmp * ( -dfermi(resp%aqp, beta)   )
             resp%aB_ker = resp%tmp * ( resp%aqp * dfermi(resp%aqp, beta) )
-          endif 
-         
-         
-         ! B = 0  
+          endif
+
+
+         ! B = 0
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
 
@@ -1066,30 +932,30 @@ subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             else
                resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
             endif
-            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-               
+            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
             do ibeta=ialpha+1,nalpha
                resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
-               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-            enddo !ibeta  
-         enddo ! ialpha           
-      
-         ! B .ne. 0 
+               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+            enddo !ibeta
+         enddo ! ialpha
+
+         ! B .ne. 0
          if (algo%lBfield .and. algo%ltbind ) then
             do ialpha=1,nalpha
                do ibeta=ialpha+1,3
-                  
+
                   !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
                   resp%tmp =ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)* &
                     (ek%M2(ibeta, ialpha, thdr%idtet(ik,itet), iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) - &
                     ek%M2(ibeta, ibeta, thdr%idtet(ik,itet), iband)* ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) )
 
-                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-                  
-               enddo !ibeta  
+                  sB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+                  aB_tmp_tetra(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+               enddo !ibeta
             enddo ! ialpha
          endif !lBfield
 
@@ -1100,9 +966,9 @@ subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
             resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
          endif
-         
+
       enddo ! iband
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine respintet_Bl
 
@@ -1110,19 +976,16 @@ end subroutine respintet_Bl
 ! RESPINTERT
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (QP counterpart missing)
-! evaluates the conduction kernel, and the 
+! evaluates the conduction kernel, and the
 ! full response functions on the vertices of a
 ! tetrahedron in the KUBO formalism
 ! for interband transitions
-! singularities might arise at conical intersections 
+! singularities might arise at conical intersections
 ! between the two bands
 !
 subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (tetramesh) :: thdr
   type (edisp) :: ek
@@ -1131,17 +994,17 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: itet
   integer, intent(in) :: nalpha
-  integer :: ib1, ib2, ik, ipg !band1, band2, k-point,  
-  integer :: ialpha,ibeta 
+  integer :: ib1, ib2, ik, ipg !band1, band2, k-point,
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 !local variables
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
-  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum  
+  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
   real(8) :: DD1, DD2   !denominators
-  real(8) :: ReK, ImK, tmp_s, tmp_a 
+  real(8) :: ReK, ImK, tmp_s, tmp_a
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   !initialisation
@@ -1154,19 +1017,19 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
          ! if the band is not contained in the optical matrices just do nothing
          if (ib1 < ek%nbopt_min) cycle
          if (ib1 > ek%nbopt_max) cycle
-        
+
          resp%z1=real(sct%z,8)
          resp%gamma1=resp%z1*real(sct%gam(iT,ib1),8)
          resp%aqp1=resp%z1*real(ek%band(thdr%idtet(ik,itet),ib1)-mu,8)
          !the first state has to belong to the occupied manifold
          if (resp%aqp1 > 0.0d0) cycle
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp1+resp%gamma1)
-         do ipg=1,1 
+         do ipg=1,1
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
          enddo
-         
+
          ! compute transport kernels (omega-part)
          do ib2=1,ek%nband_max
             if (ib2 < ek%nbopt_min) cycle
@@ -1181,7 +1044,7 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             !the second state has to belong to the unoccupied manifold
             if (resp%aqp2 < 0.0d0) cycle
             resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-            do ipg=1,1 
+            do ipg=1,1
                resp%ctmp=wpsipg(resp%zarg,ipg)
                resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
                resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
@@ -1198,7 +1061,7 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
             tmp_s = (resp%z1*resp%z2 * resp%gamma1*resp%gamma2)*DD1*beta/(pi**3)
             tmp_a = 0.5d0*resp%z1*resp%z2*DD1*(beta**2)/(pi**3)
-              
+
 
             resp%s_ker = tmp_s * ( ((DD2*Dgamma + 0.5d0/resp%gamma2)*resp%RePolyGamma2(1)) &
                        - ((DD2*Dgamma - 0.5d0/resp%gamma1)*resp%RePolyGamma1(1)) &
@@ -1206,8 +1069,8 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
             resp%a_ker = tmp_a * ( (resp%aqp1*resp%gamma2*resp%RePolyGamma1(1)) + (resp%aqp2*resp%gamma1*resp%RePolyGamma2(1)) &
                        + (ReK*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))) + (ImK*(resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))) )
-                    
-            ! B = 0  
+
+            ! B = 0
             ! tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
             do ialpha=1,nalpha
                if (algo%ltbind) then
@@ -1215,24 +1078,24 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
                else
                   resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), ib1, ib2) !the optical matrix elements given by Wien2k are squared already
                endif
-            
-               s_tmp_tetra(ik,ib1,ialpha,ialpha)=s_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)  
-               a_tmp_tetra(ik,ib1,ialpha,ialpha)=a_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp) 
-               
+
+               s_tmp_tetra(ik,ib1,ialpha,ialpha)=s_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)
+               a_tmp_tetra(ik,ib1,ialpha,ialpha)=a_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp)
+
                do ibeta=ialpha+1,nalpha
-                  resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), ib1, ib2) 
-                  s_tmp_tetra(ik,ib1,ialpha,ibeta)=s_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)  
-                  a_tmp_tetra(ik,ib1,ialpha,ibeta)=a_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp) 
-               enddo !ibeta  
-            enddo ! ialpha           
+                  resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), ib1, ib2)
+                  s_tmp_tetra(ik,ib1,ialpha,ibeta)=s_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)
+                  a_tmp_tetra(ik,ib1,ialpha,ibeta)=a_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp)
+               enddo !ibeta
+            enddo ! ialpha
          enddo !ib2
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
          resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
          resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
-         
+
       enddo ! ib1
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine respintert
 
@@ -1240,22 +1103,19 @@ end subroutine respintert
 ! RESPINTERT_SYMM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (QP counterpart missing)
-! evaluates the conduction kernel, and the 
+! evaluates the conduction kernel, and the
 ! full response functions on the vertices of a
 ! tetrahedron in the KUBO formalism
 ! for interband transitions.
-! It uses a semplified kernel obtained for a 
-! 2 band symmetrical semiconductor with 
+! It uses a semplified kernel obtained for a
+! 2 band symmetrical semiconductor with
 ! a given band gap !
-! Expressions valid only at the Gamma point 
+! Expressions valid only at the Gamma point
 ! have been commented out
 !
 subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (tetramesh) :: thdr
   type (edisp) :: ek
@@ -1265,17 +1125,17 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: itet
   integer, intent(in) :: nalpha
-  integer :: ib1, ib2, ik, ipg !band1, band2, k-point,  
-  integer :: ialpha,ibeta 
+  integer :: ib1, ib2, ik, ipg !band1, band2, k-point,
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 !local variables
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
-  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum  
+  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
   real(8) :: DD1, DD2   !denominators
-  real(8) :: ReK, ImK, tmp_s, tmp_a 
+  real(8) :: ReK, ImK, tmp_s, tmp_a
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   !initialisation
@@ -1294,14 +1154,14 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
          ! if the band is unoccupied cycle
          if(resp%aqp1 > mu) cycle
          resp%zarg=0.5d0+beta2p*((ci*resp%aqp1)+resp%gamma1)
-         do ipg=1,1 
+         do ipg=1,1
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
          enddo
-         
+
          ! compute transport kernels (omega-part)
-         ! 
+         !
          do ib2=1,ek%nband_max
             if (ib2 < ek%nbopt_min) cycle
             if (ib2 > ek%nbopt_max) cycle
@@ -1314,7 +1174,7 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             ! if the second state is occupied cycle (interband contribution)
             if(resp%aqp2 < mu) cycle
             resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-            do ipg=1,1 
+            do ipg=1,1
                resp%ctmp=wpsipg(resp%zarg,ipg)
                resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
                resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
@@ -1326,7 +1186,7 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
             tmp_s = DD1*((resp%z1 * resp%gamma1)**2)*beta/(pi**3)
             tmp_a = DD1*((resp%z1 * beta)**2)/(2.0d0*(pi**3))
-              
+
 
             resp%s_ker = tmp_s * ( (resp%RePolyGamma2(1) + resp%RePolyGamma1(1))/(2.0d0*resp%gamma1) &
                        + (resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))/Dqp )
@@ -1335,11 +1195,11 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
                        + (resp%gamma1**2)*(resp%aqp1+resp%aqp2)*(resp%ImPolyGamma2(1)-resp%ImPolyGamma1(1))/Dqp  &
                        + (resp%gamma1**3)*2.0d0*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))/Dqp )
 
-            !only at the Gamma point!!           
+            !only at the Gamma point!!
             !resp%a_ker = tmp_a * ( resp%gamma1*abs(resp%aqp1)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1)) &
-            !           + abs(resp%aqp1)*(resp%gamma1**3)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1))/(resp%aqp1**2) ) 
-                       
-            ! B = 0  
+            !           + abs(resp%aqp1)*(resp%gamma1**3)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1))/(resp%aqp1**2) )
+
+            ! B = 0
             !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
             do ialpha=1,nalpha
                if (algo%ltbind) then
@@ -1347,24 +1207,24 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
                else
                   resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), ib1, ib2) !the optical matrix elements given by Wien2k are squared already
                endif
-            
-               s_tmp_tetra(ik,ib1,ialpha,ialpha)=s_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)  
-               a_tmp_tetra(ik,ib1,ialpha,ialpha)=a_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp) 
-                  
+
+               s_tmp_tetra(ik,ib1,ialpha,ialpha)=s_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)
+               a_tmp_tetra(ik,ib1,ialpha,ialpha)=a_tmp_tetra(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp)
+
                do ibeta=ialpha+1,nalpha
-                  resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), ib1, ib2) 
-                  s_tmp_tetra(ik,ib1,ialpha,ibeta)=s_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)  
-                  a_tmp_tetra(ik,ib1,ialpha,ibeta)=a_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp) 
-               enddo !ibeta  
-            enddo ! ialpha           
+                  resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), ib1, ib2)
+                  s_tmp_tetra(ik,ib1,ialpha,ibeta)=s_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)
+                  a_tmp_tetra(ik,ib1,ialpha,ibeta)=a_tmp_tetra(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp)
+               enddo !ibeta
+            enddo ! ialpha
          enddo !ib2
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
          resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
          resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
-         
+
       enddo ! ib1
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine respintert_symm
 
@@ -1376,10 +1236,7 @@ end subroutine respintert_symm
 ! for intraband transitions.
 !
 subroutine respinkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (dp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parenttype
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
@@ -1404,7 +1261,7 @@ subroutine respinkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
      if (iband > ek%nbopt_max) cycle
      resp%z=real(sct%z,8)
      resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-     ! pre-compute all needed digamma functions   
+     ! pre-compute all needed digamma functions
      resp%aqp=resp%z*real(ek%band(ik,iband)-mu,8)
      ! TESTED 25.05.2018 tetragonal
      !resp%aqp=real(ek%band(1,iband)-mu,8) !passed loptic=false
@@ -1418,65 +1275,65 @@ subroutine respinkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
         resp%RePolyGamma(ipg)=real(resp%ctmp,8)
         resp%ImPolyGamma(ipg)=imag(resp%ctmp)
      enddo
-     
+
      ! compute transport kernels (omega-part)
-     ! 
-     resp%tmp=resp%z**2 / (4.d0*pi**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)        
+     !
+     resp%tmp=resp%z**2 / (4.d0*pi**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)
      resp%s_ker = resp%tmp * (resp%RePolyGamma(1) - resp%gamma*beta2p * resp%RePolyGamma(2) )
      resp%a_ker = resp%tmp * (resp%aqp * resp%RePolyGamma(1) - resp%aqp*resp%gamma*beta2p*resp%RePolyGamma(2) &
                 - resp%gamma**2.d0 * beta2p * resp%ImPolyGamma(2) )
-     
-     
+
+
      resp%tmp=resp%tmp*3.d0*resp%z/(4.d0*pi) ! additionally missing: 1/gamma (multiplied later) XXX
 
-     if(algo%lBfield .and. algo%ltbind) then        
+     if(algo%lBfield .and. algo%ltbind) then
         resp%sB_ker=resp%tmp*(-resp%RePolyGamma(1)-resp%gamma*beta2p*resp%RePolyGamma(2)-(beta2p*resp%gamma)**2.d0/3.d0 &
-                   * resp%RePolyGamma(3)) 
-        
+                   * resp%RePolyGamma(3))
+
         resp%aB_ker=resp%tmp*(resp%aqp*resp%RePolyGamma(1)-resp%aqp*beta2p*resp%gamma*resp%RePolyGamma(2)+resp%gamma**2.d0/3.d0  &
              * beta2p * resp%ImPolyGamma(2) &
              - resp%aqp*resp%gamma**2.d0 / 3.d0 * beta2p**2.d0 * resp%ImPolyGamma(3) &
              + resp%gamma**3.d0 / 3.d0 * beta2p**2.d0 * resp%RePolyGamma(3) )
-      endif 
-     
-     
-     ! B = 0  
+      endif
+
+
+     ! B = 0
      !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
      do ialpha=1,nalpha
         if (algo%ltbind) then
            resp%tmp=ek%Mopt(ialpha,ik, iband, iband)*ek%Mopt(ialpha,ik, iband, iband)
         else
-           !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated 
+           !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated
            resp%tmp=ek%Mopt(ialpha,ik, iband, iband) !the optical matrix elements given by Wien2k are squared already
         endif
-     
-        resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-        resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-           
+
+        resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+        resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
      ! TESTED 25.05.2018
         do ibeta=ialpha+1,nalpha
-           resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, iband, iband) 
-           resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-           resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-        enddo !ibeta  
-     enddo ! ialpha           
+           resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, iband, iband)
+           resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+           resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+        enddo !ibeta
+     enddo ! ialpha
 
-  
-     ! B .ne. 0 
+
+     ! B .ne. 0
      if (algo%lBfield .and. algo%ltbind ) then
         do ialpha=1,nalpha
            do ibeta=ialpha+1,3
-              
+
               !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
               resp%tmp =ek%Mopt(ialpha, ik, iband, iband)*( ek%M2(ibeta, ialpha, ik, iband)*ek%Mopt(ialpha, ik, iband, iband) - &
                  ek%M2(ibeta, ibeta, ik, iband)* ek%Mopt(ialpha, ik, iband, iband) )
-                  resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-                  resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-                 
-           enddo !ibeta  
+                  resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+                  resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+           enddo !ibeta
         enddo ! ialpha
      endif !lBfield
-     
+
    enddo ! iband
 
 end subroutine respinkm
@@ -1486,15 +1343,12 @@ end subroutine respinkm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine evaluates the conduction kernel
 ! for a given k-point  in the KUBO formalism
-! for intraband transitions. 
-! Quadruple precision conterpart of the 
+! for intraband transitions.
+! Quadruple precision conterpart of the
 ! preceeding routine
 !
 subroutine respinkm_qp(mu, iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (qp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parenttype
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
@@ -1522,7 +1376,7 @@ subroutine respinkm_qp(mu, iT, ik, nalpha, algo, ek, sct, resp)
       ! if the band is not contained in the optical matrices just do nothing
       resp%z=real(sct%z,16)
       resp%gamma=resp%z*real(sct%gam(iT,iband),16)
-      ! pre-compute all needed digamma functions   
+      ! pre-compute all needed digamma functions
       resp%aqp=resp%z*real(ek%band(ik,iband)-mu,16)
       resp%zarg=0.5q0+beta2pQ*(ciQ*resp%aqp+resp%gamma)
       do ipg=1,3 ! XXX need 0 for alphaxy ????
@@ -1530,62 +1384,62 @@ subroutine respinkm_qp(mu, iT, ik, nalpha, algo, ek, sct, resp)
          resp%RePolyGamma(ipg)=real(resp%ctmp,16)
          resp%ImPolyGamma(ipg)=imag(resp%ctmp)
       enddo
-      
+
       ! compute transport kernels (omega-part)
-      ! 
-      resp%tmp=resp%z**2 / (4.q0*piQ**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)        
+      !
+      resp%tmp=resp%z**2 / (4.q0*piQ**3) ! missing: beta/gamma (multiplied later to keep number reasonable here)
       resp%s_ker=resp%tmp*(resp%RePolyGamma(1)-resp%gamma*beta2pQ*resp%RePolyGamma(2) )
       resp%a_ker=resp%tmp*(resp%aqp*resp%RePolyGamma(1)-resp%aqp*resp%gamma*beta2pQ*resp%RePolyGamma(2) &
                 -resp%gamma**2*beta2pQ*resp%ImPolyGamma(2))
-      
-      
+
+
       resp%tmp=resp%tmp*3.q0*resp%z/(4.q0*piQ) ! additionally missing: 1/gamma (multiplied later) XXX
 
-      if(algo%lBfield) then        
+      if(algo%lBfield) then
          resp%sB_ker=resp%tmp*(-resp%RePolyGamma(1)-resp%gamma*beta2pQ*resp%RePolyGamma(2)-(beta2pQ*resp%gamma)**2/3.q0 &
                     *resp%RePolyGamma(3))
-         
-         
+
+
          resp%aB_ker=resp%tmp*(resp%aqp*resp%RePolyGamma(1)-resp%aqp*beta2pQ*resp%gamma*resp%RePolyGamma(2)+resp%gamma**2.q0/3.q0  &
               * beta2pQ * resp%ImPolyGamma(2) &
               - resp%aqp*resp%gamma**2.q0 / 3.q0 * beta2pQ**2.q0 * resp%ImPolyGamma(3) &
               + resp%gamma**3.q0 / 3.q0 * beta2pQ**2.q0 * resp%RePolyGamma(3) )
-       endif 
-      
-      
-      ! B = 0  
+       endif
+
+
+      ! B = 0
       !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
       do ialpha=1,nalpha
-      
+
          if (algo%ltbind) then
             resp%tmp=real(ek%Mopt(ialpha,ik, iband, iband)*ek%Mopt(ialpha,ik, iband, iband),16)
          else
             resp%tmp=real(ek%Mopt(ialpha,ik, iband, iband),16) !the optical matrix elements given by Wien2k are squared already
          endif
-      
-         resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-         resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-            
-         do ibeta=ialpha+1,nalpha
-            resp%tmp=real(ek%Mopt(ialpha+ibeta+1,ik, iband, iband),16) 
-            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-         enddo !ibeta  
-      enddo ! ialpha           
 
-   
-      ! B .ne. 0 
+         resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+         resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
+         do ibeta=ialpha+1,nalpha
+            resp%tmp=real(ek%Mopt(ialpha+ibeta+1,ik, iband, iband),16)
+            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+         enddo !ibeta
+      enddo ! ialpha
+
+
+      ! B .ne. 0
       if (algo%lBfield .and. algo%ltbind ) then
          do ialpha=1,nalpha
             do ibeta=ialpha+1,3
-               
+
                !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
                resp%tmp = real(ek%Mopt(ialpha,ik,iband,iband)*(ek%M2(ibeta,ialpha,ik,iband)*ek%Mopt(ialpha,ik,iband,iband) &
-                        - ek%M2(ibeta, ibeta, ik, iband)* ek%Mopt(ialpha, ik, iband, iband) ),16) 
-               resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-               resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-               
-            enddo !ibeta  
+                        - ek%M2(ibeta, ibeta, ik, iband)* ek%Mopt(ialpha, ik, iband, iband) ),16)
+               resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+               resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+            enddo !ibeta
          enddo ! ialpha
       endif !lBfield
 
@@ -1601,10 +1455,7 @@ end subroutine respinkm_qp
 ! for intraband transitions.
 !
 subroutine respinkm_Bl(mu, iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
+  implicit none
   type (dp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parenttype
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
@@ -1619,7 +1470,6 @@ subroutine respinkm_Bl(mu, iT, ik, nalpha, algo, ek, sct, resp)
   integer :: iband, ipg
   integer :: ialpha,ibeta
 !external variables
-  real(8), external :: dfermi
 
    !loop over k-points is external
    do iband=1,ek%nband_max !loop over bands (these will be traced over)
@@ -1629,25 +1479,25 @@ subroutine respinkm_Bl(mu, iT, ik, nalpha, algo, ek, sct, resp)
      if (iband > ek%nbopt_max) cycle
      resp%z=real(sct%z,8)
      resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-     ! pre-compute all needed digamma functions   
+     ! pre-compute all needed digamma functions
      resp%aqp=resp%z*real(ek%band(ik,iband)-mu,8)
-     
+
      ! compute transport kernels (omega-part)
-     ! 
-     resp%tmp=resp%z**2 / (2.d0*pi) ! missing: 1/gamma (multiplied later to keep number reasonable here)        
-     resp%s_ker = resp%tmp * dfermi(resp%aqp, beta) 
+     !
+     resp%tmp=resp%z**2 / (2.d0*pi) ! missing: 1/gamma (multiplied later to keep number reasonable here)
+     resp%s_ker = resp%tmp * dfermi(resp%aqp, beta)
      resp%a_ker = resp%tmp * resp%aqp * dfermi(resp%aqp, beta)
-     
-     
+
+
      resp%tmp=resp%tmp*3.d0*resp%z/(4.d0*pi) ! additionally missing: 1/gamma (multiplied later) XXX
 
-     if(algo%lBfield .and. algo%ltbind) then        
+     if(algo%lBfield .and. algo%ltbind) then
         resp%sB_ker = resp%tmp * ( -dfermi(resp%aqp, beta)  )
         resp%aB_ker = resp%tmp * ( resp%aqp * dfermi(resp%aqp, beta) )
-      endif 
-     
-     
-     ! B = 0  
+      endif
+
+
+     ! B = 0
      !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
      do ialpha=1,nalpha
         if (algo%ltbind) then
@@ -1655,33 +1505,33 @@ subroutine respinkm_Bl(mu, iT, ik, nalpha, algo, ek, sct, resp)
         else
            resp%tmp=ek%Mopt(ialpha,ik, iband, iband) !the optical matrix elements given by Wien2k are squared already
         endif
-     
-        resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-        resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-           
+
+        resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+        resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
         do ibeta=ialpha+1,nalpha
            resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, iband, iband) !the optical matrix elements given by Wien2k are squared already
-           resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-           resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-        enddo !ibeta  
-     enddo ! ialpha           
+           resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+           resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+        enddo !ibeta
+     enddo ! ialpha
 
-  
-     ! B .ne. 0 
+
+     ! B .ne. 0
      if (algo%lBfield .and. algo%ltbind ) then
         do ialpha=1,nalpha
            do ibeta=ialpha+1,3
-              
+
               !tmp=vka(ik,ib,ialpha)*( vkab(ik,ib,ibeta,ialpha)*vka(ik,ib,ibeta) - vkab(ik,ib,ibeta,ibeta)*vka(ik,ib,ialpha)    )
               resp%tmp =ek%Mopt(ialpha, ik, iband, iband)*( ek%M2(ibeta, ialpha, ik, iband)*ek%Mopt(ialpha, ik, iband, iband) - &
                  ek%M2(ibeta, ibeta, ik, iband)* ek%Mopt(ialpha, ik, iband, iband) )
-                  resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp 
-                  resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp 
-                 
-           enddo !ibeta  
+                  resp%sB_tmp(ik,iband,ialpha,ibeta)=resp%sB_ker * resp%tmp
+                  resp%aB_tmp(ik,iband,ialpha,ibeta)=resp%aB_ker * resp%tmp
+
+           enddo !ibeta
         enddo ! ialpha
      endif !lBfield
-     
+
    enddo ! iband
 
 end subroutine respinkm_Bl
@@ -1690,18 +1540,15 @@ end subroutine respinkm_Bl
 ! RESPINTERKM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (QP counterpart missing)
-! evaluates the conduction kernel, and the 
+! evaluates the conduction kernel, and the
 ! full response functions for a given k-point
 ! in the KUBO formalism for interband transitions
-! singularities might arise at conical intersections 
+! singularities might arise at conical intersections
 ! between the two bands
 !
 subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (edisp) :: ek
   type (scatrate) :: sct
@@ -1709,14 +1556,14 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: ik
   integer, intent(in) :: nalpha
-  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns  
-  integer :: ialpha,ibeta 
+  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 !local variables
-  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum  
+  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
   real(8) :: DD1, DD2   !denominators
-  real(8) :: ReK, ImK, tmp_s, tmp_a 
+  real(8) :: ReK, ImK, tmp_s, tmp_a
 
    do ib1=1,ek%nband_max !loop over bands (these will be traced over)
       ! if the band is not contained in the optical matrices just do nothing
@@ -1728,14 +1575,14 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
       !the first state has to belong to the occupied manifold
       if (resp%aqp1 > 0.0d0) cycle
       resp%zarg=0.5d0+beta2p*(ci*resp%aqp1+resp%gamma1)
-      do ipg=1,1 
+      do ipg=1,1
          resp%ctmp=wpsipg(resp%zarg,ipg)
          resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
          resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
       enddo
-      
+
       ! compute transport kernels (omega-part)
-      ! 
+      !
       !do ib2=ib1+1,ek%nband_max
       do ib2=1,ek%nband_max
          if (ib2 < ek%nbopt_min) cycle
@@ -1750,7 +1597,7 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
          !the second state has to belong to the unoccupied manifold
          if (resp%aqp2 < 0.0d0) cycle
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-         do ipg=1,1 
+         do ipg=1,1
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
@@ -1767,7 +1614,7 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
 
          tmp_s = (resp%z1*resp%z2 * resp%gamma1*resp%gamma2)*DD1*beta/(pi**3)
          tmp_a = 0.5d0*resp%z1*resp%z2*DD1*(beta**2)/(pi**3)
-           
+
 
          resp%s_ker = tmp_s * ( ((DD2*Dgamma + 0.5d0/resp%gamma2)*resp%RePolyGamma2(1)) &
                     - ((DD2*Dgamma - 0.5d0/resp%gamma1)*resp%RePolyGamma1(1)) &
@@ -1775,8 +1622,8 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
 
          resp%a_ker = tmp_a * ( (resp%aqp1*resp%gamma2*resp%RePolyGamma1(1)) + (resp%aqp2*resp%gamma1*resp%RePolyGamma2(1)) &
                     + (ReK*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))) + (ImK*(resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))) )
-                 
-         ! B = 0  
+
+         ! B = 0
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
             if (algo%ltbind) then
@@ -1784,17 +1631,17 @@ subroutine respinterkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
             else
                resp%tmp=ek%Mopt(ialpha,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
             endif
-         
-            resp%s_tmp(ik,ib1,ialpha,ialpha)=resp%s_tmp(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)  
-            resp%a_tmp(ik,ib1,ialpha,ialpha)=resp%a_tmp(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp) 
-               
+
+            resp%s_tmp(ik,ib1,ialpha,ialpha)=resp%s_tmp(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)
+            resp%a_tmp(ik,ib1,ialpha,ialpha)=resp%a_tmp(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp)
+
             do ibeta=ialpha+1,nalpha
                resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
-               resp%s_tmp(ik,ib1,ialpha,ibeta)=resp%s_tmp(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)  
-               resp%a_tmp(ik,ib1,ialpha,ibeta)=resp%a_tmp(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp) 
-            enddo !ibeta  
-         enddo ! ialpha          
- 
+               resp%s_tmp(ik,ib1,ialpha,ibeta)=resp%s_tmp(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)
+               resp%a_tmp(ik,ib1,ialpha,ibeta)=resp%a_tmp(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp)
+            enddo !ibeta
+         enddo ! ialpha
+
       enddo !ib2
    enddo ! ib1
 
@@ -1804,21 +1651,18 @@ end subroutine respinterkm
 ! RESPINTERKM_SYMM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine (QP counterpart missing)
-! evaluates the conduction kernel, and the 
-! full response functions at a given k-point 
+! evaluates the conduction kernel, and the
+! full response functions at a given k-point
 ! in the KUBO formalism for interband transitions.
-! It uses a semplified kernel obtained for a 
-! 2 band symmetrical semiconductor with 
+! It uses a semplified kernel obtained for a
+! 2 band symmetrical semiconductor with
 ! a given band gap !
-! Expressions valid only at the Gamma point 
+! Expressions valid only at the Gamma point
 ! have been commented out
 !
 subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (edisp) :: ek
   type (scatrate) :: sct
@@ -1827,14 +1671,14 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: ik
   integer, intent(in) :: nalpha
-  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns  
-  integer :: ialpha,ibeta 
+  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
   complex(16),external :: wpsipghp
 !local variables
-  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum  
+  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
   real(8) :: DD1, DD2   !denominators
-  real(8) :: ReK, ImK, tmp_s, tmp_a 
+  real(8) :: ReK, ImK, tmp_s, tmp_a
 
    do ib1=1,ek%nband_max !loop over bands (these will be traced over)
       ! if the band is not contained in the optical matrices just do nothing
@@ -1846,14 +1690,14 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
       ! if the band is unoccupied cycle
       if(resp%aqp1 > mu) cycle
       resp%zarg=0.5d0+beta2p*((ci*resp%aqp1)+resp%gamma1)
-      do ipg=1,1 
+      do ipg=1,1
          resp%ctmp=wpsipg(resp%zarg,ipg)
          resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
          resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
       enddo
-      
+
       ! compute transport kernels (omega-part)
-      ! 
+      !
       do ib2=1,ek%nband_max
          if (ib2 < ek%nbopt_min) cycle
          if (ib2 > ek%nbopt_max) cycle
@@ -1866,7 +1710,7 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
          ! if the second state is occupied cycle (interband contribution)
          if(resp%aqp2 < mu) cycle
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-         do ipg=1,1 
+         do ipg=1,1
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
@@ -1878,7 +1722,7 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
 
          tmp_s = DD1*((resp%z1 * resp%gamma1)**2)*beta/(pi**3)
          tmp_a = DD1*((resp%z1 * beta)**2)/(2.0d0*(pi**3))
-           
+
 
          resp%s_ker = tmp_s * ( (resp%RePolyGamma2(1) + resp%RePolyGamma1(1))/(2.0d0*resp%gamma1) &
                     + (resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))/Dqp )
@@ -1887,11 +1731,11 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
                     + (resp%gamma1**2)*(resp%aqp1+resp%aqp2)*(resp%ImPolyGamma2(1)-resp%ImPolyGamma1(1))/Dqp  &
                     + (resp%gamma1**3)*2.0d0*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))/Dqp )
 
-         !only at the Gamma point!!           
+         !only at the Gamma point!!
          !resp%a_ker = tmp_a * ( resp%gamma1*abs(resp%aqp1)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1)) &
-         !           + abs(resp%aqp1)*(resp%gamma1**3)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1))/(resp%aqp1**2) ) 
-                    
-         ! B = 0  
+         !           + abs(resp%aqp1)*(resp%gamma1**3)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1))/(resp%aqp1**2) )
+
+         ! B = 0
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
             if (algo%ltbind) then
@@ -1899,17 +1743,17 @@ subroutine respinterkm_symm(mu, iT, ik, nalpha, algo, ek, sct, resp)
             else
                resp%tmp=ek%Mopt(ialpha,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
             endif
-         
-            resp%s_tmp(ik,ib1,ialpha,ialpha)=resp%s_tmp(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)  
-            resp%a_tmp(ik,ib1,ialpha,ialpha)=resp%a_tmp(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp) 
-               
+
+            resp%s_tmp(ik,ib1,ialpha,ialpha)=resp%s_tmp(ik,ib1,ialpha,ialpha) + (resp%s_ker * resp%tmp)
+            resp%a_tmp(ik,ib1,ialpha,ialpha)=resp%a_tmp(ik,ib1,ialpha,ialpha) + (resp%a_ker * resp%tmp)
+
             do ibeta=ialpha+1,nalpha
-               resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, ib1, ib2) 
-               resp%s_tmp(ik,ib1,ialpha,ibeta)=resp%s_tmp(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)  
-               resp%a_tmp(ik,ib1,ialpha,ibeta)=resp%a_tmp(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp) 
-            enddo !ibeta  
-         enddo ! ialpha          
- 
+               resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, ib1, ib2)
+               resp%s_tmp(ik,ib1,ialpha,ibeta)=resp%s_tmp(ik,ib1,ialpha,ibeta) + (resp%s_ker * resp%tmp)
+               resp%a_tmp(ik,ib1,ialpha,ibeta)=resp%a_tmp(ik,ib1,ialpha,ibeta) + (resp%a_ker * resp%tmp)
+            enddo !ibeta
+         enddo ! ialpha
+
       enddo !ib2
    enddo ! ib1
 
@@ -1918,22 +1762,19 @@ end subroutine respinterkm_symm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! RESDERTET_SYMM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine 
+! This routine
 ! evaluates the conduction kernel derivatives
 ! with respect to beta=1/(kB*T) under the assumption
-! that both the chemical potential and the 
-! scattering rate are temperature independent 
+! that both the chemical potential and the
+! scattering rate are temperature independent
 ! (hence it can give meaningful results only for
 ! a symmetric semiconductor).
 ! the first derivative is saved in resp%s
-! the second derivative is saved in resp%a 
+! the second derivative is saved in resp%a
 !
 subroutine resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (tetramesh) :: thdr
   type (edisp) :: ek
@@ -1942,12 +1783,12 @@ subroutine resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: itet
   integer :: iband, ik, ipg
-  integer :: ialpha,ibeta 
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
 !local variables
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
 
-  !allocation  
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   !initialisation
@@ -1961,35 +1802,35 @@ subroutine resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, resp)
          if (iband > ek%nbopt_max) cycle
          resp%z=real(sct%z,8)
          resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-         ! pre-compute all needed digamma functions   
+         ! pre-compute all needed digamma functions
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-mu,8)
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-         do ipg=1,4 
+         do ipg=1,4
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma(ipg)=imag(resp%ctmp)
          enddo
-         
+
          ! compute transport kernel derivatives (omega-part)
-         ! 
+         !
          ! 1st derivative w.r.t. beta
-         resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing   
+         resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing
          resp%s_ker = resp%tmp * ((1.0d0/resp%gamma)*resp%RePolyGamma(1) - beta2p*resp%RePolyGamma(2) &
                     - beta2p*(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) + resp%aqp*(beta2p**2)*resp%ImPolyGamma(3) &
-                    - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) ) 
+                    - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) )
 
-         ! 
+         !
          ! 2nd derivative w.r.t. beta
-         resp%tmp=resp%z**2 / (4.d0*pi**4)    
+         resp%tmp=resp%z**2 / (4.d0*pi**4)
          resp%a_ker = resp%tmp * (-(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) &
                     - 0.5d0*resp%gamma*beta2p*(3.0d0+(resp%aqp/resp%gamma)**2 )*resp%RePolyGamma(3) &
                     + beta2p*resp%aqp*resp%ImPolyGamma(3) + (beta2p**2)*resp%aqp*resp%gamma*resp%ImPolyGamma(4) &
                     + 0.5d0*(beta2p**2)*(resp%aqp**2 - resp%gamma**2)*resp%RePolyGamma(4) )
-         
+
          !only the xx component has been evaluated
          do ialpha=1,1
             do ibeta=1,1
-         
+
                !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
                if (algo%ltbind) then
                   resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)
@@ -1997,43 +1838,40 @@ subroutine resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, resp)
                   write(*,*) 'resdertet_symm: the expression for the derivatives is only valid for a symmetric SC'
                   STOP
                endif
-         
-               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-               
-            enddo !ibeta  
-         enddo ! ialpha           
+
+               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+
+            enddo !ibeta
+         enddo ! ialpha
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
          resp%s_tmp(ik,iband,1,1) = s_tmp_tetra(ik,iband,1,1)
          resp%a_tmp(ik,iband,1,1) = a_tmp_tetra(ik,iband,1,1)
-         
+
       enddo ! iband
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine resdertet_symm
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! RESDERTET
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine 
+! This routine
 ! evaluates the conduction kernel derivatives
-! with respect to beta=1/(kB*T) with a temperature 
-! dependent chemical potential and  
-! scattering rate. The 2nd derivative of 
+! with respect to beta=1/(kB*T) with a temperature
+! dependent chemical potential and
+! scattering rate. The 2nd derivative of
 ! the chemical potential is neglected
 ! for the scattering rate it is evaluated assuming
-! gamma(T) = gc0 + gc2*T^2, so 
-! gam2dot = 6*gc2/(kB^2 * beta^4) 
+! gamma(T) = gc0 + gc2*T^2, so
+! gam2dot = 6*gc2/(kB^2 * beta^4)
 ! the first derivative of the conductivity is saved in resp%s
-! the second derivative of the conductivity is saved in resp%a 
+! the second derivative of the conductivity is saved in resp%a
 !
 subroutine resdertet(iT, itet, nalpha, thdr, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (tetramesh) :: thdr
   type (edisp) :: ek
@@ -2044,23 +1882,23 @@ subroutine resdertet(iT, itet, nalpha, thdr, algo, ek, sct, resp)
   complex(8),external  :: wpsipg
 !local variables
   real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
-  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta 
-  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta 
+  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta
+  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta
   real(8) :: dlogg          ! gammadot/gamma
   real(8) :: gam2dot        ! 2nd derivative of gamma w.r.t. beta, assuming gamma(T) = gc0 + gc2*T^2
   real(8) :: csim           ! aqp/beta - mudot
   integer :: iband, ik, ipg
-  integer :: ialpha,ibeta 
-  
-  !allocation  
+  integer :: ialpha,ibeta
+
+  !allocation
   if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
   if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
   !initialisation
   s_tmp_tetra=0.0d0 ; a_tmp_tetra=0.0d0
-  
+
   !need to call this subroutine for iT<nT
-  if(iT == sct%nT) STOP !hopefully this case has been taken care of before calling the routine 
-  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT 
+  if(iT == sct%nT) STOP !hopefully this case has been taken care of before calling the routine
+  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT
   mudot = -kB*muder*((sct%TT(iT))**2)
 
    do ik=1,4  !loop over corners of the tetrahedron
@@ -2082,25 +1920,25 @@ subroutine resdertet(iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-sct%mu(iT),8)
          csim = (resp%aqp/beta)-mudot
-         ! pre-compute all needed digamma functions   
+         ! pre-compute all needed digamma functions
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-         do ipg=1,4 
+         do ipg=1,4
             resp%ctmp=wpsipg(resp%zarg,ipg)
             resp%RePolyGamma(ipg)=real(resp%ctmp,8)
             resp%ImPolyGamma(ipg)=imag(resp%ctmp)
          enddo
-         
-         ! compute transport kernel derivatives 
-           
+
+         ! compute transport kernel derivatives
+
          ! 1st derivative w.r.t. beta (there is a term 2/beta * sigma that needs to be added up)
-         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)   
+         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
          resp%s_ker = resp%tmp*((dlogg+1.0d0/beta)*(resp%RePolyGamma(2)-(1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
                     - (csim/resp%gamma)*resp%ImPolyGamma(2) + beta2p*csim*resp%ImPolyGamma(3) &
                     - (dlogg + 1.0d0/beta)*beta2p*resp%gamma*resp%RePolyGamma(3) )
 
 
          ! 2nd derivative w.r.t. beta (there is a term 2/beta^2 * sigma that needs to be added up)
-         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)   
+         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
          resp%a_ker = resp%tmp*( ((2.0d0*dlogg/beta) + (2.0d0/(beta**2)) + (gam2dot/resp%gamma) ) &
                     * (resp%RePolyGamma(2) - (1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
                     + ((csim*(2.0d0*dlogg - 3.0d0/beta)/resp%gamma) + (csim/(beta*resp%gamma)))*resp%ImPolyGamma(2) &
@@ -2114,54 +1952,51 @@ subroutine resdertet(iT, itet, nalpha, thdr, algo, ek, sct, resp)
          resp%tmp=(((resp%z*beta)**2)/(8.d0*pi**4)) * ((1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1) - resp%RePolyGamma(2))
          resp%s_ker = resp%s_ker + (2.0d0*resp%tmp/beta)
          resp%a_ker = resp%a_ker + (2.0d0*resp%tmp/(beta**2))
-         
+
          !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
          do ialpha=1,nalpha
-         
+
             if (algo%ltbind) then
                resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)*ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband)
             else
                resp%tmp=ek%Mopt(ialpha,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
             endif
-         
-            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
-               
-            do ibeta=ialpha+1,nalpha   
-               resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband) 
-               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-            enddo !ibeta  
-         enddo ! ialpha           
+
+            s_tmp_tetra(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+            a_tmp_tetra(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
+            do ibeta=ialpha+1,nalpha
+               resp%tmp=ek%Mopt(ialpha+ibeta+1,thdr%idtet(ik,itet), iband, iband)
+               s_tmp_tetra(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+               a_tmp_tetra(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+            enddo !ibeta
+         enddo ! ialpha
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
          resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
          resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
-         
+
       enddo ! iband
-   enddo ! ik   
+   enddo ! ik
 
 end subroutine resdertet
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! RESDERKM_SYMM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine 
+! This routine
 ! evaluates the conduction kernel derivatives
 ! with respect to beta=1/(kB*T) under the assumption
-! that both the chemical potential and the 
-! scattering rate are temperature independent 
+! that both the chemical potential and the
+! scattering rate are temperature independent
 ! (hence it can give meaningful results only for
 ! a symmetric semiconductor).
 ! the first derivative is saved in resp%s
-! the second derivative is saved in resp%a 
+! the second derivative is saved in resp%a
 !
 subroutine resderkm_symm(mu, iT, ik, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (edisp) :: ek
   type (scatrate) :: sct
@@ -2169,7 +2004,7 @@ subroutine resderkm_symm(mu, iT, ik, algo, ek, sct, resp)
   integer, intent(in) :: iT
   integer, intent(in) :: ik
   integer :: iband, ipg
-  integer :: ialpha,ibeta 
+  integer :: ialpha,ibeta
   complex(8),external  :: wpsipg
 
    do iband=1,ek%nband_max !loop over bands (these will be traced over)
@@ -2180,34 +2015,34 @@ subroutine resderkm_symm(mu, iT, ik, algo, ek, sct, resp)
 
       resp%z=real(sct%z,8)
       resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-      ! pre-compute all needed digamma functions   
+      ! pre-compute all needed digamma functions
       resp%aqp=resp%z*real(ek%band(ik,iband)-mu,8)
       resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-      do ipg=1,4 
+      do ipg=1,4
          resp%ctmp=wpsipg(resp%zarg,ipg)
          resp%RePolyGamma(ipg)=real(resp%ctmp,8)
          resp%ImPolyGamma(ipg)=imag(resp%ctmp)
       enddo
-      
+
       ! compute transport kernel derivatives (omega-part)
-        
+
       ! 1st derivative w.r.t. beta
-      resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing   
+      resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing
       resp%s_ker = resp%tmp * ((1.0d0/resp%gamma)*resp%RePolyGamma(1) - beta2p*resp%RePolyGamma(2) &
                  - beta2p*(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) + resp%aqp*(beta2p**2)*resp%ImPolyGamma(3) &
-                 - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) ) 
+                 - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) )
 
       ! 2nd derivative w.r.t. beta
-      resp%tmp=resp%z**2 / (4.d0*pi**4)    
+      resp%tmp=resp%z**2 / (4.d0*pi**4)
       resp%a_ker = resp%tmp * (-(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) &
                  - 0.5d0*resp%gamma*beta2p*(3.0d0+(resp%aqp/resp%gamma)**2 )*resp%RePolyGamma(3) &
                  + beta2p*resp%aqp*resp%ImPolyGamma(3) + (beta2p**2)*resp%aqp*resp%gamma*resp%ImPolyGamma(4) &
                  + 0.5d0*(beta2p**2)*(resp%aqp**2 - resp%gamma**2)*resp%RePolyGamma(4) )
-      
+
       !only the xx component has been evaluated
       do ialpha=1,1
          do ibeta=1,1
-      
+
             !tmp=vka(ik,ib,ialpha)*vka(ik,ib,ibeta)
             if (algo%ltbind) then
                resp%tmp=ek%Mopt(ialpha, ik, iband, iband)*ek%Mopt(ialpha, ik, iband, iband)
@@ -2215,12 +2050,12 @@ subroutine resderkm_symm(mu, iT, ik, algo, ek, sct, resp)
                write(*,*) 'resderkm_symm: the expression for the derivatives is only valid for a symmetric SC'
                STOP
             endif
-      
-            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-            
-         enddo !ibeta  
-      enddo ! ialpha           
+
+            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+
+         enddo !ibeta
+      enddo ! ialpha
 
    enddo ! iband
 
@@ -2229,21 +2064,18 @@ end subroutine resderkm_symm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! RESDERKM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine 
+! This routine
 ! evaluates the conduction kernel derivatives
-! with respect to beta=1/(kB*T) with a temperature 
-! dependent chemical potential and  
+! with respect to beta=1/(kB*T) with a temperature
+! dependent chemical potential and
 ! scattering rate. The 2nd derivatives of both
-! the chemical potential and gamma are neglected 
+! the chemical potential and gamma are neglected
 ! the first derivative of the conductivity is saved in resp%s
-! the second derivative of the conductivity is saved in resp%a 
+! the second derivative of the conductivity is saved in resp%a
 !
 subroutine resderkm(iT, ik, nalpha, algo, ek, sct, resp)
-  use response
-  use types
-  use params
-  implicit none 
-  type (dp_respinter) :: resp 
+  implicit none
+  type (dp_respinter) :: resp
   type (algorithm) :: algo
   type (edisp) :: ek
   type (scatrate) :: sct
@@ -2253,17 +2085,17 @@ subroutine resderkm(iT, ik, nalpha, algo, ek, sct, resp)
   complex(8),external  :: wpsipg
   !complex(16),external :: wpsipghp
 !local variables
-  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta 
-  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta 
+  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta
+  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta
   real(8) :: dlogg          ! gammadot/gamma
   real(8) :: csim           ! aqp/beta - mudot
   integer :: iband, ipg
-  integer :: ialpha,ibeta 
-  
+  integer :: ialpha,ibeta
+
 
   !need to call this subroutine for iT<nT
-  if(iT == sct%nT) stop !hopefully this case has been taken care of before calling the routine 
-  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT 
+  if(iT == sct%nT) stop !hopefully this case has been taken care of before calling the routine
+  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT
   mudot = -kB*muder*((sct%TT(iT))**2)
 
    do iband=1,ek%nband_max !loop over bands (these will be traced over)
@@ -2280,24 +2112,24 @@ subroutine resderkm(iT, ik, nalpha, algo, ek, sct, resp)
 
       resp%aqp=resp%z*real(ek%band(ik,iband)-sct%mu(iT),8)
       csim = (resp%aqp/beta)-mudot
-      ! pre-compute all needed digamma functions   
+      ! pre-compute all needed digamma functions
       resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-      do ipg=1,4 
+      do ipg=1,4
          resp%ctmp=wpsipg(resp%zarg,ipg)
          resp%RePolyGamma(ipg)=real(resp%ctmp,8)
          resp%ImPolyGamma(ipg)=imag(resp%ctmp)
       enddo
-      
-      ! compute transport kernel derivatives 
-        
+
+      ! compute transport kernel derivatives
+
       ! 1st derivative w.r.t. beta (there is a term 2/beta * sigma that needs to be added up)
-      resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)   
+      resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
       resp%s_ker = resp%tmp*((dlogg+1.0d0/beta)*(resp%RePolyGamma(2)-(1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
                  - (csim/resp%gamma)*resp%ImPolyGamma(2) + beta2p*csim*resp%ImPolyGamma(3) &
                  - (dlogg + 1.0d0/beta)*beta2p*resp%gamma*resp%RePolyGamma(3) )
 
       ! 2nd derivative w.r.t. beta (there is a term 2/beta^2 * sigma that needs to be added up)
-      resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)   
+      resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
       resp%a_ker = resp%tmp*( ((2.0d0*dlogg/beta) + (2.0d0/(beta**2))) &
                  * (resp%RePolyGamma(2) - (1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
                  + ((csim*(2.0d0*dlogg - 3.0d0/beta)/resp%gamma) + (csim/(beta*resp%gamma)))*resp%ImPolyGamma(2) &
@@ -2311,25 +2143,25 @@ subroutine resderkm(iT, ik, nalpha, algo, ek, sct, resp)
       resp%tmp=(((resp%z*beta)**2)/(8.d0*pi**4)) * ((1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1) - resp%RePolyGamma(2))
       resp%s_ker = resp%s_ker + (2.0d0*resp%tmp/beta)
       resp%a_ker = resp%a_ker + (2.0d0*resp%tmp/(beta**2))
-      
+
       do ialpha=1,nalpha
             if (algo%ltbind) then
-               !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated 
+               !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated
                resp%tmp=ek%Mopt(ialpha, ik, iband, iband)*ek%Mopt(ialpha, ik, iband, iband)
             else
-               !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated 
+               !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated
                resp%tmp=ek%Mopt(ialpha, ik, iband, iband) !the optical matrix elements given by Wien2k are squared already
             endif
-      
-            resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp  
-            resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp 
 
-         do ibeta=ialpha+1,nalpha   
-            resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, iband, iband) 
-            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp  
-            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp 
-         enddo !ibeta  
-      enddo ! ialpha           
+            resp%s_tmp(ik,iband,ialpha,ialpha)=resp%s_ker * resp%tmp
+            resp%a_tmp(ik,iband,ialpha,ialpha)=resp%a_ker * resp%tmp
+
+         do ibeta=ialpha+1,nalpha
+            resp%tmp=ek%Mopt(ialpha+ibeta+1,ik, iband, iband)
+            resp%s_tmp(ik,iband,ialpha,ibeta)=resp%s_ker * resp%tmp
+            resp%a_tmp(ik,iband,ialpha,ibeta)=resp%a_ker * resp%tmp
+         enddo !ibeta
+      enddo ! ialpha
 
    enddo ! iband
 
@@ -2340,21 +2172,18 @@ end subroutine resderkm
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine tries to solve the equation
 ! 2*(d sigma/d beta)^2 - sigma*(d^2 sigma/d beta^2) = 0
-! for a given temperature and stores away the first 
+! for a given temperature and stores away the first
 ! temperature that fulfills it (in sct%Tstar)
 ! since the equation is difficult to solve point by point
 ! (i.e. w/o knowing the global behaviour with T)
 ! I neglect the term 2*(d sigma/d beta)^2 and find the T
 ! for which the 2nd derivative changes sign
 ! the first derivative of the conductivity saved in resp2%s
-! the second derivative of the conductivity saved in resp2%a 
+! the second derivative of the conductivity saved in resp2%a
 !
 subroutine findrhoflex(iT, resp1, resp2, sct)
-   use types
-   use response
    implicit none
-
-   integer, intent(in) :: iT 
+   integer, intent(in) :: iT
    type(dp_resp) :: resp1      !contains the intraband conductivity
    type(dp_respinter) :: resp2 !contains its derivatives
    type(scatrate):: sct
@@ -2362,12 +2191,12 @@ subroutine findrhoflex(iT, resp1, resp2, sct)
    real(8), parameter :: tol=1.0d-12
    real(8) :: tmp, tmp1, tmp2
 
-   if (.not. allocated(sct%d0)) then 
+   if (.not. allocated(sct%d0)) then
       allocate(sct%d0(1:sct%nT))
       allocate(sct%d1(1:sct%nT))
       allocate(sct%d2(1:sct%nT))
    endif
- 
+
    tmp1 = 2.0d0*((resp2%s_tot(1,1))**2)
    tmp2 = resp1%s_tot(1,1)*resp2%a_tot(1,1)
    tmp  = tmp1 - tmp2
@@ -2377,26 +2206,23 @@ subroutine findrhoflex(iT, resp1, resp2, sct)
    !if (tmp2<0.0d0 ) then
    !   sct%Tstar = sct%TT(iT)
    !else
-   !   sct%Tstar = 0.0d0 
-   !endif 
+   !   sct%Tstar = 0.0d0
+   !endif
 
 end subroutine findrhoflex
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! FINDRHOFLAT
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine finds the value of T for which 
+! This routine finds the value of T for which
 ! the derivative  d sigma/d beta changes sign
 ! (onset of saturation for the resistivity)
 ! the first derivative of the conductivity saved in resp2%s
-! the second derivative of the conductivity saved in resp2%a 
+! the second derivative of the conductivity saved in resp2%a
 !
 subroutine findrhoflat(iT, resp1, resp2, sct)
-   use types
-   use response
    implicit none
-
-   integer, intent(in) :: iT 
+   integer, intent(in) :: iT
    type(dp_resp) :: resp1      !contains the intraband conductivity
    type(dp_respinter) :: resp2 !contains its derivatives
    type(scatrate):: sct
@@ -2408,8 +2234,8 @@ subroutine findrhoflat(iT, resp1, resp2, sct)
    if (tmp < tol) then
       sct%Tflat = sct%TT(iT)
    else
-      sct%Tflat = 0.0d0 
-   endif 
+      sct%Tflat = 0.0d0
+   endif
 
 end subroutine findrhoflat
 
@@ -2417,18 +2243,15 @@ end subroutine findrhoflat
 ! FINDDRHOMAX
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine evaluates the 1st derivative of the
-! resistivity at a given temperature and saves it 
-! in the variable sct%drhodT 
+! resistivity at a given temperature and saves it
+! in the variable sct%drhodT
 ! the first derivative of the conductivity saved in resp2%s
-! the second derivative of the conductivity saved in resp2%a 
+! the second derivative of the conductivity saved in resp2%a
 !
 subroutine finddrhomax(iT, resp1, resp2, sct, drhodT)
-   use params
-   use types
-   use response
    implicit none
 
-   integer, intent(in) :: iT 
+   integer, intent(in) :: iT
    type(dp_resp) :: resp1      !contains the intraband conductivity
    type(dp_respinter) :: resp2 !contains its derivatives
    type(scatrate):: sct
@@ -2440,12 +2263,7 @@ subroutine finddrhomax(iT, resp1, resp2, sct, drhodT)
 end subroutine finddrhomax
 
 subroutine globfac(icubic, algo, mesh, resp, hpresp)
-   use params
-   use types
-   use response
-   use estruct, only:vol
    implicit none
-
    integer :: icubic
    type(algorithm) :: algo
    type(kpointmesh) :: mesh
@@ -2457,15 +2275,15 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
    real(8) :: fac,facB
    real(16):: facQ,facBQ
 
-   fac   = 2.d0 * pi * ( echarge / (vol*hbarevs)) * 1.d10 
+   fac   = 2.d0 * pi * ( echarge / (vol*hbarevs)) * 1.d10
    facB  = 2.d0 * pi**2 * ( echarge / (vol*hbarevs) ) * (1.d-10 / hbareVs)
    facQ  = 2.q0 * piQ * ( real(echarge,16) / real(vol*hbarevs,16)) * 1.q10
    facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
-  
+
    if (algo%ltetra) then
       ktot=1.0d0
    else
-      ktot=real(mesh%ktot) 
+      ktot=real(mesh%ktot)
    endif
 
    !global symmetries of a cubic system
@@ -2474,7 +2292,7 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
       resp%s(:,3,3)=resp%s(:,1,1)
       resp%a(:,2,2)=resp%a(:,1,1)
       resp%a(:,3,3)=resp%a(:,1,1)
-      resp%s_tot(2,2)=resp%s_tot(1,1)   
+      resp%s_tot(2,2)=resp%s_tot(1,1)
       resp%s_tot(3,3)=resp%s_tot(1,1)
       resp%a_tot(2,2)=resp%a_tot(1,1)
       resp%a_tot(3,3)=resp%a_tot(1,1)
@@ -2510,22 +2328,22 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
       endif
    endif
 
-   resp%s  = resp%s/real(ktot,8) * fac ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]   
-   resp%a  = resp%a/real(ktot,8) * fac * ( - beta * kb)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S) 
-   resp%s_tot  = resp%s_tot/real(ktot,8) * fac  
-   resp%a_tot  = resp%a_tot/real(ktot,8) * fac * ( - beta * kb)  
+   resp%s  = resp%s/real(ktot,8) * fac ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
+   resp%a  = resp%a/real(ktot,8) * fac * ( - beta * kb)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
+   resp%s_tot  = resp%s_tot/real(ktot,8) * fac
+   resp%a_tot  = resp%a_tot/real(ktot,8) * fac * ( - beta * kb)
    if(algo%lBfield) then
       resp%sB = resp%sB/real(ktot,8) * facB
       resp%aB = resp%aB/real(ktot,8) * facB * ( - beta * kb)
       resp%sB_tot = resp%sB_tot/real(ktot,8) * facB
       resp%aB_tot = resp%aB_tot/real(ktot,8) * facB * ( - beta * kb)
    endif
- 
+
    if (present(hpresp)) then
-      hpresp%s  = hpresp%s/real(ktot,16) * facQ ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]   
-      hpresp%a  = hpresp%a/real(ktot,16) * facQ * ( - betaQ * kbQ)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S) 
-      hpresp%s_tot  = hpresp%s_tot/real(ktot,16) * facQ  
-      hpresp%a_tot  = hpresp%a_tot/real(ktot,16) * facQ * ( - betaQ * kbQ)  
+      hpresp%s  = hpresp%s/real(ktot,16) * facQ ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
+      hpresp%a  = hpresp%a/real(ktot,16) * facQ * ( - betaQ * kbQ)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
+      hpresp%s_tot  = hpresp%s_tot/real(ktot,16) * facQ
+      hpresp%a_tot  = hpresp%a_tot/real(ktot,16) * facQ * ( - betaQ * kbQ)
       if(algo%lBfield) then
          hpresp%sB = hpresp%sB/real(ktot,16) * facBQ
          hpresp%aB = hpresp%aB/real(ktot,16) * facBQ * ( - betaQ * kbQ)
@@ -2537,25 +2355,22 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
 end subroutine globfac
 
 subroutine derresp(icubic, algo, resp, hpresp)
-   use response
-   use types
    implicit none
-
    integer :: icubic
    type(algorithm) :: algo
    class(dp_resp)  :: resp
    type(qp_resp),optional :: hpresp
 !local variables
    integer :: ix
-   
-! In Seebeck: *1000 so as to yield [S]=mV/K        
-     
+
+! In Seebeck: *1000 so as to yield [S]=mV/K
+
      do ix=1,3
         if (icubic==0) then
-           resp%Seebeck(ix)=1000.d0*resp%a_tot(ix,ix)/resp%s_tot(ix,ix) 
+           resp%Seebeck(ix)=1000.d0*resp%a_tot(ix,ix)/resp%s_tot(ix,ix)
            if (present(hpresp)) hpresp%Seebeck(ix)=1000.q0*hpresp%a_tot(ix,ix)/hpresp%s_tot(ix,ix)
         else
-           resp%Seebeck(ix)=1000.d0*resp%a_tot(1,1)/resp%s_tot(1,1) 
+           resp%Seebeck(ix)=1000.d0*resp%a_tot(1,1)/resp%s_tot(1,1)
            if (present(hpresp)) hpresp%Seebeck(ix)=1000.q0*hpresp%a_tot(1,1)/hpresp%s_tot(1,1)
         endif
      enddo
@@ -2566,19 +2381,19 @@ subroutine derresp(icubic, algo, resp, hpresp)
 !     3 = yz
 
      if (algo%lBfield) then
-        resp%Nernst(1) = (resp%aB_tot(1,2)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,2))/(resp%s_tot(1,1)**2) 
-        resp%Nernst(2) = (resp%aB_tot(1,3)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,3))/(resp%s_tot(1,1)**2) 
-        resp%Nernst(3) = (resp%aB_tot(2,3)*resp%s_tot(2,2)-resp%a_tot(2,2)*resp%sB_tot(2,3))/(resp%s_tot(2,2)**2) 
+        resp%Nernst(1) = (resp%aB_tot(1,2)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,2))/(resp%s_tot(1,1)**2)
+        resp%Nernst(2) = (resp%aB_tot(1,3)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,3))/(resp%s_tot(1,1)**2)
+        resp%Nernst(3) = (resp%aB_tot(2,3)*resp%s_tot(2,2)-resp%a_tot(2,2)*resp%sB_tot(2,3))/(resp%s_tot(2,2)**2)
         resp%Nernst = resp%Nernst * 1000.d0 ! V/K --> mV/K
         if (present(hpresp)) then
-           hpresp%Nernst(1) = (hpresp%aB_tot(1,2)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,2))/(hpresp%s_tot(1,1)**2) 
-           hpresp%Nernst(2) = (hpresp%aB_tot(1,3)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,3))/(hpresp%s_tot(1,1)**2) 
-           hpresp%Nernst(3) = (hpresp%aB_tot(2,3)*hpresp%s_tot(2,2)-hpresp%a_tot(2,2)*hpresp%sB_tot(2,3))/(hpresp%s_tot(2,2)**2) 
+           hpresp%Nernst(1) = (hpresp%aB_tot(1,2)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,2))/(hpresp%s_tot(1,1)**2)
+           hpresp%Nernst(2) = (hpresp%aB_tot(1,3)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,3))/(hpresp%s_tot(1,1)**2)
+           hpresp%Nernst(3) = (hpresp%aB_tot(2,3)*hpresp%s_tot(2,2)-hpresp%a_tot(2,2)*hpresp%sB_tot(2,3))/(hpresp%s_tot(2,2)**2)
            hpresp%Nernst = hpresp%Nernst * 1000.q0 ! V/K --> mV/K
 
            hpresp%Nernstpart(1) = ( hpresp%aB_tot(1,2)*hpresp%s_tot(1,1))/(hpresp%s_tot(1,1)**2)*1000.q0
            hpresp%Nernstpart(2) = (-hpresp%a_tot(1,1)*hpresp%sB_tot(1,2))/(hpresp%s_tot(1,1)**2)*1000.q0
-        endif 
+        endif
         resp%RH(1) = -resp%sB_tot(1,2)/(resp%s_tot(1,1)*resp%s_tot(2,2))
         resp%RH(2) = -resp%sB_tot(1,3)/(resp%s_tot(1,1)*resp%s_tot(3,3))
         resp%RH(3) = -resp%sB_tot(2,3)/(resp%s_tot(3,3)*resp%s_tot(3,3))
@@ -2588,15 +2403,12 @@ subroutine derresp(icubic, algo, resp, hpresp)
            hpresp%RH(2) = -hpresp%sB_tot(1,3)/(hpresp%s_tot(1,1)*hpresp%s_tot(3,3))
            hpresp%RH(3) = -hpresp%sB_tot(2,3)/(hpresp%s_tot(3,3)*hpresp%s_tot(3,3))
            hpresp%RH = hpresp%RH * 1.q+7 ! --> 10^-7 m^3/C
-        endif 
+        endif
      endif
 end subroutine derresp
 
-subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp) 
-   use types
-   use response
+subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
    implicit none
-
    integer, intent(in) :: iT, nalpha
    type(algorithm) :: algo
    type(scatrate)  :: sct
@@ -2610,7 +2422,7 @@ subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
    real(16):: dpdet, dptmp
 
    T = sct%TT(iT)
-   
+
    write(30,'(100E20.12)') T,(resp%s_tot(ia,ia), ia=1,nalpha )
    write(31,'(100E20.12)') T,(resp%s(:,ia,ia),   ia=1,nalpha )
    write(40,'(100E20.12)') T,(resp%a_tot(ia,ia), ia=1,nalpha )
@@ -2630,7 +2442,7 @@ subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
    write(331,'(100E20.12)') T,(respinter%s(:,ia,ia),   ia=1,nalpha )
    write(340,'(100E20.12)') T,(respinter%a_tot(ia,ia), ia=1,nalpha )
    write(341,'(100E20.12)') T,(respinter%a(:,ia,ia),   ia=1,nalpha )
-     
+
 ! XXX ACHTUNG not writing out all combinations...
    if (algo%lBfield) then
       write(50,'(100E20.12)') T,resp%sB_tot(1,2)
@@ -2714,7 +2526,7 @@ subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
             write(175,'(100E20.12)') T, real(dptmp,16),dpdet,hpresp%s_tot(1,2),hpresp%s_tot(2,3),hpresp%s_tot(1,3)! resistivity in Ohm m (xx component of the inverted matrix)
          endif
       endif
-   endif 
+   endif
 
    write(270,'(100E20.12)') T,respBl%Seebeck(:) ! in mV/K
    if (algo%lBfield) then
@@ -2744,7 +2556,6 @@ subroutine wrtresp(iT, nalpha, algo, sct, resp, respinter, respBl, hpresp)
 end subroutine wrtresp
 
 subroutine response_open_files(algo)
-   use types
    implicit none
    type(algorithm) :: algo
 
@@ -2752,11 +2563,11 @@ subroutine response_open_files(algo)
    open(31,file='sigma_band_xx.dat',status='unknown')
    open(40,file='peltier_tot.dat',status='unknown')
    open(41,file='peltier_band_xx.dat',status='unknown')
-! 50 for sxy                                                                                
+! 50 for sxy
    if (algo%lBfield) then
    open(50,file='sigmaB_tot.dat',status='unknown')
    open(51,file='sigmaB_band_xy.dat',status='unknown')
-! 60 for axy                                                                                
+! 60 for axy
    open(60,file='peltierB_tot.dat',status='unknown')
    open(61,file='peltierB_band_xy.dat',status='unknown')
 
@@ -2766,7 +2577,7 @@ subroutine response_open_files(algo)
    open(74,file='mut.dat',status='unknown') ! thermal counterpart of Hall mobility
    endif
 
-! 70 for aux's: Seebeck, Hall, Nernst...                                                    
+! 70 for aux's: Seebeck, Hall, Nernst...
    open(70,file='Seebeck.dat',status='unknown')
 
    open(75,file='resistivity.dat',status='unknown')
@@ -2777,11 +2588,11 @@ subroutine response_open_files(algo)
    open(131,file='sigma_band_xx.datQ',status='unknown')
    open(140,file='peltier_tot.datQ',status='unknown')
    open(141,file='peltier_band_xx.datQ',status='unknown')
-! 50 for sxy                                                                                
+! 50 for sxy
    if (algo%lBfield) then
    open(150,file='sigmaB_tot.datQ',status='unknown')
    open(151,file='sigmaB_band_xy.datQ',status='unknown')
-! 60 for axy                                                                                
+! 60 for axy
    open(160,file='peltierB_tot.datQ',status='unknown')
    open(161,file='peltierB_band_xy.datQ',status='unknown')
    open(171,file='Nernst.datQ',status='unknown')
@@ -2791,7 +2602,7 @@ subroutine response_open_files(algo)
    open(180,file='Nernst_part1.datQ',status='unknown')
    open(181,file='Nernst_part2.datQ',status='unknown')
    endif
-! 70 for aux's: Seebeck, Hall, Nernst...                                                    
+! 70 for aux's: Seebeck, Hall, Nernst...
    open(170,file='Seebeck.datQ',status='unknown')
 
    open(175,file='resistivity.datQ',status='unknown')
@@ -2801,11 +2612,11 @@ subroutine response_open_files(algo)
    open(231,file='sigma_band_xx.datB',status='unknown')
    open(240,file='peltier_tot.datB',status='unknown')
    open(241,file='peltier_band_xx.datB',status='unknown')
-! 50 for sxy                                                                                
+! 50 for sxy
    if (algo%lBfield) then
    open(250,file='sigmaB_tot.datB',status='unknown')
    open(251,file='sigmaB_band_xy.datB',status='unknown')
-! 60 for axy                                                                                
+! 60 for axy
    open(260,file='peltierB_tot.datB',status='unknown')
    open(261,file='peltierB_band_xy.datB',status='unknown')
    open(271,file='Nernst.datB',status='unknown')
@@ -2815,7 +2626,7 @@ subroutine response_open_files(algo)
    !open(280,file='Nernst_part1.datBQ',status='unknown')
    !open(281,file='Nernst_part2.datBQ',status='unknown')
    endif
-! 70 for aux's: Seebeck, Hall, Nernst...                                                    
+! 70 for aux's: Seebeck, Hall, Nernst...
    open(270,file='Seebeck.datB',status='unknown')
    open(275,file='resistivity.datB',status='unknown')
 
@@ -2825,7 +2636,7 @@ subroutine response_open_files(algo)
    open(340,file='peltier_inter_tot.dat',status='unknown')
    open(341,file='peltier_interband_xx.dat',status='unknown')
 
-! 70 for aux's: Seebeck, Hall, Nernst...                                                    
+! 70 for aux's: Seebeck, Hall, Nernst...
    open(370,file='Seebeck_inter.dat',status='unknown')
 
    open(375,file='resistivity_inter.dat',status='unknown')
@@ -2833,10 +2644,9 @@ subroutine response_open_files(algo)
 end subroutine response_open_files
 
 subroutine response_close_files(algo)
-   use types
    implicit none
    type(algorithm) :: algo
-   
+
    close(30)
    close(31)
    close(40)
@@ -2907,61 +2717,87 @@ end subroutine response_close_files
 
 
 subroutine dpresp_alloc(lBfield, dpresp, nk, nband)
-use response
-implicit none
-logical :: lBfield
-type(dp_resp)::dpresp 
-integer :: nk, nband
+  implicit none
+  logical :: lBfield
+  type(dp_resp)::dpresp
+  integer :: nk, nband
 
-! allocate transport variables                                                              
-allocate(dpresp%s_tmp(nk,nband,3,3))
-allocate(dpresp%a_tmp(nk,nband,3,3))
-allocate(dpresp%s(nband,3,3))
-allocate(dpresp%a(nband,3,3))
-if (nproc > 1) then
-   allocate(dpresp%s_local(nband,3,3))
-   allocate(dpresp%a_local(nband,3,3))
-endif
+  ! allocate transport variables
+  allocate(dpresp%s_tmp(nk,nband,3,3))
+  allocate(dpresp%a_tmp(nk,nband,3,3))
+  allocate(dpresp%s(nband,3,3))
+  allocate(dpresp%a(nband,3,3))
+  if (nproc > 1) then
+     allocate(dpresp%s_local(nband,3,3))
+     allocate(dpresp%a_local(nband,3,3))
+  endif
 
-if (lBfield) then
-   allocate(dpresp%sB_tmp(nk,nband,3,3))
-   allocate(dpresp%aB_tmp(nk,nband,3,3))
-   allocate(dpresp%sB(nband,3,3))
-   allocate(dpresp%aB(nband,3,3))
-   if (nproc > 1) then
-      allocate(dpresp%sB_local(nband,3,3))
-      allocate(dpresp%aB_local(nband,3,3))
-   endif
-endif
+  if (lBfield) then
+     allocate(dpresp%sB_tmp(nk,nband,3,3))
+     allocate(dpresp%aB_tmp(nk,nband,3,3))
+     allocate(dpresp%sB(nband,3,3))
+     allocate(dpresp%aB(nband,3,3))
+     if (nproc > 1) then
+        allocate(dpresp%sB_local(nband,3,3))
+        allocate(dpresp%aB_local(nband,3,3))
+     endif
+  endif
 end subroutine dpresp_alloc
 
+subroutine dprespinter_alloc(lBfield, dpresp, nk, nband)
+  implicit none
+  logical :: lBfield
+  type(dp_respinter)::dpresp
+  integer :: nk, nband
+
+  ! allocate transport variables
+  allocate(dpresp%s_tmp(nk,nband,3,3))
+  allocate(dpresp%a_tmp(nk,nband,3,3))
+  allocate(dpresp%s(nband,3,3))
+  allocate(dpresp%a(nband,3,3))
+  if (nproc > 1) then
+     allocate(dpresp%s_local(nband,3,3))
+     allocate(dpresp%a_local(nband,3,3))
+  endif
+
+  if (lBfield) then
+     allocate(dpresp%sB_tmp(nk,nband,3,3))
+     allocate(dpresp%aB_tmp(nk,nband,3,3))
+     allocate(dpresp%sB(nband,3,3))
+     allocate(dpresp%aB(nband,3,3))
+     if (nproc > 1) then
+        allocate(dpresp%sB_local(nband,3,3))
+        allocate(dpresp%aB_local(nband,3,3))
+     endif
+  endif
+end subroutine dprespinter_alloc
+
 subroutine qpresp_alloc(lBfield, qpresp, nk, nband)
-use response
-implicit none
-logical :: lBfield
-type(qp_resp)::qpresp 
-integer :: nk, nband
+  implicit none
+  logical :: lBfield
+  type(qp_resp)::qpresp
+  integer :: nk, nband
 
-! allocate transport variables                                                              
-allocate(qpresp%s_tmp(nk,nband,3,3))
-allocate(qpresp%a_tmp(nk,nband,3,3))
-allocate(qpresp%s(nband,3,3))
-allocate(qpresp%a(nband,3,3))
-if (nproc > 1) then
-   allocate(qpresp%s_local(nband,3,3))
-   allocate(qpresp%a_local(nband,3,3))
-endif
+  ! allocate transport variables
+  allocate(qpresp%s_tmp(nk,nband,3,3))
+  allocate(qpresp%a_tmp(nk,nband,3,3))
+  allocate(qpresp%s(nband,3,3))
+  allocate(qpresp%a(nband,3,3))
+  if (nproc > 1) then
+     allocate(qpresp%s_local(nband,3,3))
+     allocate(qpresp%a_local(nband,3,3))
+  endif
 
-if (lBfield) then
-   allocate(qpresp%sB_tmp(nk,nband,3,3))
-   allocate(qpresp%aB_tmp(nk,nband,3,3))
-   allocate(qpresp%sB(nband,3,3))
-   allocate(qpresp%aB(nband,3,3))
-   if (nproc > 1) then
-      allocate(qpresp%sB_local(nband,3,3))
-      allocate(qpresp%aB_local(nband,3,3))
-   endif
-endif
+  if (lBfield) then
+     allocate(qpresp%sB_tmp(nk,nband,3,3))
+     allocate(qpresp%aB_tmp(nk,nband,3,3))
+     allocate(qpresp%sB(nband,3,3))
+     allocate(qpresp%aB(nband,3,3))
+     if (nproc > 1) then
+        allocate(qpresp%sB_local(nband,3,3))
+        allocate(qpresp%aB_local(nband,3,3))
+     endif
+  endif
 end subroutine qpresp_alloc
 
 
@@ -2976,3 +2812,4 @@ function dfermi(eps,beta)
 return
 end function dfermi
 
+end module Mresponse

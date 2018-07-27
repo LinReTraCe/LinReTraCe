@@ -1,7 +1,20 @@
+# Fortran files
 *.o
 *.mod
-*.F90
+
+# application files
 bkp*/**
-linretrace
+
+# vim remainders
 *.swp
+
+# input files
 inp.*
+
+
+# build files
+make_include
+bin/**
+
+# tag files
+tags

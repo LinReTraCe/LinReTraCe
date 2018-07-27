@@ -1,12 +1,10 @@
+module Mroot
+  use Mparams
+  use Mtypes
 
-
-
+contains
 
 subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
-  use params
-  !use mpi_org, only: myid,master
-  !use estruct, only : delta
-  use types
   implicit none
   ! passed variables
   real(8) :: mu, dev, target_zero
@@ -21,7 +19,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   ! linear interpolation method
   real(8), allocatable :: Y(:), X(:) !arrays containig the function to minimise and the chemical potential
   integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
-  real(8) :: dmu ! increment 
+  real(8) :: dmu ! increment
   real(8) :: a11, a22, a31, a42
   real(8) :: A(4,4), B(4)
   integer :: i, j
@@ -30,16 +28,16 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   logical linint  ! selects the linear interpolation method
   ! Ridders' method
   real(8) :: F(4), P(4)
-  real(8) :: s 
-  real(8) :: psave, ptol  
+  real(8) :: s
+  real(8) :: psave, ptol
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
 
-! deviation from set particle number with initial mu                                                                                    
+! deviation from set particle number with initial mu
   call ndeviation(mu, iT, ek, sct, mesh, target_zero1)
 
   target_zero2=target_zero1
-!coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does                      
+!coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does
   mu1=mu
   mu2=mu
 
@@ -53,7 +51,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
      call ndeviation(mu1, iT, ek, sct, mesh, target_zero1)
 
   enddo
-   
+
   niit0=niit
 !  if (iT.eq.nT) niit0=niit*3
   lsecant=.false.
@@ -61,7 +59,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   lridd  =.true.
 
   if (lsecant) then
-  !Secant root finding                                                                                                                  
+  !Secant root finding
     do iit=1,niit0
        mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
        call ndeviation(mu, iT, ek, sct, mesh, target_zero)
@@ -69,45 +67,45 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
        if (abs(target_zero).lt.dev)  exit
        if (target_zero.gt.0.d0) then
           mu1=mu
-          target_zero1=target_zero 
+          target_zero1=target_zero
           call ndeviation(mu2, iT, ek, sct, mesh, target_zero2)
        else
           mu2=mu
-          target_zero2=target_zero 
+          target_zero2=target_zero
           call ndeviation(mu1, iT, ek, sct, mesh, target_zero1)
        endif
     enddo
     niitact=iit
 
   elseif (linint) then
-    ! evaluate the target function on an interval and find the root by linear interpolation 
-    ! fix the number of points to sample the (mu1,mu2) 
+    ! evaluate the target function on an interval and find the root by linear interpolation
+    ! fix the number of points to sample the (mu1,mu2)
     nmu=30
     allocate(Y(nmu), X(nmu))
-    Y(:)=0.0d0 ; X(:)=0.0d0 
-    ! construct linear grid 
+    Y(:)=0.0d0 ; X(:)=0.0d0
+    ! construct linear grid
     X(1)=mu1; X(nmu)=mu2; dmu=(mu2-mu1)/(nmu-1)
     !write(*,*) 'mu1',mu1,'mu2',mu2,'dmu',dmu
     Y(1)=target_zero1
     Y(nmu)=target_zero2
-  
+
     do i=2,nmu-1
       X(i)=X(i-1)+dmu
-    enddo 
+    enddo
     ! evaluate target function in the interval
     do i=2,nmu-1
        call ndeviation(X(i), iT, ek, sct, mesh, Y(i))
-    enddo 
+    enddo
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
-    enddo 
-   
-!!!!!!!!!!!!!!!!!test 
+    enddo
+
+!!!!!!!!!!!!!!!!!test
     !open(666,file='targeT.dat',status='unknown')
     !write(666,'(A,1I10)')'T ',iT
     !write(666,'(2E15.7)') (X(i),Y(i), i=1,nmu)
     !write(666,'(A)')'   '
-!!!!!!!!!!!!!!!!!test end 
+!!!!!!!!!!!!!!!!!test end
 
     ! find root by linear interpolation
     do i = 1, nmu-1
@@ -117,32 +115,32 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
           a22 = X(j+1)-X(j)
           a31 = Y(i+1)-Y(i)
           a42 = X(j+1)-X(j)
-  
+
           A(1,1)=a11; A(2,2)=a22; A(3,1)=a31; A(4,2)=a42
           A(1,3)=-1.0d0; A(2,3)=-1.0d0
           A(3,4)=-1.0d0; A(4,4)=-1.0d0
           B(1) = -X(i); B(2) = -X(j)
           B(3) = -Y(i); B(4) = -X(j)
-  
+
           !write(*,*) 'LU factorisation begins'
           call dgetrf(4, 4, A, 4, ipiv, ierr )
           if (ierr /= 0) write(*,*) 'LU factorisation failed', ierr, i, j, a31
-  
+
           !write(*,*) 'solution lin syst begins'
           call dgetrs( 'N', 4, 1, A, 4, ipiv, B, 4, ierr)
           if (ierr /= 0) write(*,*) 'solution of the system of linear equations has failed', ierr, i, j
-  
+
           ! check if there is any intersection
           if (B(1) < 1.0d0 .and. B(2) < 1.0d0) then
              if (B(1) >= 0.0d0 .and. B(2) >= 0.0d0) then
-                !write(*,*) b(3), b(4)   
+                !write(*,*) b(3), b(4)
                 ! save the values of the intersection
                 mu = B(3)
                 call ndeviation(mu, iT, ek, sct, mesh, target_zero)
              endif
           endif
        enddo ! over freq. counter j
-    enddo ! over freq. counter i 
+    enddo ! over freq. counter i
     deallocate(Y,X)
 
   elseif(lridd) then   !Ridders' method for root finding
@@ -154,7 +152,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
     !ptol   =  1.0d-18
     ptol   =  dev
     psave  = -1.1d30
-    maxiter= 60    
+    maxiter= 60
 
      do j = 1, maxiter
         P(3) = 0.5d0*(P(1)+P(2))
@@ -189,7 +187,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
         !condition for termination
         if (abs(P(2)-P(1)) <= ptol) goto 400
         !write(*,*)'iter, mu, target_zero',j, P(4), F(4)
-     enddo ! over number of iterations 
+     enddo ! over number of iterations
 
  400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
 
@@ -198,14 +196,14 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
      niitact = j
      niit0   = maxiter
      target_zero = F(4)
-  
+
   endif ! root finding algorithm
 
   if (lsecant .or. lridd) then
     !if ((niitact.ge.niit0).and.(myid.eq.master)) then
     if (niitact .ge. niit0) then
        write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
-       write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev !ndevQ     
+       write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev !ndevQ
        write(*,*) "increase niit, or allow for bigger ndev (see params.F90)"
        !write(*,*) "myid=",myid
     endif
@@ -243,9 +241,6 @@ end function FERMI
 
 
 subroutine ndeviation(mu, iT, ek, sct, mesh, target_zero)
-  use params
-  use types
-  !use mpi_org
   implicit none
 
   !passed variables
@@ -262,16 +257,14 @@ subroutine ndeviation(mu, iT, ek, sct, mesh, target_zero)
      target_zero=ek%nelect-ek%occ_tot
      !write(*,*)'mu, target_zero, ek%occ_tot ', mu, target_zero, ek%occ_tot
 
-  !endif !master                                                                                                                         
-  ! broadcast target_zero. Not very elegant to do this...                                                                               
+  !endif !master
+  ! broadcast target_zero. Not very elegant to do this...
   !call MPI_BCAST(target_zero,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
 !  call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
   return
 end subroutine ndeviation
 
 subroutine varocc(mu, iT, ek, sct, mesh)
-  use types
-  use params
   implicit none
 
   integer, intent(in) :: iT
@@ -285,10 +278,9 @@ subroutine varocc(mu, iT, ek, sct, mesh)
   real(8) :: nsmall, nbig, ninteger, eps, tmp
   integer :: iband, ik, ikx, iky, ikz
   integer :: ktot !total number of k-points
-  ! RECALL that mesh%ktot includes extra k-points when the 
+  ! RECALL that mesh%ktot includes extra k-points when the
   ! tetrahedron method is selected
 !external variables
-  real(8), external :: FERMI
   complex(8), external :: wpsipg
 
   ek%occ_tot=0.0d0
@@ -303,37 +295,37 @@ subroutine varocc(mu, iT, ek, sct, mesh)
   nbig=0.d0
   nsmall=0.d0
   ktot=mesh%kx*mesh%ky*mesh%kz
-  
+
   do ik = 1, ktot
-     do iband=1,ek%nband_max 
+     do iband=1,ek%nband_max
         if (ek%band(ik,iband) .gt. 90.0d0) cycle
         eps=sct%z*ek%band(ik,iband)-mu
 
-        if (eps .lt. 0.d0) then ! occupied state                                                                                                        
+        if (eps .lt. 0.d0) then ! occupied state
            ninteger=ninteger+1.d0
-           
+
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=1.d0-FERMI(eps,beta)
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps                                                                   
-              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0 !                                                                                          
+              z=0.5d0 + (sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps
+              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0 !
            endif
-        
+
            if (tmp.gt.thr) then
               nbig=nbig-tmp
            else
               nsmall=nsmall-tmp
            endif
-        
-        else ! unoccupied state                                                                                                                       
-        
+
+        else ! unoccupied state
+
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=FERMI(eps,beta)
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps                                                                            
-              tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0 !                               
+              z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps
+              tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0 !
            endif
-        
+
            if (tmp.gt.thr) then
               nbig=nbig+tmp
            else
@@ -344,9 +336,9 @@ subroutine varocc(mu, iT, ek, sct, mesh)
         !ek%occ(ik,iband) = 2.0d0*(ninteger_tot+nbig_tot+nsmall_tot)/real(mesh%ktot,8)
         !ek%occ(ik,iband) = 2.0d0*(ninteger+nbig+nsmall)/real(mesh%ktot,8)
         !ek%occ_tot = ek%occ_tot + ek%occ(ik,iband)
-     enddo ! iband       
-  enddo                                                                                                                   
-  ninteger=2.d0*ninteger/real(ktot,8) ! 2 for spin                                                                                       
+     enddo ! iband
+  enddo
+  ninteger=2.d0*ninteger/real(ktot,8) ! 2 for spin
   nbig=2.d0*nbig/real(ktot,8)
   nsmall=2.d0*nsmall/real(ktot,8)
   ek%occ_tot=ninteger+nbig+nsmall
@@ -355,3 +347,4 @@ subroutine varocc(mu, iT, ek, sct, mesh)
 
 end subroutine varocc
 
+end module Mroot
