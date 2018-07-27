@@ -346,15 +346,19 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
         endif
         !intraband QP
         if (.not.algo%ldebug) then
-           call MPI_ALLREDUCE(MPI_IN_PLACE, qresp%s_tot(1,1), 9, &
-                  MPI_REAL16, MPI_SUM, MPI_COMM_WORLD, mpierr)
-           call MPI_ALLREDUCE(MPI_IN_PLACE, qresp%a_tot(1,1), 9, &
-                  MPI_REAL16, MPI_SUM, MPI_COMM_WORLD, mpierr)
+           do ialpha=1,3
+              do ibeta=1,3
+                 call mpi_reduce_quad(qresp%s_tot(ialpha,ibeta),qresp%s_tot(ialpha,ibeta))
+                 call mpi_reduce_quad(qresp%a_tot(ialpha,ibeta),qresp%a_tot(ialpha,ibeta))
+              enddo
+           enddo
            if (algo%lBfield .and. algo%ltbind ) then
-              call MPI_ALLREDUCE(MPI_IN_PLACE, qresp%sB_tot(1,1), 9, &
-                     MPI_REAL16, MPI_SUM, MPI_COMM_WORLD, mpierr)
-              call MPI_ALLREDUCE(MPI_IN_PLACE, qresp%aB_tot(1,1), 9, &
-                     MPI_REAL16, MPI_SUM, MPI_COMM_WORLD, mpierr)
+              do ialpha=1,3
+                 do ibeta=1,3
+                    call mpi_reduce_quad(qresp%sB_tot(ialpha,ibeta),qresp%sB_tot(ialpha,ibeta))
+                    call mpi_reduce_quad(qresp%aB_tot(ialpha,ibeta),qresp%aB_tot(ialpha,ibeta))
+                 enddo
+              enddo
            endif
         endif 
      endif   !nproc>1
@@ -507,15 +511,11 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
                  endif
                  !intraband QP
                  if (.not.algo%ldebug) then
-                    call MPI_REDUCE(qresp%s_local(ib,ialpha,ibeta), qresp%s(ib,ialpha,ibeta), 1, &
-                           MPI_REAL16, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-                    call MPI_REDUCE(qresp%a_local(ib,ialpha,ibeta), qresp%a(ib,ialpha,ibeta), 1, &
-                           MPI_REAL16, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+                    call mpi_reduce_quad(qresp%s_local(ib,ialpha,ibeta),qresp%s(ib,ialpha,ibeta))  
+                    call mpi_reduce_quad(qresp%a_local(ib,ialpha,ibeta),qresp%a(ib,ialpha,ibeta))  
                     if (algo%lBfield .and. algo%ltbind ) then
-                       call MPI_REDUCE(qresp%sB_local(ib,ialpha,ibeta), qresp%sB(ib,ialpha,ibeta), 1, &
-                              MPI_REAL16, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-                       call MPI_REDUCE(qresp%aB_local(ib,ialpha,ibeta), qresp%aB(ib,ialpha,ibeta), 1, &
-                              MPI_REAL16, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+                       call mpi_reduce_quad(qresp%sB_local(ib,ialpha,ibeta),qresp%sB(ib,ialpha,ibeta))  
+                       call mpi_reduce_quad(qresp%aB_local(ib,ialpha,ibeta),qresp%aB(ib,ialpha,ibeta))  
                     endif
                  endif
               enddo !nbands
