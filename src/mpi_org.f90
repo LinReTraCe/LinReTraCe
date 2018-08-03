@@ -1,8 +1,5 @@
-
-
-module mpi_org
-
-
+module Mmpi_org
+  use mpi
 
 !integer dp,qp
 !parameter(dp=selected_real_kind(8)) !for HCLM
@@ -17,8 +14,6 @@ integer :: nproc,myid,master,mpierr,iqstr,iqend,nkthis
 integer, allocatable :: displs(:),rcounts(:)
 character(len=4) :: chmyid
 
-
-include 'mpif.h'
 
 
 contains
@@ -50,7 +45,7 @@ contains
    implicit none
    integer :: n, nk
    real(8) :: dvec(n)
-   real(8) :: sub_dvec(nk) 
+   real(8) :: sub_dvec(nk)
    integer :: ierror
    integer :: sendcount, recvcount
 
@@ -151,7 +146,7 @@ contains
     implicit none
     integer :: myidin,id,ikstart,ikend,dq,npp,nk
 
-    id=myidin+1 !usually starting at 0                                                                                                         
+    id=myidin+1 !usually starting at 0
     dq=nk/nproc+1
     npp=0
     if(id.gt.nproc+nk-dq*nproc) then
@@ -166,14 +161,14 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_ALGOBCAST
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_algobcast(algo) 
-    use types
+  subroutine mpi_algobcast(algo)
+    use Mtypes
     implicit none
     type(algorithm) :: algo
     integer :: ierror
 
     ierror=0
-    !write(100+myid,*)'algo%ldebug',algo%ldebug 
+    !write(100+myid,*)'algo%ldebug',algo%ldebug
     call MPI_BCAST(algo%ldebug ,1,MPI_LOGICAL,master,MPI_COMM_WORLD,ierror)
     if (ierror /= 0) then
        write (*,*) 'mpi_algobcast returns error/1'
@@ -227,12 +222,12 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_KMESHBCAST
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_kmeshbcast(kmesh)  
-    use types
+  subroutine mpi_kmeshbcast(kmesh)
+    use Mtypes
     implicit none
     type (kpointmesh) :: kmesh
     integer :: ierror
-    
+
     !write(200+myid,*)'kmesh%k_id(3,3,3)',kmesh%k_id(3,3,3)
     call MPI_BCAST(kmesh%k_id(1,1,1),size(kmesh%k_id),MPI_INTEGER,master,MPI_COMM_WORLD,ierror)
     if (ierror /= 0) then
@@ -272,13 +267,13 @@ contains
        STOP
     endif
 
-  end subroutine mpi_kmeshbcast 
+  end subroutine mpi_kmeshbcast
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_EDISPBCAST
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_edispbcast(ek)  
-    use types
+  subroutine mpi_edispbcast(ek)
+    use Mtypes
     implicit none
     type (edisp) :: ek
     integer :: ierror
@@ -324,15 +319,15 @@ contains
        STOP
     endif
 
-  end subroutine mpi_edispbcast  
+  end subroutine mpi_edispbcast
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_THDRBCAST
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_thdrbcast(thdr) 
-    use types
+  subroutine mpi_thdrbcast(thdr)
+    use Mtypes
     implicit none
-    type (tetramesh) :: thdr 
+    type (tetramesh) :: thdr
     integer :: ierror
 
     call MPI_BCAST(thdr%ntet,1,MPI_INTEGER,master,MPI_COMM_WORLD,ierror)
@@ -356,18 +351,18 @@ contains
        STOP
     endif
 
-  end subroutine mpi_thdrbcast 
+  end subroutine mpi_thdrbcast
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_SCTRBCAST
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_sctrbcast(sct) 
-    use types
+  subroutine mpi_sctrbcast(sct)
+    use Mtypes
     implicit none
     type (scatrate) :: sct
     integer :: ierror, n, m
-    
-    ierror=0 
+
+    ierror=0
     n=size(sct%TT)
     m=size(sct%gam)
     !write(400+myid,'(F8.5/)') sct%TT(:)
@@ -384,7 +379,7 @@ contains
        STOP
     endif
 
-  end subroutine mpi_sctrbcast 
+  end subroutine mpi_sctrbcast
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_REDUCE_QUAD
@@ -393,14 +388,14 @@ contains
 
     implicit none
 
-    !input/output                                                          
+    !input/output
     real(16) :: qp0,qp1
-    !parameters                    
+    !parameters
     real(16) :: QCUT
-    parameter(QCUT=1.Q14)  ! relevant digits  14?                 
-    !tmps              
+    parameter(QCUT=1.Q14)  ! relevant digits  14?
+    !tmps
     real(16) :: qtmp,qtmp2,qtmp3
-    !Transferrables                                       
+    !Transferrables
     real(8) :: DP0
     integer(8) :: INT0,IEXP
     !Transferred into
@@ -409,11 +404,11 @@ contains
     !mpi
     integer :: iproc
 
-    ! TEST NUMBER                                                                                                                               
+    ! TEST NUMBER
     !qp0=1.23456789123456789123456q-3
 !    write(*,*)'I ', myid,qp0
 
-    !Get integer exponent  IEXP of qp0                                                                                                          
+    !Get integer exponent  IEXP of qp0
     if (qp0.ne.0.q0) then
        IEXP=int(log10(abs(qp0)),8)
     else
@@ -422,25 +417,25 @@ contains
 
 !    write(*,*)'IEXP ',IEXP
 
-    !Slide qp0 by IEXP digits --> leading digit                                                                                                 
-    !Then slide by number of DP-relevant digits via QCUT (usually QCUT=1.Q12)                                                                   
+    !Slide qp0 by IEXP digits --> leading digit
+    !Then slide by number of DP-relevant digits via QCUT (usually QCUT=1.Q12)
     qtmp=(qp0/(10.q0**iEXP))*QCUT
 !    write(*,*)'SLIDED  ',qtmp
-    
-    !Define integer INT0 that contains all DP-relevant digits, and the <0 difference, cast into DP0                                             
+
+    !Define integer INT0 that contains all DP-relevant digits, and the <0 difference, cast into DP0
     INT0=int(qtmp,8)
     qtmp2=qtmp-real(INT0,16)
     DP0=real(qtmp2,8)
-    
+
 !    write(*,*)'INT  ',INT0
 !    write(*,*)'DIFF ',qtmp2
 !    write(*,*)'DIFF-DP ',DP0
 
-    ! transfer IEXP, INT0 and DP0                                                                                                               
-    ! then lrecombine                                                                                                                           
+    ! transfer IEXP, INT0 and DP0
+    ! then lrecombine
 
 !    write(*,*)' Transfer : ', iexp,int0,dp0
-    
+
 
 !    write(*,*)'============================='
 
@@ -490,7 +485,7 @@ contains
 
     qp1=0.q0
     do iproc=1,nproc
-       
+
        qtmp3=real(INT0_T(iproc),16)
        qtmp3=qtmp3*(10.q0**iEXP_T(iproc) / QCUT )
        qtmp3=qtmp3+real(DP0_T(iproc),16)*(10.q0**iEXP_T(iproc) / QCUT )
@@ -507,7 +502,7 @@ contains
 !    open(99,file='debug_'//trim(chmyid),status='unknown',position='append')
 !    write(99,'(100E20.12)')qp0-qtrans(myid+1)
 !    close(99)
- 
+
 !       do iproc=1,nproc
 !          write(*,*) 'F ',qtrans(iproc)
 !       enddo
@@ -554,48 +549,48 @@ contains
   subroutine mpi_bcast_quad(qp0)
     implicit none
 
-    !input/output                                                                                         
+    !input/output
     real(16) :: qp0
-    !parameters                                                                                           
+    !parameters
     real(16) :: QCUT
-    parameter(QCUT=1.Q14)  ! relevant digits                                                              
-    !tmps                                                                                                 
+    parameter(QCUT=1.Q14)  ! relevant digits
+    !tmps
     real(16) :: qtmp,qtmp2,qp1
-    !Transferrables                                                                                       
+    !Transferrables
     real(8) :: DP0
     integer(8) :: INT0,IEXP
 
     if (myid.eq.master) then
 !       write(*,*)'I ',qp0
 
-       !Get integer exponent  IEXP of qp0                                                                    
-       !careful here... if qp0=0 this will overflow...                                                       
+       !Get integer exponent  IEXP of qp0
+       !careful here... if qp0=0 this will overflow...
        if (qp0.ne.0.q0) then
           IEXP=int(log10(abs(qp0)),8)
        else
           IEXP=0
        endif
 !       write(*,*)'IEXP ',IEXP
-    
-       !Slide qp0 by IEXP digits --> leading digit                                                           
-       !Then slide by number of DP-relevant digits via QCUT (usually QCUT=1.Q12)                             
+
+       !Slide qp0 by IEXP digits --> leading digit
+       !Then slide by number of DP-relevant digits via QCUT (usually QCUT=1.Q12)
        qtmp=(qp0/(10.q0**iEXP))*QCUT
 !       write(*,*)'SLIDED  ',qtmp
-       
-       
-       !Define integer INT0 that contains all DP-relevant digits, and the <0 difference, cast into DP0       
+
+
+       !Define integer INT0 that contains all DP-relevant digits, and the <0 difference, cast into DP0
        INT0=int(qtmp,8)
        qtmp2=qtmp-real(INT0,16)
        DP0=real(qtmp2,8)
-       
+
 !       write(*,*)'INT  ',INT0
 !       write(*,*)'DIFF ',qtmp2
 !       write(*,*)'DIFF-DP ',DP0
-       
+
     endif !master
 
-! transfer IEXP, INT0 and DP0                                                                         
-! then recombine                                                                                     
+! transfer IEXP, INT0 and DP0
+! then recombine
 
     call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
     call MPI_BCAST(dp0,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
@@ -613,13 +608,13 @@ contains
 !    write(*,*)qp0
     qp1=qp1*(10.q0**iEXP / QCUT )
 !    write(*,*)qp0
-    
+
     qp1=qp1+real(DP0,16)*(10.q0**iEXP / QCUT )
-    
+
 !    write(*,*)'E ',myid, qp1
 !    if (myid.eq.master) write(*,*)'DIFF ', qp0-qp1
 !    write(*,*)
-    
+
 !pause
 
 !    call MPI_BCAST(dp1,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
@@ -666,4 +661,4 @@ subroutine prepare_chmyid(myid,chmyid)
   return
 end subroutine prepare_chmyid
 
-end module mpi_org
+end module Mmpi_org

@@ -49,11 +49,13 @@
 
 program gtmain ! GammaTransport
 
-use params
-use types
-use mpi_org
-use estruct!, only: delta,gam,gmax,iband_valence,gminall,emin,emax!,ek,vka,vkab,zqp ! ek,zqp,vka,vkab needed for testing only!!! move that
-use response
+use Mparams
+use Mtypes
+use Mmpi_org
+use Mestruct!, only: delta,gam,gmax,iband_valence,gminall,emin,emax!,ek,vka,vkab,zqp ! ek,zqp,vka,vkab needed for testing only!!! move that
+use Mresponse
+use Mroot
+use MrootQ
 implicit none
 
      type(algorithm)  :: algo
@@ -63,16 +65,16 @@ implicit none
      type(edisp) :: eirrk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
      type(edisp) :: eredk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
      type(edisp) :: efulk       ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
-     type(tetramesh) :: thdr    ! contains the tetrahedra 
-     type(dosgrid)   :: dos     ! DOS, integrated DOS, Fermi level 
+     type(tetramesh) :: thdr    ! contains the tetrahedra
+     type(dosgrid)   :: dos     ! DOS, integrated DOS, Fermi level
      type(scatrate)  :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
      type(dp_resp)   :: dpresp  ! response functions in double precision
      type(dp_resp)   :: respBl  ! response functions in double precision for Boltzmann regime response
      type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
      type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
      type(qp_resp)   :: qpresp  ! response functions in 4-ple precision
-   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_re there is 
-   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement 
+   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
+   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
    !! is negligible
 
 real(8) :: mu,mutmp !chemical potential
@@ -109,7 +111,7 @@ endif
      !with this flag set to false the quad precision response is computed
      algo%ldebug=.true.
      !algo%ldebug=.false.
-     
+
 !read in electronic structure and matrix elements
 call estruct_init(algo, kmesh, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
 if(.not.(algo%lBfield)) then
@@ -118,14 +120,14 @@ endif
 
 if (algo%imurestart == 0 ) then
    if (algo%ltbind) then
-      mu = eirrk%efer 
+      mu = eirrk%efer
    else
       if (algo%ltetra) mu = efulk%efer
       if (.not.algo%ltetra) mu = eredk%efer
    endif
    if (myid.eq.master)  write(*,*)'initialized mu = ',mu
 else
-   mu = eirrk%efer  
+   mu = eirrk%efer
    if (myid.eq.master)  write(*,*)'mu read from file= ',mu
 endif
 
@@ -164,14 +166,14 @@ do iband=1,nband
       do ig=0,sct%ng
          sct%gam(iT,iband)=sct%gam(iT,iband) + sct%gc(ig)*(sct%TT(iT)**ig)
       enddo
-   enddo !it                                                                                                                          
-enddo !iband                                                                                                                          
+   enddo !it
+enddo !iband
 
 if (myid.eq.master) then
 !!!!!!!!!!TEST
-  !write T-dependent GAMMA to file                                                                                                      
+  !write T-dependent GAMMA to file
    open(10,file='GamT.dat', status='unknown')
-   do iT=sct%nT,1,-1 
+   do iT=sct%nT,1,-1
       write(10,'(100E20.12)')sct%TT(iT),(sct%gam(iT,iband),iband=1,nband)
    enddo
    close(10)
@@ -246,21 +248,21 @@ enddo
 iflag_dmudt=0 !!!what is this for?
 
 if (algo%ltetra) then
-   call dpresp_alloc(algo%lBfield, dpresp, 4, nband) 
-   call dpresp_alloc(.false., dderesp, 4, nband) 
-   call dpresp_alloc(.false., dinter, 4, nband) 
+   call dpresp_alloc(algo%lBfield, dpresp, 4, nband)
+   call dprespinter_alloc(.false., dderesp, 4, nband)
+   call dprespinter_alloc(.false., dinter, 4, nband)
    call dpresp_alloc(algo%lBfield, respBl, 4, nband)
 else
-   call dpresp_alloc(algo%lBfield, dpresp, nk, nband) 
-   call dpresp_alloc(.false., dderesp, nk, nband) 
-   call dpresp_alloc(.false., dinter, nk, nband) !eM 16.03.2018 unused at the moment
+   call dpresp_alloc(algo%lBfield, dpresp, nk, nband)
+   call dprespinter_alloc(.false., dderesp, nk, nband)
+   call dprespinter_alloc(.false., dinter, nk, nband) !eM 16.03.2018 unused at the moment
    call dpresp_alloc(algo%lBfield, respBl, nk, nband)
 endif
 if (.not. algo%ldebug) then
    if (algo%ltetra) then
-      call qpresp_alloc(algo%lBfield, qpresp, 4, nband) 
+      call qpresp_alloc(algo%lBfield, qpresp, 4, nband)
    else
-      call qpresp_alloc(algo%lBfield, qpresp, nk, nband) 
+      call qpresp_alloc(algo%lBfield, qpresp, nk, nband)
    endif
 endif
 
@@ -283,14 +285,14 @@ endif
 ! START TEMPERATURE LOOP
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 do iT=sct%nT,1,-1
-   T=sct%TT(iT) 
+   T=sct%TT(iT)
    beta=1.d0/(kB*T)
    beta2p=beta/(2.d0*pi)
 !determine maximal gamma of bands involved in gap
    !gmax=max(gam(it,iband_valence),gam(it,iband_valence+1))
    gmax=max(sct%gam(iT,1),sct%gam(iT,2))
    !eM: I'm circumventing the problem here, since there is no band dependence on
-   ! gamma... a compromise could be to have different values of gamma for bands 
+   ! gamma... a compromise could be to have different values of gamma for bands
    ! above or below the VBM (that can be found already in dos%vbm)
    criterion=1.1d0/beta+0.64d0*gmax ! considerations of FWHM, etc...
    !write(*,*) 'criterion/1', criterion
@@ -310,9 +312,9 @@ do iT=sct%nT,1,-1
 ! XXX be careful in the case of metals... then delta makes no sense...
 
 
-   !if (myid.eq.master) then 
-   !also the chemical potential search is not parallelised at the moment 
-   !don't know how difficult it would be to revert to the original implementation 
+   !if (myid.eq.master) then
+   !also the chemical potential search is not parallelised at the moment
+   !don't know how difficult it would be to revert to the original implementation
    !and/or to implement the tetrahedron method
       if (algo%imurestart == 0) then
 
@@ -364,40 +366,40 @@ do iT=sct%nT,1,-1
                write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
             endif
          endif !criterion
-      
+
          mutmp=mu ! possibly unused
-      
+
 !      if (myid.eq.master) write(*,'(A,3E)') 'XXX ', T,beta,1.1d0/(delta/100.d0-0.64d0*gmax)
-      
+
          !if ( (delta.gt.0.d0).and.(criterion.gt.90.d0).and.(gminall.eq.0.d0) ) then
          if ( (dos%gap .gt. 0.d0).and.(criterion .gt. 90.d0).and.(gminall .eq. 0.d0) ) then
-      
+
             if (myid.eq.master) then
                write(*,*) 'Using low T extrapolation'
                imeth=3
-               
+
                if (iflag_dmudt.eq.0) then
-                  !dmudT = ( mu-(emax(iband_valence)+delta/2.d0) ) / T 
+                  !dmudT = ( mu-(emax(iband_valence)+delta/2.d0) ) / T
                   dmudT = ( mu-(dos%vbm+dos%gap/2.d0) ) / T  !eM: let's hope that this actually means the same as what above
                   !         write(*,*) ' XXX '
                   !         write(*,*)mu
                   !         write(*,*) (emax(iband_valence)+delta/2.d0)
                   iflag_dmudt=1
                endif
-               
+
                !      write(*,*)emax(iband_valence),emax(iband_valence)+delta/2.d0,dmudt
-               
+
                !mu=emax(iband_valence)+ delta/2.d0 + dmudT * T
                mu=dos%vbm+ dos%gap/2.d0 + dmudT * T !eM: let's hope that this actually means the same as what above
-               
+
             endif
-      
+
          endif
       endif !algo%imurestart==0
 
 ! old_vers
 !
-!      if (1.eq.2) then ! XXX beware... this is meant to work with gamma=0 ... but check... 
+!      if (1.eq.2) then ! XXX beware... this is meant to work with gamma=0 ... but check...
 !                    ! XXX for gamma=0, we know that it should be linear down to midgap, so we can actually use that...
 !                    ! XXX so determine slope and extrapolate... need to think harder for gamma>0
 !                    ! e.g. evaluate impsi at homo/lumu... and look (analytically?)
@@ -411,7 +413,7 @@ do iT=sct%nT,1,-1
 !            call find_muQ_lowT(mu,iT)
 !            !if (myid.eq.master) write(*,'(A,1E20.12)')' using find_muQ_lowT ', T
 !         endif
-!         
+!
 !      endif
 
    !endif !master
@@ -433,9 +435,9 @@ do iT=sct%nT,1,-1
          write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
          write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
       case (2)
-         mu = eirrk%efer !this is the original assignment to the value read from file 
-                         !unless imurestart == 0, in which case it is the value found from the 
-                         !dos (if the tetrahedron methos has been selected) 
+         mu = eirrk%efer !this is the original assignment to the value read from file
+                         !unless imurestart == 0, in which case it is the value found from the
+                         !dos (if the tetrahedron methos has been selected)
          niitact=0
          write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
          write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
@@ -450,8 +452,8 @@ do iT=sct%nT,1,-1
    sct%mu(iT) = mu
 
    if ((myid == master) .and. (iT == sct%nT)) then
-      !call intldos(iT, dos, redkm, eredk, sct) 
-      call intetra(fulkm, thdr, dos, sct%z*efulk%band, efulk%nband_max) 
+      !call intldos(iT, dos, redkm, eredk, sct)
+      call intetra(fulkm, thdr, dos, sct%z*efulk%band, efulk%nband_max)
       do ig=1,size(dos%enrg)
          dos%dos(ig)=2.0d0*dos%dos(ig)
          dos%nos(ig)=2.0d0*dos%nos(ig)
@@ -460,63 +462,63 @@ do iT=sct%nT,1,-1
          write (120,*) dos%enrg(ig), dos%dos(ig), dos%nos(ig)
       enddo
    endif
-   
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! DONE MU. DO TRANSPORT AT THIS POINT.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
    call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?
    if (algo%ldebug) then
-      if (algo%ltbind) then  
-        call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl) 
+      if (algo%ltbind) then
+        call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl)
       else
         if (algo%ltetra) then
           call calc_response(mu, iT, drhodT, algo, fulkm, efulk, thdr, sct, dpresp, dderesp, dinter, respBl)
         else
-          call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl) 
+          call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl)
         endif
       endif
    else
-      if (algo%ltbind) then  
+      if (algo%ltbind) then
         call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
       else
         if (algo%ltetra) then
-          call calc_response(mu, iT, drhodT, algo, fulkm, efulk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp) 
+          call calc_response(mu, iT, drhodT, algo, fulkm, efulk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
         else
-          call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp) 
+          call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
         endif
-      endif 
+      endif
    endif
-    
+
 enddo ! iT temperature
-  ! the values of the derivative of the resistivity have been accumulated over 
+  ! the values of the derivative of the resistivity have been accumulated over
   ! during the temparature loop, now find the critical temperature
 
 if (myid.eq.master) then
-  do iT=1,sct%nT-1 
+  do iT=1,sct%nT-1
      write(800,*) sct%TT(iT),sct%d1(iT),sct%d2(iT)
      write(801,*) sct%TT(iT),sct%d0(iT)
   enddo
 
-  dum1=drhodT(1) 
+  dum1=drhodT(1)
   do iT=2,sct%nT-1
      if(drhodT(iT) > dum1) then
-        dum1=drhodT(iT) 
+        dum1=drhodT(iT)
         sct%Tstar=sct%TT(iT)
-     endif 
+     endif
   enddo
   ! Lines below to be removed
   if (sct%Tstar > 0.0d0) then
-     write(*,*)'found T* (intraband only)', sct%Tstar 
-     write(700,*)'found T* (intraband only)', sct%Tstar 
+     write(*,*)'found T* (intraband only)', sct%Tstar
+     write(700,*)'found T* (intraband only)', sct%Tstar
   else
      write(*,*)'T* (intraband only) not found'
      write(700,*)'T* (intraband only) not found'
   endif
 
   if (sct%Tflat > 0.0d0) then
-     write(*,*)'found T_s (intraband only)', sct%Tflat 
-     write(700,*)'found T_s (intraband only)', sct%Tflat 
+     write(*,*)'found T_s (intraband only)', sct%Tflat
+     write(700,*)'found T_s (intraband only)', sct%Tflat
   else
      write(*,*)'T_s (intraband only) not found'
      write(700,*)'T_s (intraband only) not found'
@@ -533,4 +535,3 @@ call mpi_close()
 
 
 end program gtmain
-
