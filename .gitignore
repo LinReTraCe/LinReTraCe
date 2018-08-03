@@ -2,7 +2,7 @@
 *.o
 *.mod
 
-# application files
+# old backup files
 bkp*/**
 
 # vim remainders
@@ -11,10 +11,10 @@ bkp*/**
 # input files
 inp.*
 
-
 # build files
 make_include
 bin/**
+bin
 
 # tag files
 tags

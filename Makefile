@@ -1,9 +1,9 @@
-all: binR linretrace
+all: binR linretrace make_include
 
 binR:
 	if [ ! -d bin ] ; then mkdir bin ; fi
 
-linretrace:
+linretrace: make_include
 	cd src/; make
 
 clean:
