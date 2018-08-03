@@ -28,10 +28,6 @@ $(INSTALL_DIR):
 $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 	$(FC) $^ -o $@ $(FFLAGS) $(LIBS)
 
-$(PROG): $(OBJ)
-	$(FC) -o $(PROG) $(FFLAGS) $(OBJ) $(LDFLAGS) $(LIBS)
-	mv main linretrace
-
 %.o: %.f90
 	$(FC) $(FFLAGS) $(LIBS) -c $< -o $@
 
@@ -42,8 +38,6 @@ estruct.o: params.o types.o
 main.o: params.o mpi_org.o types.o estruct.o response.o root.o rootQ.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
-responseBQ.o: response.o
-responseQ.o: response.o
 root.o: mpi_org.o params.o types.o estruct.o
 rootQ.o: mpi_org.o params.o types.o estruct.o
 
