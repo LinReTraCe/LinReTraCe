@@ -71,7 +71,7 @@ implicit none
      type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
      type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
      type(qp_resp)   :: qpresp  ! response functions in 4-ple precision
-   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is 
+   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_re there is 
    !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement 
    !! is negligible
 
@@ -107,8 +107,8 @@ if (myid.eq.master) then
 endif
 
      !with this flag set to false the quad precision response is computed
-     !algo%ldebug=.true.
-     algo%ldebug=.false.
+     algo%ldebug=.true.
+     !algo%ldebug=.false.
      
 !read in electronic structure and matrix elements
 call estruct_init(algo, kmesh, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
@@ -191,7 +191,6 @@ if (nproc >1) then
    endif
 
    !call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?
-   !write(*,*)'proc #', myid,'iqstart,end',iqstr,iqend
 
 else !nproc==1
    ! make sure that the loop starting and ending points are consistent
@@ -206,6 +205,9 @@ else !nproc==1
    endif
 endif
 
+call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
+!!!!!!!!!!!!!!!!!!!!TEST_MPI
+!write(*,*)'proc #', myid,'iqstr',iqstr,'iqend',iqend
 
 if (myid.eq.master) then
 !reading and writing executed only by master
@@ -308,7 +310,7 @@ do iT=sct%nT,1,-1
 ! XXX be careful in the case of metals... then delta makes no sense...
 
 
-   if (myid.eq.master) then 
+   !if (myid.eq.master) then 
    !also the chemical potential search is not parallelised at the moment 
    !don't know how difficult it would be to revert to the original implementation 
    !and/or to implement the tetrahedron method
@@ -318,37 +320,49 @@ do iT=sct%nT,1,-1
          if (criterion.lt.20.d0) then !DP
             imeth=0
             if (algo%ltbind) then
-               call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eirrk, sct, kmesh)
+               call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)
             else
-               call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eredk, sct, redkm)
+               if (algo%ltetra) then
+                  call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra)
+               else
+                  call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra)
+               endif
             endif
-            !if (myid.eq.master) then
+            if (myid.eq.master) then
                write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
                write(700,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
-            !endif
+            endif
          elseif (criterion.lt.80.d0) then !QP
             imeth=1
             if (algo%ltbind) then
-               call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh)! full QUAD on particle number
+               call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
             else
-               call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eredk, sct, redkm)! full QUAD on particle number
+               if (algo%ltetra) then
+                  call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+               else
+                  call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+               endif
             endif
-            !if (myid.eq.master) then
+            if (myid.eq.master) then
                write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
                write(700,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-            !endif
-        else   ! further refinement
-           imeth=2
-            !if (myid.eq.master) write(*,*) 'SUPER QUAD'
-            if (algo%ltbind) then
-               call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh)! full QUAD on particle number
-            else
-               call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm)! full QUAD on particle number
             endif
-            !if (myid.eq.master) then
-              write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-              write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-            !endif
+         else   ! further refinement
+            imeth=2
+            if (myid.eq.master) write(*,*) 'SUPER QUAD'
+            if (algo%ltbind) then
+               call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
+            else
+               if (algo%ltetra) then
+                  call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+               else
+                  call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+               endif
+            endif
+            if (myid.eq.master) then
+               write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
+               write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
+            endif
          endif !criterion
       
          mutmp=mu ! possibly unused
@@ -358,7 +372,7 @@ do iT=sct%nT,1,-1
          !if ( (delta.gt.0.d0).and.(criterion.gt.90.d0).and.(gminall.eq.0.d0) ) then
          if ( (dos%gap .gt. 0.d0).and.(criterion .gt. 90.d0).and.(gminall .eq. 0.d0) ) then
       
-            !if (myid.eq.master) then
+            if (myid.eq.master) then
                write(*,*) 'Using low T extrapolation'
                imeth=3
                
@@ -376,7 +390,7 @@ do iT=sct%nT,1,-1
                !mu=emax(iband_valence)+ delta/2.d0 + dmudT * T
                mu=dos%vbm+ dos%gap/2.d0 + dmudT * T !eM: let's hope that this actually means the same as what above
                
-            !endif
+            endif
       
          endif
       endif !algo%imurestart==0
@@ -400,7 +414,7 @@ do iT=sct%nT,1,-1
 !         
 !      endif
 
-   endif !master
+   !endif !master
 
 
    if (myid.eq.master) then
@@ -429,16 +443,26 @@ do iT=sct%nT,1,-1
       end select
    endif !master
 
-   !if (imurestart.ne.0) then ! if read mu, need to BCAST it to all procs.
-   !XXXXXXX if statement momentarily commented out because the chemical potential
-   !search is not yet parallelised
-   call MPI_BCAST(mu,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
-   !endif
+   if (imurestart.ne.0) then ! if read mu, need to BCAST it to all procs.
+      call MPI_BCAST(mu,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
+   endif
    !copy the given value of mu into the datastructure
    sct%mu(iT) = mu
 
+   if ((myid == master) .and. (iT == sct%nT)) then
+      !call intldos(iT, dos, redkm, eredk, sct) 
+      call intetra(fulkm, thdr, dos, sct%z*efulk%band, efulk%nband_max) 
+      do ig=1,size(dos%enrg)
+         dos%dos(ig)=2.0d0*dos%dos(ig)
+         dos%nos(ig)=2.0d0*dos%nos(ig)
+      enddo
+      do ig=1,size(dos%enrg)
+         write (120,*) dos%enrg(ig), dos%dos(ig), dos%nos(ig)
+      enddo
+   endif
+   
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! DONE MU. GO TRANSPORT AT THIS POINT.
+! DONE MU. DO TRANSPORT AT THIS POINT.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
    call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?

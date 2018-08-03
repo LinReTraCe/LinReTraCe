@@ -208,11 +208,11 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
         tmp1=0.0d0
         do itet=1,thdr%ntet
            thdr%vltot=thdr%vltot+thdr%vltet(itet)
-           do ik =1,4
+           if (algo%ldebug) then; do ik =1,4
               if (myid==0) write(33,*) itet, mesh%k_coord(:,thdr%idtet(ik,itet))
-           enddo
+           enddo; endif
            tmp1=tmp1+thdr%idtet(0,itet)
-           write(34,*) itet, thdr%idtet(0,itet), thdr%vltet(itet)
+           if (algo%ldebug) write(34,*) itet, thdr%idtet(0,itet), thdr%vltet(itet)
         enddo
         tmp2=((2*pi)**3)/vol
         if (myid==0) write(*,*) 'tetrahedra volume',thdr%vltot,thdr%vltot*((2*pi)**3)/vol,tmp2
@@ -255,24 +255,24 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
 
         pdpresp => dresp
         !interpolate within tetrahedra intraband response
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
-        call interptra_mu (iT, itet, mu, nalpha, .true. , mesh, ek, thdr, sct, respBl )   
+        call interptra_re (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
+        call interptra_re (iT, itet, mu, nalpha, .true. , mesh, ek, thdr, sct, respBl )   
         if (.not.algo%ldebug) then
-           call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp, qresp )
+           call interptra_re (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp, qresp )
         endif
         nullify(pdpresp)
         
         pdpresp => dderesp
         !interpolate within tetrahedra intraband response derivatives
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
+        call interptra_re (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
         nullify(pdpresp)
 
         pdpresp => dinter
         !interpolate within tetrahedra interband response
-        call interptra_mu (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
+        call interptra_re (iT, itet, mu, nalpha, .false., mesh, ek, thdr, sct, pdpresp )   
         nullify(pdpresp)
 
-        ! add to tetrahedra-summed response functions (bands have been traced over in INTERPTRA_mu )   
+        ! add to tetrahedra-summed response functions (bands have been traced over in interptra_re )   
         ! 
         ! functions had to be multiplied by 2 for spin multiplicity
         
@@ -310,7 +310,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            enddo !ibeta 
         enddo    !ialpha
      enddo ! loop over tetrahedra 
-     
+
      !Distribute the accumulated variables and sum them up
      if (nproc > 1) then
         call MPI_ALLREDUCE(MPI_IN_PLACE, dresp%s_tot(1,1), 9, &
@@ -362,15 +362,16 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            endif
         endif 
      endif   !nproc>1
-        
+
   else ! no tetrahedron method
-        
+     
      if ((nproc > 1) .and.(.not. allocated(dresp%s_local))) then
         allocate (dresp%s_local(ek%nband_max, nalpha, nalpha) )
      endif
      if ( allocated(dresp%s_local)) then
         dresp%s_local(:,:,:) = 0.0d0
      endif
+     !do ik =1,mesh%ktot 
      do ik =iqstr,iqend 
      ! evaluate the trace over bands at each specific k-point of the mesh
         call respinkm (mu, iT, ik, nalpha, algo, ek, sct, dresp)
@@ -381,14 +382,14 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
         !evaluate the derivatives of the response functions
         !if the chemical potential is fixed use a semplified kernel for the 
         !derivatives (assuming also gamma to be not T dependent)
-        !if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
+        if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
            if (algo%ltbind .and. (algo%imurestart==2)) then
               if (iT < sct%nT) call resderkm_symm(mu, iT, ik, algo, ek, sct, dderesp) 
            else
               !since one has to evaluate the derivative of mu then the first point must be skipped 
               if (iT < sct%nT) call resderkm(iT, ik, nalpha, algo, ek, sct, dderesp) 
            endif
-        !endif
+        endif
 
         !interband transitions
         if (algo%ldebug) then
@@ -527,7 +528,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
      !accumulated already
      if (myid.eq.master) then  
         ! at this point I need to multiply the factor beta/gamma (or beta/gamma^2 for magnetic responses)
-        ! in the tetrahedron method this is done in the INTERPTRA_mu routine
+        ! in the tetrahedron method this is done in the INTERPTRA_RE routine
         do ib=1,ek%nband_max
            if (ib < ek%nbopt_min) cycle
            if (ib > ek%nbopt_max) cycle
@@ -626,6 +627,7 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
         call wrtresp(iT, nalpha, algo, sct, dresp, dinter, respBl, qresp)
      endif
   endif
+    
 end subroutine calc_response
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -747,13 +749,12 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
 
       do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
-         ! if the band is not contained in the optical matrices just do nothing
          if (iband < ek%nbopt_min) cycle
          if (iband > ek%nbopt_max) cycle
          resp%z=real(sct%z,8)
          resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-         ! pre-compute all needed digamma functions   
          resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)-mu,8)
+         ! pre-compute all needed digamma functions   
          resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
          do ipg=1,3 ! XXX need 0 for alphaxy ????
             resp%ctmp=wpsipg(resp%zarg,ipg)
@@ -817,7 +818,7 @@ subroutine respintet(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo ! ialpha
          endif !lBfield
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
          resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
          if(algo%lBfield .and. algo%ltbind ) then
@@ -970,7 +971,7 @@ subroutine respintet_qp(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo ! ialpha
          endif !lBfield
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
          resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
          if(algo%lBfield .and. algo%ltbind ) then
@@ -1093,7 +1094,7 @@ subroutine respintet_Bl(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo ! ialpha
          endif !lBfield
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
          resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
          if(algo%lBfield .and. algo%ltbind ) then
@@ -1172,6 +1173,7 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             if (ib2 < ek%nbopt_min) cycle
             if (ib2 > ek%nbopt_max) cycle
             if (ib2 == ib1 ) cycle
+        
             !singularities might arise if ek%band1 = ek%band2
 
             !second band variables and derived quantities
@@ -1227,7 +1229,7 @@ subroutine respintert(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo ! ialpha           
          enddo !ib2
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
          resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
          
@@ -1359,7 +1361,7 @@ subroutine respintert_symm(mu, iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo ! ialpha           
          enddo !ib2
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
          resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
          
@@ -1404,15 +1406,9 @@ subroutine respinkm(mu, iT, ik, nalpha, algo, ek, sct, resp)
      if (iband > ek%nbopt_max) cycle
      resp%z=real(sct%z,8)
      resp%gamma=resp%z*real(sct%gam(iT,iband),8)
-     ! pre-compute all needed digamma functions   
      resp%aqp=resp%z*real(ek%band(ik,iband)-mu,8)
-     ! TESTED 25.05.2018 tetragonal
-     !resp%aqp=real(ek%band(1,iband)-mu,8) !passed loptic=false
-     !resp%aqp=real(ek%band(8,iband)-mu,8) !passed loptic=false
-     ! TESTED 28.05.2018 tetragonal
-     !resp%aqp=real(ek%band(2,iband)-mu,8) !not passed with loptic=true
-     !TEST END
      resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
+     ! pre-compute all needed digamma functions   
      do ipg=1,3 ! XXX need 0 for alphaxy ????
         resp%ctmp=wpsipg(resp%zarg,ipg)
         resp%RePolyGamma(ipg)=real(resp%ctmp,8)
@@ -2004,7 +2000,7 @@ subroutine resdertet_symm(mu, iT, itet, thdr, algo, ek, sct, resp)
             enddo !ibeta  
          enddo ! ialpha           
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,iband,1,1) = s_tmp_tetra(ik,iband,1,1)
          resp%a_tmp(ik,iband,1,1) = a_tmp_tetra(ik,iband,1,1)
          
@@ -2134,7 +2130,7 @@ subroutine resdertet(iT, itet, nalpha, thdr, algo, ek, sct, resp)
             enddo !ibeta  
          enddo ! ialpha           
 
-         ! Now copy the local variable into the datastructure that will be passed to the interptra_mu
+         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
          resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
          resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
          
@@ -2374,11 +2370,6 @@ subroutine findrhoflex(iT, resp1, resp2, sct)
    sct%d0(iT) = tmp
    sct%d1(iT) = tmp1
    sct%d2(iT) = tmp2
-   !if (tmp2<0.0d0 ) then
-   !   sct%Tstar = sct%TT(iT)
-   !else
-   !   sct%Tstar = 0.0d0 
-   !endif 
 
 end subroutine findrhoflex
 
@@ -2452,8 +2443,7 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
    class(dp_resp) :: resp
    type(qp_resp), optional ::hpresp
 !local variables
-   !integer :: ktot
-   real(8) :: ktot
+   integer :: ktot
    real(8) :: fac,facB
    real(16):: facQ,facBQ
 
@@ -2461,11 +2451,11 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
    facB  = 2.d0 * pi**2 * ( echarge / (vol*hbarevs) ) * (1.d-10 / hbareVs)
    facQ  = 2.q0 * piQ * ( real(echarge,16) / real(vol*hbarevs,16)) * 1.q10
    facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
-  
+   
    if (algo%ltetra) then
-      ktot=1.0d0
+      ktot=1
    else
-      ktot=real(mesh%ktot) 
+      ktot=mesh%ktot 
    endif
 
    !global symmetries of a cubic system
@@ -2964,6 +2954,60 @@ if (lBfield) then
 endif
 end subroutine qpresp_alloc
 
+ ! INPUT: (renolmalised) bandstructure: (sct) ek
+ !        chemical potential
+ !        energy window (to be defined)
+ ! OUTPUT: integrated DOS (summed over bands and over k-points)        
+ !        
+subroutine intldos(iT, dos, mesh, ek, sct)
+  use params
+  use types
+  implicit none
+
+  !passed variables
+  integer :: iT 
+  type(dosgrid) :: dos
+  type(kpointmesh) :: mesh !reducible k-mesh
+  type(edisp) :: ek
+  type(scatrate) :: sct
+  !local variables
+  integer :: ee, ik, ibn
+  real(8) :: eps, eta
+  real(8) :: s, dee
+  real(8), allocatable :: AA(:)
+  complex :: iu, G0
+
+  iu = cmplx(0.0d0, 1.0d0)
+  dee= (dos%emax-dos%emin)/real(dos%nnrg)
+  eta= dee 
+  allocate(AA(1:dos%nnrg))
+  AA(:)=0.0d0
+  do ee=1, dos%nnrg
+     do ik=1, mesh%ktot ; do ibn=1, ek%nband_max
+     !do ik=1, 1 ; do ibn=1, 1
+        !construct the independent particle propagator 
+        eps = sct%z*ek%band(ik,ibn) - sct%mu(iT)
+        if (eps > 0.0d0) exit !occupied bands only
+        G0=1.0d0/(dos%enrg(ee) - eps + iu*eta)
+        !G0=1.0d0/(dos%enrg(ee) - eps + iu*sct%gam(iT,ibn))
+        AA(ee) = AA(ee) - 2.0d0*aimag(G0)
+     enddo ; enddo
+  enddo !ee
+
+  !use trapezoidal rule to evaluate the number of electrons 
+  s=0.5d0*dee*(AA(1)+AA(dos%nnrg))
+  do ee=2,dos%nnrg-1
+     s=s+dee*AA(ee)
+  enddo
+  s=s/(pi*mesh%ktot)
+
+  write(*,120)'integrated spectral density ',s,' electron number ',ek%nelect, 'diff',ek%nelect-s
+  120 FORMAT (A,f12.6,A,f12.6)
+  do ee=1, dos%nnrg
+     write(120,'(E12.6,3x,E12.6)') dos%enrg(ee),AA(ee)
+  enddo
+
+end subroutine intldos
 
 function dfermi(eps,beta)
   implicit none

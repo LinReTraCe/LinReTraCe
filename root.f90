@@ -1,19 +1,18 @@
 
-
-
-
-subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
+subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra)
   use params
-  !use mpi_org, only: myid,master
-  !use estruct, only : delta
   use types
+  use mpi_org
   implicit none
+
   ! passed variables
   real(8) :: mu, dev, target_zero
   integer  :: iT,nT,niitact
   type(edisp) :: ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
+  type(tetramesh)  :: thdr
+  logical :: ltetra
   ! local variables
   real(8) target_zero1, target_zero2, mu1, mu2
   integer iit,niit0
@@ -35,8 +34,8 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
 
-! deviation from set particle number with initial mu                                                                                    
-  call ndeviation(mu, iT, ek, sct, mesh, target_zero1)
+! deviation from set particle number with initial mu
+  call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
 
   target_zero2=target_zero1
 !coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does                      
@@ -45,14 +44,15 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
 
   do while (target_zero2.gt.0.d0)
      mu2=mu2+0.005d0
-     call ndeviation(mu2, iT, ek, sct, mesh, target_zero2)
+     call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
 
   enddo
   do while (target_zero1.le.0.d0)
      mu1=mu1-0.005d0
-     call ndeviation(mu1, iT, ek, sct, mesh, target_zero1)
+     call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
 
   enddo
+  !write(69,*) 'mu1',mu1,'mu2',mu2,'f(1)',target_zero1,'f(2)',target_zero2
    
   niit0=niit
 !  if (iT.eq.nT) niit0=niit*3
@@ -64,17 +64,17 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   !Secant root finding                                                                                                                  
     do iit=1,niit0
        mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
-       call ndeviation(mu, iT, ek, sct, mesh, target_zero)
+       call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
        if (abs(target_zero).lt.dev)  exit
        if (target_zero.gt.0.d0) then
           mu1=mu
           target_zero1=target_zero 
-          call ndeviation(mu2, iT, ek, sct, mesh, target_zero2)
+          call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
        else
           mu2=mu
           target_zero2=target_zero 
-          call ndeviation(mu1, iT, ek, sct, mesh, target_zero1)
+          call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
        endif
     enddo
     niitact=iit
@@ -96,18 +96,18 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
     enddo 
     ! evaluate target function in the interval
     do i=2,nmu-1
-       call ndeviation(X(i), iT, ek, sct, mesh, Y(i))
+       call ndeviation(X(i), iT, ek, sct, mesh, thdr, ltetra, Y(i))
     enddo 
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
     enddo 
    
-!!!!!!!!!!!!!!!!!test 
+    !!!!!!!!!!!!!!!!!TEST 
     !open(666,file='targeT.dat',status='unknown')
     !write(666,'(A,1I10)')'T ',iT
     !write(666,'(2E15.7)') (X(i),Y(i), i=1,nmu)
     !write(666,'(A)')'   '
-!!!!!!!!!!!!!!!!!test end 
+    !!!!!!!!!!!!!!!!!TEST END 
 
     ! find root by linear interpolation
     do i = 1, nmu-1
@@ -138,7 +138,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
                 !write(*,*) b(3), b(4)   
                 ! save the values of the intersection
                 mu = B(3)
-                call ndeviation(mu, iT, ek, sct, mesh, target_zero)
+                call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
              endif
           endif
        enddo ! over freq. counter j
@@ -158,7 +158,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
 
      do j = 1, maxiter
         P(3) = 0.5d0*(P(1)+P(2))
-        call ndeviation(P(3), iT, ek, sct, mesh, F(3))
+        call ndeviation(P(3), iT, ek, sct, mesh, thdr, ltetra, F(3))
         s = dsqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0d0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -169,7 +169,7 @@ subroutine find_mu(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
         P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
         if(abs(P(4)-psave)<=ptol) goto 400
         psave= P(4)
-        call ndeviation(P(4), iT, ek, sct, mesh, F(4))
+        call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
         if (F(4) ==0.0d0) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -242,10 +242,10 @@ return
 end function FERMI
 
 
-subroutine ndeviation(mu, iT, ek, sct, mesh, target_zero)
+subroutine ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   use params
   use types
-  !use mpi_org
+  use mpi_org
   implicit none
 
   !passed variables
@@ -254,24 +254,33 @@ subroutine ndeviation(mu, iT, ek, sct, mesh, target_zero)
   type(edisp) :: ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
+  type(tetramesh)  :: thdr
+  logical :: ltetra
   real(8), intent(out) :: target_zero
-  call varocc(mu, iT, ek, sct, mesh )
+
+  if (ltetra) then
+     call varocc_tet(mu, iT, ek, sct, thdr )
+  else
+     call varocc(mu, iT, ek, sct, mesh )
+  endif
 
   !if (myid.eq.master) then
 
-     target_zero=ek%nelect-ek%occ_tot
+  target_zero=ek%nelect-ek%occ_tot
      !write(*,*)'mu, target_zero, ek%occ_tot ', mu, target_zero, ek%occ_tot
 
   !endif !master                                                                                                                         
-  ! broadcast target_zero. Not very elegant to do this...                                                                               
+  ! broadcast target_zero. Not very elegant to do this...
   !call MPI_BCAST(target_zero,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
 !  call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
   return
 end subroutine ndeviation
 
 subroutine varocc(mu, iT, ek, sct, mesh)
-  use types
   use params
+  use types
+  use mpi_org
+
   implicit none
 
   integer, intent(in) :: iT
@@ -283,40 +292,36 @@ subroutine varocc(mu, iT, ek, sct, mesh)
   real(8),parameter :: thr = 1.0d-30
   complex(8) :: z
   real(8) :: nsmall, nbig, ninteger, eps, tmp
+  real(8) :: occ_loc
   integer :: iband, ik, ikx, iky, ikz
   integer :: ktot !total number of k-points
-  ! RECALL that mesh%ktot includes extra k-points when the 
-  ! tetrahedron method is selected
 !external variables
   real(8), external :: FERMI
   complex(8), external :: wpsipg
 
   ek%occ_tot=0.0d0
-  if (.not.allocated(ek%occ)) then
-    allocate(ek%occ(mesh%ktot,ek%nband_max))
-  endif
-  !write(*,*)'varocc: after allocation',mesh%ktot,mesh%kx,mesh%ky,mesh%kz,ek%nband_max
-  !write(*,*)'allocated mesh%k_id',allocated(mesh%k_id),size(mesh%k_id)
-  !write(*,*)'allocated ek%band',allocated(ek%band),size(ek%band)
+  occ_loc=0.0d0
 
   ninteger=0.d0
   nbig=0.d0
   nsmall=0.d0
   ktot=mesh%kx*mesh%ky*mesh%kz
   
-  do ik = 1, ktot
+  do ik = iqstr, iqend
      do iband=1,ek%nband_max 
         if (ek%band(ik,iband) .gt. 90.0d0) cycle
+        if (iband<ek%nbopt_min) cycle
+        if (iband>ek%nbopt_max) cycle
         eps=sct%z*ek%band(ik,iband)-mu
 
-        if (eps .lt. 0.d0) then ! occupied state                                                                                                        
+        if (eps .lt. 0.d0) then ! occupied state
            ninteger=ninteger+1.d0
            
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=1.d0-FERMI(eps,beta)
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps                                                                   
-              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0 !                                                                                          
+              z=0.5d0 + (sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps
+              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0 
            endif
         
            if (tmp.gt.thr) then
@@ -325,13 +330,13 @@ subroutine varocc(mu, iT, ek, sct, mesh)
               nsmall=nsmall-tmp
            endif
         
-        else ! unoccupied state                                                                                                                       
+        else ! unoccupied state
         
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=FERMI(eps,beta)
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps                                                                            
-              tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0 !                               
+              z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps
+              tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
            endif
         
            if (tmp.gt.thr) then
@@ -340,18 +345,121 @@ subroutine varocc(mu, iT, ek, sct, mesh)
               nsmall=nsmall+tmp
            endif
         endif
-        !TODO: remove from datatype?
-        !ek%occ(ik,iband) = 2.0d0*(ninteger_tot+nbig_tot+nsmall_tot)/real(mesh%ktot,8)
-        !ek%occ(ik,iband) = 2.0d0*(ninteger+nbig+nsmall)/real(mesh%ktot,8)
-        !ek%occ_tot = ek%occ_tot + ek%occ(ik,iband)
-     enddo ! iband       
-  enddo                                                                                                                   
-  ninteger=2.d0*ninteger/real(ktot,8) ! 2 for spin                                                                                       
+     enddo ! iband
+  enddo !k-points
+
+  !NORMALISATION AND ACCUMULATION
+  ninteger=2.d0*ninteger/real(ktot,8) ! 2 for spin
   nbig=2.d0*nbig/real(ktot,8)
   nsmall=2.d0*nsmall/real(ktot,8)
-  ek%occ_tot=ninteger+nbig+nsmall
+  if (nproc == 1) then
+     ek%occ_tot=ninteger+nbig+nsmall
+  else
+     occ_loc=ninteger+nbig+nsmall
+  endif
+  if (nproc > 1) then 
+     call MPI_ALLREDUCE(occ_loc, ek%occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  endif
 
   return
 
 end subroutine varocc
 
+subroutine varocc_tet(mu, iT, ek, sct, thdr)
+  use params
+  use types
+  use mpi_org
+  use estruct
+
+  implicit none
+
+  integer, intent(in) :: iT
+  real(8), intent(in) :: mu
+  type(edisp) :: ek
+  type(scatrate) :: sct
+  type(tetramesh) :: thdr
+!local variables
+  real(8),parameter :: thr = 1.0d-30
+  complex(8) :: z
+  real(8) :: nsmall, nbig, ninteger, eps, tmp
+  real(8) :: occ_loc, occ_intp, occ_tet(4)
+  integer :: iband, ik, itet 
+!external variables
+  real(8), external :: FERMI
+  complex(8), external :: wpsipg
+
+  ek%occ_tot=0.0d0
+  occ_loc=0.0d0
+  do itet = iqstr, iqend
+     occ_intp=0.0d0
+     do ik = 1, 4
+        ninteger=0.d0
+        nbig=0.d0
+        nsmall=0.d0
+        do iband=1,ek%nband_max 
+           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (iband<ek%nbopt_min) cycle
+           if (iband>ek%nbopt_max) cycle
+           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+        
+           if (eps .lt. 0.d0) then ! occupied state
+              ninteger=ninteger+1.d0
+              
+              if (sct%gam(iT,iband).eq.0.d0) then
+                 tmp=1.d0-FERMI(eps,beta)
+              else
+                 z=0.5d0 + ( sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps
+                 tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0 
+              endif
+           
+              if (tmp.gt.thr) then
+                 nbig=nbig-tmp
+              else
+                 nsmall=nsmall-tmp
+              endif
+           
+           else ! unoccupied state
+           
+              if (sct%gam(iT,iband).eq.0.d0) then
+                 tmp=FERMI(eps,beta)
+              else
+                 z=0.5d0 + ( sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps
+                 tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
+              endif
+           
+              if (tmp.gt.thr) then
+                 nbig=nbig+tmp
+              else
+                 nsmall=nsmall+tmp
+              endif
+           endif
+        enddo ! iband
+
+        ninteger=2.d0*ninteger ! 2 for spin
+        nbig=2.d0*nbig
+        nsmall=2.d0*nsmall
+        occ_tet(ik)=ninteger+nbig+nsmall
+     enddo ! corners of the tetrahedron
+
+        ! NOTE: this procedure is different from the one used 
+        ! for the response function, for the latter the interpolation
+        ! is done band by band, whereas here I'm summing over bands
+        ! first
+     call interptra_mu (thdr%vltet(itet), occ_tet, occ_intp)
+     if (nproc == 1) then
+        ! accumulate globally (nproc = 1)
+        ek%occ_tot=ek%occ_tot+occ_intp
+     else
+        ! or locally (nproc > 1)
+        occ_loc=occ_loc+occ_intp
+     endif
+  enddo    ! tetrahedra
+
+  ! MPI DISTRIBUTION
+  if (nproc > 1) then 
+     call MPI_ALLREDUCE(occ_loc, ek%occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  endif
+
+  return
+
+end subroutine varocc_tet

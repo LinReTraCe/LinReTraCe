@@ -44,9 +44,9 @@ type edisp
    double precision :: occ_tot                       ! number of electrons computed for the updated value of chemical potential (non-eq value) 
    double precision, allocatable :: band(:,:)        ! band(k_id,nband) contains nband_max dispersion curves, if for some k-points
                                                      ! fewer bands are computed, then the missing elements are set to 1000 (arbitrarily large value)
-   double precision, allocatable :: occ(:,:)         ! occ(k_id,nband) contains the occupation numbers  
+   double precision, allocatable :: occ(:,:)         ! occ(k_id,nband) contains the occupation numbers TODO: not used, consider removing 
    double precision, allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
-   double precision, allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
+   double precision, allocatable :: Mopt_tetra(:,:,:,:)  ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights TODO: not used, consider removing
 end type
 
 type symop
@@ -90,7 +90,6 @@ type scatrate
    double precision :: dT                  ! temperature interval
    double precision, allocatable :: TT(:)  ! temperature grid 
    double precision, allocatable :: mu(:)  ! chemical potential (temperature dependent)
-   !double precision, allocatable :: drhodT(:) ! 1st derivative of rho w.r.t. T 
    double precision, allocatable :: d1(:)  ! square of the 1st derivative of sigma 
    double precision, allocatable :: d2(:)  ! product of the 2nd derivative times sigma
    double precision, allocatable :: d0(:)  ! linear combination of the two above, whose zero corresponds to T*
@@ -170,7 +169,8 @@ module estruct
             dos%nnrg=2.0d0*dos%emax/0.007d0
             !energy spacing of roughly 0.1 eV
             call gentetra(algo, kmesh, thdr)             ! generates the tetrahedra  
-            call intetra (kmesh, eirrk, thdr, dos)       ! computes the dos and the integrated dos
+            call intetra (kmesh, thdr, dos, eirrk%band, eirrk%nband_max)   ! computes the dos and the integrated dos
+            !call intetra (kmesh, eirrk, thdr, dos)       ! computes the dos and the integrated dos
             !spin multiplicity 
             do i=1,size(dos%enrg)
                dos%dos(i)=2.0d0*dos%dos(i)
@@ -199,7 +199,8 @@ module estruct
             ! the terminal k-points on the BZ, let's call it fulkm
             call genfulkm(redkm, fulkm, eredk, efulk, symm) 
             call gentetra(algo, fulkm, thdr)         ! generates the tetrahedra  
-            call intetra (fulkm, efulk, thdr, dos)   ! computes the dos and the integrated dos
+            call intetra (fulkm, thdr, dos, efulk%band, efulk%nband_max)   ! computes the dos and the integrated dos
+            !call intetra (fulkm, efulk, thdr, dos)   ! computes the dos and the integrated dos
             !spin multiplicity only for Wien2k calculations
             do i=1,size(dos%enrg)
                dos%dos(i)=2.0d0*dos%dos(i)
@@ -282,7 +283,7 @@ module estruct
   !local variables
     integer :: which           ! switches the type of algorithm (then stored in type(algorithm))
     integer :: which_tetra     ! =0 no tetrahedron integration =1 use tetrahedron  
-    integer :: which_grid      ! =0 no symetry operations used  =1 use symmetry to generate BZ   
+    integer :: which_grid      ! =0 no symetry operations used  =1 use symmetry to generate BZ 
     integer :: tmax            ! if not equal to 1 it introduces anisotropic dispersion in the TB model
     integer :: iband
 
@@ -496,6 +497,7 @@ module estruct
       call getirrk  (algo%mysyst, kmesh, eirrk) 
       call getsymop (algo%mysyst, symm, kmesh)
       ! generate a reucible kmesh from the set of symmetry operations and the irrek-mesh
+      write(*,*) '*********** GENREDK ***********'
       call genredk  (algo%mysyst, symm, kmesh, redkm)
       ! copy also the number of electrons and the Fermi level from the old datastructure to the new one
       eredk%nband_max = eirrk%nband_max
@@ -504,10 +506,13 @@ module estruct
       redkm%alat = kmesh%alat
       redkm%a    = kmesh%a
       ! read in the optical matrix elements on the irreducible grid 
+      write(*,*) '*********** GETIRROPT ***********'
       call getirropt (algo%mysyst, kmesh, eirrk, symm%lcubic)
       ! generate the optical matrix elements evaluated on the new redkm grid
+      write(*,*) '*********** GENREDOPT ***********'
       call genredopt (redkm, symm, eirrk, eredk)
       ! translate the reducible k-mesh and take care of the bandstructure
+      write(*,*) '*********** TRNREDK ***********'
       call trnredk (kmesh, redkm, eredk, symm)
 
    else !reducible BZ is already provided by W2k
@@ -824,11 +829,6 @@ subroutine getsymop (mysyst, symm, kmesh)
   character (len=30) :: substring
   character (len=6)  :: ccrap
   integer :: ix, icrap
-  !check for the presence of inversion symmetry and introduce it
-  integer :: iexist, nsymold
-  double precision, allocatable :: Mtmp(:,:,:)
-  double precision, allocatable :: Ttmp(:,:)
- 
   
 ! read the matrix transformations 
   open(9,file=trim(adjustl(mysyst))//'.symop',status='old')
@@ -872,7 +872,7 @@ subroutine getsymop (mysyst, symm, kmesh)
   close(10)
 
   100  FORMAT (I6)
-  110  FORMAT (3(3f8.5/))
+  110  FORMAT (3(3f8.5/)) 
 
 ! set up the symmetry group descriptors 
   if ((kmesh%a(1).eq.kmesh%a(2)) .and. (kmesh%a(3).eq.kmesh%a(2))) then
@@ -969,7 +969,7 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
             c =real(G0(3,i))*(kmesh%k_coord(3,ik)-0.5d0*real(G0(3,i)))
             res =a+b+c
             if (abs(res)<1.0d-4) then
-               write(*,'(A,3f8.5,X,A,3I3)') 'k-point', kmesh%k_coord(:,ik), 'lies on the Bragg plane normal to',G0(:,i)
+            !   write(*,'(A,3f8.5,X,A,3I3)') 'k-point', kmesh%k_coord(:,ik), 'lies on the Bragg plane normal to',G0(:,i)
                symm%lBZpnt=.true.
             endif
          enddo
@@ -1020,7 +1020,7 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
             symm%symop_id(4,i) = isym
             do j=1,3
                cktmp3(j,i)=cktmp(j,k)*exp(-2.0d0*pi*iu*dot_product(G0(:,6),symm%Tras(:,isym)))
-               ! the choice of this reciprocal lattice vector is a bit euristic 
+               ! the choice of this reciprocal lattice vector (G0(:,6)) is a bit euristic 
                ! (tested on FeSi 3x3x3, 4x4x4, 5x5x5)
             enddo
          enddo
@@ -1039,14 +1039,13 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
       !!!!!!!!!!!!!!!!!!!!!!!TEST  
       !write(*,*) 'write 556',size(cktmp,2)
       !do k=1, size(cktmp,2)
-      !   write(556,'(A,I4,3f8.4)')'KP',k,cktmp(1,k),cktmp(2,k),cktmp(3,k) 
+      !   write(556,'(A,I6,3f8.4)')'KP ',k,cktmp(1,k),cktmp(2,k),cktmp(3,k) 
       !enddo
       !!!!!!!!!!!!!!!!!!!!!!!TEST END  
    endif
    
-
    !!!!!!!!!!!!!!!!!!!!!!!!
-   !Clean up 
+   !CLEAN UP 
    !check which points in the redBZ have been saved already
    !!!!!!!!!!!!!!!!!!!!!!!!
    ntmp=2   !exclude the gamma point 
@@ -1080,14 +1079,8 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
   !the loop above leaves out the Gamma point; here I'm fixing MANUALLY this by saying that the only non-redundant symmetry operation 
   !for the first k-point (the Gamma point) is the identity:
   symm%symop_id(1,1) = 1
-   
+  
   deallocate (cktmp)
-  !!!!!!!!!!!!!!!!!!!!!!!TEST  
-  !write(*,*) 'write 666', ik
-  !do k=1, ik
-  !   write(666,'(A,I4,3f8.4)')'KP',k,cktmp2(1,k),cktmp2(2,k),cktmp2(3,k) 
-  !enddo
-  !!!!!!!!!!!!!!!!!!!!!!!TEST END  
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! What we've got right now is a k-mesh with equivalent endpoints in a given 
@@ -1104,8 +1097,8 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
    redkm%nkeq = kmesh%nkeq
 
    !if ((ik .ne. redkm%ktot) .and. (.not. symm%lnsymmr) ) then
-      !write(*,*) 'GENREDK: the number of k-points generated by symmetry is: ',ik,redkm%ktot,redkm%kx,redkm%ky,redkm%kz
-      !STOP
+   !   write(*,*) 'GENREDK: the number of k-points generated by symmetry is inconsistent',ik,redkm%ktot,redkm%kx,redkm%ky,redkm%kz
+   !   STOP
    !endif
    if (.not. allocated(redkm%mult))     allocate(redkm%mult(1:redkm%ktot))
    if (.not. allocated(redkm%k_weight)) allocate(redkm%k_weight(1:redkm%ktot))
@@ -1191,7 +1184,7 @@ subroutine genredopt (redkm, symm, eirrk, eredk )
       deallocate(osm1,osm2,osm3) 
   
       !!!!!!!!!!!!!!!!TEST
-      !write(666,*)'KP',k,redkm%k_coord(1,k),redkm%k_coord(2,k),redkm%k_coord(3,k) 
+      !write(666,'(A,I6,3f8.4)')'KP ',k,redkm%k_coord(1,k),redkm%k_coord(2,k),redkm%k_coord(3,k) 
       !do nb=eredk%nbopt_min,eredk%nbopt_max
       !   do nb2=nb,eredk%nbopt_max
       !      write(666, '(2(I4,X),3(E12.6,X))')nb,nb2,eredk%Mopt(1,k,nb,nb2),eredk%Mopt(2,k,nb,nb2),eredk%Mopt(3,k,nb,nb2)
@@ -1357,7 +1350,7 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
 
   !!!!!!!!!!!!!!!!TEST
   !do ik=1,redkm%ktot   
-  !  write(776,'(A,I4,3f8.4)')'KP',ik, cktmp(1,ik),cktmp(2,ik),cktmp(3,ik) 
+  !  write(776,'(A,I6,3f8.4)')'KP ',ik, cktmp(1,ik),cktmp(2,ik),cktmp(3,ik) 
   !  do ibn=eredk%nbopt_min,eredk%nbopt_max
   !    do ibn2=ibn,eredk%nbopt_max
   !       write(776,170)ibn,ibn2,Motmp(1,ik,ibn,ibn2),Motmp(2,ik,ibn,ibn2),Motmp(3,ik,ibn,ibn2)
@@ -1372,7 +1365,7 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   deallocate(eredk%band)
   deallocate(eredk%Mopt)
 
-  !!!!!!!!! k-point clean up !!!!!!!!!!!!!!!!
+  !!!!!!!!! K-POINT CLEAN UP !!!!!!!!!!!!!!!!
   !check which points in the redBZ have been saved already
   ntmp=1   !include the gamma point 
   ik=1     
@@ -1523,16 +1516,17 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   !  do iky=1,nky   
   !    do ikz=1,nkz   
   !      ik=redkm%k_id(ikx,iky,ikz)
-  !      write(777,*)'KP',ik, ikx, iky, ikz, redkm%k_coord(1,ik),redkm%k_coord(2,ik),redkm%k_coord(3,ik) 
+  !      write(777,170)'KP ',ik, ikx, iky, ikz, redkm%k_coord(1,ik),redkm%k_coord(2,ik),redkm%k_coord(3,ik) 
   !      do ibn=eredk%nbopt_min,eredk%nbopt_max
   !        do ibn2=ibn,eredk%nbopt_max
-  !           write(777,170)ibn,ibn2,eredk%Mopt(1,ik,ibn,ibn2),eredk%Mopt(2,ik,ibn,ibn2),eredk%Mopt(3,ik,ibn,ibn2)
+  !           write(777,171)ibn,ibn2,eredk%Mopt(1,ik,ibn,ibn2),eredk%Mopt(2,ik,ibn,ibn2),eredk%Mopt(3,ik,ibn,ibn2)
   !        enddo
   !      enddo
   !    enddo
   !  enddo
   !enddo
-  !170  FORMAT  (2(I4,X),3(E12.6,X))
+  !170  FORMAT  (A,4(I4,X),3(E12.6,X))
+  !171  FORMAT  (2(I4,X),3(F12.6,X))
   !!!!!!!!!!!!!!!!TEST END
 
 end subroutine ! trnredk
@@ -1717,7 +1711,7 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
 
   !!!!!!!!!!!!!!!!TEST
   !do ik=1,fulkm%ktot   
-  !   write(778,*)'KP',ik,fulkm%k_coord(1,ik),fulkm%k_coord(2,ik),fulkm%k_coord(3,ik) 
+  !   write(778,171)'KP ',ik,fulkm%k_coord(1,ik),fulkm%k_coord(2,ik),fulkm%k_coord(3,ik) 
   !   do ibn=efulk%nbopt_min,efulk%nbopt_max
   !      do ibn2=ibn,efulk%nbopt_max
   !         write(778,170)ibn,ibn2,efulk%Mopt(1,ik,ibn,ibn2),efulk%Mopt(2,ik,ibn,ibn2),efulk%Mopt(3,ik,ibn,ibn2)
@@ -1725,6 +1719,7 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
   !   enddo
   !enddo
   !170  FORMAT  (2(I4,X),3(E12.6,X))
+  !171  FORMAT  (A,I4,X,3(F12.6,X))
   !!!!!!!!!!!!!!!!TEST END
 
   !TODO: no second derivatives of the energy because at the moment there is no way to compute them
@@ -2018,14 +2013,17 @@ end subroutine  !gentetra
 ! expressions are given in appendix C and A respectively of
 ! PRB (1994) 49, 16223-16233
 !
-subroutine intetra (mesh, ek, thdr, dos)
+subroutine intetra (mesh, thdr, dos, band, nband_max)
   use types
   implicit none
 
    type(kpointmesh) :: mesh
-   type(edisp)      :: ek 
+   !type(edisp)      :: ek 
    type(tetramesh)  :: thdr
    type(dosgrid)    :: dos
+   real(8),intent(in):: band(:,:)
+   integer,intent(in):: nband_max
+   
 !local variables
    integer :: i, j, i00, itet, nb, istart, istop
    integer :: iq(4)
@@ -2043,7 +2041,9 @@ subroutine intetra (mesh, ek, thdr, dos)
    endif
 ! initialize arrays for dos/number of states 
    !write(*,*)'INTETRA: constructing energy mesh'
-   allocate (dos%enrg(1:dos%nnrg), dos%dos(1:dos%nnrg),dos%nos(1:dos%nnrg))
+   if (.not. allocated(dos%enrg)) allocate (dos%enrg(1:dos%nnrg))
+   if (.not. allocated(dos%dos )) allocate (dos%dos(1:dos%nnrg))
+   if (.not. allocated(dos%nos )) allocate (dos%nos(1:dos%nnrg))
    dos%enrg= 0.d0
    dos%dos = 0.d0
    dos%nos = 0.d0
@@ -2061,16 +2061,16 @@ subroutine intetra (mesh, ek, thdr, dos)
       iq(4) = thdr%idtet(4,itet)
       wthdr = thdr%vltet(itet)
 
-      do nb=1,ek%nband_max
-        if (ek%band(iq(1),nb)>99.0d0) cycle 
-        if (ek%band(iq(2),nb)>99.0d0) cycle 
-        if (ek%band(iq(3),nb)>99.0d0) cycle 
-        if (ek%band(iq(4),nb)>99.0d0) cycle 
+      do nb=1,nband_max
+        if (band(iq(1),nb)>99.0d0) cycle 
+        if (band(iq(2),nb)>99.0d0) cycle 
+        if (band(iq(3),nb)>99.0d0) cycle 
+        if (band(iq(4),nb)>99.0d0) cycle 
 ! get the band energy at each corner of the tetrahedron:
-        ec(1) = ek%band(iq(1),nb)
-        ec(2) = ek%band(iq(2),nb)
-        ec(3) = ek%band(iq(3),nb)
-        ec(4) = ek%band(iq(4),nb)
+        ec(1) = band(iq(1),nb)
+        ec(2) = band(iq(2),nb)
+        ec(3) = band(iq(3),nb)
+        ec(4) = band(iq(4),nb)
 
 ! sort the energies at the four corners (array ec) into array es
          do i=1,4
@@ -2271,176 +2271,8 @@ subroutine findef(dos, ek)
 
 end subroutine ! FINDEF 
 
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! INTERPTRA 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This routine linearly interpolates the optical matrix elements
-! defined on the vertices of a tetrahedron, by computing a
-! weighted sum of these values according to eq.6 in
-! PRB (1994) 49, 16223-16233. The expressions for the 
-! weights are given in app. B therein.
-!
-subroutine interptra (mesh, ek, thdr )
-  use types
-  implicit none
-
-   type(kpointmesh) :: mesh
-   type(edisp)      :: ek 
-   type(tetramesh)  :: thdr
-!local variables
-   integer :: i, j, i00, itet, nb, nb1, iswitch
-   integer :: iq(4), iqs(4) !contains the tetrahedron identifiers before and after the corners have been sorted for increasing energy
-   double precision :: ef, ec(4), ec1(4), es(4)
-   double precision :: c0, c1, c2, c3, cc1, cc4  !constants
-   double precision :: wthdr          !weight of the tetrahedron
-   double precision :: x1, x2, x3, x4 !energies zeroed w.r.t. Fermi energy: xj = es(j)-ef  
-   double precision :: w(4)           !weights of the interpolation formula
-   double precision, allocatable :: Mopt_tetra(:,:,:) !(x, n, n') interpolates the optical matrix element in a tetrahedron 
-
-   !********************
-   ! At the beginning this is almost a literal
-   ! copy from the INTETRA routine
-   !********************
-! SANITY CHECK
-   if (mesh%ktot<4) then
-      write(*,*)'INTERPTRA: tetrahedron method fails (number of k-points < 4)',mesh%ktot
-      STOP
-   endif
-   ef = ek%efer !local variable for the Fermi energy
-   allocate(Mopt_tetra(3,ek%nbopt_min:ek%nbopt_max,ek%nbopt_min:ek%nbopt_max))
-   if (.not. allocated(ek%Mopt_tetra)) &
-     &  allocate(ek%Mopt_tetra(3, 1:thdr%ntet, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max))
-! loop over tetrahedra:
-   do itet=1,thdr%ntet
-      Mopt_tetra=0.d0
-! get the four corner points:
-      iq(1) = thdr%idtet(1,itet)
-      iq(2) = thdr%idtet(2,itet)
-      iq(3) = thdr%idtet(3,itet)
-      iq(4) = thdr%idtet(4,itet)
-      wthdr = thdr%vltet(itet)
-
-      do nb=1,ek%nband_max
-        if (nb < ek%nbopt_min) cycle !if there are no optical matrix elements there is nothing to interpolate 
-        if (nb > ek%nbopt_max) cycle 
-! get the band energy at each corner of the tetrahedron:
-        ec(1) = ek%band(iq(1),nb)
-        ec(2) = ek%band(iq(2),nb)
-        ec(3) = ek%band(iq(3),nb)
-        ec(4) = ek%band(iq(4),nb)
-
-! sort the energies at the four corners (array ec) into array es
-         do i=1,4
-            ec1(i)=ec(i)
-         enddo
-         do 3 i=1,4
-            i00=1
-            do j=2,4
-               if (ec1(j)<ec1(i00)) i00=j
-            enddo
-            es(i) = ec1(i00)
-            iqs(i)= iq(i00)
-            ec1(i00)=1.d30
-     3   continue
-!!!!!!!!!!!test
-         !write(*,*) 'tetrahedron no.',itet
-         !do i=1,4
-         !   write(*,'(F8.3, 2I6)') ec(i),iq(i)
-         !enddo
-         !do i=1,4
-         !   write(*,'(F8.3, 2I6)') es(i),iqs(i)
-         !enddo
-         !STOP 
-!!!!!!!!!!!test end
-
-! define the constants required for later 
-         x1 = es(1)-ef
-         x2 = es(2)-ef
-         x3 = es(3)-ef
-         x4 = es(4)-ef
-         c0 = wthdr/4.d0
-
-         if (es(1) > ef) then
-            iswitch=1 
-
-         else if ((es(1) < ef) .and. (es(2) > ef)) then
-            iswitch=2 
-            c1 = c0*x1*x1*x1/((es(1)-es(2))*(es(3)-es(1))*(es(4)-es(1)))
-            cc1= (1.d0/(es(2)-es(1))) + (1.d0/(es(3)-es(1))) + (1.d0/(es(4)-es(1)))
-
-         else if ((es(2) < ef) .and. (es(3) > ef)) then
-            iswitch=3 
-            c1 = c0*x1*x1/((es(4)-es(1))*(es(3)-es(1)))
-            c2 = c0*x1*x2*x3/((es(4)-es(1))*(es(3)-es(2))*(es(3)-es(1)))
-            c3 = c0*x2*x2*x4/((es(4)-es(2))*(es(3)-es(2))*(es(4)-es(1))) 
-
-         else if ((es(3) < ef) .and. (es(4) > ef)) then
-            iswitch=4 
-            c1 = c0*x4*x4*x4/((es(4)-es(1))*(es(4)-es(2))*(es(4)-es(3)))
-            cc4= (1.d0/(es(1)-es(4))) + (1.d0/(es(2)-es(4))) + (1.d0/(es(3)-es(4)))
-
-         else if (es(4) < ef) then
-            iswitch=5 
-         else 
-            write(*,*)'INTERPTRA: the ordering of your thetrahedron vertices is not consistent', itet
-            !STOP
-         endif
-
-         select case (iswitch)
-            case(1)
-               w(1) = 0.d0
-               w(2) = 0.d0
-               w(3) = 0.d0
-               w(4) = 0.d0
-
-            case(2)
-               w(1) = c1*(4+(cc1*x1))
-               w(2) = c1*x1/(es(1)-es(2))
-               w(3) = c1*x1/(es(1)-es(3))
-               w(4) = c1*x1/(es(1)-es(4))
-
-            case(3)
-               w(1) = c1 + ((c1+c2)*x3/(es(3)-es(1))) + ((c1+c2+c3)*x4/(es(4)-es(1))) 
-               w(2) = c1+c2+c3 + ((c2+c3)*x3/(es(3)-es(2))) + (c3*x4/(es(4)-es(2))) 
-               w(3) = ((c1+c2)*x1/(es(1)-es(3))) + ((c2+c3)*x2/(es(2)-es(3)))
-               w(4) = ((c1+c2+c3)*x1/(es(1)-es(4))) + (c3*x2/(es(2)-es(4)))
-
-            case(4)
-               w(1) = c0 - (c1*x4/(es(4)-es(1)))
-               w(2) = c0 - (c1*x4/(es(4)-es(2)))
-               w(3) = c0 - (c1*x4/(es(4)-es(3)))
-               w(4) = c0 - (c1*(4+(cc4*x4))) 
-
-            case(5)
-               w(1) = c0 
-               w(2) = c0 
-               w(3) = c0 
-               w(4) = c0 
-
-         end select
- ! now that the weights are set need to perform the integration within the tetrahedron
-         do nb1=nb,ek%nbopt_max
-            do j=1,3
-               do i=1,4
-                  Mopt_tetra(j,nb,nb1)=Mopt_tetra(j,nb,nb1) + (ek%Mopt(j,iqs(i),nb,nb1 )*w(i))
-               enddo
-            enddo 
-         enddo !over nb1
-      enddo    ! over nb band
-      ek%Mopt_tetra(1,itet,:,: )=Mopt_tetra(1,:,:)
-      ek%Mopt_tetra(2,itet,:,: )=Mopt_tetra(2,:,:)
-      ek%Mopt_tetra(3,itet,:,: )=Mopt_tetra(3,:,:)
-   enddo       ! over tetrahedra
-
-   deallocate(Mopt_tetra)
-
- return
-end subroutine !INTERPTRA 
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! INTERPTRA_mu 
+! INTERPTRA_RE 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This routine linearly interpolates the product 
 ! of the optical matrix elemets with the transport kernel
@@ -2449,7 +2281,7 @@ end subroutine !INTERPTRA
 ! PRB (1994) 49, 16223-16233. The expressions for the 
 ! weights are given in app. B therein.
 !
-subroutine interptra_mu (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp, hpresp )
+subroutine interptra_re (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp, hpresp )
   use types
   use response
   use params
@@ -2591,7 +2423,7 @@ subroutine interptra_mu (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
       else if (es(4) < ef) then
          iswitch=5 
       else 
-         write(*,*)'INTERPTRA_MU: the ordering of your thetrahedron vertices is not consistent', itet
+         write(*,*)'INTERPTRA_RE: the ordering of your thetrahedron vertices is not consistent', itet
          STOP
       endif
       !09.04.2018: the switch case above cuts out the 
@@ -2745,8 +2577,76 @@ subroutine interptra_mu (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
   
 
  return
-end subroutine !INTERPTRA_mu 
+end subroutine !INTERPTRA_RE 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! INTERPTRA_MU 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+subroutine interptra_mu (vltet, occ_tet, occ_intp)
+  use types
+
+  implicit none
+
+   double precision, intent (in) :: vltet      !tetrahedron volume  
+   double precision, intent (in) :: occ_tet(4) !occupation numbers at tetrahedra vertices 
+   double precision, intent (out):: occ_intp   !occupation numbers at tetrahedra vertices 
+!local variables
+   integer :: i
+   double precision :: c0
+   double precision :: wthdr  !weight of the tetrahedron
+   double precision :: w(4)   !weights of the interpolation formula
+
+   !wthdr = real(thdr%idtet(0,itet))*thdr%vltet(itet) !the volume of the individual tetrahedra is already in units of the reciprocal unit cell
+   wthdr = vltet !the volume of the individual tetrahedra is already in units of the reciprocal unit cell
+
+   c0 = wthdr/4.d0
+
+   w(1) = c0 
+   w(2) = c0 
+   w(3) = c0 
+   w(4) = c0 
+
+   do i=1,4 !linear interpolation within the  tetrahedron
+      occ_intp = occ_intp + (w(i)*occ_tet(i))
+   enddo !over corners of the tetrahedron 
+
+ return
+end subroutine !INTERPTRA_MU 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! INTERPTRA_MUQ 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+subroutine interptra_muQ (vltet, target_tet, target_intp)
+  use types
+
+  implicit none
+
+   double precision, intent (in) :: vltet      !tetrahedron volume  
+   real(16), intent (in) :: target_tet(4) !occupation numbers at tetrahedra vertices 
+   real(16), intent (out):: target_intp   !occupation numbers at tetrahedra vertices 
+!local variables
+   integer :: i
+   real(16) :: c0
+   real(16) :: wthdr  !weight of the tetrahedron
+   real(16) :: w(4)   !weights of the interpolation formula
+
+   wthdr = real(vltet,16) !the volume of the individual tetrahedra is already in units of the reciprocal unit cell
+
+   c0 = wthdr/4.q0
+
+   w(1) = c0 
+   w(2) = c0 
+   w(3) = c0 
+   w(4) = c0 
+
+   do i=1,4 !linear interpolation within the  tetrahedron
+      target_intp = target_intp + (w(i)*target_tet(i))
+   enddo !over corners of the tetrahedron 
+
+ return
+end subroutine !INTERPTRA_MUQ 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !SUBROUTINE GENDOSEL

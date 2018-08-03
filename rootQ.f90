@@ -1,14 +1,10 @@
 
-
-
-
-
-
-subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
+subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra)
  ! uses QUAD-PRECISION for particle numbers    
   use params
   use types
-!  use mpi_org, only: myid,master
+  use mpi_org
+
   implicit none
   ! passed variables
   real(16) target_zero, dev !QUAD    
@@ -17,6 +13,8 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   type(edisp) :: ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
+  type(tetramesh)  :: thdr
+  logical :: ltetra
   ! local variables
   real(16) target_zero1, target_zero2
   real(8) mu1, mu2, dmu
@@ -26,7 +24,6 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   real(16), allocatable :: Y(:) !array containig the function to minimise 
   real(8), allocatable :: X(:) !array containig the chemical potential
   integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
-  !real(8) :: dmu ! increment 
   real(8) :: a11, a22, a31, a42
   real(8) :: A(4,4), B(4)
   integer :: i, j
@@ -41,10 +38,21 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
 
-! deviation from set particle number with initial mu                                                                                    
-  !call ndeviationQ(mu,NE,iT,target_zero1)
-  call ndeviationQ(mu, iT, ek, sct, mesh, target_zero1)
+! deviation from set particle number with initial mu
+  call ndeviationQ(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
 
+  !!!!!!!!!!!!!!!!!TEST 
+  !write(*,*) 'find_muQ, ndeviation1',myid,target_zero1
+  !if (ltetra) then
+  !   write(*,*) 'kpoint',mesh%k_coord(:,thdr%idtet(2,1))
+  !   write(*,*) 'energy',ek%band(thdr%idtet(2,1), 30)
+  !   write(*,*) myid,mu
+  !else
+  !   write(*,*) 'kpoint',mesh%k_coord(:,2)
+  !   write(*,*) 'energy',ek%band(2, 30)
+  !   write(*,*) myid,mu
+  !endif
+  !!!!!!!!!!!!!!!!!TEST END
   target_zero2=target_zero1
 !coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does                      
   mu1=mu
@@ -53,25 +61,19 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   dmu=0.005d0
   if (iT.eq.nT) dmu=0.025d0
 
-!  itest=0
   do while (target_zero2.gt.0.q0)
      mu2=mu2+dmu
-     !call ndeviationQ(mu2,NE,iT,target_zero2)
-     call ndeviationQ(mu2, iT, ek, sct, mesh, target_zero2)
-!     itest=itest+1
+     call ndeviationQ(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
   enddo
   do while (target_zero1.le.0.q0)
      mu1=mu1-dmu
-     !call ndeviationQ(mu1,NE,iT,target_zero1)
-     call ndeviationQ(mu1, iT, ek, sct, mesh, target_zero1)
-!     itest=itest+1
+     call ndeviationQ(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
   enddo
 
   niit0=niitQ
 !  if (iT.eq.nT) niit0=niitQ*2
 
   if (dev.eq.ndevVQ) niit0=niit0+niit0/2
-
 
   lsecant=.false.
   linint =.false.
@@ -80,25 +82,20 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   !Secant root finding                                                                                                                  
     do iit=1,niit0
        mu=mu1-real(target_zero1,8)*(mu2-mu1)/real(target_zero2-target_zero1,8)
-       !call ndeviationQ(mu,NE,iT,target_zero)
-       call ndeviationQ(mu, iT, ek, sct, mesh, target_zero)
+       call ndeviationQ(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
        if (abs(target_zero).lt.dev) exit    
        if (target_zero.gt.0.q0) then
           mu1=mu
-          target_zero1=target_zero !hu                                                                                                    
-          !call ndeviationQ(mu2,NE,iT,target_zero2)
-          call ndeviationQ(mu2, iT, ek, sct, mesh, target_zero2)
+          target_zero1=target_zero 
+          call ndeviationQ(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
        else
           mu2=mu
-          target_zero2=target_zero !hu                                                                                                    
-          !call ndeviationQ(mu1,NE,iT,target_zero1)
-          call ndeviationQ(mu1, iT, ek, sct, mesh, target_zero1)
+          target_zero2=target_zero 
+          call ndeviationQ(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
        endif
     enddo
     niitact=iit
-
-
 
 
   elseif (linint) then
@@ -118,19 +115,18 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
     enddo 
     ! evaluate target function in the interval
     do i=2,nmu-1
-       !call ndeviationQ(X(i),NE,iT,Y(i))
-       call ndeviationQ(X(i), iT, ek, sct, mesh, Y(i))
+       call ndeviationQ(X(i), iT, ek, sct, mesh, thdr, ltetra, Y(i))
     enddo 
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
     enddo 
     
-!!!!!!!!!!!!!!!!!test 
+    !!!!!!!!!!!!!!!!!TEST 
     !open(666,file='targeT.dat',status='unknown')
     !write(666,'(A,1I10)')'T ',iT
     !write(666,'(2E15.7)') (X(i),Y(i), i=1,nmu)
     !write(666,'(A)')'   '
-!!!!!!!!!!!!!!!!!test end 
+    !!!!!!!!!!!!!!!!!TEST END 
 
     ! find root by linear interpolation
     do i = 1, nmu-1
@@ -162,8 +158,7 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
                 !write(*,*) b(3), b(4)   
                 ! save the values of the intersection
                 mu = B(3)
-                !call ndeviationQ(mu,NE,iT,target_zero)
-                call ndeviationQ(mu, iT, ek, sct, mesh, target_zero)
+                call ndeviationQ(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
              endif
           endif
        enddo ! over freq. counter j
@@ -183,8 +178,7 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
 
      do j = 1, maxiter
         P(3) = 0.5d0*(P(1)+P(2))
-        !call ndeviationQ(P(3),NE,iT,F(3))
-        call ndeviationQ(P(3), iT, ek, sct, mesh, F(3))
+        call ndeviationQ(P(3), iT, ek, sct, mesh, thdr, ltetra, F(3))
         s = sqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0d0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -195,8 +189,7 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
         P(4) = P(3)+(P(3)-P(1))*(sign(1.0q0,F(1)-F(2))*F(3)/s)
         if(abs(P(4)-psave)<=ptol) goto 400
         psave= P(4)
-        !call ndeviationQ(P(4),NE,iT,F(4))
-        call ndeviationQ(P(4), iT, ek, sct, mesh, F(4))
+        call ndeviationQ(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
         if (f(4) ==0.0d0) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -228,31 +221,28 @@ subroutine find_muQ(mu,iT,nT,dev,target_zero,niitact, ek, sct, mesh )
   endif ! root finding algorithm
 
   if (lsecant .or. lridd) then
-    !if ((niitact.ge.niit0).and.(myid.eq.master)) then
-    if (niitact.ge.niit0) then
+    if ((niitact.ge.niit0).and.(myid.eq.master)) then
        write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
        write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",T, " with  niitQ=",niitQ, " ndevQ =", real(dev,8) !ndevQ       
        write(*,*) "increase niitQ, or allow for bigger ndevQ (see params.F90)"
-!     write(*,*) "myid=",myid
     endif
   endif
-!  if (myid.eq.master) write(*,*)target_zero
+
   return
 end subroutine find_muQ
 
 
-
-
-subroutine find_muQ_lowT(mu,iT, ek, sct, mesh, dos)
+subroutine find_muQ_lowT(mu,iT, ek, sct, mesh, thdr, ltetra, dos)
   use params
   use types
-  !use mpi_org, only: myid,master
-  !use estruct, only : delta
+  use mpi_org !, only: myid,master
   implicit none
 
   type(edisp) :: ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
+  type(tetramesh)  :: thdr
+  logical :: ltetra
   type(dosgrid) :: dos
   real(16) test,test1,test2
   real(8) mu,mu1,mu2,muold,sgn,tmp
@@ -265,19 +255,20 @@ subroutine find_muQ_lowT(mu,iT, ek, sct, mesh, dos)
      mu1=mu-dos%gap/2.05d0 ! should be related to size of gap... ~Delta/2 or so                                                             
      mu2=mu+dos%gap/2.05d0
 
-     call ndeviationQ(mu, 1, ek, sct, mesh, test)
+     call ndeviationQ(mu, 1, ek, sct, mesh, thdr, ltetra, test)
 !     if (myid.eq.master)        write(*,*)test                                                                                         
-     call ndeviationQ(mu1, 1, ek, sct, mesh, test1)
+     !call ndeviationQ(mu1, 1, ek, sct, mesh, test1)
+     call ndeviationQ(mu1, 1, ek, sct, mesh, thdr, ltetra, test1)
 !     if (myid.eq.master)        write(*,*)test1                                                                                        
-     call ndeviationQ(mu2, 1, ek, sct, mesh, test2)
-!     if (myid.eq.master)        write(*,*)test2                                                                                        
+     call ndeviationQ(mu2, 1, ek, sct, mesh, thdr, ltetra, test2)
+!     if (myid.eq.master)        write(*,*)test2
 
 
-!     if (myid.eq.master) then                                                                                                          
-!        write(*,*)                                                                                                                     
-!        write(*,*)mu                                                                                                                   
-!        write(*,*)test-(test1+test2)/2.q0                                                                                              
-!        write(*,*)mu+(mu1-mu2)*(test-(test1+test2)/2.q0)                                                                               
+!     if (myid.eq.master) then 
+!        write(*,*)
+!        write(*,*)mu
+!        write(*,*)test-(test1+test2)/2.q0
+!        write(*,*)mu+(mu1-mu2)*(test-(test1+test2)/2.q0)
 !     endif                                                                                                                             
 
      muold=mu
@@ -288,18 +279,13 @@ subroutine find_muQ_lowT(mu,iT, ek, sct, mesh, dos)
 
      mu=mu+sgn*min(abs(tmp),5.d-3)
 !     mu=mu+tmp                                                                                                                         
-
-
-
-
-     !call ndeviationQ(mu,NE,1,test2)                                                                                                   
-     !if (myid.eq.master)        write(*,*)                                                                                             
-     !if (myid.eq.master)        write(*,*)test2                                                                                        
-
-     !if (myid.eq.master)        write(*,*)                                                                                             
-!     if (myid.eq.master)        write(*,*)' NEW MU ',istep, mu                                                                         
-!     if (myid.eq.master)        write(22,*)istep,mu                                                                                    
-!     if (myid.eq.master)        write(*,*)                                                                                             
+     !call ndeviationQ(mu,NE,1,test2)
+     !if (myid.eq.master)        write(*,*)
+     !if (myid.eq.master)        write(*,*)test2
+     !if (myid.eq.master)        write(*,*)
+!     if (myid.eq.master)        write(*,*)' NEW MU ',istep, mu
+!     if (myid.eq.master)        write(22,*)istep,mu
+!     if (myid.eq.master)        write(*,*)
 !     if (myid.eq.master)        write(*,*)                                                                                             
 
      if (abs(mu-muold).lt.1.d-5) exit
@@ -324,10 +310,10 @@ end function FERMIQ
 
 
 
-subroutine ndeviationQ(mu, iT, ek, sct, mesh, target_zero)
+subroutine ndeviationQ(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   use params
   use types
-  !use mpi_org
+  use mpi_org
   implicit none
 
   !passed variables
@@ -336,12 +322,21 @@ subroutine ndeviationQ(mu, iT, ek, sct, mesh, target_zero)
   type(edisp) :: ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
+  type(tetramesh)  :: thdr
+  logical :: ltetra
+  real(16) :: occ_tot
   real(16), intent(out) :: target_zero
 
   !real(16) ninteger,nbig,nsmall,target_zero,NQ !QP   
   !real(16) ninteger_tot,nbig_tot,nsmall_tot !QP 
 
-  call varoccQ(mu, iT, ek, sct, mesh, target_zero )
+  if (ltetra) then
+     call varoccQ_tet(mu, iT, ek, sct, thdr, target_zero)
+  else
+     call varoccQ(mu, iT, ek, sct, mesh, occ_tot)
+     target_zero=real(ek%nelect,16)-occ_tot
+  endif
+
   !NQ=real(NE,16)
   ! particles per processor                                                                                                             
   !call n_per_procQ(iT,mu,ninteger,nbig,nsmall)
@@ -358,21 +353,21 @@ subroutine ndeviationQ(mu, iT, ek, sct, mesh, target_zero)
 !write(*,*)'master ', target_zero                                                                                                       
 
   !endif !master                                                                                                                         
-!broadcast target_zero. Not very elegant to do this...                                                                                  
-!broadcasting QUAD precision data ...                                                                                                   
-  !call MPI_BARRIER( MPI_COMM_WORLD, mpierr )               
+!broadcast target_zero. Not very elegant to do this...
+!broadcasting QUAD precision data ...
+  !call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
   !call MPI_BCAST_QUAD(target_zero)
   !call MPI_BCAST(target_zero,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)                                                      
-
-
 
 return
 end subroutine ndeviationQ
 
 
-subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
+subroutine varoccQ(mu, iT, ek, sct, mesh, occ_tot)
   use types
   use params
+  use mpi_org
+
   implicit none
 
   integer, intent(in) :: iT
@@ -380,13 +375,13 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
   type(edisp) ::ek
   type(scatrate) :: sct
   type(kpointmesh) :: mesh
-  real(16), intent(out) :: target_zero
+  real(16) :: occ_loc, occ_tot
 !local variables
   real(16),parameter :: thr = 1.0q-30
   complex(16) ::z
   real(16) :: nsmall, nbig, ninteger, tmp, tmp2
   real(8) :: eps
-  integer :: iband, ik, ikx, iky, ikz
+  integer :: iband, ik
   integer :: ktot
   real(16) :: cutQ
   !more sophistication                                                                                                                  
@@ -398,11 +393,8 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
   real(16), external :: FERMIQ
   complex(16), external :: wpsipghp
 
-  ek%occ_tot=0.0d0
-  !not used at the moment
-  !if (.not.allocated(ek%occ)) then
-  !  allocate(ek%occ(mesh%ktot,ek%nband_max))
-  !endif
+  occ_tot=0.0q0
+  occ_loc=0.0q0
 
   ninteger=0.q0
   nbig=0.q0
@@ -410,9 +402,11 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
   ktot = mesh%kx*mesh%ky*mesh%kz
   cutQ=1.q0/thr
 
-  do ik =1, ktot 
+  do ik = iqstr, iqend
      do iband=1,ek%nband_max 
         if (ek%band(ik,iband) .gt. 90.0d0) cycle
+        if (iband<ek%nbopt_min) cycle
+        if (iband>ek%nbopt_max) cycle
         eps=sct%z*ek%band(ik,iband)-mu
 
         if (eps.lt.0.d0) then ! occupied state                                                                                                        
@@ -421,11 +415,11 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=1.q0-FERMIQ(eps,beta)
            else
-              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) + ciQ*real(eps*beta2p,16) ! eps --> -eps                                                                   
-              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0 !                                                                                          
+              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) + ciQ*real(eps*beta2p,16) ! eps --> -eps
+              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0 
            endif
      
-           !write(*,*) 'occupied state, occ var', tmp                                                                                                            
+           !write(*,*) 'occupied state, occ var', tmp
            if (tmp.gt.thr) then
               IEXP=int(log10(abs(tmp)),8)
               tmp2=( real(int((tmp/(10.q0**iEXP))*QCUT,8),16)*10.q0**iEXP ) / QCUT
@@ -437,16 +431,16 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
               nsmall=nsmall-tmp
            endif
      
-        else ! unoccupied state                                                                                                                       
+        else ! unoccupied state
      
            if (sct%gam(iT,iband).eq.0.d0) then
               tmp=FERMIQ(eps,beta)
            else
-              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps                                                                            
+              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps
               tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0 !                               
            endif
      
-           !write(*,*) 'unoccupied state, occ var', tmp                                                                                                            
+           !write(*,*) 'unoccupied state, occ var', tmp 
            if (tmp.gt.thr) then
               if (tmp.ne.0.q0) then
                  IEXP=int(log10(abs(tmp)),8)
@@ -462,24 +456,148 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, target_zero)
               nsmall=nsmall+tmp
            endif
         endif
-        !ek%occ(ik,iband) = 2.0d0*(ninteger_tot+nbig_tot+nsmall_tot)/real(mesh%ktot,8)
-        !ek%occ(ik,iband) = 2.0d0*(ninteger+nbig+nsmall)/real(mesh%ktot,8)
-        !ek%occ_tot = ek%occ_tot + ek%occ(ik,iband)
      enddo ! iband       
   enddo                                                                                                                   
-  !ninteger=2.q0*ninteger/real(mesh%ktot,16) ! 2 for spin                                                                                       
-  !nbig=2.q0*nbig/real(mesh%ktot,16)
-  !nsmall=2.q0*nsmall/real(mesh%ktot,16)
   ninteger=2.q0*ninteger/real(ktot,16) ! 2 for spin                                                                                       
   nbig=2.q0*nbig/real(ktot,16)
   nsmall=2.q0*nsmall/real(ktot,16)
-  ek%occ_tot=real(ninteger+nbig+nsmall,8)
+  !ek%occ_tot=real(ninteger+nbig+nsmall,8)
 
-  target_zero=((real(ek%nelect,16)-ninteger)-nbig)-nsmall
+  if (nproc == 1) then
+     !target_zero=((real(ek%nelect,16)-ninteger)-nbig)-nsmall
+     occ_tot=ninteger+nbig+nsmall
+  else
+     !target_loc=((real(ek%nelect,16)-ninteger)-nbig)-nsmall
+     occ_loc=ninteger+nbig+nsmall
+  endif
+
+  if (nproc > 1) then
+     call mpi_reduce_quad(occ_loc, occ_tot)
+  endif
 
   return
 
 end subroutine varoccQ
+
+subroutine varoccQ_tet(mu, iT, ek, sct, thdr, target_zero)
+  use types
+  use params
+  use mpi_org
+  use estruct
+
+  implicit none
+
+  integer, intent(in) :: iT
+  real(8), intent(in) :: mu
+  type(edisp) ::ek
+  type(scatrate) :: sct
+  type(tetramesh) :: thdr
+  real(16) :: target_loc
+  real(16), intent(out) :: target_zero
+!local variables
+  real(16),parameter :: thr = 1.0q-30
+  complex(16) ::z
+  real(16) :: nsmall, nbig, ninteger, tmp, tmp2
+  real(16) :: target_tet(4), target_intp
+  real(8) :: eps
+  integer :: iband, ik
+  integer :: itet
+  real(16) :: cutQ
+  !more sophistication
+  integer(8) ::IEXP
+  !parameters
+  real(16),parameter :: QCUT=1.Q14 ! not the same as cutQ!!!!!
+!external variables
+  real(16), external :: FERMIQ
+  complex(16), external :: wpsipghp
+
+  target_zero=0.0q0
+  target_loc=0.0q0
+  cutQ=1.q0/thr
+
+  do itet = iqstr, iqend
+     target_intp=0.0q0
+     do ik = 1, 4
+        ninteger=0.q0
+        nbig=0.q0
+        nsmall=0.q0
+        do iband=1,ek%nband_max 
+           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (iband<ek%nbopt_min) cycle
+           if (iband>ek%nbopt_max) cycle
+           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+        
+           if (eps.lt.0.d0) then ! occupied state
+              ninteger=ninteger+1.q0
+              
+              if (sct%gam(iT,iband).eq.0.d0) then
+                 tmp=1.q0-FERMIQ(eps,beta)
+              else
+                 z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) + ciQ*real(eps*beta2p,16) ! eps --> -eps
+                 tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0 
+              endif
+        
+              !write(*,*) 'occupied state, occ var', tmp
+              if (tmp.gt.thr) then
+                 IEXP=int(log10(abs(tmp)),8)
+                 tmp2=( real(int((tmp/(10.q0**iEXP))*QCUT,8),16)*10.q0**iEXP ) / QCUT
+                 tmp=tmp-tmp2
+        
+                 nbig=nbig-tmp2
+                 nsmall=nsmall-tmp
+              else
+                 nsmall=nsmall-tmp
+              endif
+        
+           else ! unoccupied state
+        
+              if (sct%gam(iT,iband).eq.0.d0) then
+                 tmp=FERMIQ(eps,beta)
+              else
+                 z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps
+                 tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0 
+              endif
+        
+              !write(*,*) 'unoccupied state, occ var', tmp
+              if (tmp.gt.thr) then
+                 if (tmp.ne.0.q0) then
+                    IEXP=int(log10(abs(tmp)),8)
+                 else
+                    IEXP=0
+                 endif
+        
+                 tmp2=( real(int((tmp/(10.q0**iEXP))*QCUT,8),16)*10.q0**iEXP ) / QCUT
+                 tmp=tmp-tmp2
+                 nbig=nbig+tmp2
+                 nsmall=nsmall+tmp
+              else
+                 nsmall=nsmall+tmp
+              endif
+           endif
+        enddo ! iband  
+        ninteger=2.q0*ninteger ! 2 for spin
+        nbig=2.q0*nbig
+        nsmall=2.q0*nsmall
+        target_tet(ik)=((real(ek%nelect,16)-ninteger)-nbig)-nsmall
+     enddo ! corners of the tetrahedron     
+     call interptra_muQ (thdr%vltet(itet), target_tet, target_intp)
+     if (nproc == 1) then
+        ! accumulate globally (nproc = 1)
+        target_zero=target_zero+target_intp
+     else
+        ! or locally (nproc > 1)
+        target_loc=target_loc+target_intp
+     endif
+  enddo ! tetrahedra
+
+  ! MPI DISTRIBUTION
+  if (nproc > 1) then
+     call mpi_reduce_quad(target_loc, target_zero)
+  endif
+
+  return
+
+end subroutine varoccQ_tet
 
 
 
