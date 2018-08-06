@@ -6,6 +6,7 @@ module Mparams
   real(8)  :: beta, beta2p, threshold
   real(16) :: betaQ,beta2pQ,thresholdQ
 
+
   ! mathematical constants
   complex(8), parameter  :: ci = (0.d0,1.d0)
   real(8), parameter     :: pi=3.1415926535897932384626433832795028841971693993751D0
@@ -30,4 +31,6 @@ module Mparams
   integer, parameter     :: niitQ=150 ! maximal number of secant steps
   real(8), parameter     :: small=1D-11 ! ~1D-11 for real(8): use 10 significant digits... use 20 for QUAD
   real(16), parameter    :: smallQ=1Q-21 ! ~1Q-18 doesnt seem to matter for QUAD...
+
+  real(8), parameter     :: band_fill_value = 1.d2
 end module Mparams

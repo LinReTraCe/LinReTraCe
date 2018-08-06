@@ -62,7 +62,7 @@ module Mmpi_org
     iqstr = displs(myid+1) + 1
     iqend = displs(myid+1) + rcounts(myid+1)
 #else
-    iqstr = 0
+    iqstr = 1
     iqend = nk
 #endif
   end subroutine mpi_genkstep

@@ -1,15 +1,15 @@
 module Mtypes
 
   type algorithm
-    logical :: ldebug       ! evaluate quad precision data?
-    logical :: ltbind       ! tight binding lattice?
-    logical :: ltetra       ! use tetrahedron method?
-    logical :: lw2k         ! use Wien2k input
-    logical :: loptic       ! use also optic matrix elements
-    logical :: lBfield      ! calculations in the presence of a magnetic field?
-    logical :: lsymm        ! reads in the full BZ or generates it using symmetry operations?
-    integer :: imurestart   ! restart with a privided value of the chemical potential?
-    character(10) :: mysyst ! label that is used to open the Wien2k files
+    logical :: ldebug        ! evaluate quad precision data?
+    logical :: ltbind        ! tight binding lattice?
+    logical :: ltetra        ! use tetrahedron method?
+    logical :: lw2k          ! use Wien2k input
+    logical :: loptic        ! use also optic matrix elements
+    logical :: lBfield       ! calculations in the presence of a magnetic field?
+    logical :: lsymm         ! reads in the full BZ or generates it using symmetry operations?
+    integer :: imurestart    ! restart with a privided value of the chemical potential?
+    character(100) :: mysyst ! label that is used to open the Wien2k files
   end type
 
   type kpointmesh

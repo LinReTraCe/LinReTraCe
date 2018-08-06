@@ -58,36 +58,36 @@ program gtmain ! GammaTransport
   use MrootQ
   implicit none
 
-  type(algorithm)  :: algo
-  type(kpointmesh) :: kmesh  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh) :: redkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh) :: fulkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(edisp) :: eirrk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
-  type(edisp) :: eredk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
-  type(edisp) :: efulk       ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
-  type(tetramesh) :: thdr    ! contains the tetrahedra
-  type(dosgrid)   :: dos     ! DOS, integrated DOS, Fermi level
-  type(scatrate)  :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
-  type(dp_resp)   :: dpresp  ! response functions in double precision
-  type(dp_resp)   :: respBl  ! response functions in double precision for Boltzmann regime response
+  type(algorithm)    :: algo
+  type(kpointmesh)   :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh)   :: redkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh)   :: fulkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(edisp)        :: eirrk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
+  type(edisp)        :: eredk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
+  type(edisp)        :: efulk   ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
+  type(tetramesh)    :: thdr    ! contains the tetrahedra
+  type(dosgrid)      :: dos     ! DOS, integrated DOS, Fermi level
+  type(scatrate)     :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
+  type(dp_resp)      :: dpresp  ! response functions in double precision
+  type(dp_resp)      :: respBl  ! response functions in double precision for Boltzmann regime response
   type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
   type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
-  type(qp_resp)   :: qpresp  ! response functions in 4-ple precision
+  type(qp_resp)      :: qpresp  ! response functions in 4-ple precision
   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
   !! is negligible
 
-  real(8) :: mu,mutmp !chemical potential
-  integer :: nT,iT,ierr,imeth,iband,iflag_dmudt,imurestart,niitact
-  real(16) :: test0,test1,ndevactQ
-  real(8) :: criterion,ndevact
-  real(8) :: dmudT ! used only for gamma=0.d0
+  real(8)              :: mu,mutmp !chemical potential
+  integer              :: nT,iT,ierr,imeth,iband,iflag_dmudt,imurestart,niitact
+  real(16)             :: test0,test1,ndevactQ
+  real(8)              :: criterion,ndevact
+  real(8)              :: dmudT ! used only for gamma=0.d0
   real(8), allocatable :: drhodT(:)
 
-  real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
-  integer :: idum
-  integer :: nk, nband !local values that are assigned depending on the algorithm
-  integer :: ig
+  real(8)              :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
+  integer              :: idum
+  integer              :: nk, nband !local values that are assigned depending on the algorithm
+  integer              :: ig
 
   call mpi_initialize()
 
@@ -420,9 +420,11 @@ program gtmain ! GammaTransport
         end select
      endif !master
 
+#ifdef MPI
      if (imurestart.ne.0) then ! if read mu, need to BCAST it to all procs.
         call MPI_BCAST(mu,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
      endif
+#endif
      !copy the given value of mu into the datastructure
      sct%mu(iT) = mu
 
@@ -442,7 +444,9 @@ program gtmain ! GammaTransport
   ! DONE MU. DO TRANSPORT AT THIS POINT.
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+#ifdef MPI
      call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?
+#endif
      if (algo%ldebug) then
         if (algo%ltbind) then
           call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl)
