@@ -6,6 +6,9 @@
 *.so
 *.a
 
+# other text files
+*.dat
+
 # old backup files
 bkp*/**
 

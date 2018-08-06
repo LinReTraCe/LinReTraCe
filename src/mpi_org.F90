@@ -74,6 +74,8 @@ module Mmpi_org
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! scatters a double precision vector
 ! across processors
+
+#ifdef MPI
   subroutine mpi_dvecscat(dvec, n, sub_dvec, nk)
    implicit none
    integer :: n, nk
@@ -591,5 +593,8 @@ module Mmpi_org
 
     return
   end subroutine mpi_bcast_quad
+
+! mpi communication tools
+#endif
 
 end module Mmpi_org

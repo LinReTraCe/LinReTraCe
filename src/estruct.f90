@@ -26,7 +26,7 @@ module Mestruct
 !eM: ikstart and ikend are parameters set by a previous mpi call in main.f90
 ! I think that the parallelisation will have to take place after the construction of the
 ! tetrahedra
-     call readinfile(algo, eirrk, kmesh, sct)
+
      !the total number of k-points has to be increased because we need also the endpoints in the BZ
      if (algo%ltetra) then
         kmesh%ktot=(kmesh%kx +1)*(kmesh%ky +1)*(kmesh%kz +1)
@@ -166,7 +166,7 @@ module Mestruct
      endif !ltetra
    end subroutine !estruct_init
 
-   subroutine readinfile(algo, ek, kmesh, sct)
+   subroutine read_config(algo, ek, kmesh, sct)
      implicit none
 
     type (algorithm) :: algo
@@ -272,7 +272,7 @@ module Mestruct
 
     close(10)
 
-   end subroutine !readinfile
+   end subroutine
 
    subroutine gentbstr(algo, eirrk, kmesh)
      implicit none
