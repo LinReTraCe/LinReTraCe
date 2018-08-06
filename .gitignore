@@ -2,6 +2,10 @@
 *.o
 *.mod
 
+# Libary files
+*.so
+*.a
+
 # old backup files
 bkp*/**
 

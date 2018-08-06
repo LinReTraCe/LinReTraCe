@@ -6,6 +6,8 @@ INSTALL_DIR = ../bin
 OBJECTS = types.o estruct.o params.o mpi_org.o \
 					estruct.o root.o rootQ.o response.o main.o
 
+DIGAMMA = ./digamma/cern_digamma.a
+
 include ../make_include
 
 # delete this later
@@ -17,10 +19,13 @@ include ../make_include
 #CFLAGS = -g -fbounds-check -fbacktrace  -Wall -Wextra -Wconversion -O0 #  gfortran debugging
 #CFLAGS = -O3 #-xHost -ipo  # ifort production
 
-LIBS= ./digamma/cern_digamma.a -lquadmath $(LAPACK) $(BLAS)
+LIBS= $(DIGAMMA) -lquadmath $(LAPACK) $(BLAS)
 
 .PHONY: all
-all: $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG)
+all: $(DIGAMMA) $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG)
+
+$(DIGAMMA):
+	if [ ! -f $(DIGAMMA) ]; then cd digamma; $(SHELL) compile.sh; fi
 
 $(INSTALL_DIR):
 	if [ ! -d $(INSTALL_DIR) ]; then mkdir -p $(INSTALL_DIR) ; fi
