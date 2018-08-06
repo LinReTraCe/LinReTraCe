@@ -1,41 +1,74 @@
 module Mmpi_org
+
+#ifdef MPI
   use mpi
+#endif
 
-!integer dp,qp
-!parameter(dp=selected_real_kind(8)) !for HCLM
-!parameter(qp=selected_real_kind(16))
-!parameter(dp=8)
-!parameter(qp=16)
+  integer, parameter   :: master = 0
+  integer              :: myid, nproc
+  integer, allocatable :: displs(:),rcounts(:)
+  integer              :: iqstr, iqend
 
-! somehow mpif90 on hclm doesn like the more elegant iso way...
-!Private :: 8,16
+  integer              :: mpierr, nkthis
+  character(len=5)     :: chmyid
 
-integer :: nproc,myid,master,mpierr,iqstr,iqend,nkthis
-integer, allocatable :: displs(:),rcounts(:)
-character(len=4) :: chmyid
+  contains
 
-
-
-contains
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_GEN
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_gen(small,threshold,smallQ,thresholdQ)
+  ! initialize mpi environment
+  subroutine mpi_initialize()
     implicit none
-    integer :: nk
-    real(8) :: threshold,small
-    real(16):: thresholdQ,smallQ
-    integer :: i
-
+#ifdef MPI
     call MPI_INIT(mpierr)
     call MPI_COMM_RANK(MPI_COMM_WORLD,myid,mpierr)
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nproc,mpierr)
-    master=0
-    threshold=small !real(nk,8)/2.d0*small ! threshold for relevant digits...
-    thresholdQ=smallQ !real(nk,16)/2.q0*smallQ ! threshold for relevant digits...
-  end subroutine mpi_gen
+#else
+    myid = 0
+    nproc = 1
+#endif
+  end subroutine mpi_initialize
 
+  ! close mpi environment
+  subroutine mpi_close()
+    implicit none
+#ifdef MPI
+    if (allocated(rcounts)) deallocate(rcounts)
+    if (allocated(displs))  deallocate(displs)
+    call MPI_FINALIZE( mpierr )
+#endif
+  end subroutine mpi_close
+
+  subroutine prepare_chmyid(myid,chmyid)
+    implicit none
+    integer, intent(in) :: myid
+    character(len=*)    :: chmyid
+    write(chmyid,'(I5.5)') myid
+    return
+  end subroutine prepare_chmyid
+
+  subroutine mpi_genkstep(nk)
+    implicit none
+    integer, intent(in) :: nk
+    integer             :: i,nktmp
+#ifdef MPI
+    allocate(displs(nproc),rcounts(nproc))
+    displs = 0
+    rcounts = 0
+    do i=1,nproc-1
+       rcounts(i) = (nk - displs(i)) / (nproc+1-i) ! integer division
+       displs(i+1) = displs(i) + rcounts(i)
+    enddo
+    rcounts(nproc) = (nk - displs(nproc))
+
+    iqstr = displs(myid+1) + 1
+    iqend = displs(myid+1) + rcounts(myid+1)
+#else
+    iqstr = 0
+    iqend = nk
+#endif
+  end subroutine mpi_genkstep
+
+
+!!! COMMUNICATION ROUTINES
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! SUBROUTINE MPI_DVECSCAT
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -88,75 +121,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! SUBROUTINE MPI_GENKSTEP
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_genkstep(nk)
-    implicit none
-    integer :: nk
-    integer :: i
-
-    allocate(displs(nproc),rcounts(nproc))
-    do i=1,nproc
-       call select_krange(i-1,nk,iqstr,iqend)
-       displs(i)=iqstr-1
-       rcounts(i)=iqend-iqstr+1
-    enddo
-    call select_krange(myid,nk,iqstr,iqend)
-
-  end subroutine mpi_genkstep
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_ENV
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_env(nk,small,threshold,smallQ,thresholdQ)
-    implicit none
-    integer :: nk
-    real(8) :: threshold,small
-    real(16):: thresholdQ,smallQ
-    integer :: i
-
-    call MPI_INIT(mpierr)
-    call MPI_COMM_RANK(MPI_COMM_WORLD,myid,mpierr)
-    call MPI_COMM_SIZE(MPI_COMM_WORLD,nproc,mpierr)
-    allocate(displs(nproc),rcounts(nproc))
-    master=0
-    do i=1,nproc
-       call select_krange(i-1,nk,iqstr,iqend)
-       displs(i)=iqstr-1
-       rcounts(i)=iqend-iqstr+1
-
-!	write(*,*)
-
-    enddo
-    call select_krange(myid,nk,iqstr,iqend)
-    ! XXX maybe not a good idea to make it nk dependent...
-
-    threshold=small !real(nk,8)/2.d0*small ! threshold for relevant digits...
-    thresholdQ=smallQ !real(nk,16)/2.q0*smallQ ! threshold for relevant digits...
-
-!    threshold=real(nk,8)/2.d0*small ! threshold for relevant digits...
-!    thresholdQ=real(nk,16)/2.q0*smallQ ! threshold for relevant digits...
-!    write(*,*)'threshold  ',threshold
-!    write(*,*)'thresholdQ ',thresholdQ
-
-  end subroutine mpi_env
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE SELECT_KRANGE
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine select_krange(myidin,nk,ikstart,ikend)
-    implicit none
-    integer :: myidin,id,ikstart,ikend,dq,npp,nk
-
-    id=myidin+1 !usually starting at 0
-    dq=nk/nproc+1
-    npp=0
-    if(id.gt.nproc+nk-dq*nproc) then
-       npp=nproc+nk-dq*nproc
-       dq=dq-1
-    endif
-    ikstart=npp*(dq+1)+(id-npp-1)*dq+1
-    ikend=ikstart+dq-1
-    return
-  end subroutine select_krange
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !  SUBROUTINE MPI_ALGOBCAST
@@ -627,38 +591,5 @@ contains
 
     return
   end subroutine mpi_bcast_quad
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_CLOSE
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine mpi_close()
-    implicit none
-
-    if (allocated(rcounts)) deallocate(rcounts)
-    if (allocated(displs))  deallocate(displs)
-    call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
-    call MPI_FINALIZE( mpierr )
-
-  end subroutine mpi_close
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  SUBROUTINE PREPARE_CHMYID
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine prepare_chmyid(myid,chmyid)
-  implicit none
-  integer myid
-  character(len=*)chmyid
-
-  if (myid.lt.10) then
-     write(chmyid,'(1I1)')myid
-  else
-     if (myid.lt.100) then
-        write(chmyid,'(1I2)')myid
-     else
-        write(chmyid,'(1I3)')myid
-     endif
-  endif
-  return
-end subroutine prepare_chmyid
 
 end module Mmpi_org

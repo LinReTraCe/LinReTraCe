@@ -52,65 +52,60 @@ program gtmain ! GammaTransport
 use Mparams
 use Mtypes
 use Mmpi_org
-use Mestruct!, only: delta,gam,gmax,iband_valence,gminall,emin,emax!,ek,vka,vkab,zqp ! ek,zqp,vka,vkab needed for testing only!!! move that
+use Mestruct
 use Mresponse
 use Mroot
 use MrootQ
 implicit none
 
-     type(algorithm)  :: algo
-     type(kpointmesh) :: kmesh  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-     type(kpointmesh) :: redkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-     type(kpointmesh) :: fulkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-     type(edisp) :: eirrk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
-     type(edisp) :: eredk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
-     type(edisp) :: efulk       ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
-     type(tetramesh) :: thdr    ! contains the tetrahedra
-     type(dosgrid)   :: dos     ! DOS, integrated DOS, Fermi level
-     type(scatrate)  :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
-     type(dp_resp)   :: dpresp  ! response functions in double precision
-     type(dp_resp)   :: respBl  ! response functions in double precision for Boltzmann regime response
-     type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
-     type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
-     type(qp_resp)   :: qpresp  ! response functions in 4-ple precision
-   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
-   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
-   !! is negligible
+  type(algorithm)  :: algo
+  type(kpointmesh) :: kmesh  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh) :: redkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh) :: fulkm  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(edisp) :: eirrk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
+  type(edisp) :: eredk       ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
+  type(edisp) :: efulk       ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
+  type(tetramesh) :: thdr    ! contains the tetrahedra
+  type(dosgrid)   :: dos     ! DOS, integrated DOS, Fermi level
+  type(scatrate)  :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
+  type(dp_resp)   :: dpresp  ! response functions in double precision
+  type(dp_resp)   :: respBl  ! response functions in double precision for Boltzmann regime response
+  type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
+  type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
+  type(qp_resp)   :: qpresp  ! response functions in 4-ple precision
+  !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
+  !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
+  !! is negligible
 
-real(8) :: mu,mutmp !chemical potential
-integer :: nT,iT,ierr,imeth,iband,iflag_dmudt,imurestart,niitact
-real(16) :: test0,test1,ndevactQ
-real(8) :: criterion,ndevact
-real(8) :: dmudT ! used only for gamma=0.d0
-real(8), allocatable :: drhodT(:)
+  real(8) :: mu,mutmp !chemical potential
+  integer :: nT,iT,ierr,imeth,iband,iflag_dmudt,imurestart,niitact
+  real(16) :: test0,test1,ndevactQ
+  real(8) :: criterion,ndevact
+  real(8) :: dmudT ! used only for gamma=0.d0
+  real(8), allocatable :: drhodT(:)
 
-real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
-integer :: idum
-integer :: nk, nband !local values that are assigned depending on the algorithm
-integer :: ig
+  real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
+  integer :: idum
+  integer :: nk, nband !local values that are assigned depending on the algorithm
+  integer :: ig
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-call mpi_gen(small,threshold,smallQ,thresholdQ)
-!!!!!!!!!!!!!!!!!!!!TEST_MPI
-!if (nproc>1) write(*,*)'proc #', myid,'out of',nproc
-!STOP
-!!!!!!!!!!!!!!!!!!!!TEST_MPI END
+  call mpi_initialize()
 
-if (myid.eq.master) then
-   open(700,file='control.dat',status='unknown')
-   write(*,*)
-   write(*,*)
-   write(*,*)'#####################################################'
-   write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
-   write(*,*)'#####################################################'
-   write(*,*)'#  Jan M. Tomczak                                   #'
-   write(*,*)'#####################################################'
-   write(*,*)
-endif
+  if (myid.eq.master) then
+     open(700,file='control.dat',status='unknown')
+     write(*,*)
+     write(*,*)
+     write(*,*)'#####################################################'
+     write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
+     write(*,*)'#####################################################'
+     write(*,*)'#  Jan M. Tomczak                                   #'
+     write(*,*)'#####################################################'
+     write(*,*)
+  endif
 
-     !with this flag set to false the quad precision response is computed
-     algo%ldebug=.true.
-     !algo%ldebug=.false.
+  !with this flag set to false the quad precision response is computed
+  algo%ldebug=.true.
+  !algo%ldebug=.false.
 
 !read in electronic structure and matrix elements
 call estruct_init(algo, kmesh, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
