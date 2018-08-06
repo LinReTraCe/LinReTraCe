@@ -19,7 +19,7 @@ include ../make_include
 #CFLAGS = -g -fbounds-check -fbacktrace  -Wall -Wextra -Wconversion -O0 #  gfortran debugging
 #CFLAGS = -O3 #-xHost -ipo  # ifort production
 
-LIBS= $(DIGAMMA) -lquadmath $(LAPACK) $(BLAS)
+LIBS= -lquadmath $(LAPACK) $(BLAS)
 
 .PHONY: all
 all: $(DIGAMMA) $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG)
@@ -31,7 +31,7 @@ $(INSTALL_DIR):
 	if [ ! -d $(INSTALL_DIR) ]; then mkdir -p $(INSTALL_DIR) ; fi
 
 $(INSTALL_DIR)/$(PROG): $(OBJECTS)
-	$(FC) $^ -o $@ $(FFLAGS) $(LIBS)
+	$(FC) $^ -o $@ $(FFLAGS) $(LIBS) $(DIGAMMA)
 
 %.o: %.f90
 	$(FC) $(FFLAGS) $(LIBS) -c $< -o $@
