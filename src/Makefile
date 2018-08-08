@@ -4,7 +4,7 @@ PROG = linretrace
 
 INSTALL_DIR = ../bin
 OBJECTS = types.o estruct.o params.o mpi_org.o \
-					estruct.o root.o rootQ.o response.o main.o
+					estruct.o root.o response.o main.o
 
 DIGAMMA = ./digamma/cern_digamma.a
 
@@ -40,11 +40,10 @@ $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) -c $< -o $@
 
 estruct.o: params.o types.o
-main.o: params.o mpi_org.o types.o estruct.o response.o root.o rootQ.o
+main.o: params.o mpi_org.o types.o estruct.o response.o root.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
-rootQ.o: mpi_org.o params.o types.o estruct.o
 
 .PHONY: clean
 clean :

@@ -55,7 +55,6 @@ program gtmain ! GammaTransport
   use Mestruct
   use Mresponse
   use Mroot
-  use MrootQ
   implicit none
 
   type(algorithm)    :: algo
@@ -121,10 +120,13 @@ program gtmain ! GammaTransport
      if (algo%ltbind) then
         mu = eirrk%efer
      else
-        if (algo%ltetra) mu = efulk%efer
-        if (.not.algo%ltetra) mu = eredk%efer
+        if (algo%ltetra) then
+          mu = efulk%efer
+        else
+          mu = eredk%efer
+        endif
      endif
-     if (myid.eq.master)  write(*,*)'initialized mu = ',mu
+     if (myid.eq.master)  write(*,*)'initialized LDA mu = ',mu
   else
      mu = eirrk%efer
      if (myid.eq.master)  write(*,*)'mu read from file= ',mu
@@ -262,7 +264,9 @@ program gtmain ! GammaTransport
   do iT=sct%nT,1,-1
      T=sct%TT(iT)
      beta=1.d0/(kB*T)
+     betaQ=1.q0/(kBQ*T)
      beta2p=beta/(2.d0*pi)
+     beta2pQ=beta/(2.q0*piQ)
      !determine maximal gamma of bands involved in gap
      !gmax=max(gam(it,iband_valence),gam(it,iband_valence+1))
      gmax=max(sct%gam(iT,1),sct%gam(iT,2))
@@ -297,12 +301,12 @@ program gtmain ! GammaTransport
         if (criterion.lt.20.d0) then !DP
            imeth=0
            if (algo%ltbind) then
-              call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)
+              call find_mu(mu,iT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)
            else
               if (algo%ltetra) then
-                 call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra)
+                 call find_mu(mu,iT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra)
               else
-                 call find_mu(mu,iT,sct%nT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra)
+                 call find_mu(mu,iT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra)
               endif
            endif
            if (myid.eq.master) then
@@ -312,12 +316,12 @@ program gtmain ! GammaTransport
         elseif (criterion.lt.80.d0) then !QP
            imeth=1
            if (algo%ltbind) then
-              call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
+              call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
            else
               if (algo%ltetra) then
-                 call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
               else
-                 call find_muQ(mu,iT,sct%nT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
               endif
            endif
            if (myid.eq.master) then
@@ -328,12 +332,12 @@ program gtmain ! GammaTransport
            imeth=2
            if (myid.eq.master) write(*,*) 'SUPER QUAD'
            if (algo%ltbind) then
-              call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
+              call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
            else
               if (algo%ltetra) then
-                 call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
               else
-                 call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
               endif
            endif
            if (myid.eq.master) then
@@ -428,7 +432,7 @@ program gtmain ! GammaTransport
      !copy the given value of mu into the datastructure
      sct%mu(iT) = mu
 
-     if ((myid == master) .and. (iT == sct%nT)) then
+     if ((myid == master) .and. (iT == sct%nT) .and. algo%ltetra) then
         !call intldos(iT, dos, redkm, eredk, sct)
         call intetra(fulkm, thdr, dos, sct%z*efulk%band, efulk%nband_max)
         do ig=1,size(dos%enrg)

@@ -115,17 +115,16 @@ module Mestruct
            do iband=1,eirrk%nband_max
               if (maxtmp < abs(eirrk%E0(iband))) maxtmp = abs(eirrk%E0(iband))
            enddo
-           dos%emax= 2.0d0*maxtmp
+           dos%emax= 1.2d0*maxtmp
            dos%emin=-dos%emax
-           dos%nnrg=2.0d0*dos%emax/0.007d0
+           dos%nnrg=5001
            !energy spacing of roughly 0.1 eV
 
            call gendosel(kmesh, eirrk, dos)
            !spin multiplicity
-           do i=1,size(dos%enrg)
-              dos%dos(i)=2.0d0*dos%dos(i)
-              dos%nos(i)=2.0d0*dos%nos(i)
-           enddo
+           dos%dos=2.0d0*dos%dos
+           dos%nos=2.0d0*dos%nos
+
            open(10,file='linrados',status='unknown')
            do i=1,size(dos%enrg)
               write (10,*) dos%enrg(i), dos%dos(i), dos%nos(i)
@@ -139,22 +138,21 @@ module Mestruct
            !generate energy grid exactly as before
            maxtmp=0.d0
            do iband=1,eredk%nband_max
-              if ((eredk%band(1,iband) < 1.0d2) .and. (maxtmp < abs(eredk%band(1,iband)))) &
+              if ((eredk%band(1,iband) < band_fill_value) .and. (maxtmp < abs(eredk%band(1,iband)))) &
                  maxtmp = abs(eredk%band(1,iband))
            enddo
-           dos%emax= 20.0d0*maxtmp
+           dos%emax= 1.2d0*maxtmp
            dos%emin=-dos%emax
-           dos%nnrg=2.0d0*dos%emax/0.007d0
+           dos%nnrg=5001
            !energy spacing of roughly 0.1 Ry
            write(*,*) 'estruct: Wien2k electronic structure linear k-mesh DOS calculation'
 
            call gendosel (redkm, eredk, dos)
 
            !spin multiplicity
-           do i=1,size(dos%enrg)
-              dos%dos(i)=2.0d0*dos%dos(i)
-              dos%nos(i)=2.0d0*dos%nos(i)
-           enddo
+           dos%dos=2.0d0*dos%dos
+           dos%nos=2.0d0*dos%nos
+
            open(10,file='linrados',status='unknown')
            do i=1,size(dos%enrg)
               write (10,*) dos%enrg(i), dos%dos(i), dos%nos(i)
@@ -302,8 +300,8 @@ module Mestruct
    endif
    nband=eirrk%nband_max
 
-   allocate(kmesh%k_id(1:nkx, 1:nky, 1:nkz))
-   allocate(kmesh%k_coord( 3, 1:kmesh%ktot))
+   allocate(kmesh%k_id(nkx,nky,nkz))
+   allocate(kmesh%k_coord(3,kmesh%ktot))
    allocate(eirrk%band( kmesh%ktot, nband ))
    allocate(eirrk%Mopt(3, kmesh%ktot, nband, nband))
    if (algo%lBfield) allocate(eirrk%M2(3, 3, kmesh%ktot, nband))
@@ -2543,7 +2541,7 @@ subroutine gendosel(mesh, ek, dos)
    integer :: i, ik, nb !energy, k-point, band counters
    double precision :: br, de !broadening, energy spacing
 
-   allocate (dos%enrg(1:dos%nnrg),dos%dos(1:dos%nnrg),dos%nos(1:dos%nnrg))
+   allocate (dos%enrg(dos%nnrg),dos%dos(dos%nnrg),dos%nos(dos%nnrg))
    dos%enrg= 0.d0
    dos%dos = 0.d0
    dos%nos = 0.d0
@@ -2556,15 +2554,18 @@ subroutine gendosel(mesh, ek, dos)
    br = 2.0d0*de
    !lorentian bandshape
    do i =1,size(dos%enrg)
-      do ik=1,mesh%ktot
-         do nb=1,ek%nband_max
-            if (ek%band(ik,nb) > 99.0d0) cycle !necessary because big eig'vals
+      do nb=1,ek%nband_max
+         do ik=1,mesh%ktot
+            if (ek%band(ik,nb) > band_fill_value) cycle !necessary because big eig'vals
                                                !have been introduced to make matrices square
-            dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-ek%band(ik,nb))**2)+(br**2))))/mesh%ktot
-            dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-ek%band(ik,nb))/br)))/mesh%ktot
+            dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-ek%band(ik,nb))**2)+(br**2))))
+            dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-ek%band(ik,nb))/br)))
          enddo
       enddo
    enddo
+
+   dos%dos = dos%dos / mesh%ktot ! normalizing
+   dos%nos = dos%nos / mesh%ktot
 
 end subroutine !GENDOSEL
 
