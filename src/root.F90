@@ -12,13 +12,13 @@ module Mroot
     module procedure ndeviation_D, ndeviation_Q
   end interface ndeviation
 
-  interface varocc
-    module procedure varocc_D, varocc_Q
-  end interface varocc
+  interface occ
+    module procedure occ_D, occ_Q
+  end interface occ
 
-  interface varocc_tet
-    module procedure varocc_tet_D, varocc_tet_Q
-  end interface varocc_tet
+  interface occ_tet
+    module procedure occ_tet_D, occ_tet_Q
+  end interface occ_tet
 
   interface fermi
     module procedure fermi_D, fermi_Q
@@ -30,10 +30,10 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   implicit none
 
   real(8), intent(inout)        :: mu ! chemical potential which is calculated
-  integer, intent(in)           :: iT ! temperature
-  real(8), intent(in)           :: dev
-  real(8), intent(out)          :: target_zero ! deviation from root
-  integer, intent(out)          :: niitact ! number of iteractions
+  integer, intent(in)           :: iT ! integer of temperature loop
+  real(8), intent(in)           :: dev ! allowed deviation
+  real(8), intent(out)          :: target_zero ! deviation from root after convergence
+  integer, intent(out)          :: niitact ! number of iterations
   logical, intent(in)           :: ltetra  ! use the tetrahedron methods
   integer, intent(in), optional :: method  ! choose root finding method
   type(edisp)                   :: ek
@@ -44,7 +44,8 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   ! local variables
   real(8) target_zero1, target_zero2, mu1, mu2
   integer iit,niit0
-  logical lsecant  ! selects the secant root finding algorithm
+  ! Secand method
+  logical lsecant
   ! linear interpolation method
   real(8), allocatable :: Y(:), X(:) !arrays containig the function to minimise and the chemical potential
   integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
@@ -54,69 +55,57 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   integer :: i, j
   integer :: ipiv(4)
   integer :: ierr
-  logical linint  ! selects the linear interpolation method
+  ! Linear interpolation
+  logical linint
   ! Ridders' method
   real(8) :: F(4), P(4)
   real(8) :: s
   real(8) :: psave, ptol
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
-  ! Bisection
+  ! Bisection method
   logical :: lbisec
 
+  lsecant = .false.
+  linint  = .false.
+  lridd   = .false.
+  lbisec  = .false.
   ! choose method according to input
   ! if method is not provided: default to Riddler
   if (present(method)) then
     select case (method)
       case (0)
         lsecant = .true.
-        linint = .false.
-        lridd = .false.
-        lbisec = .false.
       case (1)
-        lsecant = .false.
-        linint = .true.
-        lridd = .false.
-        lbisec = .false.
+        linint  = .true.
       case (2)
-        lsecant = .false.
-        linint = .false.
-        lridd = .true.
-        lbisec = .false.
+        lridd   = .true.
       case (3)
-        lsecant = .false.
-        linint = .false.
-        lridd = .false.
-        lbisec = .true.
+        lbisec  = .true.
     end select
   else
-    lsecant = .false.
-    linint = .false.
     lridd = .true.
-    lbisec = .false.
   endif
 
 ! deviation from set particle number with initial mu
-! based on the precision of target_zero1, the double or quadruple verion is called
+! output: target_zero1 = required - actual electrons
   call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
 
-!coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does
+! coarse initialization of secant bracket mu1, mu2
   target_zero2=target_zero1
   mu1=mu
   mu2=mu
 
-  do while (target_zero2.gt.0.d0)
+  do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
      mu2=mu2+0.005d0
      call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
-
   enddo
-  do while (target_zero1.le.0.d0)
+  do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
      mu1=mu1-0.005d0
      call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
-
   enddo
-  !write(69,*) 'mu1',mu1,'mu2',mu2,'f(1)',target_zero1,'f(2)',target_zero2
 
+  ! maximal steps for double precision calculations
   niit0=niit
 
   if (lsecant) then
@@ -129,11 +118,9 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
        if (target_zero.gt.0.d0) then
           mu1=mu
           target_zero1=target_zero
-          ! call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
        else
           mu2=mu
           target_zero2=target_zero
-          ! call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
        endif
     enddo
     niitact=iit
@@ -160,13 +147,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
     enddo
-
-    !!!!!!!!!!!!!!!!!TEST
-    !open(666,file='targeT.dat',status='unknown')
-    !write(666,'(A,1I10)')'T ',iT
-    !write(666,'(2E15.7)') (X(i),Y(i), i=1,nmu)
-    !write(666,'(A)')'   '
-    !!!!!!!!!!!!!!!!!TEST END
 
     ! find root by linear interpolation
     do i = 1, nmu-1
@@ -205,12 +185,8 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     deallocate(Y,X)
 
   elseif(lridd) then   !Ridders' method for root finding
-   !write(*,*) 'Ridders search for chemical potential'
-
-! initialise the varibles
     P(1)=mu1 ; P(2)=mu2
     F(1)= target_zero1; F(2)= target_zero2
-    !ptol   =  1.0d-18
     ptol   =  dev
     psave  = -1.1d30
     maxiter=  niit
@@ -229,7 +205,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
         if(abs(P(4)-psave)<=ptol) goto 400
         psave= P(4)
         call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
-        if (F(4) ==0.0d0) goto 400
+        if (F(4) == 0.0d0) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
            P(1)  = P(3)
@@ -263,7 +239,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     do iit=1,niit0
        mu = (mu1+mu2)/2.d0
        call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
-
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
           mu1=mu
@@ -285,8 +260,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
        !write(*,*) "myid=",myid
     endif
   endif
-
-  return
 end subroutine find_mu_D
 
 subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra, method)
@@ -305,76 +278,67 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   type(tetramesh)               :: thdr
 
   ! local variables
+  real(16) mu_qp
   real(16) target_zero1, target_zero2
-  real(8) mu1, mu2, dmu
+  real(16) mu1, mu2, dmu
   integer iit, niit0, itest
   logical lsecant  ! selects the secant root finding algorithm
   ! linear interpolation method
   real(16), allocatable :: Y(:) !array containig the function to minimise
-  real(8), allocatable :: X(:) !array containig the chemical potential
+  real(16), allocatable :: X(:) !array containig the chemical potential
   integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
-  real(8) :: a11, a22, a31, a42
-  real(8) :: A(4,4), B(4)
+  real(16) :: a11, a22, a31, a42
+  real(16) :: A(4,4), B(4)
   integer :: i, j
   integer :: ipiv(4)
   integer :: ierr
   logical linint  ! selects the linear interpolation method
   ! Ridders' method
   real(16) :: F(4)
-  real(8) :: P(4)
+  real(16) :: P(4)
   real(16) :: s
-  real(8) :: psave, ptol
+  real(16) :: psave, ptol
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
   ! Bisection
   logical  :: lbisec  ! selects bisection
 
+  lsecant = .false.
+  linint  = .false.
+  lridd   = .false.
+  lbisec  = .false.
   ! choose method according to input
   ! if method is not provided: default to Riddler
   if (present(method)) then
     select case (method)
       case (0)
         lsecant = .true.
-        linint = .false.
-        lridd = .false.
-        lbisec = .false.
       case (1)
-        lsecant = .false.
-        linint = .true.
-        lridd = .false.
-        lbisec = .false.
+        linint  = .true.
       case (2)
-        lsecant = .false.
-        linint = .false.
-        lridd = .true.
-        lbisec = .false.
+        lridd   = .true.
       case (3)
-        lsecant = .false.
-        linint = .false.
-        lridd = .false.
-        lbisec = .true.
+        lbisec  = .true.
     end select
   else
-    lsecant = .false.
-    linint = .false.
     lridd = .true.
-    lbisec = .false.
   endif
 
+  mu_qp = real(mu,16) ! save into a local qp number
+
 ! deviation from set particle number with initial mu
-  call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+  call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
 
   target_zero2=target_zero1
-!coarse initialization of secant bracket mu1, mu2... Secant doesnt need mu to lie within bracket, but here it does
-  mu1=mu
-  mu2=mu
+  mu1=mu_qp
+  mu2=mu_qp
 
   do while (target_zero2.gt.0.q0)
-     mu2=mu2+0.005d0
+     mu2=mu2+0.005q0
      call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
   enddo
   do while (target_zero1.le.0.q0)
-     mu1=mu1-0.005d0
+     mu1=mu1-0.005q0
      call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
   enddo
 
@@ -383,16 +347,17 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   if (lsecant) then
   !Secant root finding
     do iit=1,niit0
-       mu=mu1-real(target_zero1,8)*(mu2-mu1)/real(target_zero2-target_zero1,8)
-       call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       mu_qp=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
+       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
+       write(*,*) mu_qp, abs(target_zero)
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
-          mu1=mu
+          mu1=mu_qp
           target_zero1=target_zero
           ! call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
        else
-          mu2=mu
+          mu2=mu_qp
           target_zero2=target_zero
           ! call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
        endif
@@ -401,72 +366,11 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
 
   elseif (linint) then
-    ! evaluate the target function on an interval and find the root by linear interpolation
-    ! fix the number of points to sample the (mu1,mu2)
-    nmu=30
-    allocate(Y(nmu), X(nmu))
-    Y(:)=0.0d0 ; X(:)=0.0d0
-    ! construct linear grid
-    X(1)=mu1; X(nmu)=mu2; dmu=(mu2-mu1)/(nmu-1)
-    !write(*,*) 'mu1',mu1,'mu2',mu2,'dmu',dmu
-    Y(1)=target_zero1
-    Y(nmu)=target_zero2
-
-    do i=2,nmu-1
-      X(i)=X(i-1)+dmu
-    enddo
-    ! evaluate target function in the interval
-    do i=2,nmu-1
-       call ndeviation(X(i), iT, ek, sct, mesh, thdr, ltetra, Y(i))
-    enddo
-    do i=1,nmu
-      Y(i)=Y(i)+X(i) !this is the correct target function for this method
-    enddo
-
-    !!!!!!!!!!!!!!!!!TEST
-    !open(666,file='targeT.dat',status='unknown')
-    !write(666,'(A,1I10)')'T ',iT
-    !write(666,'(2E15.7)') (X(i),Y(i), i=1,nmu)
-    !write(666,'(A)')'   '
-    !!!!!!!!!!!!!!!!!TEST END
-
-    ! find root by linear interpolation
-    do i = 1, nmu-1
-       do j = 1, nmu-1
-          A(:,:) = 0.0d0
-          a11 = X(i+1)-X(i)
-          a22 = X(j+1)-X(j)
-          a31 = Y(i+1)-Y(i)
-          a42 = X(j+1)-X(j)
-
-          !write(*,*) 'assignment to vectors'
-          A(1,1)=a11; A(2,2)=a22; A(3,1)=a31; A(4,2)=a42
-          A(1,3)=-1.0d0; A(2,3)=-1.0d0
-          A(3,4)=-1.0d0; A(4,4)=-1.0d0
-          B(1) = -X(i); B(2) = -X(j)
-          B(3) = -Y(i); B(4) = -X(j)
-
-          !write(*,*) 'LU factorisation begins'
-          call dgetrf(4, 4, A, 4, ipiv, ierr )
-          if (ierr /= 0) write(*,*) 'lu fact failed', ierr, i, j, a31
-
-          !write(*,*) 'solution lin syst begins'
-          call dgetrs( 'N', 4, 1, A, 4, ipiv, B, 4, ierr)
-          if (ierr /= 0) write(*,*) 'solution of the system has failed', ierr, i, j
-
-          ! check if there is any intersection
-          if (B(1) < 1.0d0 .and. B(2) < 1.0d0) then
-             if (B(1) >= 0.0d0 .and. B(2) >= 0.0d0) then
-                !write(*,*) b(3), b(4)
-                ! save the values of the intersection
-                mu = B(3)
-                call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
-             endif
-          endif
-       enddo ! over freq. counter j
-    enddo ! over freq. counter i
-    deallocate(Y,X)
-
+    if (myid.eq.master) then
+      write(*,*) 'Linear interpolation root finding method not implemented for quadruple precision'
+      write(*,*) 'Exiting.'
+      stop
+    endif
   elseif(lridd) then   !Ridders' method for root finding
     !write(*,*) 'Ridders search for chemical potential'
 
@@ -475,14 +379,14 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     F(1)= target_zero1; F(2)= target_zero2
     !ptol   =  1.0d-6
     ptol   =  dev
-    psave  = -1.1d30
+    psave  = -1.1q30
     maxiter= niitQ
 
      do j = 1, maxiter
-        P(3) = 0.5d0*(P(1)+P(2))
+        P(3) = 0.5q0*(P(1)+P(2))
         call ndeviation(P(3), iT, ek, sct, mesh, thdr, ltetra, F(3))
         s = sqrt((F(3)**2)-(F(1)*F(2)))
-        if (s==0.0d0) then
+        if (s==0.0q0) then
            write(*,*) 'Error in Ridders search for chemical potential'
            write(*,*) 'ITER', j, 'x1', P(1),'  x2',P(2),'  x3', P(3)
            write(*,*) 'ITER', j, 'F1', F(1),'  F2',F(2),'  F3', F(3)
@@ -492,7 +396,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
         if(abs(P(4)-psave)<=ptol) goto 400
         psave= P(4)
         call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
-        if (f(4) ==0.0d0) goto 400
+        if (f(4) == 0.0q0) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
            P(1)  = P(3)
@@ -523,15 +427,16 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   elseif(lbisec) then
     ! Bisection root finding
     do iit=1,niit0
-       mu = (mu1+mu2)/2.d0
-       call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       mu_qp = (mu1+mu2)/2.q0
+       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       write(*,*) mu_qp, abs(target_zero)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
-          mu1=mu
+          mu1=mu_qp
           target_zero1=target_zero
        else
-          mu2=mu
+          mu2=mu_qp
           target_zero2=target_zero
        endif
     enddo
@@ -546,7 +451,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     endif
   endif
 
-  return
+  mu = real(mu_qp, 8) ! transform back to dp
 end subroutine find_mu_Q
 
 
@@ -587,9 +492,9 @@ subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   real(8) :: occ_tot
 
   if (ltetra) then
-     call varocc_tet(mu, iT, ek, sct, thdr, occ_tot)
+     call occ_tet(mu, iT, ek, sct, thdr, occ_tot)
   else
-     call varocc(mu, iT, ek, sct, mesh, occ_tot)
+     call occ(mu, iT, ek, sct, mesh, occ_tot)
   endif
   target_zero=ek%nelect-occ_tot
 end subroutine ndeviation_D
@@ -598,7 +503,7 @@ subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   implicit none
 
   !passed variables
-  real(8), intent(in)   :: mu
+  real(16), intent(in)   :: mu
   integer, intent(in)   :: iT
   logical, intent(in)   :: ltetra
   real(16), intent(out) :: target_zero
@@ -610,16 +515,16 @@ subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   real(16) :: occ_tot
 
   if (ltetra) then
-     call varocc_tet(mu, iT, ek, sct, thdr, occ_tot)
+     call occ_tet(mu, iT, ek, sct, thdr, occ_tot)
   else
-     call varocc(mu, iT, ek, sct, mesh, occ_tot)
+     call occ(mu, iT, ek, sct, mesh, occ_tot)
   endif
   target_zero=real(ek%nelect,16)-occ_tot
 end subroutine ndeviation_Q
 
 ! for a given chemical potential mu and Temperature iT
 ! calculate the occupation and save it in ek%occ_tot
-subroutine varocc_D(mu, iT, ek, sct, mesh, occ_tot)
+subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   implicit none
 
   integer, intent(in)  :: iT
@@ -685,13 +590,13 @@ subroutine varocc_D(mu, iT, ek, sct, mesh, occ_tot)
   ek%occ_tot=occ_tot
 #endif
 
-end subroutine varocc_D
+end subroutine occ_D
 
 
-subroutine varocc_Q(mu, iT, ek, sct, mesh, occ_tot)
+subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
   implicit none
 
-  real(8), intent(in)   :: mu
+  real(16), intent(in)   :: mu
   integer, intent(in)   :: iT
   real(16), intent(out) :: occ_tot
   type(edisp)           :: ek
@@ -762,10 +667,10 @@ subroutine varocc_Q(mu, iT, ek, sct, mesh, occ_tot)
   ek%occ_tot = real(occ_tot,8)
 #endif
 
-end subroutine varocc_Q
+end subroutine occ_Q
 
 
-subroutine varocc_tet_D(mu, iT, ek, sct, thdr, occ_tot)
+subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   implicit none
 
   integer, intent(in)  :: iT
@@ -833,13 +738,13 @@ subroutine varocc_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   ek%occ_tot = occ_loc
 #endif
 
-end subroutine varocc_tet_D
+end subroutine occ_tet_D
 
-subroutine varocc_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
+subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   implicit none
 
   integer, intent(in)   :: iT
-  real(8), intent(in)   :: mu
+  real(16), intent(in)   :: mu
   real(16), intent(out) :: occ_tot
   type(edisp)           :: ek
   type(scatrate)        :: sct
@@ -912,7 +817,7 @@ subroutine varocc_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   ek%occ_tot = real(occ_tot,8)
 #endif
 
-end subroutine varocc_tet_Q
+end subroutine occ_tet_Q
 
 pure elemental function fermi_d(eps,beta) result(f)
   implicit none

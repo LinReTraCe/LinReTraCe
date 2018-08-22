@@ -87,6 +87,7 @@ program gtmain ! GammaTransport
   integer              :: idum
   integer              :: nk, nband !local values that are assigned depending on the algorithm
   integer              :: ig
+  integer              :: method = 4 ! Riddler method for root finding -> move later to optional input
 
   call mpi_initialize()
 
@@ -297,16 +298,15 @@ program gtmain ! GammaTransport
      !and/or to implement the tetrahedron method
      if (algo%imurestart == 0) then
 
-  !!!!!!!!!!!!!!!!!!!!!! making the double precision to work first
         if (criterion.lt.20.d0) then !DP
            imeth=0
            if (algo%ltbind) then
-              call find_mu(mu,iT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)
+              call find_mu(mu,iT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)
            else
               if (algo%ltetra) then
-                 call find_mu(mu,iT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra)
+                 call find_mu(mu,iT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)
               else
-                 call find_mu(mu,iT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra)
+                 call find_mu(mu,iT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)
               endif
            endif
            if (myid.eq.master) then
@@ -316,12 +316,12 @@ program gtmain ! GammaTransport
         elseif (criterion.lt.80.d0) then !QP
            imeth=1
            if (algo%ltbind) then
-              call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
+              call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)! full QUAD on particle number
            else
               if (algo%ltetra) then
-                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)! full QUAD on particle number
               else
-                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)! full QUAD on particle number
               endif
            endif
            if (myid.eq.master) then
