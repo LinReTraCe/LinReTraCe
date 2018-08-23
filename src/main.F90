@@ -87,7 +87,8 @@ program gtmain ! GammaTransport
   integer              :: idum
   integer              :: nk, nband !local values that are assigned depending on the algorithm
   integer              :: ig
-  integer              :: method = 4 ! Riddler method for root finding -> move later to optional input
+  ! method 0: secant; method 1: linint; method 2: Riddler; method 3: bisection
+  integer, parameter   :: method = 2
 
   call mpi_initialize()
 
@@ -98,7 +99,7 @@ program gtmain ! GammaTransport
      write(*,*)'#####################################################'
      write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
      write(*,*)'#####################################################'
-     write(*,*)'#  Jan M. Tomczak                                   #'
+     write(*,*)'#  J.M. Tomczak, E. Maggio, M. Pickem               #'
      write(*,*)'#####################################################'
      write(*,*)
   endif
@@ -332,12 +333,12 @@ program gtmain ! GammaTransport
            imeth=2
            if (myid.eq.master) write(*,*) 'SUPER QUAD'
            if (algo%ltbind) then
-              call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
+              call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)! full QUAD on particle number
            else
               if (algo%ltetra) then
-                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)! full QUAD on particle number
               else
-                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra)! full QUAD on particle number
+                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)! full QUAD on particle number
               endif
            endif
            if (myid.eq.master) then

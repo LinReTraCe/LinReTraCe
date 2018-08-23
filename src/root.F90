@@ -60,7 +60,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   ! Ridders' method
   real(8) :: F(4), P(4)
   real(8) :: s
-  real(8) :: psave, ptol
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
   ! Bisection method
@@ -187,8 +186,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   elseif(lridd) then   !Ridders' method for root finding
     P(1)=mu1 ; P(2)=mu2
     F(1)= target_zero1; F(2)= target_zero2
-    ptol   =  dev
-    psave  = -1.1d30
     maxiter=  niit
 
      do j = 1, maxiter
@@ -202,10 +199,8 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
-        if(abs(P(4)-psave)<=ptol) goto 400
-        psave= P(4)
         call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
-        if (F(4) == 0.0d0) goto 400
+        if (abs(F(4)) .lt. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
            P(1)  = P(3)
@@ -221,9 +216,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            P(1)  = P(4)
            F(1)  = F(4)
         endif
-        !condition for termination
-        if (abs(P(2)-P(1)) .lt. ptol) goto 400
-        !write(*,*)'iter, mu, target_zero',j, P(4), F(4)
      enddo ! over number of iterations
 
  400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
@@ -239,6 +231,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     do iit=1,niit0
        mu = (mu1+mu2)/2.d0
        call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       if (myid.eq.master .and. iit .ge. 50) write(*,*) mu
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
           mu1=mu
@@ -251,14 +244,11 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     niitact = iit
   endif ! root finding algorithm
 
-  if (.not. linint) then
-    !if ((niitact.ge.niit0).and.(myid.eq.master)) then
-    if (niitact .ge. niit0) then
-       write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
-       write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
-       write(*,*) "increase niit, or allow for bigger ndev (see params.F90)"
-       !write(*,*) "myid=",myid
-    endif
+  if (myid.eq.master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
+     write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
+     write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
+     write(*,*) "increase niit, or allow for bigger ndev (see params.F90)"
+     !write(*,*) "myid=",myid
   endif
 end subroutine find_mu_D
 
@@ -297,7 +287,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   real(16) :: F(4)
   real(16) :: P(4)
   real(16) :: s
-  real(16) :: psave, ptol
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
   ! Bisection
@@ -347,10 +336,9 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   if (lsecant) then
   !Secant root finding
     do iit=1,niit0
-       mu_qp=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
+       mu_qp=mu1-target_zero1*mu2/(target_zero2-target_zero1)+target_zero1*mu1/(target_zero2-target_zero1)
        call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
-       write(*,*) mu_qp, abs(target_zero)
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
           mu1=mu_qp
@@ -377,9 +365,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 ! initialise the varibles
     P(1)=mu1 ; P(2)=mu2
     F(1)= target_zero1; F(2)= target_zero2
-    !ptol   =  1.0d-6
-    ptol   =  dev
-    psave  = -1.1q30
     maxiter= niitQ
 
      do j = 1, maxiter
@@ -393,10 +378,8 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(sign(1.0q0,F(1)-F(2))*F(3)/s)
-        if(abs(P(4)-psave)<=ptol) goto 400
-        psave= P(4)
         call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
-        if (f(4) == 0.0q0) goto 400
+        if (abs(F(4)) .le. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
            P(1)  = P(3)
@@ -412,8 +395,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            P(1)  = P(4)
            F(1)  = F(4)
         endif
-        !condition for termination
-        if (abs(P(2)-P(1)) <= ptol) goto 400
      enddo ! over number of iterations
 
  400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
@@ -429,7 +410,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     do iit=1,niit0
        mu_qp = (mu1+mu2)/2.q0
        call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
-       write(*,*) mu_qp, abs(target_zero)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -443,12 +423,10 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     niitact = iit
   endif
 
-  if (.not. linint) then
-    if ((niitact.ge.niit0).and.(myid.eq.master)) then
-       write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
-       write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",T, " with  niitQ=",niitQ, " ndevQ =", real(dev,8)
-       write(*,*) "increase niitQ, or allow for bigger ndevQ (see params.F90)"
-    endif
+  if (myid .eq. master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
+     write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
+     write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",T, " with  niitQ=",niitQ, " ndevQ =", real(dev,8)
+     write(*,*) "increase niitQ, or allow for bigger ndevQ (see params.F90)"
   endif
 
   mu = real(mu_qp, 8) ! transform back to dp
@@ -534,7 +512,7 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   type(scatrate)       :: sct
   type(kpointmesh)     :: mesh
 !local variables
-  real(8),parameter :: thr = 1.0d-30
+  real(8),parameter :: thr = 1.0d-10
   complex(8) :: z
   real(8) :: nsmall, nbig, eps, tmp
   real(8) :: occ_loc
@@ -605,7 +583,7 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
 
   real(16) :: occ_loc
 !local variables
-  real(16),parameter :: thr = 1.0q-30
+  real(16),parameter :: thr = 1.0q-15
   complex(16) ::z
   real(16) :: nsmall, nbig, tmp, tmp2
   real(8) :: eps

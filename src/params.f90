@@ -24,9 +24,8 @@ module Mparams
 
   ! numerical parameters
   real(8), parameter     :: ndev=5D-14 ! ~1D-12 allowed deviation from set particle number in mu-root finding.
-  real(8), parameter     :: ndevhp=5D-15 ! when using find_muDPQ
-  real(16), parameter    :: ndevQ=5Q-18  ! when using full QUAD in find_muQ
-  real(16), parameter    :: ndevVQ=1Q-21
+  real(16), parameter    :: ndevQ=5Q-17  ! when using full QUAD in find_muQ
+  real(16), parameter    :: ndevVQ=5Q-18
   integer, parameter     :: niit=1000 ! maximal number of secant or Riddler steps
   integer, parameter     :: niitQ=1500 ! maximal number of secant or Riddler steps in Quadprecision
   real(8), parameter     :: small=1D-11 ! ~1D-11 for real(8): use 10 significant digits... use 20 for QUAD
