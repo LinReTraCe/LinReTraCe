@@ -25,7 +25,7 @@ LIBS= -lquadmath $(LAPACK) $(BLAS)
 all: $(DIGAMMA) $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG)
 
 $(DIGAMMA):
-	if [ ! -f $(DIGAMMA) ]; then cd digamma; $(SHELL) compile.sh; fi
+	if [ ! -f $(DIGAMMA) ]; then cd digamma; make all; fi
 
 $(INSTALL_DIR):
 	if [ ! -d $(INSTALL_DIR) ]; then mkdir -p $(INSTALL_DIR) ; fi

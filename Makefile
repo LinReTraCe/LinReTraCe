@@ -8,9 +8,11 @@ linretrace: make_include
 
 clean:
 	cd src/; make clean
+	cd src/digamma; make clean
 
 pristine:
 	cd src/; make clean
+	cd src/digamma; make clean
 	rmdir bin
 
 ctags:
