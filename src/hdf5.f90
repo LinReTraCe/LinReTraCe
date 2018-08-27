@@ -3,12 +3,12 @@ module Mhdf5
   use Mparams
   implicit none
 
+  ! for an easy access to common hdf_error and special complex data types
   integer         :: hdf_err
-  integer(hid_t)  :: plist_id
   integer(hid_t)  :: compound_id ! complex compound dtype
   integer(hid_t)  :: type_r_id, type_i_id
-  integer(size_t) :: compound_size, type_sized
 
+  ! may want to extend this to higher dimensions
   interface h5_loaddata
     module procedure h5_loaddata_1d_complex, h5_loaddata_2d_complex, h5_loaddata_3d_complex, &
                      h5_loaddata_1d_real,    h5_loaddata_2d_real,    h5_loaddata_3d_real
@@ -23,17 +23,29 @@ module Mhdf5
 
   subroutine h5_init()
     call h5open_f(hdf_err)
-    call create_complex_datatype()
+    call h5_create_complex_datatype()
   end subroutine h5_init
 
   subroutine h5_finalize()
     call h5close_f(hdf_err)
   end subroutine h5_finalize
 
+  subroutine h5_create_file(fname)
+    character(len=*), intent(in) :: fname
+
+    integer(hid_t) :: file_id
+    ! truncate -> if it already exists, erase all data
+    ! other possibility: h5f_acc_excl_f -> fail if already exists
+    call h5fcreate_f(trim(adjustl(fname)), h5f_acc_trunc_f, file_id, hdf_err)
+  end subroutine h5_create_file
+
   ! this code part is from ADGA
   ! github.com/abinitiodga/adga
-  subroutine create_complex_datatype()
+  ! GPLv3
+  subroutine h5_create_complex_datatype()
     integer(size_t), parameter :: zero = 0
+    integer(hid_t)  :: plist_id
+    integer(size_t) :: compound_size, type_sized
 
     call h5pcreate_f(h5p_dataset_xfer_f, plist_id, hdf_err)
     call h5pset_preserve_f(plist_id, .true., hdf_err)
@@ -50,7 +62,7 @@ module Mhdf5
     call h5tinsert_f(type_r_id, "r", zero, h5t_native_double, hdf_err)
     call h5tcreate_f(h5t_compound_f, type_sized, type_i_id, hdf_err)
     call h5tinsert_f(type_i_id, "i", zero, h5t_native_double, hdf_err)
-  end subroutine create_complex_datatype
+  end subroutine h5_create_complex_datatype
 
   subroutine h5_loaddata_1d_real(fname, dset, darray)
     character(len=*), intent(in)       :: fname
