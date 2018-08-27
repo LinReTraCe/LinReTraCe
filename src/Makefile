@@ -4,7 +4,7 @@ PROG = linretrace
 
 INSTALL_DIR = ../bin
 OBJECTS = types.o estruct.o params.o mpi_org.o \
-					estruct.o root.o response.o main.o
+					estruct.o root.o response.o main.o hdf5.o
 
 DIGAMMA = ./digamma/cern_digamma.a
 
@@ -31,13 +31,13 @@ $(INSTALL_DIR):
 	if [ ! -d $(INSTALL_DIR) ]; then mkdir -p $(INSTALL_DIR) ; fi
 
 $(INSTALL_DIR)/$(PROG): $(OBJECTS)
-	$(FC) $^ -o $@ $(FFLAGS) $(LIBS) $(DIGAMMA)
+	$(FC) $^ -o $@ $(FFLAGS) $(LIBS) $(HDF5) $(DIGAMMA)
 
 %.o: %.f90
-	$(FC) $(FFLAGS) $(LIBS) -c $< -o $@
+	$(FC) $(FFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
 %.o: %.F90
-	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) -c $< -o $@
+	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
 estruct.o: params.o types.o
 main.o: params.o mpi_org.o types.o estruct.o response.o root.o
