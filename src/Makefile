@@ -4,7 +4,7 @@ PROG = linretrace
 
 INSTALL_DIR = ../bin
 OBJECTS = types.o estruct.o params.o mpi_org.o \
-					estruct.o root.o response.o main.o hdf5.o
+					estruct.o root.o response.o main.o hdf5_wrapper.o
 
 DIGAMMA = ./digamma/cern_digamma.a
 

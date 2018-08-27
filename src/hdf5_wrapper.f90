@@ -1,6 +1,5 @@
 module Mhdf5
   use hdf5
-  use Mparams
   implicit none
 
   ! for an easy access to common hdf_error and special complex data types
@@ -97,6 +96,49 @@ module Mhdf5
     call h5tinsert_f(type_i_id, "i", zero, h5t_native_double, hdf_err)
   end subroutine h5_create_complex_datatype
 
+  integer function h5_get_dimensions(fname, dset)
+    character(len=*), intent(in) :: fname
+    character(len=*), intent(in) :: dset
+
+    integer :: rank
+    integer(hid_t) :: file_id, dset_id, dset_space_id
+
+    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
+    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_ndims_f(dset_space_id, rank, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5fclose_f(file_id, hdf_err)
+
+    h5_get_dimensions = rank
+  end function h5_get_dimensions
+
+  subroutine h5_get_shape(fname, dset, dshape)
+    character(len=*), intent(in) :: fname
+    character(len=*), intent(in) :: dset
+    integer, allocatable         :: dshape(:)
+
+    integer(hsize_t), allocatable :: dshape5(:)
+    integer(hsize_t), allocatable :: dmaxshape5(:)
+    integer :: rank
+    integer(hid_t) :: file_id, dset_id, dset_space_id
+
+    rank = h5_get_dimensions(fname, dset)
+    allocate(dshape(rank), dshape5(rank), dmaxshape5(rank))
+
+    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
+    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dshape5, dmaxshape5, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5fclose_f(file_id, hdf_err)
+
+    dshape = int(dshape5)
+    deallocate(dshape5, dmaxshape5)
+  end subroutine h5_get_shape
+
   subroutine h5_load_data_0d_real(fname, dset, darray)
     character(len=*), intent(in) :: fname
     character(len=*), intent(in) :: dset
@@ -117,6 +159,7 @@ module Mhdf5
     character(len=*), intent(in) :: dset
     complex(8)                   :: darray
 
+    complex(8) :: ci = (0.0d0, 1.0d0)
     real(8) :: tmp_r, tmp_i
     integer(hid_t) :: file_id, dset_id, dset_space_id
     integer(hsize_t), dimension(0) :: dset_dims
@@ -144,6 +187,7 @@ module Mhdf5
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
   end subroutine h5_load_data_1d_real
@@ -153,6 +197,7 @@ module Mhdf5
     character(len=*), intent(in)          :: dset
     complex(8), allocatable, dimension(:) :: darray
 
+    complex(8) :: ci = (0.0d0, 1.0d0)
     real(8), allocatable, dimension(:)    :: tmp_i, tmp_r
     integer(hid_t) :: file_id, dset_id, dset_space_id
     integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
@@ -165,6 +210,7 @@ module Mhdf5
     allocate(tmp_i(dset_dims(1)),tmp_r(dset_dims(1)))
     call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
     call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
     darray = tmp_r + ci* tmp_i
@@ -185,6 +231,7 @@ module Mhdf5
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
   end subroutine h5_load_data_2d_real
@@ -194,6 +241,7 @@ module Mhdf5
     character(len=*), intent(in)            :: dset
     complex(8), allocatable, dimension(:,:) :: darray
 
+    complex(8) :: ci = (0.0d0, 1.0d0)
     real(8), allocatable, dimension(:,:)    :: tmp_i, tmp_r
     integer(hid_t) :: file_id, dset_id, dset_space_id
     integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
@@ -206,6 +254,7 @@ module Mhdf5
     allocate(tmp_r(dset_dims(1), dset_dims(2)),tmp_i(dset_dims(1), dset_dims(2)))
     call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
     call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
     darray = tmp_r + ci* tmp_i
@@ -226,6 +275,7 @@ module Mhdf5
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
   end subroutine h5_load_data_3d_real
@@ -235,6 +285,7 @@ module Mhdf5
     character(len=*), intent(in)              :: dset
     complex(8), allocatable, dimension(:,:,:) :: darray
 
+    complex(8) :: ci = (0.0d0, 1.0d0)
     real(8), allocatable, dimension(:,:,:)    :: tmp_i, tmp_r
     integer(hid_t)                            :: file_id, dset_id, dset_space_id
     integer(hsize_t), dimension(3)            :: dset_dims, dset_maxdims
@@ -247,6 +298,7 @@ module Mhdf5
     allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3)),tmp_i(dset_dims(1), dset_dims(2), dset_dims(3)))
     call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
     call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
     darray = tmp_r + ci* tmp_i
@@ -267,6 +319,7 @@ module Mhdf5
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
   end subroutine h5_load_data_4d_real
@@ -276,6 +329,7 @@ module Mhdf5
     character(len=*), intent(in)                :: dset
     complex(8), allocatable, dimension(:,:,:,:) :: darray
 
+    complex(8) :: ci = (0.0d0, 1.0d0)
     real(8), allocatable, dimension(:,:,:,:)    :: tmp_i, tmp_r
     integer(hid_t)                              :: file_id, dset_id, dset_space_id
     integer(hsize_t), dimension(4)              :: dset_dims, dset_maxdims
@@ -289,6 +343,7 @@ module Mhdf5
     allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
     call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
     call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5fclose_f(file_id, hdf_err)
     darray = tmp_r + ci*tmp_i
