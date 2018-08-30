@@ -1,690 +1,2917 @@
-module Mhdf5
+! MIT License
+
+! Copyright (c) 2018 Matthias Pickem
+
+! Permission is hereby granted, free of charge, to any person obtaining a copy
+! of this software and associated documentation files (the "Software"), to deal
+! in the Software without restriction, including without limitation the rights
+! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+! copies of the Software, and to permit persons to whom the Software is
+! furnished to do so, subject to the following conditions:
+
+! The above copyright notice and this permission notice shall be included in all
+! copies or substantial portions of the Software.
+
+! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+! SOFTWARE.
+
+module hdf5_wrapper
   use hdf5
   implicit none
 
-  ! for an easy access to common hdf_error and special complex data types
   integer         :: hdf_err
-  integer(hid_t)  :: compound_id ! complex compound dtype
-  integer(hid_t)  :: type_r_id, type_i_id
+  integer(hid_t)  :: complex_id_dp, complex_id_sp
+  integer(hid_t)  :: complex_id_r_dp, complex_id_i_dp, complex_id_r_sp, complex_id_i_sp
 
-  interface h5_load_data
-    module procedure h5_load_data_0d_real,   &
-                     h5_load_data_1d_real,   &
-                     h5_load_data_2d_real,   &
-                     h5_load_data_3d_real,   &
-                     h5_load_data_4d_real,   &
-                     h5_load_data_0d_complex,&
-                     h5_load_data_1d_complex,&
-                     h5_load_data_2d_complex,&
-                     h5_load_data_3d_complex,&
-                     h5_load_data_4d_complex
-  end interface h5_load_data
+  interface hdf5_read_data
+    module procedure hdf5_read_data_0d_int4,    &
+                     hdf5_read_data_1d_int4,    &
+                     hdf5_read_data_2d_int4,    &
+                     hdf5_read_data_3d_int4,    &
+                     hdf5_read_data_4d_int4,    &
+                     hdf5_read_data_5d_int4,    &
+                     hdf5_read_data_6d_int4,    &
+                     hdf5_read_data_7d_int4,    &
+                     hdf5_read_data_0d_real4,   &
+                     hdf5_read_data_1d_real4,   &
+                     hdf5_read_data_2d_real4,   &
+                     hdf5_read_data_3d_real4,   &
+                     hdf5_read_data_4d_real4,   &
+                     hdf5_read_data_5d_real4,   &
+                     hdf5_read_data_6d_real4,   &
+                     hdf5_read_data_7d_real4,   &
+                     hdf5_read_data_0d_complex4,&
+                     hdf5_read_data_1d_complex4,&
+                     hdf5_read_data_2d_complex4,&
+                     hdf5_read_data_3d_complex4,&
+                     hdf5_read_data_4d_complex4,&
+                     hdf5_read_data_5d_complex4,&
+                     hdf5_read_data_6d_complex4,&
+                     hdf5_read_data_7d_complex4,&
+                     hdf5_read_data_0d_real8,   &
+                     hdf5_read_data_1d_real8,   &
+                     hdf5_read_data_2d_real8,   &
+                     hdf5_read_data_3d_real8,   &
+                     hdf5_read_data_4d_real8,   &
+                     hdf5_read_data_5d_real8,   &
+                     hdf5_read_data_6d_real8,   &
+                     hdf5_read_data_7d_real8,   &
+                     hdf5_read_data_0d_complex8,&
+                     hdf5_read_data_1d_complex8,&
+                     hdf5_read_data_2d_complex8,&
+                     hdf5_read_data_3d_complex8,&
+                     hdf5_read_data_4d_complex8,&
+                     hdf5_read_data_5d_complex8,&
+                     hdf5_read_data_6d_complex8,&
+                     hdf5_read_data_7d_complex8
+  end interface hdf5_read_data
 
-  interface h5_flush_data
-    module procedure h5_flush_data_0d_real,   &
-                     h5_flush_data_1d_real,   &
-                     h5_flush_data_2d_real,   &
-                     h5_flush_data_3d_real,   &
-                     h5_flush_data_4d_real,   &
-                     h5_flush_data_0d_complex,&
-                     h5_flush_data_1d_complex,&
-                     h5_flush_data_2d_complex,&
-                     h5_flush_data_3d_complex,&
-                     h5_flush_data_4d_complex
-  end interface h5_flush_data
+  interface hdf5_write_data
+    module procedure hdf5_write_data_0d_int4,    &
+                     hdf5_write_data_1d_int4,    &
+                     hdf5_write_data_2d_int4,    &
+                     hdf5_write_data_3d_int4,    &
+                     hdf5_write_data_4d_int4,    &
+                     hdf5_write_data_5d_int4,    &
+                     hdf5_write_data_6d_int4,    &
+                     hdf5_write_data_7d_int4,    &
+                     hdf5_write_data_0d_real4,   &
+                     hdf5_write_data_1d_real4,   &
+                     hdf5_write_data_2d_real4,   &
+                     hdf5_write_data_3d_real4,   &
+                     hdf5_write_data_4d_real4,   &
+                     hdf5_write_data_5d_real4,   &
+                     hdf5_write_data_6d_real4,   &
+                     hdf5_write_data_7d_real4,   &
+                     hdf5_write_data_0d_complex4,&
+                     hdf5_write_data_1d_complex4,&
+                     hdf5_write_data_2d_complex4,&
+                     hdf5_write_data_3d_complex4,&
+                     hdf5_write_data_4d_complex4,&
+                     hdf5_write_data_5d_complex4,&
+                     hdf5_write_data_6d_complex4,&
+                     hdf5_write_data_7d_complex4,&
+                     hdf5_write_data_0d_real8,   &
+                     hdf5_write_data_1d_real8,   &
+                     hdf5_write_data_2d_real8,   &
+                     hdf5_write_data_3d_real8,   &
+                     hdf5_write_data_4d_real8,   &
+                     hdf5_write_data_5d_real8,   &
+                     hdf5_write_data_6d_real8,   &
+                     hdf5_write_data_7d_real8,   &
+                     hdf5_write_data_0d_complex8,&
+                     hdf5_write_data_1d_complex8,&
+                     hdf5_write_data_2d_complex8,&
+                     hdf5_write_data_3d_complex8,&
+                     hdf5_write_data_4d_complex8,&
+                     hdf5_write_data_5d_complex8,&
+                     hdf5_write_data_6d_complex8,&
+                     hdf5_write_data_7d_complex8
+  end interface hdf5_write_data
+
+  interface hdf5_write_attribute
+    module procedure hdf5_write_attribute_int4,    &
+                     hdf5_write_attribute_real4,   &
+                     hdf5_write_attribute_real8,   &
+                     hdf5_write_attribute_complex4,&
+                     hdf5_write_attribute_complex8,&
+                     hdf5_write_attribute_string
+  end interface hdf5_write_attribute
+
+  interface hdf5_read_attribute
+    module procedure hdf5_read_attribute_int4,    &
+                     hdf5_read_attribute_real4,   &
+                     hdf5_read_attribute_real8,   &
+                     hdf5_read_attribute_complex4,&
+                     hdf5_read_attribute_complex8,&
+                     hdf5_read_attribute_string
+  end interface hdf5_read_attribute
 
   contains
 
-  subroutine h5_init()
+  subroutine hdf5_init()
     call h5open_f(hdf_err)
-    call h5_create_complex_datatype()
-  end subroutine h5_init
+    call hdf5_create_complex_datatype()
+  end subroutine hdf5_init
 
-  subroutine h5_finalize()
+  subroutine hdf5_finalize()
     call h5close_f(hdf_err)
-  end subroutine h5_finalize
+  end subroutine hdf5_finalize
 
-  subroutine h5_create_file(fname)
+  subroutine hdf5_create_file(fname)
     character(len=*), intent(in) :: fname
 
-    integer(hid_t) :: file_id
+    integer(hid_t)               :: ifile
     ! truncate -> if it already exists, erase all data
     ! other possibility: h5f_acc_excl_f -> fail if already exists
-    call h5fcreate_f(trim(adjustl(fname)), h5f_acc_trunc_f, file_id, hdf_err)
-  end subroutine h5_create_file
+    call h5fcreate_f(trim(adjustl(fname)), h5f_acc_trunc_f, ifile, hdf_err)
+    ! we only create here
+    call h5fclose_f(ifile, hdf_err)
+  end subroutine hdf5_create_file
 
-  subroutine h5_create_group(fname, gname, parentgroup)
-    character(len=*), intent(in)           :: fname
+  subroutine hdf5_open_file(fname, ifile, rdonly)
+    character(len=*), intent(in)  :: fname
+    integer(hid_t), intent(out)    :: ifile
+    logical, optional :: rdonly
+
+    if (present(rdonly)) then
+      if (rdonly) then
+        call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, ifile, hdf_err)
+      else
+        call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdwr_f, ifile, hdf_err)
+      endif
+    else
+      call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdwr_f, ifile, hdf_err)
+    endif
+  end subroutine hdf5_open_file
+
+  subroutine hdf5_close_file(ifile)
+    integer(hid_t), intent(in)    :: ifile
+    call h5fclose_f(ifile, hdf_err)
+  end subroutine hdf5_close_file
+
+  subroutine hdf5_create_group(ifile, gname)
+    integer(hid_t), intent(in)             :: ifile
     character(len=*), intent(in)           :: gname
-    character(len=*), intent(in), optional :: parentgroup
 
     integer(hid_t) :: file_id
-    integer(hid_t) :: grp_id_parent, grp_id
+    integer(hid_t) :: grp_parent_id, grp_id
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdwr_f, file_id, hdf_err)
-    if (present(parentgroup) .and. (trim(adjustl(parentgroup)) .ne. "")) then
-      call h5gopen_f(file_id, trim(adjustl(parentgroup)), grp_id_parent, hdf_err)
-      call h5gcreate_f(grp_id_parent, trim(adjustl(gname)), grp_id, hdf_err) ! on parent
-    else
-      call h5gcreate_f(file_id, trim(adjustl(gname)), grp_id, hdf_err) ! on root
+    integer :: grpcnt
+    integer :: pos,i
+    character(len=50), allocatable :: ngroup(:)
+    character(len=150) :: strim
+
+    ! adjusting string and removing possible leading and trailing '/'
+    strim = adjustl(trim(gname))
+    if (index(strim, '/', back=.true.) .eq. len_trim(strim)) then
+      strim = strim(:(len_trim(strim)-1))
     endif
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_create_group
+    if (index(strim, '/') .eq. 1) then
+      strim = strim(2:)
+    endif
+    ! now we have a string with looks like 'group1/group2/group3'
+
+    if (len_trim(strim) .eq. 0) return
+
+    allocate(ngroup(30))
+    grpcnt = 1
+    do
+      pos = index(strim, '/')
+      if (pos .eq. 0) then
+        ngroup(grpcnt) = strim(:len_trim(strim)) ! until the end
+        exit
+      else
+        ngroup(grpcnt) = strim(:(pos-1)) ! without the '/'
+        strim = strim((pos+1):) ! truncating the left
+        grpcnt = grpcnt + 1
+      endif
+    enddo
+    ! now we have the number of groups (grpcnt)
+    ! the according group names are stored in the array ngroup(1...grpcnt)
+    call h5eset_auto_f(0,hdf_err) ! deactivate error printing
+    grp_parent_id = ifile ! for the first entry into the file
+    do i=1,grpcnt
+      ! check for existance
+      ! this check causes all the unecessary error messages
+      ! I tried doing it with h5oexists_by_name_f, but there one
+      ! cannot specifically check for group ... so
+      ! I will stick to this 'hack'
+      call h5gopen_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+      if (hdf_err .ne. 0) then ! failed
+        call h5gcreate_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+      endif
+      call h5gclose_f(grp_parent_id, hdf_err)
+      grp_parent_id = grp_id
+    enddo
+    call h5eclear_f(hdf_err)      ! clear the error
+    call h5eset_auto_f(1,hdf_err) ! acitvate it again
+
+    call h5gclose_f(grp_id, hdf_err)
+
+    deallocate(ngroup)
+
+  end subroutine hdf5_create_group
 
   ! this code part is from ADGA
   ! github.com/abinitiodga/adga
   ! GPLv3
-  subroutine h5_create_complex_datatype()
+  subroutine hdf5_create_complex_datatype()
     integer(size_t), parameter :: zero = 0
     integer(hid_t)  :: plist_id
     integer(size_t) :: compound_size, type_sized
 
+    ! double precision
     call h5pcreate_f(h5p_dataset_xfer_f, plist_id, hdf_err)
     call h5pset_preserve_f(plist_id, .true., hdf_err)
-
-    ! create compound datatype for complex arrays:
+    ! compound
     call h5tget_size_f(h5t_native_double, type_sized, hdf_err)
     compound_size = 2*type_sized
-    call h5tcreate_f(h5t_compound_f, compound_size, compound_id, hdf_err)
-    call h5tinsert_f(compound_id, "r", zero, h5t_native_double, hdf_err)
-    call h5tinsert_f(compound_id, "i", type_sized, h5t_native_double, hdf_err)
+    call h5tcreate_f(h5t_compound_f, compound_size, complex_id_dp, hdf_err)
+    call h5tinsert_f(complex_id_dp, "r", zero, h5t_native_double, hdf_err)
+    call h5tinsert_f(complex_id_dp, "i", type_sized, h5t_native_double, hdf_err)
+    ! separate
+    call h5tcreate_f(h5t_compound_f, type_sized, complex_id_r_dp, hdf_err)
+    call h5tinsert_f(complex_id_r_dp, "r", zero, h5t_native_double, hdf_err)
+    call h5tcreate_f(h5t_compound_f, type_sized, complex_id_i_dp, hdf_err)
+    call h5tinsert_f(complex_id_i_dp, "i", zero, h5t_native_double, hdf_err)
+    call h5pclose_f(plist_id, hdf_err)
 
-    !complex type to write real and imaginary individually:
-    call h5tcreate_f(h5t_compound_f, type_sized, type_r_id, hdf_err)
-    call h5tinsert_f(type_r_id, "r", zero, h5t_native_double, hdf_err)
-    call h5tcreate_f(h5t_compound_f, type_sized, type_i_id, hdf_err)
-    call h5tinsert_f(type_i_id, "i", zero, h5t_native_double, hdf_err)
-  end subroutine h5_create_complex_datatype
+    ! single precision
+    call h5pcreate_f(h5p_dataset_xfer_f, plist_id, hdf_err)
+    call h5pset_preserve_f(plist_id, .true., hdf_err)
+    ! compound
+    call h5tget_size_f(h5t_native_real, type_sized, hdf_err)
+    compound_size = 2*type_sized
+    call h5tcreate_f(h5t_compound_f, compound_size, complex_id_sp, hdf_err)
+    call h5tinsert_f(complex_id_sp, "r", zero, h5t_native_real, hdf_err)
+    call h5tinsert_f(complex_id_sp, "i", type_sized, h5t_native_real, hdf_err)
+    ! separate
+    call h5tcreate_f(h5t_compound_f, type_sized, complex_id_r_sp, hdf_err)
+    call h5tinsert_f(complex_id_r_sp, "r", zero, h5t_native_real, hdf_err)
+    call h5tcreate_f(h5t_compound_f, type_sized, complex_id_i_sp, hdf_err)
+    call h5tinsert_f(complex_id_i_sp, "i", zero, h5t_native_real, hdf_err)
+    call h5pclose_f(plist_id, hdf_err)
+  end subroutine hdf5_create_complex_datatype
 
-  integer function h5_get_dimensions(fname, dset)
-    character(len=*), intent(in) :: fname
+  integer function hdf5_get_dimensions(ifile, dset)
+    integer(hid_t), intent(in)   :: ifile
     character(len=*), intent(in) :: dset
 
     integer :: rank
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_ndims_f(dset_space_id, rank, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
 
-    h5_get_dimensions = rank
-  end function h5_get_dimensions
+    hdf5_get_dimensions = rank
+  end function hdf5_get_dimensions
 
-  subroutine h5_get_shape(fname, dset, dshape)
-    character(len=*), intent(in) :: fname
+  subroutine hdf5_get_shape(ifile, dset, dshape)
+    integer(hid_t), intent(in)   :: ifile
     character(len=*), intent(in) :: dset
     integer, allocatable         :: dshape(:)
 
     integer(hsize_t), allocatable :: dshape5(:)
     integer(hsize_t), allocatable :: dmaxshape5(:)
     integer :: rank
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
 
-    rank = h5_get_dimensions(fname, dset)
+    rank = hdf5_get_dimensions(ifile, dset)
     allocate(dshape(rank), dshape5(rank), dmaxshape5(rank))
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dshape5, dmaxshape5, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
 
     dshape = int(dshape5)
     deallocate(dshape5, dmaxshape5)
-  end subroutine h5_get_shape
+  end subroutine hdf5_get_shape
 
-  subroutine h5_load_data_0d_real(fname, dset, darray)
-    character(len=*), intent(in) :: fname
+  subroutine hdf5_read_data_0d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dset
+    integer(4)                   :: darray
+
+    integer(hid_t) :: dset_id
+    integer(hsize_t), dimension(0) :: dset_dims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_0d_int4
+
+  subroutine hdf5_read_data_1d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)            :: ifile
+    character(len=*), intent(in)          :: dset
+    integer(4), allocatable, dimension(:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_1d_int4
+
+  subroutine hdf5_read_data_2d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)              :: ifile
+    character(len=*), intent(in)            :: dset
+    integer(4), allocatable, dimension(:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_2d_int4
+
+  subroutine hdf5_read_data_3d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)                :: ifile
+    character(len=*), intent(in)              :: dset
+    integer(4), allocatable, dimension(:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_3d_int4
+
+  subroutine hdf5_read_data_4d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: dset
+    integer(4), allocatable, dimension(:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_4d_int4
+
+  subroutine hdf5_read_data_5d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)                    :: ifile
+    character(len=*), intent(in)                  :: dset
+    integer(4), allocatable, dimension(:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_5d_int4
+
+  subroutine hdf5_read_data_6d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)                      :: ifile
+    character(len=*), intent(in)                    :: dset
+    integer(4), allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(6) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_6d_int4
+
+  subroutine hdf5_read_data_7d_int4(ifile, dset, darray)
+    integer(hid_t), intent(in)                        :: ifile
+    character(len=*), intent(in)                      :: dset
+    integer(4), allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(7) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    call h5dread_f(dset_id, h5t_native_integer, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_7d_int4
+
+  subroutine hdf5_read_data_0d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dset
+    real(4)                      :: darray
+
+    integer(hid_t) :: dset_id
+    integer(hsize_t), dimension(0) :: dset_dims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_0d_real4
+
+  subroutine hdf5_read_data_1d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)            :: ifile
+    character(len=*), intent(in)          :: dset
+    real(4), allocatable, dimension(:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_1d_real4
+
+  subroutine hdf5_read_data_2d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)           :: ifile
+    character(len=*), intent(in)         :: dset
+    real(4), allocatable, dimension(:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_2d_real4
+
+  subroutine hdf5_read_data_3d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)                :: ifile
+    character(len=*), intent(in)              :: dset
+    real(4), allocatable, dimension(:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_3d_real4
+
+  subroutine hdf5_read_data_4d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)               :: ifile
+    character(len=*), intent(in)             :: dset
+    real(4), allocatable, dimension(:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_4d_real4
+
+  subroutine hdf5_read_data_5d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)                 :: ifile
+    character(len=*), intent(in)               :: dset
+    real(4), allocatable, dimension(:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_5d_real4
+
+  subroutine hdf5_read_data_6d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)                   :: ifile
+    character(len=*), intent(in)                 :: dset
+    real(4), allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(6) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_6d_real4
+
+  subroutine hdf5_read_data_7d_real4(ifile, dset, darray)
+    integer(hid_t), intent(in)                     :: ifile
+    character(len=*), intent(in)                   :: dset
+    real(4), allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(7) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    call h5dread_f(dset_id, h5t_native_real, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_7d_real4
+
+  subroutine hdf5_read_data_0d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
     character(len=*), intent(in) :: dset
     real(8)                      :: darray
 
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id
     integer(hsize_t), dimension(0) :: dset_dims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_load_data_0d_real
+  end subroutine hdf5_read_data_0d_real8
 
-  subroutine h5_load_data_0d_complex(fname, dset, darray)
-    character(len=*), intent(in) :: fname
-    character(len=*), intent(in) :: dset
-    complex(8)                   :: darray
-
-    complex(8) :: ci = (0.0d0, 1.0d0)
-    real(8) :: tmp_r, tmp_i
-    integer(hid_t) :: file_id, dset_id, dset_space_id
-    integer(hsize_t), dimension(0) :: dset_dims
-
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
-    call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
-    call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-    darray = tmp_r + ci*tmp_i
-  end subroutine h5_load_data_0d_complex
-
-  subroutine h5_load_data_1d_real(fname, dset, darray)
-    character(len=*), intent(in)       :: fname
-    character(len=*), intent(in)       :: dset
+  subroutine hdf5_read_data_1d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)            :: ifile
+    character(len=*), intent(in)          :: dset
     real(8), allocatable, dimension(:) :: darray
 
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
     integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_load_data_1d_real
+  end subroutine hdf5_read_data_1d_real8
 
-  subroutine h5_load_data_1d_complex(fname, dset, darray)
-    character(len=*), intent(in)          :: fname
-    character(len=*), intent(in)          :: dset
-    complex(8), allocatable, dimension(:) :: darray
-
-    complex(8) :: ci = (0.0d0, 1.0d0)
-    real(8), allocatable, dimension(:)    :: tmp_i, tmp_r
-    integer(hid_t) :: file_id, dset_id, dset_space_id
-    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
-
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
-    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
-    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
-    allocate(darray(dset_dims(1)))
-    allocate(tmp_i(dset_dims(1)),tmp_r(dset_dims(1)))
-    call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
-    call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
-    call h5sclose_f(dset_space_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-    darray = tmp_r + ci* tmp_i
-    deallocate(tmp_i, tmp_r)
-  end subroutine h5_load_data_1d_complex
-
-  subroutine h5_load_data_2d_real(fname, dset, darray)
-    character(len=*), intent(in)         :: fname
+  subroutine hdf5_read_data_2d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)           :: ifile
     character(len=*), intent(in)         :: dset
     real(8), allocatable, dimension(:,:) :: darray
 
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
     integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_load_data_2d_real
+  end subroutine hdf5_read_data_2d_real8
 
-  subroutine h5_load_data_2d_complex(fname, dset, darray)
-    character(len=*), intent(in)            :: fname
-    character(len=*), intent(in)            :: dset
-    complex(8), allocatable, dimension(:,:) :: darray
-
-    complex(8) :: ci = (0.0d0, 1.0d0)
-    real(8), allocatable, dimension(:,:)    :: tmp_i, tmp_r
-    integer(hid_t) :: file_id, dset_id, dset_space_id
-    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
-
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
-    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
-    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
-    allocate(darray(dset_dims(1), dset_dims(2)))
-    allocate(tmp_r(dset_dims(1), dset_dims(2)),tmp_i(dset_dims(1), dset_dims(2)))
-    call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
-    call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
-    call h5sclose_f(dset_space_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-    darray = tmp_r + ci* tmp_i
-    deallocate(tmp_i, tmp_r)
-  end subroutine h5_load_data_2d_complex
-
-  subroutine h5_load_data_3d_real(fname, dset, darray)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
+  subroutine hdf5_read_data_3d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)                :: ifile
+    character(len=*), intent(in)              :: dset
     real(8), allocatable, dimension(:,:,:) :: darray
 
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
     integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_load_data_3d_real
+  end subroutine hdf5_read_data_3d_real8
 
-  subroutine h5_load_data_3d_complex(fname, dset, darray)
-    character(len=*), intent(in)              :: fname
-    character(len=*), intent(in)              :: dset
-    complex(8), allocatable, dimension(:,:,:) :: darray
-
-    complex(8) :: ci = (0.0d0, 1.0d0)
-    real(8), allocatable, dimension(:,:,:)    :: tmp_i, tmp_r
-    integer(hid_t)                            :: file_id, dset_id, dset_space_id
-    integer(hsize_t), dimension(3)            :: dset_dims, dset_maxdims
-
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
-    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
-    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
-    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
-    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3)),tmp_i(dset_dims(1), dset_dims(2), dset_dims(3)))
-    call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
-    call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
-    call h5sclose_f(dset_space_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-    darray = tmp_r + ci* tmp_i
-    deallocate(tmp_i, tmp_r)
-  end subroutine h5_load_data_3d_complex
-
-  subroutine h5_load_data_4d_real(fname, dset, darray)
-    character(len=*), intent(in)             :: fname
+  subroutine hdf5_read_data_4d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)               :: ifile
     character(len=*), intent(in)             :: dset
     real(8), allocatable, dimension(:,:,:,:) :: darray
 
-    integer(hid_t) :: file_id, dset_id, dset_space_id
+    integer(hid_t) :: dset_id, dset_space_id
     integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
     call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_load_data_4d_real
+  end subroutine hdf5_read_data_4d_real8
 
-  subroutine h5_load_data_4d_complex(fname, dset, darray)
-    character(len=*), intent(in)                :: fname
+  subroutine hdf5_read_data_5d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)                 :: ifile
+    character(len=*), intent(in)               :: dset
+    real(8), allocatable, dimension(:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_5d_real8
+
+  subroutine hdf5_read_data_6d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)                   :: ifile
+    character(len=*), intent(in)                 :: dset
+    real(8), allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(6) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_6d_real8
+
+  subroutine hdf5_read_data_7d_real8(ifile, dset, darray)
+    integer(hid_t), intent(in)                     :: ifile
+    character(len=*), intent(in)                   :: dset
+    real(8), allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(7) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    call h5dread_f(dset_id, h5t_native_double, darray, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+  end subroutine hdf5_read_data_7d_real8
+
+  subroutine hdf5_read_data_0d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dset
+    complex(4)                   :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4) :: tmp_r, tmp_i
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(0) :: dset_dims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+  end subroutine hdf5_read_data_0d_complex4
+
+  subroutine hdf5_read_data_1d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)            :: ifile
+    character(len=*), intent(in)          :: dset
+    complex(4), allocatable, dimension(:) :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1)))
+    allocate(tmp_i(dset_dims(1)))
+    allocate(tmp_r(dset_dims(1)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_1d_complex4
+
+  subroutine hdf5_read_data_2d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)              :: ifile
+    character(len=*), intent(in)            :: dset
+    complex(4), allocatable, dimension(:,:) :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_2d_complex4
+
+  subroutine hdf5_read_data_3d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)                :: ifile
+    character(len=*), intent(in)              :: dset
+    complex(4), allocatable, dimension(:,:,:) :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_3d_complex4
+
+  subroutine hdf5_read_data_4d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)                  :: ifile
     character(len=*), intent(in)                :: dset
-    complex(8), allocatable, dimension(:,:,:,:) :: darray
+    complex(4), allocatable, dimension(:,:,:,:) :: darray
 
-    complex(8) :: ci = (0.0d0, 1.0d0)
-    real(8), allocatable, dimension(:,:,:,:)    :: tmp_i, tmp_r
-    integer(hid_t)                              :: file_id, dset_id, dset_space_id
-    integer(hsize_t), dimension(4)              :: dset_dims, dset_maxdims
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)), h5f_acc_rdonly_f, file_id, hdf_err)
-    call h5dopen_f(file_id, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
     call h5dget_space_f(dset_id, dset_space_id, hdf_err)
     call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
     allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
-    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
     allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
-    call h5dread_f(dset_id, type_r_id, tmp_r, dset_dims, hdf_err)
-    call h5dread_f(dset_id, type_i_id, tmp_i, dset_dims, hdf_err)
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    call h5fclose_f(file_id, hdf_err)
     darray = tmp_r + ci*tmp_i
     deallocate(tmp_i, tmp_r)
-  end subroutine h5_load_data_4d_complex
+  end subroutine hdf5_read_data_4d_complex4
 
-  subroutine h5_flush_data_0d_real(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    real(8)                                :: darray
-    character(len=*), intent(in), optional :: group
+  subroutine hdf5_read_data_5d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)                    :: ifile
+    character(len=*), intent(in)                  :: dset
+    complex(4), allocatable, dimension(:,:,:,:,:) :: darray
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(1)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 0
-    integer(8), dimension(0)               :: dims
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_5d_complex4
+
+  subroutine hdf5_read_data_6d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)                      :: ifile
+    character(len=*), intent(in)                    :: dset
+    complex(4), allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(6) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_6d_complex4
+
+  subroutine hdf5_read_data_7d_complex4(ifile, dset, darray)
+    integer(hid_t), intent(in)                        :: ifile
+    character(len=*), intent(in)                      :: dset
+    complex(4), allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    complex(4) :: ci = (0.0, 1.0)
+    real(4), allocatable, dimension(:,:,:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(7) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    call h5dread_f(dset_id, complex_id_r_sp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_sp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_7d_complex4
+
+  subroutine hdf5_read_data_0d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dset
+    complex(8)                   :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8) :: tmp_r, tmp_i
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(0) :: dset_dims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+  end subroutine hdf5_read_data_0d_complex8
+
+  subroutine hdf5_read_data_1d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)            :: ifile
+    character(len=*), intent(in)          :: dset
+    complex(8), allocatable, dimension(:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1)))
+    allocate(tmp_i(dset_dims(1)))
+    allocate(tmp_r(dset_dims(1)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_1d_complex8
+
+  subroutine hdf5_read_data_2d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)              :: ifile
+    character(len=*), intent(in)            :: dset
+    complex(8), allocatable, dimension(:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_2d_complex8
+
+  subroutine hdf5_read_data_3d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)                :: ifile
+    character(len=*), intent(in)              :: dset
+    complex(8), allocatable, dimension(:,:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_3d_complex8
+
+  subroutine hdf5_read_data_4d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: dset
+    complex(8), allocatable, dimension(:,:,:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_4d_complex8
+
+  subroutine hdf5_read_data_5d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)                    :: ifile
+    character(len=*), intent(in)                  :: dset
+    complex(8), allocatable, dimension(:,:,:,:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_5d_complex8
+
+  subroutine hdf5_read_data_6d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)                      :: ifile
+    character(len=*), intent(in)                    :: dset
+    complex(8), allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(6) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_6d_complex8
+
+  subroutine hdf5_read_data_7d_complex8(ifile, dset, darray)
+    integer(hid_t), intent(in)                        :: ifile
+    character(len=*), intent(in)                      :: dset
+    complex(8), allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    real(8), allocatable, dimension(:,:,:,:,:,:,:)    :: tmp_i, tmp_r
+    integer(hid_t) :: dset_id, dset_space_id
+    integer(hsize_t), dimension(7) :: dset_dims, dset_maxdims
+
+    call h5dopen_f(ifile, trim(adjustl(dset)), dset_id, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darray(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    allocate(tmp_i(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    allocate(tmp_r(dset_dims(1), dset_dims(2), dset_dims(3), dset_dims(4), dset_dims(5), dset_dims(6), dset_dims(7)))
+    call h5dread_f(dset_id, complex_id_r_dp, tmp_r, dset_dims, hdf_err)
+    call h5dread_f(dset_id, complex_id_i_dp, tmp_i, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    darray = tmp_r + ci*tmp_i
+    deallocate(tmp_i, tmp_r)
+  end subroutine hdf5_read_data_7d_complex8
+
+  subroutine hdf5_write_data_0d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    integer(4)                   :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 0
+    integer(8), dimension(0)     :: dims
+
+    character(len=150) :: gname, dset
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
-    if (present(group)) then
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_flush_data_0d_real
+  end subroutine hdf5_write_data_0d_int4
 
-  subroutine h5_flush_data_0d_complex(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    complex(8)                             :: darray
-    character(len=*), intent(in), optional :: group
+  subroutine hdf5_write_data_1d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    integer(4), dimension(:)       :: darray
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(1)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 0
-    integer(8), dimension(0)               :: dims
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 1
+    integer(8), dimension(1)       :: dims
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    endif
-    call h5dwrite_f(dset_id, type_r_id, real(darray), dims, hdf_err)
-    call h5dwrite_f(dset_id, type_i_id, aimag(darray), dims, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
-    if (present(group)) then
-      call h5gclose_f(grp_id, hdf_err)
-    endif
-    call h5fclose_f(file_id, hdf_err)
-  end subroutine h5_flush_data_0d_complex
+    character(len=150) :: gname, dset
 
-  subroutine h5_flush_data_1d_real(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    real(8), dimension(:)                  :: darray
-    character(len=*), intent(in), optional :: group
-
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(1)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 1
-    integer(8), dimension(:), allocatable  :: dims
-
-    allocate(dims(rank))
     dims(1) = size(darray)
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
+  end subroutine hdf5_write_data_1d_int4
 
-  end subroutine h5_flush_data_1d_real
+  subroutine hdf5_write_data_2d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    integer(4), dimension(:,:)     :: darray
 
-  subroutine h5_flush_data_1d_complex(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    complex(8), dimension(:)               :: darray
-    character(len=*), intent(in), optional :: group
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 2
+    integer(8), dimension(2)       :: dims
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(1)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 1
-    integer(8), dimension(:), allocatable  :: dims
+    character(len=150) :: gname, dset
 
-    allocate(dims(rank))
-    dims(1) = size(darray)
-
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    endif
-    call h5dwrite_f(dset_id, type_r_id, real(darray), dims, hdf_err)
-    call h5dwrite_f(dset_id, type_i_id, aimag(darray), dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
-      call h5gclose_f(grp_id, hdf_err)
-    endif
-    call h5fclose_f(file_id, hdf_err)
-
-  end subroutine h5_flush_data_1d_complex
-
-  subroutine h5_flush_data_2d_real(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    real(8), dimension(:,:)                :: darray
-    character(len=*), intent(in), optional :: group
-
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(2)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 2
-    integer(8), dimension(:), allocatable  :: dims
-
-    allocate(dims(rank))
     dims(1) = size(darray,1)
     dims(2) = size(darray,2)
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
+  end subroutine hdf5_write_data_2d_int4
 
-  end subroutine h5_flush_data_2d_real
+  subroutine hdf5_write_data_3d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    integer(4), dimension(:,:,:)   :: darray
 
-  subroutine h5_flush_data_2d_complex(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    complex(8), dimension(:,:)             :: darray
-    character(len=*), intent(in), optional :: group
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 3
+    integer(8), dimension(3)       :: dims
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(2)         :: dset_dims, dset_maxdims
-    integer, parameter                     :: rank = 2
-    integer(8), dimension(:), allocatable  :: dims
+    character(len=150) :: gname, dset
 
-    allocate(dims(rank))
-    dims(1) = size(darray,1)
-    dims(2) = size(darray,2)
-
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    endif
-    call h5dwrite_f(dset_id, type_r_id, real(darray), dims, hdf_err)
-    call h5dwrite_f(dset_id, type_i_id, aimag(darray), dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
-      call h5gclose_f(grp_id, hdf_err)
-    endif
-    call h5fclose_f(file_id, hdf_err)
-
-  end subroutine h5_flush_data_2d_complex
-
-  subroutine h5_flush_data_3d_real(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    real(8), dimension(:,:,:)              :: darray
-    character(len=*), intent(in), optional :: group
-
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(3)         :: dset_dims, dset_maxdims
-    integer                                :: rank = 3
-    integer(8), dimension(:), allocatable  :: dims
-
-    allocate(dims(rank))
     dims(1) = size(darray,1)
     dims(2) = size(darray,2)
     dims(3) = size(darray,3)
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
+  end subroutine hdf5_write_data_3d_int4
 
-  end subroutine h5_flush_data_3d_real
+  subroutine hdf5_write_data_4d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    integer(4), dimension(:,:,:,:) :: darray
 
-  subroutine h5_flush_data_3d_complex(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    complex(8), dimension(:,:,:)           :: darray
-    character(len=*), intent(in), optional :: group
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 4
+    integer(8), dimension(4)       :: dims
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(3)         :: dset_dims, dset_maxdims
-    integer                                :: rank = 3
-    integer(8), dimension(:), allocatable  :: dims
+    character(len=150) :: gname, dset
 
-    allocate(dims(rank))
-    dims(1) = size(darray,1)
-    dims(2) = size(darray,2)
-    dims(3) = size(darray,3)
-
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
-    endif
-    call h5dwrite_f(dset_id, type_r_id, real(darray), dims, hdf_err)
-    call h5dwrite_f(dset_id, type_r_id, aimag(darray), dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
-    call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
-      call h5gclose_f(grp_id, hdf_err)
-    endif
-    call h5fclose_f(file_id, hdf_err)
-
-  end subroutine h5_flush_data_3d_complex
-
-  subroutine h5_flush_data_4d_real(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    real(8), dimension(:,:,:,:)            :: darray
-    character(len=*), intent(in), optional :: group
-
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(4)         :: dset_dims, dset_maxdims
-    integer                                :: rank = 4
-    integer(8), dimension(:), allocatable  :: dims
-
-    allocate(dims(rank))
     dims(1) = size(darray,1)
     dims(2) = size(darray,2)
     dims(3) = size(darray,3)
     dims(4) = size(darray,4)
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
+  end subroutine hdf5_write_data_4d_int4
 
-  end subroutine h5_flush_data_4d_real
+  subroutine hdf5_write_data_5d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)       :: ifile
+    character(len=*), intent(in)     :: dsetfull
+    integer(4), dimension(:,:,:,:,:) :: darray
 
-  subroutine h5_flush_data_4d_complex(fname, dset, darray, group)
-    character(len=*), intent(in)           :: fname
-    character(len=*), intent(in)           :: dset
-    complex(8), dimension(:,:,:,:)         :: darray
-    character(len=*), intent(in), optional :: group
+    integer(hid_t)                   :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(5)   :: dset_dims, dset_maxdims
+    integer, parameter               :: rank = 5
+    integer(8), dimension(5)         :: dims
 
-    integer(hid_t)                         :: file_id, grp_id, dset_id, dspace_id
-    integer(hsize_t), dimension(4)         :: dset_dims, dset_maxdims
-    integer                                :: rank = 4
-    integer(8), dimension(:), allocatable  :: dims
+    character(len=150) :: gname, dset
 
-    allocate(dims(rank))
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_5d_int4
+
+  subroutine hdf5_write_data_6d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)         :: ifile
+    character(len=*), intent(in)       :: dsetfull
+    integer(4), dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                     :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(6)     :: dset_dims, dset_maxdims
+    integer, parameter                 :: rank = 6
+    integer(8), dimension(6)           :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_6d_int4
+
+  subroutine hdf5_write_data_7d_int4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)           :: ifile
+    character(len=*), intent(in)         :: dsetfull
+    integer(4), dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                       :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(7)       :: dset_dims, dset_maxdims
+    integer, parameter                   :: rank = 7
+    integer(8), dimension(7)             :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_integer, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_integer, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_7d_int4
+
+  subroutine hdf5_write_data_0d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    real(4)                      :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 0
+    integer(8), dimension(0)     :: dims
+
+    character(len=150) :: gname, dset
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_0d_real4
+
+  subroutine hdf5_write_data_1d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(4), dimension(:)          :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 1
+    integer(8), dimension(1)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_1d_real4
+
+  subroutine hdf5_write_data_2d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(4), dimension(:,:)        :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 2
+    integer(8), dimension(2)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_2d_real4
+
+  subroutine hdf5_write_data_3d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(4), dimension(:,:,:)      :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 3
+    integer(8), dimension(3)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_3d_real4
+
+  subroutine hdf5_write_data_4d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(4), dimension(:,:,:,:)    :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 4
+    integer(8), dimension(4)       :: dims
+
+    character(len=150) :: gname, dset
+
     dims(1) = size(darray,1)
     dims(2) = size(darray,2)
     dims(3) = size(darray,3)
     dims(4) = size(darray,4)
 
-    call h5fopen_f(trim(adjustl(fname)),h5f_acc_rdwr_f,file_id,hdf_err)
-    call h5screate_f(H5S_SIMPLE_F, dspace_id, hdf_err)
-    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
-    if (present(group)) then
-      call h5gopen_f(file_id, trim(adjustl(group)), grp_id, hdf_err)
-      call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
     else
-      call h5dcreate_f(file_id,trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
     endif
-    call h5dwrite_f(dset_id, type_r_id, real(darray), dims, hdf_err)
-    call h5dwrite_f(dset_id, type_i_id, aimag(darray), dims, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (present(group)) then
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
       call h5gclose_f(grp_id, hdf_err)
     endif
-    call h5fclose_f(file_id, hdf_err)
+  end subroutine hdf5_write_data_4d_real4
 
-  end subroutine h5_flush_data_4d_complex
+  subroutine hdf5_write_data_5d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(4), dimension(:,:,:,:,:)  :: darray
 
-end module Mhdf5
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 5
+    integer(8), dimension(5)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_5d_real4
+
+  subroutine hdf5_write_data_6d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)      :: ifile
+    character(len=*), intent(in)    :: dsetfull
+    real(4), dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                  :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(6)  :: dset_dims, dset_maxdims
+    integer, parameter              :: rank = 6
+    integer(8), dimension(6)        :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_6d_real4
+
+  subroutine hdf5_write_data_7d_real4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)        :: ifile
+    character(len=*), intent(in)      :: dsetfull
+    real(4), dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                    :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(7)    :: dset_dims, dset_maxdims
+    integer, parameter                :: rank = 7
+    integer(8), dimension(7)          :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_real, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_real, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_7d_real4
+
+  subroutine hdf5_write_data_0d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    real(8)                      :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 0
+    integer(8), dimension(0)     :: dims
+
+    character(len=150) :: gname, dset
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_0d_real8
+
+  subroutine hdf5_write_data_1d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(8), dimension(:)          :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 1
+    integer(8), dimension(1)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_1d_real8
+
+  subroutine hdf5_write_data_2d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(8), dimension(:,:)        :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(2) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 2
+    integer(8), dimension(2)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_2d_real8
+
+  subroutine hdf5_write_data_3d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(8), dimension(:,:,:)      :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(3) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 3
+    integer(8), dimension(3)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_3d_real8
+
+  subroutine hdf5_write_data_4d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(8), dimension(:,:,:,:)    :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(4) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 4
+    integer(8), dimension(4)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_4d_real8
+
+  subroutine hdf5_write_data_5d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    real(8), dimension(:,:,:,:,:)  :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(5) :: dset_dims, dset_maxdims
+    integer, parameter             :: rank = 5
+    integer(8), dimension(5)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_5d_real8
+
+  subroutine hdf5_write_data_6d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)      :: ifile
+    character(len=*), intent(in)    :: dsetfull
+    real(8), dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                  :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(6)  :: dset_dims, dset_maxdims
+    integer, parameter              :: rank = 6
+    integer(8), dimension(6)        :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_6d_real8
+
+  subroutine hdf5_write_data_7d_real8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)        :: ifile
+    character(len=*), intent(in)      :: dsetfull
+    real(8), dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                    :: grp_id, dset_id, dspace_id
+    integer(hsize_t), dimension(7)    :: dset_dims, dset_maxdims
+    integer, parameter                :: rank = 7
+    integer(8), dimension(7)          :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), h5t_native_double, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, h5t_native_double, darray, dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_7d_real8
+
+  subroutine hdf5_write_data_0d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(4)                   :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 0
+    integer(8), dimension(0)     :: dims
+
+    character(len=150) :: gname, dset
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_0d_complex4
+
+  subroutine hdf5_write_data_1d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(4), dimension(:)     :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 1
+    integer(8), dimension(1)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_1d_complex4
+
+  subroutine hdf5_write_data_2d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(4), dimension(:,:)   :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 2
+    integer(8), dimension(2)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_2d_complex4
+
+  subroutine hdf5_write_data_3d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(4), dimension(:,:,:) :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 3
+    integer(8), dimension(3)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_3d_complex4
+
+  subroutine hdf5_write_data_4d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    complex(4), dimension(:,:,:,:) :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer, parameter             :: rank = 4
+    integer(8), dimension(4)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_4d_complex4
+
+  subroutine hdf5_write_data_5d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)       :: ifile
+    character(len=*), intent(in)     :: dsetfull
+    complex(4), dimension(:,:,:,:,:) :: darray
+
+    integer(hid_t)                   :: grp_id, dset_id, dspace_id
+    integer, parameter               :: rank = 5
+    integer(8), dimension(5)         :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_5d_complex4
+
+  subroutine hdf5_write_data_6d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)         :: ifile
+    character(len=*), intent(in)       :: dsetfull
+    complex(4), dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                     :: grp_id, dset_id, dspace_id
+    integer, parameter                 :: rank = 6
+    integer(8), dimension(6)           :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_6d_complex4
+
+  subroutine hdf5_write_data_7d_complex4(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)           :: ifile
+    character(len=*), intent(in)         :: dsetfull
+    complex(4), dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                       :: grp_id, dset_id, dspace_id
+    integer, parameter                   :: rank = 7
+    integer(8), dimension(7)             :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_sp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_sp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_sp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_7d_complex4
+
+  subroutine hdf5_write_data_0d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(8)                   :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 0
+    integer(8), dimension(0)     :: dims
+
+    character(len=150) :: gname, dset
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_0d_complex8
+
+  subroutine hdf5_write_data_1d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(8), dimension(:)     :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 1
+    integer(8), dimension(1)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_1d_complex8
+
+  subroutine hdf5_write_data_2d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(8), dimension(:,:)   :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 2
+    integer(8), dimension(2)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_2d_complex8
+
+  subroutine hdf5_write_data_3d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    complex(8), dimension(:,:,:) :: darray
+
+    integer(hid_t)               :: grp_id, dset_id, dspace_id
+    integer, parameter           :: rank = 3
+    integer(8), dimension(3)     :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_3d_complex8
+
+  subroutine hdf5_write_data_4d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)     :: ifile
+    character(len=*), intent(in)   :: dsetfull
+    complex(8), dimension(:,:,:,:) :: darray
+
+    integer(hid_t)                 :: grp_id, dset_id, dspace_id
+    integer, parameter             :: rank = 4
+    integer(8), dimension(4)       :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_4d_complex8
+
+  subroutine hdf5_write_data_5d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)       :: ifile
+    character(len=*), intent(in)     :: dsetfull
+    complex(8), dimension(:,:,:,:,:) :: darray
+
+    integer(hid_t)                   :: grp_id, dset_id, dspace_id
+    integer, parameter               :: rank = 5
+    integer(8), dimension(5)         :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_5d_complex8
+
+  subroutine hdf5_write_data_6d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)         :: ifile
+    character(len=*), intent(in)       :: dsetfull
+    complex(8), dimension(:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                     :: grp_id, dset_id, dspace_id
+    integer, parameter                 :: rank = 6
+    integer(8), dimension(6)           :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_6d_complex8
+
+  subroutine hdf5_write_data_7d_complex8(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)           :: ifile
+    character(len=*), intent(in)         :: dsetfull
+    complex(8), dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(hid_t)                       :: grp_id, dset_id, dspace_id
+    integer, parameter                   :: rank = 7
+    integer(8), dimension(7)             :: dims
+
+    character(len=150) :: gname, dset
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+
+    call hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    call hdf5_create_group(ifile, gname)
+
+    if (trim(adjustl(gname)) == '') then
+      grp_id = ifile
+    else
+      call h5gopen_f(ifile, trim(adjustl(gname)), grp_id, hdf_err)
+    endif
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, rank, dims, dims, hdf_err)
+    call h5dcreate_f(grp_id, trim(adjustl(dset)), complex_id_dp, dspace_id, dset_id, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_r_dp, real(darray), dims, hdf_err)
+    call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
+    call h5dclose_f(dset_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    if (grp_id .ne. ifile) then
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+  end subroutine hdf5_write_data_7d_complex8
+
+  subroutine hdf5_write_attribute_int4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    integer(4)                   :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_integer, dspace_id, attr_id, hdf_err)
+    call h5awrite_f(attr_id, h5t_native_integer, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_write_attribute_real4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    real(4)                      :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_real, dspace_id, attr_id, hdf_err)
+    call h5awrite_f(attr_id, h5t_native_real, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_write_attribute_real8(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    real(8)                      :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_double, dspace_id, attr_id, hdf_err)
+    call h5awrite_f(attr_id, h5t_native_double, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_write_attribute_string(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    character(len=*)             :: attr
+
+    integer(8), dimension(0) :: dims
+    integer(hid_t)           :: type_id, dspace_id, attr_id, obj_id
+    character(len=150)       :: strim
+    integer(8)               :: string_size
+
+    strim = adjustl(trim(attr))
+    string_size = int(len_trim(strim),8)
+
+    call h5tcopy_f(h5t_native_character, type_id, hdf_err)
+    call h5tset_size_f(type_id, string_size, hdf_err)
+    call h5screate_f(h5s_scalar_f, dspace_id, hdf_err)
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), type_id, dspace_id, attr_id, hdf_err)
+    call h5awrite_f(attr_id, type_id, trim(attr), dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+    call h5tclose_f(type_id, hdf_err)
+
+  end subroutine
+
+  subroutine hdf5_write_attribute_complex4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    complex(4)                   :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), complex_id_sp, dspace_id, attr_id, hdf_err)
+    ! for whatever reason ... this works ... I really dont know why
+    ! and it has to be in this order
+    call h5awrite_f(attr_id, complex_id_sp, aimag(attr), dims, hdf_err)
+    call h5awrite_f(attr_id, complex_id_sp, real(attr), dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_write_attribute_complex8(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    complex(8)                   :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
+    call h5acreate_f(obj_id, trim(adjustl(attrname)), complex_id_dp, dspace_id, attr_id, hdf_err)
+    ! same story here
+    call h5awrite_f(attr_id, complex_id_dp, aimag(attr), dims, hdf_err)
+    call h5awrite_f(attr_id, complex_id_dp, real(attr), dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_int4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    integer(4), intent(out)      :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+    call h5aread_f(attr_id, h5t_native_integer, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_real4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    real(4), intent(out)      :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+    call h5aread_f(attr_id, h5t_native_real, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_real8(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    real(8), intent(out)      :: attr
+
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+    call h5aread_f(attr_id, h5t_native_double, attr, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_string(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)      :: ifile
+    character(len=*), intent(in)    :: location
+    character(len=*), intent(in)    :: attrname
+    character(len=*), intent(inout) :: attr
+
+    integer(hsize_t) :: strg_size
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id, type_id
+
+    attr = ''
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+
+    ! create dspace
+    call h5aget_storage_size_f(attr_id, strg_size, hdf_err)
+    call h5tcopy_f(h5t_native_character, type_id, hdf_err)
+    call h5tset_size_f(type_id, strg_size, hdf_err)
+    call h5screate_f(h5s_scalar_f, dspace_id, hdf_err)
+
+    call h5aread_f(attr_id, type_id, attr, dims, hdf_err)
+
+    call h5aclose_f(attr_id, hdf_err)
+    call h5sclose_f(dspace_id, hdf_err)
+    call h5tclose_f(type_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_complex4(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    complex(4), intent(out)      :: attr
+
+    complex(4) :: ci = (0.0, 1.0)
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+    real(4) :: tmp_r, tmp_i
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+    call h5aread_f(attr_id, complex_id_r_sp, tmp_r, dims, hdf_err)
+    call h5aread_f(attr_id, complex_id_i_sp, tmp_i, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+
+    attr = tmp_r + ci*tmp_i
+  end subroutine
+
+  subroutine hdf5_read_attribute_complex8(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    complex(8), intent(out)      :: attr
+
+    complex(8) :: ci = (0.d0, 1.d0)
+    integer(8), dimension(0)     :: dims
+    integer(hid_t) :: obj_id, dspace_id, attr_id
+    real(8) :: tmp_r, tmp_i
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+    call h5aread_f(attr_id, complex_id_r_dp, tmp_r, dims, hdf_err)
+    call h5aread_f(attr_id, complex_id_i_dp, tmp_i, dims, hdf_err)
+    call h5aclose_f(attr_id, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+
+    attr = tmp_r + ci*tmp_i
+  end subroutine
+
+  integer function hdf5_get_number_groups(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+
+    integer :: nmembers
+    integer :: ngroups
+
+    integer :: idx
+    character(len=150) :: strim
+    integer(hid_t) :: obj_id
+    integer :: obj_type
+
+    ngroups = 0
+    call h5gn_members_f(ifile, trim(adjustl(location)), nmembers, hdf_err)
+    do idx = 0, nmembers-1
+      call h5gget_obj_info_idx_f(ifile, trim(adjustl(location)), idx, strim, obj_type, hdf_err)
+      if (obj_type .eq. h5g_group_f) then
+        ngroups = ngroups + 1
+      endif
+    enddo
+
+    hdf5_get_number_groups = ngroups
+  end function
+
+  integer function hdf5_get_number_datasets(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+
+    integer :: nmembers
+    integer :: ndsets
+
+    character(len=150) :: strim
+    integer(hid_t) :: obj_id
+    integer :: obj_type
+    integer :: idx
+
+    ndsets = 0
+    call h5gn_members_f(ifile, trim(adjustl(location)), nmembers, hdf_err)
+    do idx = 0,nmembers-1
+      call h5gget_obj_info_idx_f(ifile, trim(adjustl(location)), idx, strim, obj_type, hdf_err)
+      if (obj_type .eq. h5g_dataset_f) then
+        ndsets = ndsets + 1
+      endif
+    enddo
+
+    hdf5_get_number_datasets = ndsets
+  end function
+
+  integer function hdf5_get_number_attributes(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+
+    integer(hid_t) :: obj_id
+    integer attr_num
+
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aget_num_attrs_f(obj_id, attr_num, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+
+    hdf5_get_number_attributes = attr_num
+  end function
+
+  subroutine hdf5_list_groups(ifile, location, groups)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+    character(len=*), allocatable, dimension(:) :: groups
+
+    integer :: nmembers, ngroups
+    character(len=150) :: strim
+    character(len=150), allocatable, dimension(:) :: members
+    integer(hid_t) :: obj_id
+    integer :: obj_type
+    integer :: idx
+
+    ngroups = 0
+
+    call h5gn_members_f(ifile, trim(adjustl(location)), nmembers, hdf_err)
+    if (nmembers .eq. 0) return
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    allocate(members(nmembers))
+    do idx = 0, nmembers-1
+      call h5gget_obj_info_idx_f(ifile, trim(adjustl(location)), idx, strim, obj_type, hdf_err)
+      if (obj_type .eq. h5g_group_f) then
+        ngroups = ngroups + 1
+        members(ngroups) = trim(strim)
+      endif
+    enddo
+    call h5oclose_f(obj_id, hdf_err)
+    if (ngroups .eq. 0) return
+    allocate(groups(ngroups))
+    groups(:) = members(:ngroups)
+    deallocate(members)
+  end subroutine
+
+  subroutine hdf5_list_datasets(ifile, location, dsets)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+    character(len=*), allocatable, dimension(:) :: dsets
+
+    integer :: nmembers, ndsets
+    character(len=150) :: strim
+    character(len=150), allocatable, dimension(:) :: members
+    integer(hid_t) :: obj_id
+    integer :: obj_type
+    integer :: idx
+
+    ndsets = 0
+
+    call h5gn_members_f(ifile, trim(adjustl(location)), nmembers, hdf_err)
+    if (nmembers .eq. 0) return
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    allocate(members(nmembers))
+    do idx = 0, nmembers-1
+      call h5gget_obj_info_idx_f(ifile, trim(adjustl(location)), idx, strim, obj_type, hdf_err)
+      if (obj_type .eq. h5g_dataset_f) then
+        ndsets = ndsets + 1
+        members(ndsets) = trim(strim)
+      endif
+    enddo
+    call h5oclose_f(obj_id, hdf_err)
+    if (ndsets .eq. 0) return
+    allocate(dsets(ndsets))
+    dsets(:) = members(:ndsets)
+    deallocate(members)
+  end subroutine
+
+  ! subroutine hdf5_list_attributes(ifile, location)
+  !   integer(hid_t), intent(in)                  :: ifile
+  !   character(len=*), intent(in)                :: location
+  !   character(len=150), allocatable, dimension(:) :: attrs
+
+  !   integer :: nattrs
+  !   integer(hid_t) :: obj_id
+  !   integer :: idx
+  !   integer(size_t) :: buf_size = 0
+  !   integer(hid_t) :: lapl_id
+  !   character(len=150) :: strim
+
+  !   call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+  !   call h5aget_num_attrs_f(obj_id, nattrs, hdf_err)
+
+  !   if (nattrs .eq. 0) return
+  !   allocate(attrs(nattrs))
+  !   call h5pset_nlinks_f(lapl_id, int(0,size_t), hdf_err)
+  !   do idx= 0, nattrs-1
+  !     ! call h5aget_info_by_idx_f(ifile, trim(adjustl(location)), h5_index_name_f, &
+  !     !     h5_iter_inc_f, int(idx, hsize_t), f_corder_valid, corder, cset, data_size, hdf_err)
+  !     strim = NULL
+  !     call h5aget_name_by_idx_f(ifile, trim(adjustl(location)), h5_index_name_f, h5_iter_inc_f, int(idx, hsize_t), strim, buf_size, lapl_id, hdf_err)
+  !     write(*,*) trim(strim)
+  !   enddo
+
+  ! end subroutine
+
+  ! help function with separates /group1/group2/dset -> /group1/group2 and dset
+  subroutine hdf5_help_separate_dsetname(dsetfull, gname, dset)
+    character(len=*), intent(in)    :: dsetfull
+    character(len=150), intent(out) :: dset, gname
+
+    character(len=150) :: strim
+    integer            :: pos
+
+    ! adjusting string and removing possible leading and trailing '/'
+    strim = adjustl(trim(dsetfull))
+    if (index(strim, '/', back=.true.) .eq. len_trim(strim)) then
+      strim = strim(:(len_trim(strim)-1))
+    endif
+    if (index(strim, '/') .eq. 1) then
+      strim = strim(2:)
+    endif
+
+    pos = index(strim, '/', back=.true.)
+    if (pos .eq. 0) then
+      dset  = strim
+      gname = ''
+    else
+      gname = strim(:(pos-1))
+      dset  = strim((pos+1):)
+    endif
+  end subroutine hdf5_help_separate_dsetname
+
+end module hdf5_wrapper
