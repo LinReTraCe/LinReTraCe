@@ -4,7 +4,7 @@ kmax_double = 7
 kmax_quad = 16
 
 CPP = cpp
-CPPFLAGS = -P -C -traditional
+CPPFLAGS = -P -traditional
 
 ifeq (${FCDG},gfortran)
 	CPPFLAGS += -DGFORTRAN
