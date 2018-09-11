@@ -534,14 +534,16 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
 
-        eps=sct%z*ek%band(ik,iband)-mu  !a = Z.e(k) - mu
+        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
 
         ! the digamma function transitions to the fermi function as Gamma -> 0
-        if (abs(sct%gam(iT,iband)) .lt. 1d-14) then
+        if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,beta)
+        else if (allocated(sct%ykb)) then
+           z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))+ci*eps)*beta2p ! eps --> -eps
+           tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
         else
-           ! n(k) = 0.5 + 1/pi . psi(0.5 + beta/2pi . (Z.Gamma - 1j.a))
-           z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p
+           z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)+ci*eps)*beta2p ! eps --> -eps
            tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
         endif
 
@@ -611,12 +613,17 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
         if (ek%band(ik,iband) .gt. band_fill_value) cycle
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
-        eps=sct%z*ek%band(ik,iband)-mu
+        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
 
-        if (abs(sct%gam(iT,iband)) .lt. smallQ) then
+        if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,betaQ)
+        else if (allocated(sct%ykb)) then
+           z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) + &
+                      ciQ*real(eps*beta2p,16) ! eps --> -eps
+           tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
         else
-           z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2pQ,16) - ciQ*real(eps*beta2pQ,16)
+           z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) + &
+                      ciQ*real(eps*beta2p,16) ! eps --> -eps
            tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
         endif
 
@@ -663,7 +670,7 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   complex(8) :: z
   real(8) :: nsmall, nbig, ninteger, eps, tmp
   real(8) :: occ_loc, occ_intp, occ_tet(4)
-  integer :: iband, ik, itet
+  integer :: iband, ik, itet, kp
 !external variables
   complex(8), external :: wpsipg
 
@@ -674,18 +681,22 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
      do ik = 1, 4
         nbig=0.d0
         nsmall=0.d0
+        kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
            if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
 
-           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+           eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
 
-           if (sct%gam(iT,iband).lt.small) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,beta)
+           else if (allocated(sct%ykb)) then
+              z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) + ci*eps ) * beta2p ! eps --> -eps
+              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            else
-              z=0.5d0 + ( sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p
-              tmp=0.5d0+aimag(wpsipg(z,0))/pi
+              z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) + ci*eps ) * beta2p ! eps --> -eps
+              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            endif
 
            if (tmp.gt.thr) then
@@ -735,7 +746,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   real(16) :: occ_loc, occ_tet(4), occ_intp
   real(8) :: eps
   integer :: iband, ik
-  integer :: itet
+  integer :: itet, kp
   real(16) :: cutQ
   !more sophistication
   integer(8) ::IEXP
@@ -753,16 +764,22 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
         ninteger=0.q0
         nbig=0.q0
         nsmall=0.q0
+        kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
            if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
-           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+           eps=(ek%z(kp,iband)*ek%band(kp,iband))-mu
 
-           if (sct%gam(iT,iband).eq.smallQ) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,betaQ)
+           else if (allocated(sct%ykb)) then
+              z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) + &
+                       ciQ*real(eps*beta2p,16) ! eps --> -eps
+              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            else
-              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps --> -eps
+              z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) + &
+                       ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            endif
 

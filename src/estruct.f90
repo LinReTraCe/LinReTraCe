@@ -1,6 +1,7 @@
 module Mestruct
   use Mparams
   use Mtypes
+  use Mmymath
   implicit none
 
   real(8) :: gmax,gminall,vol ! gmax is maximal gamma of bands that determine [gap]
@@ -166,12 +167,12 @@ module Mestruct
 
    subroutine read_config(algo, ek, kmesh, sct)
      implicit none
-
     type (algorithm) :: algo
-    type(edisp) :: ek          ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
+    type(edisp)      :: ek     ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
     type(kpointmesh) :: kmesh  ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-    type(scatrate) :: sct
+    type(scatrate)   :: sct
   !local variables
+    !double precision :: Z, ReS ! renormalisation factor, Re{Selfenergy} (a.k.a. quasi-particle shift)
     integer :: which           ! switches the type of algorithm (then stored in type(algorithm))
     integer :: which_tetra     ! =0 no tetrahedron integration =1 use tetrahedron
     integer :: which_grid      ! =0 no symetry operations used  =1 use symmetry to generate BZ
@@ -191,24 +192,34 @@ module Mestruct
 ! case = 1 use the uniform k-mesh generated with tight binding
 ! case = 2 read the k-points and band dispersion from Wien2k
 ! case = 3 read also the optical matrix elements from Wien2k
+! case = 4 read the renormalised qp energies, renormalisation factor and -Im{selfnrg}
     read(10,*)which, which_tetra, which_grid
 
     if (which==1) then
        algo%ltbind =.true.
        algo%lw2k   =.false.
        algo%loptic =.false.
+       algo%ldmft  =.false.
     else if (which==2) then
        algo%ltbind =.false.
        algo%lw2k   =.true.
        algo%loptic =.false.
        algo%lBfield=.false.
+       algo%ldmft  =.false.
     else if (which==3) then
        algo%ltbind =.false.
        algo%lw2k   =.false.
        algo%loptic =.true.
        algo%lBfield=.false.
+       algo%ldmft  =.false.
+    else if (which==4) then
+       algo%ltbind =.false.
+       algo%lw2k   =.false.
+       algo%loptic =.true.
+       algo%lBfield=.false.
+       algo%ldmft  =.true.
     else
-       write(*,*)'No k-mesh selected'
+       write(*,*)'Not valid algorithm selection'
        STOP
     endif
 
@@ -246,18 +257,6 @@ module Mestruct
     endif
 
     read(10,*)kmesh%kx,kmesh%ky,kmesh%kz
-    !
-    !TODO
-    !consider removing from datatype
-    if ((kmesh%kx == kmesh%ky) .AND. (kmesh%ky == kmesh%kz) ) then
-       kmesh%nkeq=3
-    elseif ((kmesh%kx == kmesh%ky) .AND. (kmesh%ky /= kmesh%kz)) then
-       kmesh%nkeq=2
-    elseif ((kmesh%kx == kmesh%kz) .AND. (kmesh%ky /= kmesh%kz)) then
-       kmesh%nkeq=2
-    else
-       kmesh%nkeq=1
-    endif
 
     if (algo%ltbind) then
        write(*,*)'readinfile: reading TB parameters'
@@ -274,17 +273,15 @@ module Mestruct
     read(10,*)sct%ng
     allocate(sct%gc(0:sct%ng))
     read(10,*)sct%gc(:)
-   !read in also the renormalisation factor
-    read(10,*)sct%z
-   !originally there was a loop over bands that I'm skipping
-   !out of the complication to generate a long input file for 40 bands or so...
+   !read in also the renormalisation factor and the quasi-particle shift
+    read(10,*)ek%ztmp
 
     close(10)
 
    end subroutine
 
    subroutine gentbstr(algo, eirrk, kmesh)
-     implicit none
+    implicit none
 
     type(algorithm) :: algo
     type(edisp) :: eirrk                 ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
@@ -292,6 +289,7 @@ module Mestruct
   !local variables
     integer :: ik,ikx,iky,ikz, nk,nkx,nky,nkz, iband,nband, idir,idir2 !counters
     double precision :: k(3)
+    double precision, allocatable :: xtmp(:), ytmp(:), dytmp(:)
 
    if (algo%ltetra) then
       nkx=kmesh%kx+1; nky=kmesh%ky+1; nkz=kmesh%kz+1
@@ -348,6 +346,7 @@ module Mestruct
                   enddo
                enddo
             endif
+
             if(algo%ldebug) then !write to file
                write(10,'(1I14,3F12.6)')ik,k
                write(11,'(1I14,100F16.10)')ik,(eirrk%band(ik,iband),iband=1,nband)
@@ -365,6 +364,30 @@ module Mestruct
       close(12)
       if(algo%lBfield) close(13)
    endif
+   !!!!!!!!!!!!!!!TEST
+   ! costruct the numerical derivative for the band dispersion
+   ! and compare it with the analitycal estimate
+   ! select the direction in which you want to estimate the derivative
+   !allocate(xtmp(1:nkx))
+   !allocate(ytmp(1:nkx))
+   !allocate(dytmp(1:nkx))
+   !iband=1
+   !do ikx=1,nkx
+   !   ik = kmesh%k_id(ikx,2,2)
+   !   xtmp(ikx) = kmesh%k_coord(1,ik)
+   !   ytmp(ikx) = eirrk%band(ik,iband)
+   !   dytmp(ikx)= 0.0d0
+   !enddo
+   !
+   !call derrich(xtmp,ytmp,dytmp)
+   !do ikx=1,nkx
+   !   write(70,*)xtmp(ikx),ytmp(ikx),dytmp(ikx)
+   !   write(71,*)xtmp(ikx),dytmp(ikx),2.0d0*pi*eirrk%Mopt(1,kmesh%k_id(ikx,2,2),iband,iband)/kmesh%alat
+   !enddo
+   !deallocate(xtmp,ytmp,dytmp)
+   !STOP
+   !!!!!!!!!!!!!!!TEST END
+
    ! if we are passing only 1 k-point chances are that we want to study a
    ! flat-band model; in this case the Fermi velocity gets overwritten
    ! TODO: testing
@@ -393,10 +416,9 @@ module Mestruct
     integer :: ik,ikx,iky,ikz, nb, nb1
 
    if (algo%lsymm) then
-      call getirrk  (algo%mysyst, kmesh, eirrk)
-      call getsymop (algo%mysyst, symm, kmesh)
+      call getirrk  (algo%mysyst, symm%cntr, kmesh, eirrk)
+      call getsymop (algo%mysyst, symm,  kmesh, eirrk)
       ! generate a reucible kmesh from the set of symmetry operations and the irrek-mesh
-      write(*,*) '*********** GENREDK ***********'
       call genredk  (algo%mysyst, symm, kmesh, redkm)
       ! copy also the number of electrons and the Fermi level from the old datastructure to the new one
       eredk%nband_max = eirrk%nband_max
@@ -405,17 +427,15 @@ module Mestruct
       redkm%alat = kmesh%alat
       redkm%a    = kmesh%a
       ! read in the optical matrix elements on the irreducible grid
-      write(*,*) '*********** GETIRROPT ***********'
-      call getirropt (algo%mysyst, kmesh, eirrk, symm%lcubic)
+      ! and if algo%ldmft is true also the selfenergy file
+      call getirropt (algo%mysyst, kmesh, eirrk, algo%loptic, symm%lcubic, algo%ldmft)
       ! generate the optical matrix elements evaluated on the new redkm grid
-      write(*,*) '*********** GENREDOPT ***********'
       call genredopt (redkm, symm, eirrk, eredk)
       ! translate the reducible k-mesh and take care of the bandstructure
-      write(*,*) '*********** TRNREDK ***********'
-      call trnredk (kmesh, redkm, eredk, symm)
+      call trnredk (kmesh, redkm, eredk, symm, algo)
 
    else !reducible BZ is already provided by W2k
-      call getirrk (algo%mysyst, redkm, eredk)
+      call getirrk (algo%mysyst, symm%cntr, redkm, eredk)
       !the values below are stored in the irreducible mesh by readinfile
       eredk%nband_max = eirrk%nband_max
       eredk%nelect = eirrk%nelect
@@ -423,7 +443,7 @@ module Mestruct
       redkm%alat = kmesh%alat
       redkm%a    = kmesh%a
       redkm%kx = kmesh%kx; redkm%ky = kmesh%ky; redkm%kz = kmesh%kz
-      call getsymop (algo%mysyst, symm, redkm) !need to call this routine to set the logical switches in symmop type
+      call getsymop (algo%mysyst, symm, redkm, eredk) !need to call this routine to set the logical switches in symmop type
 
       if (.not. allocated(redkm%k_id)) allocate(redkm%k_id(1:redkm%kx, 1:redkm%ky, 1:redkm%kz)) !if algo%lsymm=.false. redkm%k_id has not been allocated
       ik=0
@@ -446,7 +466,8 @@ module Mestruct
       !!!!!!!!!!!!!!!!TEST END
 
       ! read in the optical matrix elements on the reducible grid
-      call getirropt ( algo%mysyst, redkm, eredk, symm%lcubic)
+      ! and if algo%ldmft is true also the selfenergy file
+      call getirropt ( algo%mysyst, redkm, eredk, algo%loptic, symm%lcubic, algo%ldmft)
    endif !lsymm
 
    if (.not. algo%loptic) then
@@ -491,11 +512,12 @@ module Mestruct
 ! either in the kpointmesh or in edisp type
 !
 
-subroutine getirrk (mysyst, kmesh, edspk )
+subroutine getirrk (mysyst, cntr, kmesh, edspk )
      implicit none
 
 !passed variables
   character(len=*) :: mysyst ! file name to open
+  character(3)  :: cntr     ! centering of the unit cell: P,F,B,H,C??
   type(kpointmesh) :: kmesh ! k-mesh generated by Wien2k
   type(edisp)      :: edspk ! energy dispersion and optical matrix elements over k-mesh generated by Wien2k
 !internal variables
@@ -520,7 +542,7 @@ subroutine getirrk (mysyst, kmesh, edspk )
    !get the number of nonequivalent atoms in cell
    open(10,file=trim(adjustl(mysyst))//'.struct',status='old')
    read(10,*)
-   read(10,*) ccrap, ccrap, ccrap, iatm ! comma and spaces separates character arrays
+   read(10,*) cntr, ccrap, ccrap, iatm
    !write(*,*) 'number of inequivalent atoms in cell',iatm
    close(10)
 
@@ -564,6 +586,7 @@ subroutine getirrk (mysyst, kmesh, edspk )
    deallocate(band_tmp)
 
    !get k-points weight
+   !TODO: remove because we never use weighted k-point sums
    open(12,file=trim(adjustl(mysyst))//'.klist',status='old')
    do ik=1,kmesh%ktot
       read(12,*)icrap,icrap,icrap,icrap,icrap,dtmp
@@ -589,16 +612,20 @@ end subroutine !getirrk
 ! 4...Re<x><y>
 ! 5...Re<x><z>
 ! 6...Re<y><z>
-! columns 4-6 are allocated only for non-cubic systems
+! columns 4-6 are allocated only for non-cubic systems.
+! If DMFT reference state is used the one-particle energies
+! are overwritten and self-energy data are read in.
 !
-subroutine getirropt (mysyst, kmesh, eirrk, lcubic )
+subroutine getirropt (mysyst, kmesh, eirrk, loptic, lcubic, ldmft )
      implicit none
 
 !passed variables
   character(len=*) :: mysyst   ! file name to open
   type(kpointmesh) :: kmesh ! irreducible k-mesh generated by Wien2k
   type(edisp)      :: eirrk ! energy dispersion and optical matrix elements over irr k-mesh generated by Wien2k
+  logical :: loptic
   logical :: lcubic
+  logical :: ldmft          ! read self-energy file if true
 !internal variables
   integer :: icrap, itmp, i, j, ik
   integer :: ierr
@@ -621,6 +648,7 @@ subroutine getirropt (mysyst, kmesh, eirrk, lcubic )
 
    eirrk%nbopt_min=1000
    eirrk%nbopt_max=0
+   if (loptic) then
    do ik=1,kmesh%ktot
       read(10,*)   !there is an empty line
       read(10,*)ccrap,itmp,ccrap,ccrap,ccrap,min_nopt,max_nopt
@@ -656,7 +684,8 @@ subroutine getirropt (mysyst, kmesh, eirrk, lcubic )
          enddo
       endif
 
-   enddo
+   enddo !over kpoints
+   endif
 
    130  FORMAT (4X,I3,X,I3,3(X,E12.6))
    160  FORMAT (4X,I3,X,I3,6(X,E12.6))
@@ -673,7 +702,7 @@ subroutine getirropt (mysyst, kmesh, eirrk, lcubic )
    !write(*,*) Mopt_tmp(3,10,1,3)
    !STOP
 !!!!TEST END
-
+   !eirrk%nbopt_max=int(eirrk%nbopt_max/10)
    ! copy over the data to the permanent data structure (with the minimal number of entries consistent for all the k-point considered)
    if ((.not. allocated(eirrk%Mopt)) .and. (lcubic) ) &
      & allocate(eirrk%Mopt(1:3,kmesh%ktot,eirrk%nbopt_min:eirrk%nbopt_max,eirrk%nbopt_min:eirrk%nbopt_max))
@@ -704,6 +733,37 @@ subroutine getirropt (mysyst, kmesh, eirrk, lcubic )
    !STOP
 !!!!TEST END
 
+   !allocation of renormalised bandstructure
+   !the -Im{Sigma} read in here is added to the temperature dependent scattering rate
+   !in the response module
+   if (.not. allocated(eirrk%Z)) then
+      !allocate(eirrk%Z(kmesh%ktot,eirrk%nbopt_min:eirrk%nbopt_max))
+      allocate(eirrk%Z(kmesh%ktot,eirrk%nband_max))
+      eirrk%Z=1.0d0
+   endif
+   if (.not. allocated(eirrk%Im)) then
+      !allocate(eirrk%Im(kmesh%ktot,eirrk%nbopt_min:eirrk%nbopt_max))
+      allocate(eirrk%Im(kmesh%ktot,eirrk%nband_max))
+      eirrk%Im=0.0d0
+   endif
+   if (ldmft) then
+      open(11,file=trim(adjustl(mysyst))//'.dmft',status='old')
+      read(11,*) eirrk%efer
+      do ik=1,kmesh%ktot
+         read(11,*) i, min_nopt, max_nopt
+         !sanity checks
+         if (min_nopt < eirrk%nbopt_min) STOP 'Self-energy bands do not match optical matrix elements'
+         if (max_nopt > eirrk%nbopt_max) STOP 'Self-energy bands do not match optical matrix elements'
+         !overwrite the bandstructure with the renormalised one
+         do j=min_nopt,max_nopt
+            read(11,*) eirrk%band(ik,j), eirrk%Z(ik,j), eirrk%Im(ik,j)
+         enddo
+      enddo
+      close(11)
+   else ! if there are no dmft data copy over the values read from input file
+      eirrk%Z(:,:)=eirrk%ztmp
+   endif
+
 end subroutine
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -714,18 +774,24 @@ end subroutine
 ! acting on the irreducible kmesh generate the reducible
 ! counterpart (see genredk below)
 !
-subroutine getsymop (mysyst, symm, kmesh)
+subroutine getsymop (mysyst, symm, kmesh, ek)
   implicit none
 
   character(len=*) :: mysyst
   type(symop) :: symm
   type(kpointmesh) :: kmesh ! irreducible k-mesh generated by Wien2k
+  type(edisp) :: ek
   integer :: n, i, j
   !for the additional detection of roto-translation in non-symmorphic groups
   character (len=80) :: line
   character (len=30) :: substring
   character (len=6)  :: ccrap
   integer :: ix, icrap
+  !if centering is required additional temporary vectors are required
+  !double precision, allocatable :: Mtmp(:,:,:), Ttmp(:,:)
+  double precision, allocatable :: k_coord(:,:)
+  double precision, allocatable :: band(:,:)
+
 
 ! read the matrix transformations
   open(9,file=trim(adjustl(mysyst))//'.symop',status='old')
@@ -755,8 +821,7 @@ subroutine getsymop (mysyst, symm, kmesh)
   else
      do n=1,symm%nsym
         do j=1,3
-           !read(10,'(6A,X,f10.8)') ccrap, symm%Tras(j,n)
-           !thanks to Mathias for pointing out this trick! ;-)
+           !thanks to Matthias for pointing out this trick! ;-)
            read(10,'(A)') line
            substring=trim(adjustl(line(7:)))
            read(substring,*) symm%Tras(j,n)
@@ -768,8 +833,82 @@ subroutine getsymop (mysyst, symm, kmesh)
   endif
   close(10)
 
+  ! if the unit cell is not primitive we need to include centering
+  select case (symm%cntr)
+
+     case('B  ') !body centered cell
+        write(*,*) 'body centering unit cell'
+        !allocate(Mtmp(3,3,2*symm%nsym))
+        !allocate(Ttmp(3,2*symm%nsym))
+        !do n=1,symm%nsym
+        !   Mtmp(:,:,n)= symm%Msym(:,:,n)
+        !   Ttmp(:,n)  = symm%Tras(:,n)
+        !   Mtmp(:,:,n+symm%nsym)= symm%Msym(:,:,n)
+        !   Ttmp(:,n+symm%nsym)  = modulo(symm%Tras(:,n)+0.5d0,1.0d0)
+        !enddo
+        !deallocate(symm%Msym); deallocate(symm%Tras)
+        !symm%nsym=2*symm%nsym
+        !allocate(symm%Msym(3,3,symm%nsym))
+        !allocate(symm%Tras(3,symm%nsym))
+        !do n=1,symm%nsym
+        !   !do i=1,3 ; do j=1,3
+        !   !symm%Msym(i,j,n)= Mtmp(j,i,n)  !do I take the direct or the inverse rotation??
+        !   !enddo
+        !   !symm%Tras(i,n)  = Ttmp(i,n)
+        !   !enddo
+        !   symm%Msym(:,:,n)= Mtmp(:,:,n)  !do I take the direct or the inverse rotation??
+        !   symm%Tras(:,n)  = Ttmp(:,n)
+        !enddo
+        !deallocate(Mtmp); deallocate(Ttmp)
+        !allocate(band(2*kmesh%ktot, ek%nband_max))
+        !allocate(k_coord(3,2*kmesh%ktot))
+        !do i =1, kmesh%ktot
+        !   k_coord(:,i)=kmesh%k_coord(:,i)
+        !   k_coord(:,kmesh%ktot+i)=modulo(kmesh%k_coord(:,i)+0.5d0,1.0d0)
+        !   band(i,:)=ek%band(i,:)
+        !   band(kmesh%ktot+i,:)=ek%band(i,:)
+        !enddo
+        !kmesh%ktot=2*kmesh%ktot
+        !deallocate(ek%band,kmesh%k_coord)
+        !allocate(ek%band(kmesh%ktot,ek%nband_max))
+        !allocate(kmesh%k_coord(3,kmesh%ktot))
+        !do i=1,kmesh%ktot
+        !   kmesh%k_coord(:,i)=k_coord(:,i)
+        !   ek%band(i,:)=band(i,:)
+        !enddo
+        !deallocate(k_coord,band)
+
+     case('F  ') !face centered cell
+        write(*,*) 'face centering unit cell'
+        !STOP
+
+     case('H  ') !hexagonal cell?
+        write(*,*) 'hexagonal centering unit cell'
+        !STOP
+
+     case('CXY') !base centered along xy plane
+        write(*,*) 'base centering unit cell'
+        !STOP
+
+     case('CXZ') !base centered along xz plane
+        write(*,*) 'base centering unit cell'
+        !STOP
+
+     case('CYZ') !base centered along yz plane
+        write(*,*) 'base centering unit cell'
+        !STOP
+
+  end select
+
   100  FORMAT (I6)
   110  FORMAT (3(3f8.5/))
+!!!!!!!!!!!!!!!!!!!!!!!TEST
+!  do n=1,symm%nsym
+!     write(40,120) ((symm%Msym(j,i,n),i=1,3), symm%Tras(j,n),j=1,3)
+!  enddo
+!  120  FORMAT (3(4f8.5/))
+!  STOP
+!!!!!!!!!!!!!!!!!!!!!!!TEST END
 
 ! set up the symmetry group descriptors
   if ((kmesh%a(1).eq.kmesh%a(2)) .and. (kmesh%a(3).eq.kmesh%a(2))) then
@@ -817,27 +956,20 @@ end subroutine
 ! in the following subroutine
 !
 subroutine genredk (mysyst, symm, kmesh, redkm )
-  implicit none
+   implicit none
 !passed variables
-  character(len=*) :: mysyst   ! file name to open
-  type(symop) :: symm       ! contains symmetry operations
-  type(kpointmesh) :: kmesh ! irreducible k-mesh generated by Wien2k
-  type(kpointmesh) :: redkm ! reducible k-mesh generated here
+   character(len=*) :: mysyst   ! file name to open
+   type(symop) :: symm       ! contains symmetry operations
+   type(kpointmesh) :: kmesh ! irreducible k-mesh generated by Wien2k
+   type(kpointmesh) :: redkm ! reducible k-mesh generated here
 !internal variables
-  integer :: icrap, itmp,itmp2,ntmp, i,j,k, ik,isym
-  integer :: iexist, itest
-  integer :: redkpW2k
-  integer :: G0(3,7)
-  real :: rcrap
-  double precision, allocatable :: cktmp(:,:),cktmp2(:,:),cktmp3(:,:) ! temporary k-point coordinates arrays
-  double precision :: a, b, c, res
+   integer :: icrap, itmp,itmp2,ntmp, i,j,k, ik,isym
+   integer :: iexist, itest
+   integer :: G0(3,7)
+   real :: rcrap
+   double precision, allocatable :: cktmp(:,:),cktmp2(:,:),cktmp3(:,:) ! temporary k-point coordinates arrays
+   complex :: iu
 
-
-! READ THE NUMBER OF REDUCIBLE K-POINTS
-   !fundamentally redundant, the value is never used and for non-uniform grids it is 0
-   open(12,file=trim(adjustl(mysyst))//'.klist',status='old')
-   read(12,*)icrap,icrap,icrap,icrap,icrap, rcrap,rcrap,rcrap,redkpW2k  !not used at the moment
-   close(12)
 
    itmp=kmesh%ktot*symm%nsym ! number of k-points generated by the symmetry operations acting on the irreducible mesh
    itmp2=1
@@ -854,21 +986,6 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
 
       data G0/ &
      &         0,0,1, 0,1,0, 1,0,0, 0,1,1, 1,1,0, 1,0,1, 1,1,1 /
-   if (symm%lnsymmr) then
-   ! Check if any of the given k-points lies on the Bragg hyperplanes
-      do ik=1,kmesh%ktot  !loop over irredk
-         do i =1,7
-            a =real(G0(1,i))*(kmesh%k_coord(1,ik)-0.5d0*real(G0(1,i)))
-            b =real(G0(2,i))*(kmesh%k_coord(2,ik)-0.5d0*real(G0(2,i)))
-            c =real(G0(3,i))*(kmesh%k_coord(3,ik)-0.5d0*real(G0(3,i)))
-            res =a+b+c
-            if (abs(res)<1.0d-4) then
-            !   write(*,'(A,3f8.5,X,A,3I3)') 'k-point', kmesh%k_coord(:,ik), 'lies on the Bragg plane normal to',G0(:,i)
-               symm%lBZpnt=.true.
-            endif
-         enddo
-      enddo
-   endif
 
    cktmp = 0.0d0
    cktmp2= 0.0d0
@@ -987,14 +1104,13 @@ subroutine genredk (mysyst, symm, kmesh, redkm )
    redkm%ky = kmesh%ky+(1-mod(kmesh%ky,2))
    redkm%kz = kmesh%kz+(1-mod(kmesh%kz,2))
    redkm%ktot = max(redkm%kx*redkm%ky*redkm%kz,ik)
-   redkm%nkeq = kmesh%nkeq
 
-   !if ((ik .ne. redkm%ktot) .and. (.not. symm%lnsymmr) ) then
-   !   write(*,*) 'GENREDK: the number of k-points generated by symmetry is inconsistent',ik,redkm%ktot,redkm%kx,redkm%ky,redkm%kz
-   !   STOP
-   !endif
-   if (.not. allocated(redkm%mult))     allocate(redkm%mult(redkm%ktot))
-   if (.not. allocated(redkm%k_weight)) allocate(redkm%k_weight(redkm%ktot))
+   if ((ik .ne. redkm%ktot) .and. (.not. symm%lnsymmr) ) then
+      write(*,*) 'GENREDK: the number of k-points generated by symmetry is inconsistent',ik,redkm%ktot,redkm%kx,redkm%ky,redkm%kz
+      STOP
+   endif
+   if (.not. allocated(redkm%mult))     allocate(redkm%mult(1:redkm%ktot))
+   if (.not. allocated(redkm%k_weight)) allocate(redkm%k_weight(1:redkm%ktot))
    if (.not. allocated(redkm%k_coord))  allocate(redkm%k_coord(3,redkm%ktot))
    if (.not. allocated(redkm%k_id))     allocate(redkm%k_id(redkm%kx, redkm%ky, redkm%kz))
    redkm%k_coord=0.0d0
@@ -1041,8 +1157,14 @@ subroutine genredopt (redkm, symm, eirrk, eredk )
      allocate(eredk%Mopt(1:6,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
    if (.not. allocated(eredk%band)) &
      allocate(eredk%band(redkm%ktot,eredk%nband_max))
-   eredk%Mopt=0.d0
-   eredk%band=0.d0
+   if (.not. allocated(eredk%Z)) &
+     allocate(eredk%Z(redkm%ktot,eredk%nband_max))
+   if (.not. allocated(eredk%Im)) &
+     allocate(eredk%Im(redkm%ktot,eredk%nband_max))
+   eredk%Mopt(:,:,:,:)= 0.d0
+   eredk%band(:,:)   = 0.d0
+   eredk%Im(:,:)    = 0.d0
+   eredk%Z(:,:)    = 0.d0
    if (symm%lcubic) then
       allocate(osm1(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
       allocate(osm2(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
@@ -1142,6 +1264,8 @@ subroutine genredopt (redkm, symm, eirrk, eredk )
       isym= symm%symop_id(3,i)
       do nb=1,eredk%nband_max
          eredk%band(k,nb) = eirrk%band(ik,nb)
+         eredk%Im(k,nb) = eirrk%Im(ik,nb)
+         eredk%Z(k,nb) = eirrk%Z(ik,nb)
       enddo
    enddo
 
@@ -1155,13 +1279,14 @@ end subroutine
 ! into the interval (0, 2pi/a), taking care also of
 ! the band structure and of the optical matrix elements
 !
-subroutine trnredk (irrkm, redkm, eredk, symm)
+subroutine trnredk (irrkm, redkm, eredk, symm, algo)
   implicit none
 !passed variables
   type(kpointmesh) :: irrkm
   type(kpointmesh) :: redkm
   type(edisp) :: eredk
   type(symop) :: symm
+  type(algorithm) :: algo
 
 !local variables
   integer :: i, j, ik, ikx, iky, ikz, ibn, ibn2
@@ -1170,9 +1295,11 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   integer :: offdia !off-diagonal terms in the Mopt matrix?
   double precision :: dk(3), tmp1, tmp2
   double precision :: maxkx, maxky, maxkz
-  double precision, allocatable :: cktmp(:,:),cktmp2(:,:) ! temporary k-point coordinates arrays
-  double precision, allocatable :: bstmp(:,:),bstmp2(:,:) ! temporary bandstructure arrays
-  double precision, allocatable :: Motmp(:,:,:,:),Motmp2(:,:,:,:) ! temporary optical transition matrices
+  double precision, allocatable :: cktmp(:,:), cktmp2(:,:) ! temporary k-point coordinates arrays
+  double precision, allocatable :: bstmp(:,:), bstmp2(:,:) ! temporary bandstructure arrays
+  double precision, allocatable :: Imtmp(:,:), Imtmp2(:,:) ! temporary bandstructure arrays
+  double precision, allocatable :: Ztmp(:,:),  Ztmp2(:,:)  ! temporary bandstructure arrays
+  double precision, allocatable :: Motmp(:,:,:,:), Motmp2(:,:,:,:) ! temporary optical transition matrices
 
   if (symm%lcubic) then
      offdia=0  !no off-diagonal terms for cubic systems
@@ -1181,6 +1308,8 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   endif
   !allocation temporary arrays
   allocate(bstmp(redkm%ktot,eredk%nband_max)); allocate(bstmp2(redkm%ktot,eredk%nband_max))
+  allocate(Imtmp(redkm%ktot,eredk%nband_max)); allocate(Imtmp2(redkm%ktot,eredk%nband_max))
+  allocate(Ztmp(redkm%ktot,eredk%nband_max));  allocate(Ztmp2(redkm%ktot,eredk%nband_max))
   allocate(cktmp(3,redkm%ktot)); allocate(cktmp2(3,redkm%ktot))
   if (symm%lcubic) then
      allocate(Motmp (3,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
@@ -1189,12 +1318,12 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
      allocate(Motmp (6,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
      allocate(Motmp2(6,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
   endif
-  cktmp = 0.0d0
-  cktmp2= 0.0d0
-  bstmp = 0.0d0
-  bstmp2= 0.0d0
-  Motmp = 0.0d0
-  Motmp2= 0.0d0
+  cktmp = 0.0d0; cktmp2 = 0.0d0
+  bstmp = 0.0d0; bstmp2 = 0.0d0
+  Imtmp = 0.0d0; Imtmp2 = 0.0d0
+  Ztmp  = 0.0d0; Ztmp2  = 0.0d0
+  Motmp = 0.0d0; Motmp2 = 0.0d0
+
   do i=1,3
      tmp1 = 0.0d0
      do ik=2,redkm%ktot
@@ -1210,21 +1339,20 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   endif
 
   !translate the points in the negative BZ into the +'ve interval
-  do i = 1,3
-     do ik=1,redkm%ktot
-        if ((redkm%k_coord(1,ik) > 1.0d0) .or. (redkm%k_coord(2,ik) > 1.0d0) .or.(redkm%k_coord(3,ik) > 1.0d0)) &
-           STOP 'TRNREDK: something is seriously wrong here (e.g. improper traslation bigger than lattice constant)'
+  do ik=1,redkm%ktot
+     if ((redkm%k_coord(1,ik) > 1.0d0) .or. (redkm%k_coord(2,ik) > 1.0d0) .or.(redkm%k_coord(3,ik) > 1.0d0)) &
+        STOP 'TRNREDK: something is seriously wrong here (e.g. improper traslation bigger than lattice constant)'
+     do i = 1,3
         if (redkm%k_coord(i,ik)<0.0d0) then
            cktmp(i,ik)=mod(1.0d0+redkm%k_coord(i,ik),1.0d0)
-           do ibn =1,eredk%nband_max
-              bstmp(ik,ibn)=eredk%band(ik,ibn)
-           enddo
         else
            cktmp(i,ik)=mod(redkm%k_coord(i,ik),1.0d0)
-           do ibn =1,eredk%nband_max
-              bstmp(ik,ibn)=eredk%band(ik,ibn)
-           enddo
         endif
+     enddo
+     do ibn =1,eredk%nband_max
+        bstmp(ik,ibn)= eredk%band(ik,ibn)
+        Imtmp(ik,ibn)= eredk%Im(ik,ibn)
+        Ztmp(ik,ibn) = eredk%Z(ik,ibn)
      enddo
   enddo
 
@@ -1254,6 +1382,8 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   deallocate(redkm%k_coord)
   deallocate(redkm%k_id)
   deallocate(eredk%band)
+  deallocate(eredk%Im)
+  deallocate(eredk%Z)
   deallocate(eredk%Mopt)
 
   !!!!!!!!! K-POINT CLEAN UP !!!!!!!!!!!!!!!!
@@ -1282,8 +1412,12 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
            cktmp2(2,ik) = cktmp(2,itest)
            cktmp2(3,ik) = cktmp(3,itest)
            do ibn=1,eredk%nband_max
-              bstmp2(1,ibn)  = bstmp(1,ibn) !the gamma point was left out (min(itest)=2)
-              bstmp2(ik,ibn) = bstmp(itest,ibn)
+              bstmp2(1,ibn) = bstmp(1,ibn) !the gamma point was left out (min(itest)=2)
+              bstmp2(ik,ibn)= bstmp(itest,ibn)
+              Imtmp2(1,ibn) = Imtmp(1,ibn)
+              Imtmp2(ik,ibn)= Imtmp(itest,ibn)
+              Ztmp2(1,ibn)  = Ztmp(1,ibn)
+              Ztmp2(ik,ibn) = Ztmp(itest,ibn)
               do ibn2=eredk%nbopt_min,eredk%nbopt_max
                 if ((ibn>eredk%nbopt_max) .or. (ibn<eredk%nbopt_min)) cycle
                 Motmp2(1,1,ibn,ibn2) = Motmp(1,1,ibn,ibn2)
@@ -1312,13 +1446,20 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   nk  =  nkx*nky*nkz
   if (ik .ne. nk) then
      write(*,*) 'TRNREDK: the number of k-points after clean-up is inconsistent',ik, nk, nkx, nky, nkz
-     STOP
+     !do i=1,nk
+     !   write(777,*)i, cktmp2(1,i),cktmp2(2,i),cktmp2(3,i)
+     !enddo
+     !STOP
+     nk=ik
+     if (algo%ltetra) STOP 'TRNREDK: tetrahedron method can not be used'
   endif
 
   !allocate the final datastructure with the correct dimensions
   allocate(redkm%k_coord(3,nk))
   allocate(redkm%k_id(nkx,nky,nkz))
   allocate(eredk%band(nk,eredk%nband_max))
+  allocate(eredk%Im(nk,eredk%nband_max))
+  allocate(eredk%Z(nk,eredk%nband_max))
   if (symm%lcubic) then
      allocate(eredk%Mopt(3,nk,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
   else
@@ -1326,9 +1467,11 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
   endif
 
   !initialise the variables
-  eredk%band(:,:)    = 0.0d0
-  redkm%k_coord(:,:) = 0.0d0
   redkm%k_id(:,:,:)  = 0
+  redkm%k_coord(:,:) = 0.0d0
+  eredk%band(:,:)    = 0.0d0
+  eredk%Im(:,:)      = 0.0d0
+  eredk%Z(:,:)       = 0.0d0
   eredk%Mopt(:,:,:,:)= 0.0d0
 
 
@@ -1342,7 +1485,9 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
         redkm%k_coord(i,ik)=cktmp2(i,ik)
      enddo
      do ibn=1,eredk%nband_max
-        eredk%band(ik,ibn)=bstmp2(ik,ibn)
+        eredk%band(ik,ibn)= bstmp2(ik,ibn)
+        eredk%Im(ik,ibn)  = Imtmp2(ik,ibn)
+        eredk%Z(ik,ibn)   = Ztmp2(ik,ibn)
      enddo
   enddo
 
@@ -1358,49 +1503,53 @@ subroutine trnredk (irrkm, redkm, eredk, symm)
 
   deallocate (cktmp); deallocate (cktmp2)
   deallocate (bstmp); deallocate (bstmp2)
+  deallocate (Imtmp); deallocate (Imtmp2)
+  deallocate (Ztmp) ; deallocate (Ztmp2)
   deallocate (Motmp); deallocate (Motmp2)
 
+  if (algo%ltetra) then
   !the k-point coordinates are all scrambled together, one has to construct
   !some identifier, otherwise is is difficult to add the terminal k-point
   !(equivalent to the Gamma point if we were in 1d)
-  allocate(cktmp(3,nk))
-  maxkx=0.d0; maxky=0.d0; maxkz=0.d0;
-  do ik=1,nk
-     if(redkm%k_coord(1,ik) > maxkx) maxkx= redkm%k_coord(1,ik)
-     if(redkm%k_coord(2,ik) > maxky) maxky= redkm%k_coord(2,ik)
-     if(redkm%k_coord(3,ik) > maxkz) maxkz= redkm%k_coord(3,ik)
-  enddo
-
-  !construct a linearly spaced grid equivalent to the one given
-  ik=0
-  do ikx=nkx,1,-1
-     do iky=nky,1,-1
-        do ikz=nkz,1,-1
-           ik=ik+1
-           cktmp(1,ik)= maxkx-real(ikx-1)*(maxkx/real(nkx-1))
-           cktmp(2,ik)= maxky-real(iky-1)*(maxky/real(nky-1))
-           cktmp(3,ik)= maxkz-real(ikz-1)*(maxkz/real(nkz-1))
-        enddo
+     allocate(cktmp(3,nk))
+     maxkx=0.d0; maxky=0.d0; maxkz=0.d0;
+     do ik=1,nk
+        if(redkm%k_coord(1,ik) > maxkx) maxkx= redkm%k_coord(1,ik)
+        if(redkm%k_coord(2,ik) > maxky) maxky= redkm%k_coord(2,ik)
+        if(redkm%k_coord(3,ik) > maxkz) maxkz= redkm%k_coord(3,ik)
      enddo
-  enddo
 
-  itest=0
-  do ikx=1,nkx
-     do iky=1,nky
-        do ikz=1,nkz
-           itest=itest+1
-           do ik=1,nk
-              if ( ( abs(cktmp(1,itest) - redkm%k_coord(1,ik)) <1.0d-1/real(redkm%ktot) ) &
-              .and. (abs(cktmp(2,itest) - redkm%k_coord(2,ik)) <1.0d-1/real(redkm%ktot) ) &
-              .and. (abs(cktmp(3,itest) - redkm%k_coord(3,ik)) <1.0d-1/real(redkm%ktot) ) ) then
-                 redkm%k_id(ikx,iky,ikz)=ik
-              endif
+     !construct a linearly spaced grid equivalent to the one given
+     ik=0
+     do ikx=nkx,1,-1
+        do iky=nky,1,-1
+           do ikz=nkz,1,-1
+              ik=ik+1
+              cktmp(1,ik)= maxkx-real(ikx-1)*(maxkx/real(nkx-1))
+              cktmp(2,ik)= maxky-real(iky-1)*(maxky/real(nky-1))
+              cktmp(3,ik)= maxkz-real(ikz-1)*(maxkz/real(nkz-1))
            enddo
         enddo
      enddo
-  enddo
 
-  deallocate (cktmp)
+     itest=0
+     do ikx=1,nkx
+        do iky=1,nky
+           do ikz=1,nkz
+              itest=itest+1
+              do ik=1,nk
+                 if ( ( abs(cktmp(1,itest) - redkm%k_coord(1,ik)) <1.0d-1/real(redkm%ktot) ) &
+                 .and. (abs(cktmp(2,itest) - redkm%k_coord(2,ik)) <1.0d-1/real(redkm%ktot) ) &
+                 .and. (abs(cktmp(3,itest) - redkm%k_coord(3,ik)) <1.0d-1/real(redkm%ktot) ) ) then
+                    redkm%k_id(ikx,iky,ikz)=ik
+                 endif
+              enddo
+           enddo
+        enddo
+     enddo
+
+     deallocate (cktmp)
+  endif
 
   !!!!!!!!!!!!!!!!TEST
   !do ikx=1,nkx
@@ -1425,9 +1574,12 @@ end subroutine ! trnredk
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! GENFULKM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This subroutine translates the BZ from 0 to -kmax
-! to the interval [1-kmax,1] and takes care of the
-! bandstructure as well
+! This subroutine generates a reducible BZ that
+! extends the k-point interval from [0,1) to
+! [0,1] in each direction (i.e. if we were in
+! 1D this would mean to include the Gamma point
+! twice). This is necessary if we are going
+! to construct tetrahedra on this k-mesh.
 !
 subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
  implicit none
@@ -1466,26 +1618,32 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
   fulkm%alat = redkm%alat
   !if (.not. allocated(fulkm%mult))     allocate(fulkm%mult(1:fulkm%ktot))      *** TODO: REDUNDANT BECAUSE NEVER USED,
   !if (.not. allocated(fulkm%k_weight)) allocate(fulkm%k_weight(1:fulkm%ktot))      HENCE NOT ALLOCATED, CONSIDER REMOVING FROM DATATYPE ***
-  if (.not. allocated(fulkm%k_coord)) allocate(fulkm%k_coord(3,fulkm%ktot))
   if (.not. allocated(fulkm%k_id))    allocate(fulkm%k_id(1:fulkm%kx, 1:fulkm%ky, 1:fulkm%kz))
+  if (.not. allocated(fulkm%k_coord)) allocate(fulkm%k_coord(3,fulkm%ktot))
   !bandstructure allocation
-  if (.not. allocated(efulk%band)) allocate(efulk%band( fulkm%ktot, nband ))
+  if (.not. allocated(efulk%band)) allocate(efulk%band(fulkm%ktot, nband))
+  if (.not. allocated(efulk%Im))   allocate(efulk%Im(fulkm%ktot, nband))
+  if (.not. allocated(efulk%Z))    allocate(efulk%Z(fulkm%ktot, nband))
   if (.not. allocated(efulk%Mopt) .and. (offdia==0)) &
     allocate(efulk%Mopt(3,fulkm%ktot,efulk%nbopt_min:efulk%nbopt_max,efulk%nbopt_min:efulk%nbopt_max))
   if (.not. allocated(efulk%Mopt) .and. (offdia==1)) &
     allocate(efulk%Mopt(6,fulkm%ktot,efulk%nbopt_min:efulk%nbopt_max,efulk%nbopt_min:efulk%nbopt_max))
 
-  if (allocated(fulkm%k_coord)) fulkm%k_coord=0.d0
-  if (allocated(fulkm%k_id)) fulkm%k_id=0
-  if (allocated(efulk%band)) efulk%band(:,:)=0.d0
-  if (allocated(efulk%Mopt)) efulk%Mopt(:,:,:,:)=0.d0
+   fulkm%k_id(:,:,:) = 0
+   fulkm%k_coord(:,:)= 0.d0
+   efulk%band(:,:) = 0.d0
+   efulk%Im(:,:)  = 0.d0
+   efulk%Z(:,:)  = 0.d0
+   efulk%Mopt(:,:,:,:)=0.d0
 
   do ik=1,nk
      do i=1,3
         fulkm%k_coord(i,ik)=redkm%k_coord(i,ik)
      enddo
      do ibn=1,nband
-        efulk%band(ik,ibn)=eredk%band(ik,ibn)
+        efulk%band(ik,ibn)= eredk%band(ik,ibn)
+        efulk%Im(ik,ibn)  = eredk%Im(ik,ibn)
+        efulk%Z(ik,ibn)   = eredk%Z(ik,ibn)
      enddo
   enddo
 
@@ -1535,9 +1693,11 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
         fulkm%k_coord(2,ik)=fulkm%k_coord(2,fulkm%k_id(ikx,iky,nkz))
         fulkm%k_coord(3,ik)=fulkm%k_coord(3,fulkm%k_id(ikx,iky,nkz))+dk(3)
         do ibn=1,nband
-           efulk%band(ik,ibn)=efulk%band(fulkm%k_id(ikx,iky,1),ibn)
+           efulk%band(ik,ibn)= efulk%band(fulkm%k_id(ikx,iky,1),ibn)
+           efulk%Im(ik,ibn)  = efulk%Im(fulkm%k_id(ikx,iky,1),ibn)
+           efulk%Z(ik,ibn)   = efulk%Z(fulkm%k_id(ikx,iky,1),ibn)
+           if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
            do ibn2=efulk%nbopt_min,efulk%nbopt_max
-             if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
              efulk%Mopt(1,ik,ibn,ibn2)=efulk%Mopt(1,fulkm%k_id(ikx,iky,1),ibn,ibn2)
              efulk%Mopt(2,ik,ibn,ibn2)=efulk%Mopt(2,fulkm%k_id(ikx,iky,1),ibn,ibn2)
              efulk%Mopt(3,ik,ibn,ibn2)=efulk%Mopt(3,fulkm%k_id(ikx,iky,1),ibn,ibn2)
@@ -1559,9 +1719,11 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
         fulkm%k_coord(2,ik)=fulkm%k_coord(2,fulkm%k_id(ikx,nky,ikz))+dk(2)
         fulkm%k_coord(3,ik)=fulkm%k_coord(3,fulkm%k_id(ikx,nky,ikz))
         do ibn=1,nband
-           efulk%band(ik,ibn)=efulk%band(fulkm%k_id(ikx,1,ikz),ibn)
+           efulk%band(ik,ibn)= efulk%band(fulkm%k_id(ikx,1,ikz),ibn)
+           efulk%Im(ik,ibn)  = efulk%Im(fulkm%k_id(ikx,1,ikz),ibn)
+           efulk%Z(ik,ibn)   = efulk%Z(fulkm%k_id(ikx,1,ikz),ibn)
+           if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
            do ibn2=efulk%nbopt_min,efulk%nbopt_max
-             if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
              efulk%Mopt(1,ik,ibn,ibn2)=efulk%Mopt(1,fulkm%k_id(ikx,1,ikz),ibn,ibn2)
              efulk%Mopt(2,ik,ibn,ibn2)=efulk%Mopt(2,fulkm%k_id(ikx,1,ikz),ibn,ibn2)
              efulk%Mopt(3,ik,ibn,ibn2)=efulk%Mopt(3,fulkm%k_id(ikx,1,ikz),ibn,ibn2)
@@ -1583,9 +1745,11 @@ subroutine genfulkm( redkm, fulkm, eredk, efulk, symm)
         fulkm%k_coord(2,ik)=fulkm%k_coord(2,fulkm%k_id(nkx,iky,ikz))
         fulkm%k_coord(3,ik)=fulkm%k_coord(3,fulkm%k_id(nkx,iky,ikz))
         do ibn=1,nband
-           efulk%band(ik,ibn)=efulk%band(fulkm%k_id(1,iky,ikz),ibn)
+           efulk%band(ik,ibn)= efulk%band(fulkm%k_id(1,iky,ikz),ibn)
+           efulk%Im(ik,ibn)  = efulk%Im(fulkm%k_id(1,iky,ikz),ibn)
+           efulk%Z(ik,ibn)   = efulk%Z(fulkm%k_id(1,iky,ikz),ibn)
+           if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
            do ibn2=efulk%nbopt_min,efulk%nbopt_max
-             if ((ibn>efulk%nbopt_max) .or. (ibn<efulk%nbopt_min)) cycle
              efulk%Mopt(1,ik,ibn,ibn2)=efulk%Mopt(1,fulkm%k_id(1,iky,ikz),ibn,ibn2)
              efulk%Mopt(2,ik,ibn,ibn2)=efulk%Mopt(2,fulkm%k_id(1,iky,ikz),ibn,ibn2)
              efulk%Mopt(3,ik,ibn,ibn2)=efulk%Mopt(3,fulkm%k_id(1,iky,ikz),ibn,ibn2)
@@ -1831,7 +1995,7 @@ subroutine gentetra (algo, mesh, thdr )
       endif
 ! now tell us the result:
       write(*,15) ntet,mesh%kx*mesh%ky*mesh%kz
-   15 format(1x,'GENTETRA: found ',i6,' inequivalent tetrahedra from ',i8,' k-points' )
+   15 FORMAT(1x,'GENTETRA: found ',i6,' inequivalent tetrahedra from ',i8,' k-points' )
 
 !!!!!!! COMPUTE THE TETRAHEDRON'S VOLUME !!!!!!!!!!
 ! The expression for the volume was retrieved on http://mathworld.wolfram.com/Tetrahedron.html
@@ -2192,20 +2356,10 @@ subroutine interptra_re (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
    integer :: itmp
 
 
- !!!!!!!!!!!!!!!!test
-  ! select type(resp)
-  !    type is(dp_resp)
-  !    write (*,*) 'dp_resp type'
-  !    type is(dp_respinter)
-  !    write (*,*) 'dp_respinter type'
-  ! end select
-  ! STOP
- !!!!!!!!!!!!!!!!test end
-
-   !********************
+   !*******************************************
    ! At the beginning this is almost a literal
    ! copy from the INTETRA routine
-   !********************
+   !*******************************************
 ! SANITY CHECK
    if (mesh%ktot<4) then
       write(*,*)'INTERPTRA: tetrahedron method fails (number of k-points < 4)',mesh%ktot
@@ -2247,9 +2401,6 @@ subroutine interptra_re (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
       ec(2) = ek%band(iq(2),nb)
       ec(3) = ek%band(iq(3),nb)
       ec(4) = ek%band(iq(4),nb)
-      ! set the value of the scattering rate for the specific temperature, band
-      resp%gamma=real(sct%gam(iT,nb)*sct%z,8)
-      if (present(hpresp)) hpresp%gamma=real(sct%gam(iT,nb)*sct%z,16)
 
       ! sort the energies at the four corners (array ec) into array es
       do i=1,4
@@ -2351,6 +2502,16 @@ subroutine interptra_re (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
       do ix=1,nalpha
          do iy=ix,nalpha
             do i=1,4 !linear interpolation within the  tetrahedron
+               ! set the value of the scattering rate for the specific temperature, band
+               if (allocated(sct%ykb)) then
+                  resp%gamma=real(ek%z(thdr%idtet(i,itet),nb)*(sct%gam(iT)+sct%ykb(iT,thdr%idtet(i,itet),nb)),8)
+                  if (present(hpresp)) hpresp%gamma=real(ek%z(thdr%idtet(i,itet),nb)*(sct%gam(iT)+ &
+                                                    sct%ykb(iT,thdr%idtet(i,itet),nb)),16)
+               else
+                  resp%gamma=real(ek%z(thdr%idtet(i,itet),nb)*sct%gam(iT),8)
+                  if (present(hpresp)) hpresp%gamma=real(ek%z(thdr%idtet(i,itet),nb)*sct%gam(iT),16)
+
+               endif
                if (lBoltz) then
                   ! no interband transitions for Boltzmann response
                   resp%s(nb,ix,iy) = resp%s(nb,ix,iy) + (real(w(i),8)*resp%s_tmp(i,nb,ix,iy))/(resp%gamma)
@@ -2406,7 +2567,7 @@ subroutine interptra_re (iT, itet, mu, nalpha, lBoltz, mesh, ek, thdr, sct, resp
                      hpresp%sB(nb,ix,iy) = hpresp%sB(nb,ix,iy) + &
                                          (real(w(i),16)*hpresp%sB_tmp(i,nb,ix,iy))*betaQ/(hpresp%gamma**2)
                      hpresp%aB(nb,ix,iy) = hpresp%aB(nb,ix,iy) + &
-                                         (real(w(i),16)*hpresp%aB_tmp(i,nb,ix,iy))*betaQ/(hpresp%gamma**2)
+                                         (real(w(i),16)*hpresp%aB_tmp(i,nb,ix,iy))*(betaQ/hpresp%gamma)**2
                   endif
                enddo
 

@@ -3,10 +3,10 @@ SHELL = /bin/bash
 PROG = linretrace
 
 INSTALL_DIR = ../bin
-OBJECTS = types.o estruct.o params.o mpi_org.o \
-					estruct.o root.o response.o main.o hdf5_wrapper.o
 
 DIGAMMA = ./digamma/cern_digamma.a
+OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
+				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o
 
 include ../make_include
 
@@ -39,8 +39,10 @@ $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 %.o: %.F90
 	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
-estruct.o: params.o types.o
-main.o: params.o mpi_org.o types.o estruct.o response.o root.o
+nrutil.o: nrtype.o
+mymath.o: params.o nrtype.o nrutil.o
+estruct.o: params.o types.o mymath.o
+main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
