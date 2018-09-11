@@ -399,15 +399,21 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, occ_tot)
         if (ek%band(ik,iband) .gt. 90.0d0) cycle
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
-        eps=sct%z*ek%band(ik,iband)-mu
+        !eps=se%z(ik,iband)*(ek%band(ik,iband)+se%Re(ik,iband))-mu
+        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
 
         if (eps.lt.0.d0) then ! occupied state
            ninteger=ninteger+1.q0
 
-           if (sct%gam(iT,iband).eq.0.d0) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=1.q0-FERMIQ(eps,beta)
+           else if (allocated(sct%ykb)) then
+              z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) + &
+                         ciQ*real(eps*beta2p,16) ! eps --> -eps
+              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            else
-              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) + ciQ*real(eps*beta2p,16) ! eps --> -eps
+              z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) + &
+                         ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            endif
 
@@ -425,10 +431,15 @@ subroutine varoccQ(mu, iT, ek, sct, mesh, occ_tot)
 
         else ! unoccupied state
 
-           if (sct%gam(iT,iband).eq.0.d0) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=FERMIQ(eps,beta)
+           else if (allocated(sct%ykb)) then
+              z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) - &
+                         ciQ*real(eps*beta2p,16) ! eps
+              tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0 !
            else
-              z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps
+              z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) - &
+                         ciQ*real(eps*beta2p,16) ! eps
               tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0 !
            endif
 
@@ -488,7 +499,7 @@ subroutine varoccQ_tet(mu, iT, ek, sct, thdr, target_zero)
   real(16) :: target_tet(4), target_intp
   real(8) :: eps
   integer :: iband, ik
-  integer :: itet
+  integer :: itet, kp
   real(16) :: cutQ
   !more sophistication
   integer(8) ::IEXP
@@ -507,19 +518,26 @@ subroutine varoccQ_tet(mu, iT, ek, sct, thdr, target_zero)
         ninteger=0.q0
         nbig=0.q0
         nsmall=0.q0
+        kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (ek%band(kp,iband) .gt. 90.0d0) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
-           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+           !eps=se%z(thdr%idtet(ik,itet),iband)*(ek%band(thdr%idtet(ik,itet),iband)+se%Re(thdr%idtet(ik,itet),iband))-mu
+           eps=(ek%z(kp,iband)*ek%band(kp,iband))-mu
 
            if (eps.lt.0.d0) then ! occupied state
               ninteger=ninteger+1.q0
 
-              if (sct%gam(iT,iband).eq.0.d0) then
+              if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
                  tmp=1.q0-FERMIQ(eps,beta)
+              else if (allocated(sct%ykb)) then
+                 z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) + &
+                          ciQ*real(eps*beta2p,16) ! eps --> -eps
+                 tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
               else
-                 z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) + ciQ*real(eps*beta2p,16) ! eps --> -eps
+                 z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) + &
+                          ciQ*real(eps*beta2p,16) ! eps --> -eps
                  tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
               endif
 
@@ -537,10 +555,15 @@ subroutine varoccQ_tet(mu, iT, ek, sct, thdr, target_zero)
 
            else ! unoccupied state
 
-              if (sct%gam(iT,iband).eq.0.d0) then
+              if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
                  tmp=FERMIQ(eps,beta)
+              else if (allocated(sct%ykb)) then
+                 z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) - &
+                          ciQ*real(eps*beta2p,16) ! eps
+                 tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0
               else
-                 z=0.5q0 + real(sct%z*sct%gam(iT,iband)*beta2p,16) - ciQ*real(eps*beta2p,16) ! eps
+                 z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) - &
+                          ciQ*real(eps*beta2p,16) ! eps
                  tmp=(0.5q0+aimag(wpsipghp(z,0))/piQ) ! >0
               endif
 

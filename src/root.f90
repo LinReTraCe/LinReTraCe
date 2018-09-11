@@ -308,15 +308,19 @@ subroutine varocc(mu, iT, ek, sct, mesh)
         if (ek%band(ik,iband) .gt. 90.0d0) cycle
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
-        eps=sct%z*ek%band(ik,iband)-mu
+        !eps=se%z(ik,iband)*(ek%band(ik,iband)+se%Re(ik,iband))-mu
+        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
 
         if (eps .lt. 0.d0) then ! occupied state
            ninteger=ninteger+1.d0
 
-           if (sct%gam(iT,iband).eq.0.d0) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=1.d0-FERMI(eps,beta)
+           else if (allocated(sct%ykb)) then
+              z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))+ci*eps)*beta2p ! eps --> -eps
+              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps
+              z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)+ci*eps)*beta2p ! eps --> -eps
               tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            endif
 
@@ -328,10 +332,13 @@ subroutine varocc(mu, iT, ek, sct, mesh)
 
         else ! unoccupied state
 
-           if (sct%gam(iT,iband).eq.0.d0) then
+           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=FERMI(eps,beta)
+           else if (allocated(sct%ykb)) then
+              z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))-ci*eps)*beta2p ! eps 
+              tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
            else
-              z=0.5d0 + (sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps
+              z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)-ci*eps)*beta2p ! eps 
               tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
            endif
 
@@ -374,7 +381,7 @@ subroutine varocc_tet(mu, iT, ek, sct, thdr)
   complex(8) :: z
   real(8) :: nsmall, nbig, ninteger, eps, tmp
   real(8) :: occ_loc, occ_intp, occ_tet(4)
-  integer :: iband, ik, itet
+  integer :: iband, ik, itet, kp
 !external variables
   complex(8), external :: wpsipg
 
@@ -386,19 +393,24 @@ subroutine varocc_tet(mu, iT, ek, sct, thdr)
         ninteger=0.d0
         nbig=0.d0
         nsmall=0.d0
+        kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (ek%band(kp,iband) .gt. 90.0d0) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
-           eps=sct%z*ek%band(thdr%idtet(ik,itet),iband)-mu
+           !eps=se%z(thdr%idtet(ik,itet),iband)*(ek%band(thdr%idtet(ik,itet),iband)+se%Re(thdr%idtet(ik,itet),iband))-mu
+           eps=(ek%z(kp,iband)*ek%band(kp,iband))-mu
 
            if (eps .lt. 0.d0) then ! occupied state
               ninteger=ninteger+1.d0
 
-              if (sct%gam(iT,iband).eq.0.d0) then
+              if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
                  tmp=1.d0-FERMI(eps,beta)
+              else if (allocated(sct%ykb)) then
+                 z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) + ci*eps ) * beta2p ! eps --> -eps
+                 tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
               else
-                 z=0.5d0 + ( sct%z*sct%gam(iT,iband) + ci*eps ) * beta2p ! eps --> -eps
+                 z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) + ci*eps ) * beta2p ! eps --> -eps
                  tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
               endif
 
@@ -410,10 +422,13 @@ subroutine varocc_tet(mu, iT, ek, sct, thdr)
 
            else ! unoccupied state
 
-              if (sct%gam(iT,iband).eq.0.d0) then
+              if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
                  tmp=FERMI(eps,beta)
+              else if (allocated(sct%ykb)) then
+                 z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) - ci*eps ) * beta2p ! eps 
+                 tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
               else
-                 z=0.5d0 + ( sct%z*sct%gam(iT,iband) - ci*eps ) * beta2p ! eps
+                 z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) - ci*eps ) * beta2p ! eps 
                  tmp=(0.5d0+aimag(wpsipg(z,0))/pi) ! >0
               endif
 

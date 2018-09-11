@@ -1,5 +1,7 @@
 FC = mpif90
-FFLAGS = -O3 -funroll-loops -ffast-math #-march=native -flto -fstack-arrays  # gfortran production run
+#FFLAGS = -O3 -funroll-loops -ffast-math #-march=native -flto -fstack-arrays  # gfortran production run
+FFLAGS = -O3 -funroll-loops -ffast-math -fbacktrace -fcheck=all  # gfortran debug
+#FFLAGS = -O3 -funroll-loops -ffast-math -fbacktrace -fcheck=all -pg  # gfortran profiling
 FPPFLAGS = -DMPI
 
 LAPACK= -L/home/maggio/lib/lapack/lapack-3.7.1/ -llapack

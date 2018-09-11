@@ -52,6 +52,7 @@ program gtmain ! GammaTransport
 use Mparams
 use Mtypes
 use Mmpi_org
+use Mmymath
 use Mestruct!, only: delta,gam,gmax,iband_valence,gminall,emin,emax!,ek,vka,vkab,zqp ! ek,zqp,vka,vkab needed for testing only!!! move that
 use Mresponse
 use Mroot
@@ -78,7 +79,7 @@ implicit none
    !! is negligible
 
 real(8) :: mu,mutmp !chemical potential
-integer :: nT,iT,ierr,imeth,iband,iflag_dmudt,imurestart,niitact
+integer :: nT,iT,ierr,imeth,iflag_dmudt,imurestart,niitact
 real(16) :: test0,test1,ndevactQ
 real(8) :: criterion,ndevact
 real(8) :: dmudT ! used only for gamma=0.d0
@@ -87,7 +88,8 @@ real(8), allocatable :: drhodT(:)
 real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
 integer :: idum
 integer :: nk, nband !local values that are assigned depending on the algorithm
-integer :: ig
+integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
+integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 call mpi_gen(small,threshold,smallQ,thresholdQ)
@@ -112,7 +114,7 @@ endif
      algo%ldebug=.true.
      !algo%ldebug=.false.
 
-!read in electronic structure and matrix elements
+!generate electronic structure and matrix elements
 call estruct_init(algo, kmesh, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
 if(.not.(algo%lBfield)) then
    write(*,*)'LINRETRACE will not perform calculations with magnetic field'
@@ -131,11 +133,29 @@ else
    if (myid.eq.master)  write(*,*)'mu read from file= ',mu
 endif
 
-!call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
-!!!!!!!!!!!!!!!!!!!!TEST_MPI
-!write(*,*)'proc #', myid,'mu',mu
-!STOP
-!!!!!!!!!!!!!!!!!!!!TEST_MPI END
+if (algo%ltbind) then
+   nk=kmesh%ktot
+   nband=eirrk%nband_max
+   ib=nband
+   !search for the valence band index, direct band gap only 
+   do while(eirrk%band(1,ib) > mu)
+      ib=ib-1
+   enddo 
+   vb=ib
+else
+   if (algo%ltetra) then
+      nk=fulkm%ktot
+   else
+      nk=redkm%ktot
+   endif
+   nband=eredk%nband_max
+   ib=nband
+   !search for the valence band index, direct band gap only 
+   do while(eredk%band(1,ib) > mu)
+      ib=ib-1
+   enddo 
+   vb=ib
+endif
 
 ! construct temperature grid
 sct%nT=int((sct%Tmax-sct%Tmin)/sct%dT)+1
@@ -144,41 +164,58 @@ allocate(sct%mu(sct%nT))
 do iT=1,sct%nT
    sct%TT(iT)=real(iT-1,8)*sct%dT+sct%Tmin
 enddo
+
 ! construct scattering rate temperature dependence
-! NOTE: the orbital dependence in the coefficients has been omitted for the time being
-if (algo%ltbind) then
-   nband=eirrk%nband_max
-   nk=kmesh%ktot
-   allocate(sct%gam(sct%nT,eirrk%nband_max))
-else
-   if (algo%ltetra) then
-      nk=fulkm%ktot
-   else
-      nk=redkm%ktot
-   endif
-   nband=eredk%nband_max
-   allocate(sct%gam(sct%nT,eredk%nband_max))
-endif
+! (these variables are in the scatrate type)  
+! k-point and band dependence are included in the 
+! intrinsic scattering rate ykb (it inherits them from Im{Sigma})
+! whereas sct%gam has only T dependence
+
+allocate(sct%gam(sct%nT)) ! always there, value read from input file
+if (algo%ldmft) allocate(sct%ykb(sct%nT, nk, nband))
 
 sct%gam=0.d0
-do iband=1,nband
-   do iT=1,sct%nT
-      do ig=0,sct%ng
-         sct%gam(iT,iband)=sct%gam(iT,iband) + sct%gc(ig)*(sct%TT(iT)**ig)
-      enddo
-   enddo !it
-enddo !iband
-
-if (myid.eq.master) then
-!!!!!!!!!!TEST
-  !write T-dependent GAMMA to file
-   open(10,file='GamT.dat', status='unknown')
-   do iT=sct%nT,1,-1
-      write(10,'(100E20.12)')sct%TT(iT),(sct%gam(iT,iband),iband=1,nband)
+do iT=1,sct%nT
+   do ig=0,sct%ng
+      sct%gam(iT)=sct%gam(iT) + sct%gc(ig)*(sct%TT(iT)**ig)
    enddo
-   close(10)
+enddo 
+
+!intrinsic scattering rate
+!trivial T-dependence at the moment
+if (algo%ldmft) then
+   sct%ykb=0.0d0
+   if (algo%ltetra) then !full mesh
+      do iT=1,sct%nT
+         do ik=1,nk ; do iband=1,nband
+            sct%ykb(iT,ik,iband)=efulk%Im(ik,iband)
+         enddo ; enddo
+      enddo
+   else if(algo%ltbind) then   !irreducible mesh (I don't think that this case is ever given)
+      do iT=1,sct%nT
+         do ik=1,nk ; do iband=1,nband
+            sct%ykb(iT,ik,iband)=eirrk%Im(ik,iband)
+         enddo ; enddo
+      enddo
+   else                  !reducible mesk
+      do iT=1,sct%nT
+         do ik=1,nk ; do iband=1,nband
+            sct%ykb(iT,ik,iband)=eredk%Im(ik,iband)
+         enddo ; enddo
+      enddo
+   endif
+endif
+
+!!!!!!!!!!TEST
+!if (myid.eq.master) then
+  !write T-dependent GAMMA to file
+  ! open(10,file='GamT.dat', status='unknown')
+  ! do iT=sct%nT,1,-1
+  !    write(10,'(100E20.12)')sct%TT(iT),sct%gam(iT)
+  ! enddo
+  ! close(10)
+!endif !master node
 !!!!!!!!!!TEST END
-endif !master node
 
 if (nproc >1) then
 
@@ -239,11 +276,15 @@ endif !master
 
 !find minimal gamma for lowest T. If = 0 then we can do (linear) extrapolation... if gam=O(T,T^2) ... strictly not linear...
 gminall=10.d0
-do iT=1,1 ! lowest T
+if (algo%ldmft) then
    do iband=1,nband
-      if (sct%gam(iT,iband).lt.gminall) gminall=sct%gam(iT,iband)
+      if ((sct%ykb(1,1,iband)<gminall).and.(sct%ykb(1,1,iband)>0.0d0)) &
+             gminall=sct%ykb(1,1,iband)
    enddo
-enddo
+else
+gminall=sct%gam(1)
+endif
+
 
 iflag_dmudt=0 !!!what is this for?
 
@@ -288,12 +329,9 @@ do iT=sct%nT,1,-1
    T=sct%TT(iT)
    beta=1.d0/(kB*T)
    beta2p=beta/(2.d0*pi)
-!determine maximal gamma of bands involved in gap
-   !gmax=max(gam(it,iband_valence),gam(it,iband_valence+1))
-   gmax=max(sct%gam(iT,1),sct%gam(iT,2))
-   !eM: I'm circumventing the problem here, since there is no band dependence on
-   ! gamma... a compromise could be to have different values of gamma for bands
-   ! above or below the VBM (that can be found already in dos%vbm)
+!determine maximal gamma of bands involved in gap (if there is a band dependence)
+   gmax=sct%gam(iT)
+   if (algo%ldmft) gmax=max(sct%ykb(iT,1,vb),sct%ykb(iT,1,vb+1))
    criterion=1.1d0/beta+0.64d0*gmax ! considerations of FWHM, etc...
    !write(*,*) 'criterion/1', criterion
    !write(*,*) 'gap', dos%gap
@@ -351,7 +389,7 @@ do iT=sct%nT,1,-1
             endif
          else   ! further refinement
             imeth=2
-            if (myid.eq.master) write(*,*) 'SUPER QUAD'
+            !if (myid.eq.master) write(*,*) 'SUPER QUAD'
             if (algo%ltbind) then
                call find_muQ(mu,iT,sct%nT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra)! full QUAD on particle number
             else
@@ -452,8 +490,13 @@ do iT=sct%nT,1,-1
    sct%mu(iT) = mu
 
    if ((myid == master) .and. (iT == sct%nT)) then
-      !call intldos(iT, dos, redkm, eredk, sct)
-      call intetra(fulkm, thdr, dos, sct%z*efulk%band, efulk%nband_max)
+      if (algo%ltbind) then
+         call intldos(iT, dos, kmesh, eirrk, sct)
+         !call intetra(kmesh, thdr, dos, selfnrg%z*eirrk%band, eirrk%nband_max)
+      else
+         call intldos(iT, dos, redkm, eredk, sct)
+         !call intetra(fulkm, thdr, dos, selfnrg%z*efulk%band, efulk%nband_max)
+      endif
       do ig=1,size(dos%enrg)
          dos%dos(ig)=2.0d0*dos%dos(ig)
          dos%nos(ig)=2.0d0*dos%nos(ig)

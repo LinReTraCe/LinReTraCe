@@ -7,6 +7,7 @@ module Mtypes
     logical :: lw2k         ! use Wien2k input
     logical :: loptic       ! use also optic matrix elements
     logical :: lBfield      ! calculations in the presence of a magnetic field?
+    logical :: ldmft        ! k-point and band dependent renormalisation factor and scattering rate provided
     logical :: lsymm        ! reads in the full BZ or generates it using symmetry operations?
     integer :: imurestart   ! restart with a privided value of the chemical potential?
     character(10) :: mysyst ! label that is used to open the Wien2k files
@@ -23,7 +24,6 @@ module Mtypes
     integer :: ktot                               ! total number of k-points (which varies depending on the sampling method for the BZ)
     double precision :: alat                      ! lattice constant
     double precision :: a(3)                      ! direct lattice vectors in units of ALAT. needed for derivatives --> units of vk's... ???
-    integer :: nkeq                               ! number of direction with the same number of k-point (nkeq=3 uniform k-mesh)
   end type
 
   type edisp
@@ -36,9 +36,11 @@ module Mtypes
     double precision :: efer                          ! Fermi energy
     double precision :: nelect                        ! number of electrons (provided from inputfile at first iteration)
     double precision :: occ_tot                       ! number of electrons computed for the updated value of chemical potential (non-eq value)
+    double precision :: ztmp                          ! (constant) renormalisation factor -only used if algo%ldmft=.false.-
     double precision, allocatable :: band(:,:)        ! band(k_id,nband) contains nband_max dispersion curves, if for some k-points
                                                       ! fewer bands are computed, then the missing elements are set to 1000 (arbitrarily large value)
-    double precision, allocatable :: occ(:,:)         ! occ(k_id,nband) contains the occupation numbers
+    double precision, allocatable :: Z(:,:)           ! renormalisation factor 1/z= 1 - (d/dw)S_{k,n}(w) @ w=0
+    double precision, allocatable :: Im(:,:)          ! =-imaginary part of the self-energy at zero frequency
     double precision, allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
     double precision, allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
   end type
@@ -53,7 +55,7 @@ module Mtypes
     logical :: ltetrag
     logical :: lorthor
     logical :: lnsymmr                           ! .true. for nonsymmorphic space groups
-    logical :: lBZpnt
+    character(3) :: cntr
   end type
 
   type tetramesh
@@ -77,25 +79,24 @@ module Mtypes
   end type
 
   type scatrate
-    !temperature grid
     integer :: nT                           ! number of points in the temperature window
     double precision :: Tmin                ! bottom of the temperature window
     double precision :: Tmax                ! top of the temperature window
     double precision :: dT                  ! temperature interval
     double precision, allocatable :: TT(:)  ! temperature grid
     double precision, allocatable :: mu(:)  ! chemical potential (temperature dependent)
-    !double precision, allocatable :: drhodT(:) ! 1st derivative of rho w.r.t. T
     double precision, allocatable :: d1(:)  ! square of the 1st derivative of sigma
     double precision, allocatable :: d2(:)  ! product of the 2nd derivative times sigma
     double precision, allocatable :: d0(:)  ! linear combination of the two above, whose zero corresponds to T*
     double precision :: Tstar               ! temperature for which (d^2 rho)/(d beta^2)=0
                                             ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
     double precision :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
-    double precision :: z                   ! renormalisation factor (read from file)
     !gamma
     integer :: ng                           ! degree of the polynomial temperature dependence of gamma
     double precision, allocatable :: gc(:)  ! coefficient of the polynomial temperature dependence of gamma
-    double precision, allocatable :: gam(:,:)  ! temparature and band dependent scattering rate
+    double precision, allocatable :: gam(:) ! temparature dependent scattering rate (extrinsic scattering events), defects
+    double precision, allocatable :: ykb(:,:,:) ! intrinsic scattering rate ykb(T,k,band)
+
   end type
 
   ! DOUBLE PRECISION

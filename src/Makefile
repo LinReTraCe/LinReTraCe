@@ -3,8 +3,8 @@ SHELL = /bin/bash
 PROG = linretrace
 
 INSTALL_DIR = ../bin
-OBJECTS = types.o estruct.o params.o mpi_org.o \
-					estruct.o root.o rootQ.o response.o main.o
+OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
+				mymath.o estruct.o root.o rootQ.o response.o main.o
 
 include ../make_include
 
@@ -34,8 +34,10 @@ $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 %.o: %.F90
 	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) -c $< -o $@
 
-estruct.o: params.o types.o
-main.o: params.o mpi_org.o types.o estruct.o response.o root.o rootQ.o
+nrutil.o: nrtype.o
+mymath.o: params.o nrtype.o nrutil.o
+estruct.o: params.o types.o mymath.o 
+main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o rootQ.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
