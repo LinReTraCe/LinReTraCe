@@ -1,12 +1,15 @@
 SHELL = /bin/bash
 
 PROG = linretrace
+BZ   = setupbz
 
 INSTALL_DIR = ../bin
 
 DIGAMMA = ./digamma/cern_digamma.a
 OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
 				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o
+
+BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o
 
 include ../make_include
 
@@ -22,7 +25,7 @@ include ../make_include
 LIBS= -lquadmath $(LAPACK) $(BLAS)
 
 .PHONY: all
-all: $(DIGAMMA) $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG)
+all: $(DIGAMMA) $(INSTALL_DIR) $(INSTALL_DIR)/$(PROG) $(INSTALL_DIR)/$(BZ)
 
 $(DIGAMMA):
 	if [ ! -f $(DIGAMMA) ]; then cd digamma; make all; fi
@@ -32,6 +35,9 @@ $(INSTALL_DIR):
 
 $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 	$(FC) $^ -o $@ $(FFLAGS) $(LIBS) $(HDF5) $(DIGAMMA)
+
+$(INSTALL_DIR)/$(BZ): $(BZOBJECTS)
+	$(FCDG) $^ -o $@ $(FFLAGS) $(HDF5)
 
 %.o: %.f90
 	$(FC) $(FFLAGS) $(LIBS) $(HDF5) -c $< -o $@
@@ -47,6 +53,8 @@ mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
 
+setupbz.o: params.o estruct.o types.o
+
 .PHONY: clean
 clean :
 	rm -f *.o *.mod
@@ -55,3 +63,4 @@ clean :
 pristine:
 	rm -f *.o *.mod
 	rm -f $(INSTALL_DIR)/$(PROG)
+	rm -f $(INSTALL_DIR)/$(BZ)

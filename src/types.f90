@@ -46,7 +46,7 @@ module Mtypes
   end type
 
   type symop
-    integer, allocatable :: symop_id(:,:)        ! symop_id(3,irrkp*nsym) this counter tells me if for a given k-point (2nd entry) a given symmetry operation (3rd entry)
+    integer, allocatable :: symop_id(:,:)        ! symop_id(2,redkp) this counter tells me if for a given k-point the corresponding irreducible kpoint (1) and the required symmetry operation (2)
                                                  ! produces a new element or a redundant one (1 or 0 in the 1st entry)
     integer :: nsym                              ! number of symmetry operations
     double precision, allocatable :: Msym(:,:,:) ! Msym(3,3,nsym) matrix containing the 3x3 symmetry transformations

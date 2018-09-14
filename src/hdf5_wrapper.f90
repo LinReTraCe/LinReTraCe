@@ -175,15 +175,17 @@ module hdf5_wrapper
     call h5fclose_f(ifile, hdf_err)
   end subroutine hdf5_close_file
 
-  subroutine hdf5_create_group(ifile, gname)
+  subroutine hdf5_create_group(ifile, gname, iforce_error)
     integer(hid_t), intent(in)             :: ifile
     character(len=*), intent(in)           :: gname
+    logical, intent(in), optional          :: iforce_error
 
     integer(hid_t) :: file_id
     integer(hid_t) :: grp_parent_id, grp_id
 
     integer :: grpcnt
     integer :: pos,i
+    logical :: force_error
     character(len=50), allocatable :: ngroup(:)
     character(len=150) :: strim
 
@@ -212,28 +214,63 @@ module hdf5_wrapper
         grpcnt = grpcnt + 1
       endif
     enddo
+
+    ! if we call create_group from the outside we call errors if we stumble upon
+    ! existing groups
+    if (present(iforce_error)) then
+      if (iforce_error) then
+        force_error = .true.
+      else
+        force_error = .false.
+      endif
+    else
+      force_error = .true.
+    endif
     ! now we have the number of groups (grpcnt)
     ! the according group names are stored in the array ngroup(1...grpcnt)
     call h5eset_auto_f(0,hdf_err) ! deactivate error printing
     grp_parent_id = ifile ! for the first entry into the file
-    do i=1,grpcnt
-      ! check for existance
-      ! this check causes all the unecessary error messages
-      ! I tried doing it with h5oexists_by_name_f, but there one
-      ! cannot specifically check for group ... so
-      ! I will stick to this 'hack'
-      call h5gopen_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
-      if (hdf_err .ne. 0) then ! failed
-        call h5gcreate_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+
+    ! the last group creating is outside of the error supression.
+    if (force_error) then
+      do i=1,grpcnt-1
+        ! check for existance
+        ! this check causes all the unecessary error messages
+        ! I tried doing it with h5oexists_by_name_f, but there one
+        ! cannot specifically check for group ... so
+        ! I will stick to this 'hack'
+        call h5gopen_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+        if (hdf_err .ne. 0) then ! failed
+          call h5gcreate_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+        endif
+        if (grp_parent_id .ne. ifile) then
+          call h5gclose_f(grp_parent_id, hdf_err)
+        endif
+        grp_parent_id = grp_id
+      enddo
+      call h5eclear_f(hdf_err)      ! clear the error
+      call h5eset_auto_f(1,hdf_err) ! acitvate it again
+      ! this will cause the error message if the group already exists
+      call h5gcreate_f(grp_parent_id, trim(ngroup(grpcnt)), grp_id, hdf_err)
+      if (grp_parent_id .ne. ifile) then
+        call h5gclose_f(grp_parent_id, hdf_err)
       endif
-      call h5gclose_f(grp_parent_id, hdf_err)
-      grp_parent_id = grp_id
-    enddo
-    call h5eclear_f(hdf_err)      ! clear the error
-    call h5eset_auto_f(1,hdf_err) ! acitvate it again
-
+    ! here everything is inside the error supression.
+    else
+      do i=1,grpcnt
+        call h5gopen_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+        if (hdf_err .ne. 0) then ! failed
+          call h5gcreate_f(grp_parent_id, trim(ngroup(i)), grp_id, hdf_err)
+        endif
+        if (grp_parent_id .ne. ifile) then
+          call h5gclose_f(grp_parent_id, hdf_err)
+        endif
+        grp_parent_id = grp_id
+      enddo
+      call h5eclear_f(hdf_err)      ! clear the error
+      call h5eset_auto_f(1,hdf_err) ! acitvate it again
+    endif
     call h5gclose_f(grp_id, hdf_err)
-
     deallocate(ngroup)
 
   end subroutine hdf5_create_group
@@ -1096,7 +1133,7 @@ module hdf5_wrapper
     character(len=150) :: gname, dset
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1128,7 +1165,7 @@ module hdf5_wrapper
     dims(1) = size(darray)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1162,7 +1199,7 @@ module hdf5_wrapper
     dims(2) = size(darray,2)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1197,7 +1234,7 @@ module hdf5_wrapper
     dims(3) = size(darray,3)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1233,7 +1270,7 @@ module hdf5_wrapper
     dims(4) = size(darray,4)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1270,7 +1307,7 @@ module hdf5_wrapper
     dims(5) = size(darray,5)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1308,7 +1345,7 @@ module hdf5_wrapper
     dims(6) = size(darray,6)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1347,7 +1384,7 @@ module hdf5_wrapper
     dims(7) = size(darray,7)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1377,7 +1414,7 @@ module hdf5_wrapper
     character(len=150) :: gname, dset
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1409,7 +1446,7 @@ module hdf5_wrapper
     dims(1) = size(darray)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1443,7 +1480,7 @@ module hdf5_wrapper
     dims(2) = size(darray,2)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1478,7 +1515,7 @@ module hdf5_wrapper
     dims(3) = size(darray,3)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1514,7 +1551,7 @@ module hdf5_wrapper
     dims(4) = size(darray,4)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1551,7 +1588,7 @@ module hdf5_wrapper
     dims(5) = size(darray,5)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1589,7 +1626,7 @@ module hdf5_wrapper
     dims(6) = size(darray,6)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1628,7 +1665,7 @@ module hdf5_wrapper
     dims(7) = size(darray,7)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1658,7 +1695,7 @@ module hdf5_wrapper
     character(len=150) :: gname, dset
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1690,7 +1727,7 @@ module hdf5_wrapper
     dims(1) = size(darray)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1724,7 +1761,7 @@ module hdf5_wrapper
     dims(2) = size(darray,2)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1759,7 +1796,7 @@ module hdf5_wrapper
     dims(3) = size(darray,3)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1795,7 +1832,7 @@ module hdf5_wrapper
     dims(4) = size(darray,4)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1832,7 +1869,7 @@ module hdf5_wrapper
     dims(5) = size(darray,5)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1870,7 +1907,7 @@ module hdf5_wrapper
     dims(6) = size(darray,6)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1909,7 +1946,7 @@ module hdf5_wrapper
     dims(7) = size(darray,7)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1939,7 +1976,7 @@ module hdf5_wrapper
     character(len=150) :: gname, dset
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -1971,7 +2008,7 @@ module hdf5_wrapper
     dims(1) = size(darray,1)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2005,7 +2042,7 @@ module hdf5_wrapper
     dims(2) = size(darray,2)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2040,7 +2077,7 @@ module hdf5_wrapper
     dims(3) = size(darray,3)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2076,7 +2113,7 @@ module hdf5_wrapper
     dims(4) = size(darray,4)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2113,7 +2150,7 @@ module hdf5_wrapper
     dims(5) = size(darray,5)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2151,7 +2188,7 @@ module hdf5_wrapper
     dims(6) = size(darray,6)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2190,7 +2227,7 @@ module hdf5_wrapper
     dims(7) = size(darray,7)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2221,7 +2258,7 @@ module hdf5_wrapper
     character(len=150) :: gname, dset
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2253,7 +2290,7 @@ module hdf5_wrapper
     dims(1) = size(darray,1)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2287,7 +2324,7 @@ module hdf5_wrapper
     dims(2) = size(darray,2)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2322,7 +2359,7 @@ module hdf5_wrapper
     dims(3) = size(darray,3)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2358,7 +2395,7 @@ module hdf5_wrapper
     dims(4) = size(darray,4)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2395,7 +2432,7 @@ module hdf5_wrapper
     dims(5) = size(darray,5)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2433,7 +2470,7 @@ module hdf5_wrapper
     dims(6) = size(darray,6)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2472,7 +2509,7 @@ module hdf5_wrapper
     dims(7) = size(darray,7)
 
     call hdf5_help_separate_dsetname(dsetfull, gname, dset)
-    call hdf5_create_group(ifile, gname)
+    call hdf5_create_group(ifile, gname, iforce_error=.false.)
 
     if (trim(adjustl(gname)) == '') then
       grp_id = ifile
@@ -2859,33 +2896,44 @@ module hdf5_wrapper
     deallocate(members)
   end subroutine
 
-  ! subroutine hdf5_list_attributes(ifile, location)
-  !   integer(hid_t), intent(in)                  :: ifile
-  !   character(len=*), intent(in)                :: location
-  !   character(len=150), allocatable, dimension(:) :: attrs
+  subroutine hdf5_list_attributes(ifile, location, attrs)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+    character(len=*), allocatable, dimension(:) :: attrs
 
-  !   integer :: nattrs
-  !   integer(hid_t) :: obj_id
-  !   integer :: idx
-  !   integer(size_t) :: buf_size = 0
-  !   integer(hid_t) :: lapl_id
-  !   character(len=150) :: strim
+    integer :: nattrs
+    integer(hid_t) :: obj_id
+    integer :: idx
+    character(len=150) :: strim
 
-  !   call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
-  !   call h5aget_num_attrs_f(obj_id, nattrs, hdf_err)
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5aget_num_attrs_f(obj_id, nattrs, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
 
-  !   if (nattrs .eq. 0) return
-  !   allocate(attrs(nattrs))
-  !   call h5pset_nlinks_f(lapl_id, int(0,size_t), hdf_err)
-  !   do idx= 0, nattrs-1
-  !     ! call h5aget_info_by_idx_f(ifile, trim(adjustl(location)), h5_index_name_f, &
-  !     !     h5_iter_inc_f, int(idx, hsize_t), f_corder_valid, corder, cset, data_size, hdf_err)
-  !     strim = NULL
-  !     call h5aget_name_by_idx_f(ifile, trim(adjustl(location)), h5_index_name_f, h5_iter_inc_f, int(idx, hsize_t), strim, buf_size, lapl_id, hdf_err)
-  !     write(*,*) trim(strim)
-  !   enddo
+    if (nattrs .eq. 0) return
+    allocate(attrs(nattrs))
+    do idx= 0, nattrs-1
+      call h5aget_name_by_idx_f(ifile, trim(adjustl(location)), h5_index_name_f, h5_iter_inc_f, int(idx, hsize_t), strim, hdf_err)
+      attrs(idx+1) = strim
+    enddo
+  end subroutine
 
-  ! end subroutine
+  subroutine hdf5_delete_attribute(ifile, location, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attr
+
+    integer(hid_t) :: obj_id
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    call h5adelete_f(obj_id, attr, hdf_err)
+    call h5oclose_f(obj_id, hdf_err)
+  end subroutine hdf5_delete_attribute
+
+  subroutine hdf5_delete(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+    call h5ldelete_f(ifile, location, hdf_err)
+  end subroutine hdf5_delete
 
   ! help function with separates /group1/group2/dset -> /group1/group2 and dset
   subroutine hdf5_help_separate_dsetname(dsetfull, gname, dset)
