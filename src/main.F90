@@ -57,6 +57,9 @@ program gtmain ! GammaTransport
   use Mroot
   implicit none
 
+  !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
+  !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
+  !! is negligible
   type(algorithm)    :: algo
   type(kpointmesh)   :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
   type(kpointmesh)   :: redkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
@@ -72,9 +75,6 @@ program gtmain ! GammaTransport
   type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
   type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
   type(qp_resp)      :: qpresp  ! response functions in 4-ple precision
-  !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
-  !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
-  !! is negligible
 
   real(8)              :: mu,mutmp !chemical potential
   integer              :: nT,iT,ierr,imeth,iflag_dmudt,imurestart,niitact
@@ -88,6 +88,7 @@ program gtmain ! GammaTransport
   integer :: nk, nband !local values that are assigned depending on the algorithm
   integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
   integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
+
   ! method 0: secant; method 1: linint; method 2: Riddler; method 3: bisection
   integer, parameter   :: method = 2
 
@@ -105,7 +106,8 @@ program gtmain ! GammaTransport
      write(*,*)
   endif
 
-  !with this flag set to false the quad precision response is computed
+  ! with this flag set to false the quad precision response is computed
+  ! currently in developing / debugging mode
   algo%ldebug=.true.
   !algo%ldebug=.false.
 
@@ -149,40 +151,40 @@ program gtmain ! GammaTransport
 ! intrinsic scattering rate ykb (it inherits them from Im{Sigma})
 ! whereas sct%gam has only T dependence
 
-allocate(sct%gam(sct%nT)) ! always there, value read from input file
-if (algo%ldmft) allocate(sct%ykb(sct%nT, nk, nband))
+  allocate(sct%gam(sct%nT)) ! always there, value read from input file
+  if (algo%ldmft) allocate(sct%ykb(sct%nT, nk, nband))
 
-sct%gam=0.d0
-do iT=1,sct%nT
-   do ig=0,sct%ng
-      sct%gam(iT)=sct%gam(iT) + sct%gc(ig)*(sct%TT(iT)**ig)
-   enddo
-enddo
+  sct%gam=0.d0
+  do iT=1,sct%nT
+     do ig=0,sct%ng
+        sct%gam(iT)=sct%gam(iT) + sct%gc(ig)*(sct%TT(iT)**ig)
+     enddo
+  enddo
 
-!intrinsic scattering rate
-!trivial T-dependence at the moment
-if (algo%ldmft) then
-   sct%ykb=0.0d0
-   if (algo%ltetra) then !full mesh
-      do iT=1,sct%nT
-         do ik=1,nk ; do iband=1,nband
-            sct%ykb(iT,ik,iband)=efulk%Im(ik,iband)
-         enddo ; enddo
-      enddo
-   else if(algo%ltbind) then   !irreducible mesh (I don't think that this case is ever given)
-      do iT=1,sct%nT
-         do ik=1,nk ; do iband=1,nband
-            sct%ykb(iT,ik,iband)=eirrk%Im(ik,iband)
-         enddo ; enddo
-      enddo
-   else                  !reducible mesk
-      do iT=1,sct%nT
-         do ik=1,nk ; do iband=1,nband
-            sct%ykb(iT,ik,iband)=eredk%Im(ik,iband)
-         enddo ; enddo
-      enddo
-   endif
-endif
+  !intrinsic scattering rate
+  !trivial T-dependence at the moment
+  if (algo%ldmft) then
+     sct%ykb=0.0d0
+     if (algo%ltetra) then !full mesh
+        do iT=1,sct%nT
+           do ik=1,nk ; do iband=1,nband
+              sct%ykb(iT,ik,iband)=efulk%Im(ik,iband)
+           enddo ; enddo
+        enddo
+     else if(algo%ltbind) then   !irreducible mesh (I don't think that this case is ever given)
+        do iT=1,sct%nT
+           do ik=1,nk ; do iband=1,nband
+              sct%ykb(iT,ik,iband)=eirrk%Im(ik,iband)
+           enddo ; enddo
+        enddo
+     else                  !reducible mesk
+        do iT=1,sct%nT
+           do ik=1,nk ; do iband=1,nband
+              sct%ykb(iT,ik,iband)=eredk%Im(ik,iband)
+           enddo ; enddo
+        enddo
+     endif
+  endif
 
   !if (myid.eq.master) then
   !  !write T-dependent GAMMA to file

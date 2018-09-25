@@ -31,5 +31,5 @@ module Mparams
   real(8), parameter     :: small=1D-11 ! ~1D-11 for real(8): use 10 significant digits... use 20 for QUAD
   real(16), parameter    :: smallQ=1Q-21 ! ~1Q-18 doesnt seem to matter for QUAD...
 
-  real(8), parameter     :: band_fill_value = 1.d2
+  real(8), parameter     :: band_fill_value = 1.d4
 end module Mparams

@@ -540,11 +540,11 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
         if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,beta)
         else if (allocated(sct%ykb)) then
-           z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))+ci*eps)*beta2p ! eps --> -eps
-           tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
+           z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))-ci*eps)*beta2p
+           tmp=0.5d0+aimag(wpsipg(z,0))/pi
         else
-           z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)+ci*eps)*beta2p ! eps --> -eps
-           tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
+           z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)-ci*eps)*beta2p
+           tmp=0.5d0+aimag(wpsipg(z,0))/pi
         endif
 
         ! here we separate the 'big' and 'small' values
@@ -618,13 +618,13 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
         if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,betaQ)
         else if (allocated(sct%ykb)) then
-           z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) + &
-                      ciQ*real(eps*beta2p,16) ! eps --> -eps
-           tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
+           z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) - &
+                      ciQ*real(eps*beta2p,16)
+           tmp=0.5q0+aimag(wpsipghp(z,0))/piQ
         else
-           z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) + &
-                      ciQ*real(eps*beta2p,16) ! eps --> -eps
-           tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
+           z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) - &
+                      ciQ*real(eps*beta2p,16)
+           tmp=0.5q0+aimag(wpsipghp(z,0))/piQ
         endif
 
         if (tmp.gt.thr) then
@@ -683,7 +683,7 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
         nsmall=0.d0
         kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (ek%band(thdr%idtet(ik,itet),iband) .ge. band_fill_value) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
 
@@ -692,10 +692,10 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
            if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,beta)
            else if (allocated(sct%ykb)) then
-              z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) + ci*eps ) * beta2p ! eps --> -eps
+              z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) - ci*eps ) * beta2p ! eps --> -eps
               tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            else
-              z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) + ci*eps ) * beta2p ! eps --> -eps
+              z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) - ci*eps ) * beta2p ! eps --> -eps
               tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            endif
 
@@ -766,7 +766,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
         nsmall=0.q0
         kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .gt. 90.0d0) cycle
+           if (ek%band(thdr%idtet(ik,itet),iband) .ge. band_fill_value) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
            eps=(ek%z(kp,iband)*ek%band(kp,iband))-mu
@@ -774,11 +774,11 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
            if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,betaQ)
            else if (allocated(sct%ykb)) then
-              z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) + &
+              z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) - &
                        ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            else
-              z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) + &
+              z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) - &
                        ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            endif
