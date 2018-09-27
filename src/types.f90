@@ -24,12 +24,15 @@ module Mtypes
     integer :: ktot                               ! total number of k-points (which varies depending on the sampling method for the BZ)
     double precision :: alat                      ! lattice constant
     double precision :: a(3)                      ! direct lattice vectors in units of ALAT. needed for derivatives --> units of vk's... ???
+    double precision :: vol                       ! volume of the lattice
   end type
 
   type edisp
+    double precision              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
     double precision, allocatable :: E0(:)            ! TIGHT BINDING PARAMETER: band energy at Gamma point (nbands)
     double precision, allocatable :: t(:,:)           ! TIGHT BINDING PARAMETER: band width (nbands,tmax), tmax/=1 is used to set anisotropic dispersion
     double precision, allocatable :: M2(:,:,:,:)      ! TIGHT BINDING PARAMETER: 2nd derivative of the energy dispersion (idir,idir2,nk,nbands), not used if ltbind=F
+
     integer :: nband_max
     integer :: nbopt_min                              ! number of bands (interval) included in the optical matrix elements
     integer :: nbopt_max                              ! number of bands (interval) included in the optical matrix elements
@@ -142,8 +145,6 @@ module Mtypes
 
   ! QUAD PRECISION
   type qp_resp
-    !integer,parameter :: iq=16
-    !integer, kind :: iq=16
     !kernels
     real(16) ::  s_ker  ! for conductivity
     real(16) ::  sB_ker ! nband,3,3 for conductivity in B-field
@@ -171,6 +172,12 @@ module Mtypes
 
     real(16) :: RePolyGamma(0:4),ImPolyGamma(0:4),gamma,aqp,z,tmp
     complex(16) :: ctmp,zarg
+  end type
+
+  type, extends(qp_resp) :: qp_respinter
+    real(16) :: RePolyGamma1(0:4),ImPolyGamma1(0:4)
+    real(16) :: RePolyGamma2(0:4),ImPolyGamma2(0:4)
+    real(16) :: gamma1,gamma2, aqp1,aqp2, z1,z2
   end type
 
 end module Mtypes

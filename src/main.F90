@@ -60,22 +60,29 @@ program gtmain ! GammaTransport
   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
   !! is negligible
-  type(algorithm)    :: algo
-  type(kpointmesh)   :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh)   :: redkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh)   :: fulkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(edisp)        :: eirrk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
-  type(edisp)        :: eredk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
-  type(edisp)        :: efulk   ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
-  type(tetramesh)    :: thdr    ! contains the tetrahedra
-  type(dosgrid)      :: dos     ! DOS, integrated DOS, Fermi level
-  type(scatrate)     :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
-  type(dp_resp)      :: dpresp  ! response functions in double precision
-  type(dp_resp)      :: respBl  ! response functions in double precision for Boltzmann regime response
-  type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
-  type(dp_respinter) :: dderesp ! response function's (intraband conductivity) derivatives in double precision
-  type(qp_resp)      :: qpresp  ! response functions in 4-ple precision
+  type(algorithm)          :: algo
+  type(kpointmesh), target :: irrkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh), target :: redkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(kpointmesh), target :: fulkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(edisp), target      :: eirrk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
+  type(edisp), target      :: eredk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
+  type(edisp), target      :: efulk   ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
+  type(tetramesh)          :: thdr    ! contains the tetrahedra
+  type(dosgrid)            :: dos     ! DOS, integrated DOS, Fermi level
+  type(scatrate)           :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
+  type(dp_resp)            :: dpresp  ! response functions in double precision
+  type(dp_resp)            :: respBl  ! response functions in double precision for Boltzmann regime response
+  type(dp_respinter)       :: dinter  ! response functions in double precision for interband transitions
+  type(dp_respinter)       :: dderesp ! response function's (intraband conductivity) derivatives in double precision
+  type(qp_resp)            :: qpresp  ! response functions in 4-ple precision
 
+  ! mP note
+  ! after we initialized all the kpointer, optical elements, energy dispersion
+  ! we just point to the required variable
+  class(kpointmesh), pointer :: kpointer
+  class(edisp), pointer      :: epointer
+
+  real(8)              :: gmax, gminall
   real(8)              :: mu,mutmp !chemical potential
   integer              :: nT,iT,ierr,imeth,iflag_dmudt,imurestart,niitact
   real(16)             :: test0,test1,ndevactQ
@@ -84,18 +91,18 @@ program gtmain ! GammaTransport
   real(8), allocatable :: drhodT(:)
 
   real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
-  integer :: idum
+  integer :: idum, i
   integer :: nk, nband !local values that are assigned depending on the algorithm
   integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
   integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
 
+  ! mP: should possibly go into the algo datatype
   ! method 0: secant; method 1: linint; method 2: Riddler; method 3: bisection
   integer, parameter   :: method = 2
 
   call mpi_initialize()
 
   if (myid.eq.master) then
-     open(700,file='control.dat',status='unknown')
      write(*,*)
      write(*,*)
      write(*,*)'#####################################################'
@@ -106,35 +113,49 @@ program gtmain ! GammaTransport
      write(*,*)
   endif
 
+  call mpi_barrier(mpi_comm_world, mpierr)
+
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
   algo%ldebug=.true.
-  !algo%ldebug=.false.
 
-  ! this should definitely be called in the main routine
-  call read_config(algo, eirrk, kmesh, sct)
-
+  ! we read the information into the irreducible datatypes
+  call read_config(algo, irrkm, eirrk, sct)
+  ! based on algo switches we setup the other kind of grids
+  call setup_meshes(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk)
   !read in electronic structure and matrix elements
-  call estruct_init(algo, kmesh, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
-  if(.not.(algo%lBfield)) then
+  call estruct_init(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
+
+  ! now we either have the data in the full BZ or in the reducible one
+  if (algo%ltetra) then
+     epointer => efulk
+     kpointer => fulkm
+  else
+     epointer => eredk
+     kpointer => redkm
+  endif
+
+  if(myid .eq. master .and. .not.(algo%lBfield)) then
      write(*,*)'LINRETRACE will not perform calculations with magnetic field'
   endif
 
-  ! decide working mode for the chemical potential
-  if (algo%imurestart == 0 ) then
-     if (algo%ltbind) then
-        mu = eirrk%efer
+  !output of DOS NOS
+  if (algo%ldebug .and. myid .eq. master) then
+     open(10,file='dos',status='unknown')
+     do i=1,size(dos%enrg)
+        write (10,*) dos%enrg(i), dos%dos(i), dos%nos(i)
+     enddo
+     close(10)
+  endif
+
+  ! starting point for the chemical potential
+  mu = epointer%efer
+  if (myid.eq.master) then
+     if (algo%imurestart == 0) then
+        write(*,*)'initialized LDA mu = ',mu
      else
-        if (algo%ltetra) then
-          mu = efulk%efer
-        else
-          mu = eredk%efer
-        endif
+        write(*,*) 'mu read from file = ', mu
      endif
-     if (myid.eq.master)  write(*,*)'initialized LDA mu = ',mu
-  else
-     mu = eirrk%efer
-     if (myid.eq.master)  write(*,*)'mu read from file= ',mu
   endif
 
   ! construct temperature grid
@@ -145,12 +166,11 @@ program gtmain ! GammaTransport
      sct%TT(iT)=real(iT-1,8)*sct%dT+sct%Tmin
   enddo
 
-! construct scattering rate temperature dependence
-! (these variables are in the scatrate type)
-! k-point and band dependence are included in the
-! intrinsic scattering rate ykb (it inherits them from Im{Sigma})
-! whereas sct%gam has only T dependence
-
+  ! construct scattering rate temperature dependence
+  ! (these variables are in the scatrate type)
+  ! k-point and band dependence are included in the
+  ! intrinsic scattering rate ykb (it inherits them from Im{Sigma})
+  ! whereas sct%gam has only T dependence
   allocate(sct%gam(sct%nT)) ! always there, value read from input file
   if (algo%ldmft) allocate(sct%ykb(sct%nT, nk, nband))
 
@@ -165,52 +185,40 @@ program gtmain ! GammaTransport
   !trivial T-dependence at the moment
   if (algo%ldmft) then
      sct%ykb=0.0d0
-     if (algo%ltetra) then !full mesh
-        do iT=1,sct%nT
-           do ik=1,nk ; do iband=1,nband
-              sct%ykb(iT,ik,iband)=efulk%Im(ik,iband)
-           enddo ; enddo
+     do iT=1,sct%nT
+        do iband=1,nband
+           do ik=1,nk
+              sct%ykb(iT,ik,iband)=epointer%Im(ik,iband)
+           enddo
         enddo
-     else if(algo%ltbind) then   !irreducible mesh (I don't think that this case is ever given)
-        do iT=1,sct%nT
-           do ik=1,nk ; do iband=1,nband
-              sct%ykb(iT,ik,iband)=eirrk%Im(ik,iband)
-           enddo ; enddo
-        enddo
-     else                  !reducible mesk
-        do iT=1,sct%nT
-           do ik=1,nk ; do iband=1,nband
-              sct%ykb(iT,ik,iband)=eredk%Im(ik,iband)
-           enddo ; enddo
-        enddo
-     endif
+     enddo
   endif
 
-  !if (myid.eq.master) then
-  !  !write T-dependent GAMMA to file
-  !   open(10,file='GamT.dat', status='unknown')
-  !   do iT=sct%nT,1,-1
-  !      write(10,'(100E20.12)')sct%TT(iT),(sct%gam(iT,iband),iband=1,nband)
-  !   enddo
-  !   close(10)
-  !endif
+  ! if (algo%ldebug .and. myid.eq.master) then
+  !    open(10,file='GamT.dat', status='unknown')
+  !    do iT=sct%nT,1,-1
+  !       write(10,'(100E20.12)')sct%TT(iT),(sct%gam(iT,iband),iband=1,nband)
+  !    enddo
+  !    close(10)
+  ! endif
 
   ! distribute k-points
   if (algo%ltetra) then
      call mpi_genkstep(thdr%ntet)
   else
-     if (algo%ltbind) then
-         call mpi_genkstep(kmesh%ktot)
-     else
-         call mpi_genkstep(redkm%ktot)
-     endif
+     call mpi_genkstep(kpointer%ktot)
+  endif
+
+  if (algo%ldebug) then
+     if (myid.eq.master) write(*,*) "number of tetrahedrons: ", thdr%ntet
+     write(*,*) "myid: ", myid, "iqstr: ", iqstr, "iqend: ", iqend
   endif
 
   if (myid.eq.master) then
      select case (algo%imurestart)
         case (0)
            open(20,file='mu.dat',status='unknown')
-           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT,kmesh%ktot,eirrk%nelect
+           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT,kpointer%ktot,epointer%nelect
         case (1) ! read and check
            open(20,file='mu.dat',status='old')
            read(20,'(2X,3E15.7,1I10,1E20.12)')dum1,dum2,dum3,idum,dum4
@@ -218,18 +226,20 @@ program gtmain ! GammaTransport
            if (dum1.ne.sct%Tmin) STOP 'wrong Tmin in mu.dat'
            if (dum2.ne.sct%Tmax) STOP 'wrong Tmax in mu.dat'
            if (dum3.ne.sct%dT) STOP   'wrong dT in mu.dat'
-           if (idum.ne.kmesh%ktot) STOP 'wrong nk in mu.dat'
-           if (dum4.ne.eirrk%nelect) STOP 'wrong NE in mu.dat'
-  ! Here, I should be checking for the Gammas, too...
+           if (idum.ne.kpointer%ktot) STOP 'wrong nk in mu.dat'
+           if (dum4.ne.epointer%nelect) STOP 'wrong NE in mu.dat'
+           ! TODO: Here, I should be checking for the Gammas, too...
            write(*,*)'using chemical potential from mu.dat'
         case (2) ! use mu from inp.linretrace
            open(20,file='mu.dat',status='unknown')
-           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT, kmesh%ktot, eirrk%nelect
+           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT, kpointer%ktot, epointer%nelect
            write(20,*)'using constant mu=',mu
            write(*,*)'using constant mu=',mu
      end select
      call response_open_files(algo)
   endif !master
+
+  stop
 
   !find minimal gamma for lowest T. If = 0 then we can do (linear) extrapolation... if gam=O(T,T^2) ... strictly not linear...
   gminall=10.d0
@@ -257,6 +267,7 @@ program gtmain ! GammaTransport
      call dpresp_alloc(algo%lBfield, respBl, nk, nband)
   endif
 
+  ! allocation of qp only for production runs
   if (.not. algo%ldebug) then
      if (algo%ltetra) then
         call qpresp_alloc(algo%lBfield, qpresp, 4, nband)
@@ -279,7 +290,9 @@ program gtmain ! GammaTransport
   sct%Tstar = 0.0d0
   sct%Tflat = 0.0d0
   allocate(drhodT(sct%nT))
-  drhodT(:)=0.0d0
+  drhodT = 0.0d0
+
+  stop
 
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -318,52 +331,24 @@ program gtmain ! GammaTransport
      !don't know how difficult it would be to revert to the original implementation
      !and/or to implement the tetrahedron method
      if (algo%imurestart == 0) then
-
         if (criterion.lt.20.d0) then !DP
            imeth=0
-           if (algo%ltbind) then
-              call find_mu(mu,iT,ndev,ndevact,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)
-           else
-              if (algo%ltetra) then
-                 call find_mu(mu,iT,ndev,ndevact,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)
-              else
-                 call find_mu(mu,iT,ndev,ndevact,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)
-              endif
-           endif
+           call find_mu(mu,iT,ndev,ndevact,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
-              write(700,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
            endif
         elseif (criterion.lt.80.d0) then !QP
            imeth=1
-           if (algo%ltbind) then
-              call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)! full QUAD on particle number
-           else
-              if (algo%ltetra) then
-                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)! full QUAD on particle number
-              else
-                 call find_mu(mu,iT,ndevQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)! full QUAD on particle number
-              endif
-           endif
+           call find_mu(mu,iT,ndevQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-              write(700,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
         else   ! further refinement
            imeth=2
            if (myid.eq.master) write(*,*) 'SUPER QUAD'
-           if (algo%ltbind) then
-              call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eirrk, sct, kmesh, thdr, algo%ltetra, method)! full QUAD on particle number
-           else
-              if (algo%ltetra) then
-                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, efulk, sct, fulkm, thdr, algo%ltetra, method)! full QUAD on particle number
-              else
-                 call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, eredk, sct, redkm, thdr, algo%ltetra, method)! full QUAD on particle number
-              endif
-           endif
+           call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-              write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
         endif !criterion
 
@@ -433,14 +418,12 @@ program gtmain ! GammaTransport
   !      endif
            niitact=0
            write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-           write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
         case (2)
            mu = eirrk%efer !this is the original assignment to the value read from file
                            !unless imurestart == 0, in which case it is the value found from the
                            !dos (if the tetrahedron methos has been selected)
            niitact=0
            write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-           write(700,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            write(20,'(100E20.12)')T,mu,mutmp,real(imeth,kind=8),criterion
         end select
      endif !master
@@ -454,13 +437,7 @@ program gtmain ! GammaTransport
      sct%mu(iT) = mu
 
      if ((myid == master) .and. (iT == sct%nT)) then
-        if (algo%ltbind) then
-           call intldos(iT, dos, kmesh, eirrk, sct)
-           !call intetra(kmesh, thdr, dos, selfnrg%z*eirrk%band, eirrk%nband_max)
-        else
-           call intldos(iT, dos, redkm, eredk, sct)
-           !call intetra(fulkm, thdr, dos, selfnrg%z*efulk%band, efulk%nband_max)
-        endif
+        call intldos(iT, dos, kpointer, epointer, sct)
         do ig=1,size(dos%enrg)
            dos%dos(ig)=2.0d0*dos%dos(ig)
            dos%nos(ig)=2.0d0*dos%nos(ig)
@@ -478,27 +455,10 @@ program gtmain ! GammaTransport
      call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?
 #endif
      if (algo%ldebug) then
-        if (algo%ltbind) then
-          call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl)
-        else
-          if (algo%ltetra) then
-            call calc_response(mu, iT, drhodT, algo, fulkm, efulk, thdr, sct, dpresp, dderesp, dinter, respBl)
-          else
-            call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl)
-          endif
-        endif
+        call calc_response(mu, iT, drhodT, algo, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl)
      else
-        if (algo%ltbind) then
-          call calc_response(mu, iT, drhodT, algo, kmesh, eirrk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
-        else
-          if (algo%ltetra) then
-            call calc_response(mu, iT, drhodT, algo, fulkm, efulk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
-          else
-            call calc_response(mu, iT, drhodT, algo, redkm, eredk, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
-          endif
-        endif
+        call calc_response(mu, iT, drhodT, algo, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
      endif
-
   enddo ! iT temperature
   ! the values of the derivative of the resistivity have been accumulated over
   ! during the temparature loop, now find the critical temperature
@@ -522,23 +482,18 @@ program gtmain ! GammaTransport
     ! Lines below to be removed
     if (sct%Tstar > 0.0d0) then
        write(*,*)'found T* (intraband only)', sct%Tstar
-       write(700,*)'found T* (intraband only)', sct%Tstar
     else
        write(*,*)'T* (intraband only) not found'
-       write(700,*)'T* (intraband only) not found'
     endif
 
     if (sct%Tflat > 0.0d0) then
        write(*,*)'found T_s (intraband only)', sct%Tflat
-       write(700,*)'found T_s (intraband only)', sct%Tflat
     else
        write(*,*)'T_s (intraband only) not found'
-       write(700,*)'T_s (intraband only) not found'
     endif
     !end lines to be removed
 
-    close(20)
-    close(700)
+    close(20) ! mu.dat
     call response_close_files(algo)
   endif
 

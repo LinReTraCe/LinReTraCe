@@ -299,18 +299,20 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   ! choose method according to input
   ! if method is not provided: default to Riddler
   if (present(method)) then
-    select case (method)
-      case (0)
-        lsecant = .true.
-      case (1)
-        linint  = .true.
-      case (2)
-        lridd   = .true.
-      case (3)
-        lbisec  = .true.
-    end select
+     select case (method)
+        case (0)
+           lsecant = .true.
+        case (1)
+           linint  = .true.
+        case (2)
+           lridd   = .true.
+        case (3)
+           lbisec  = .true.
+        case default
+           lridd   = .true.
+     end select
   else
-    lridd = .true.
+     lridd = .true.
   endif
 
   mu_qp = real(mu,16) ! save into a local qp number

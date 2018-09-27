@@ -92,8 +92,8 @@ subroutine calc_response(mu, iT, drhodT, algo, mesh, ek, thdr, sct, dresp, ddere
            tmp1=tmp1+thdr%idtet(0,itet)
            if (algo%ldebug) write(34,*) itet, thdr%idtet(0,itet), thdr%vltet(itet)
         enddo
-        tmp2=((2*pi)**3)/vol
-        if (myid==0) write(*,*) 'tetrahedra volume',thdr%vltot,thdr%vltot*((2*pi)**3)/vol,tmp2
+        tmp2=((2*pi)**3)/mesh%vol
+        if (myid==0) write(*,*) 'tetrahedra volume',thdr%vltot,thdr%vltot*((2*pi)**3)/mesh%vol,tmp2
      endif
   !!!!!!!!!! TEST END
 
@@ -2337,10 +2337,10 @@ subroutine globfac(icubic, algo, mesh, resp, hpresp)
    real(8) :: fac,facB
    real(16):: facQ,facBQ
 
-   fac   = 2.d0 * pi * ( echarge / (vol*hbarevs)) * 1.d10
-   facB  = 2.d0 * pi**2 * ( echarge / (vol*hbarevs) ) * (1.d-10 / hbareVs)
-   facQ  = 2.q0 * piQ * ( real(echarge,16) / real(vol*hbarevs,16)) * 1.q10
-   facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
+   fac   = 2.d0 * pi * ( echarge / (mesh%vol*hbarevs)) * 1.d10
+   facB  = 2.d0 * pi**2 * ( echarge / (mesh%vol*hbarevs) ) * (1.d-10 / hbareVs)
+   facQ  = 2.q0 * piQ * ( real(echarge,16) / real(mesh%vol*hbarevs,16)) * 1.q10
+   facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(mesh%vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
 
    if (algo%ltetra) then
       ktot=1
