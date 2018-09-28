@@ -128,7 +128,7 @@ module Mestruct
           STOP
     end select
 
-    if (algo%ltbind) algo%lsymm=.false.
+    if (algo%ltbind) algo%lsymm = .false.
 
     ! this is unfortunately necessary if we want arbitrary paths
     ! this whole section will be replaced anyways ...
@@ -143,7 +143,7 @@ module Mestruct
     read(10,*) kmesh%kx,kmesh%ky,kmesh%kz
 
     if (algo%ltbind) then
-       write(*,*)'readinfile: reading TB parameters'
+       write(*,*)'READ_CONFIG: reading TB parameters'
        allocate(ek%E0(ek%nband_max),ek%t(ek%nband_max, tmax))
        do iband=1,ek%nband_max
           read(10,*)ek%E0(iband),ek%t(iband,:)
@@ -181,6 +181,9 @@ module Mestruct
     ! tb + .not. tetrahedron -> copy everything into RED
     ! .not. tb -> copy everything into RED
     ! .not. tb + tetrahedron -> also copy everything into FUL
+    !
+    ! the thing we cannot take care of here is the number of normal and optical bands
+    ! since they are determined in getirrk
     !
     if (algo%ltbind) then
        if (algo%ltetra) then
@@ -228,8 +231,7 @@ module Mestruct
        redkm%alat = irrkm%alat
        redkm%a    = irrkm%a
        redkm%vol  = irrkm%vol
-       eredk%nband_max = eirrk%nband_max
-       ! we can't copy the optical bands here because they are not determined yet
+       ! we can't copy the bands or optical bands here because they are not determined yet
        eredk%nelect    = eirrk%nelect
        eredk%efer      = eirrk%efer
        eredk%ztmp      = eirrk%ztmp
@@ -241,7 +243,6 @@ module Mestruct
           fulkm%alat = irrkm%alat
           fulkm%a    = irrkm%a
           fulkm%vol  = irrkm%vol
-          efulk%nband_max = eirrk%nband_max
           efulk%nelect    = eirrk%nelect
           efulk%efer      = eirrk%efer
           efulk%ztmp      = eirrk%ztmp
@@ -375,7 +376,7 @@ module Mestruct
     if (kmesh%kx==1 .and. kmesh%ky==1 .and. kmesh%kz==1) then
        if (abs(kmesh%k_coord(1,1)) < 1d-4 .and. abs(kmesh%k_coord(2,1)) < 1.d-4 &
            .and. abs(kmesh%k_coord(3,1)) < 1d-4) then
-          write(*,*) 'Gamma-point only calculation; assuming flatband model'
+          write(*,*) 'GENTBSTR: Gamma-point only calculation; assuming flatband model'
           do iband =1,nband
              do idir=1,3
                 ek%Mopt(idir,1,iband,iband) = 1.0d0
@@ -399,7 +400,10 @@ module Mestruct
 
     if (algo%lsymm) then
        ! read in the w2k klist and symmetry operations
+       ! also determine the number of bands we have to use
        call getirrk  (algo%mysyst, symm%cntr, irrkm, eirrk)
+       eredk%nband_max = eirrk%nband_max
+       ! get the rotations and translations from the appropriate w2k files
        call getsymop (algo%mysyst, symm,  irrkm, eirrk)
        ! generate a reducible kmesh (redkm) from the set of symmetry operations and the irrek-mesh
        ! also save the rotations required in symm for the optical elements later
@@ -410,12 +414,12 @@ module Mestruct
        ! generate the optical matrix elements evaluated on the new redkm grid
        call genredopt (redkm, symm, eirrk, eredk)
        ! translate the reducible k-mesh and take care of the bandstructure
-       call trnredk (irrkm, redkm, eredk, symm, algo)
+       ! call trnredk (irrkm, redkm, eredk, symm, algo)
     else !reducible BZ is already provided by W2k
        call getirrk (algo%mysyst, symm%cntr, redkm, eredk)
        call getsymop (algo%mysyst, symm, redkm, eredk) !need to call this routine to set the logical switches in symmop type
 
-       if (.not. allocated(redkm%k_id)) allocate(redkm%k_id(1:redkm%kx, 1:redkm%ky, 1:redkm%kz)) !if algo%lsymm=.false. redkm%k_id has not been allocated
+       if (.not. allocated(redkm%k_id)) allocate(redkm%k_id(redkm%kx, redkm%ky, redkm%kz)) !if algo%lsymm=.false. redkm%k_id has not been allocated
        ik=0
        do ikx=1,redkm%kx
           do iky=1,redkm%ky
@@ -503,7 +507,7 @@ module Mestruct
     open(10,file=trim(adjustl(mysyst))//'.weight',status='old')
     read(10,*) rcrap, rcrap, ccrap
     read(10,*) kmesh%ktot, ccrap
-    write(*,*) 'total number of irred k-points read from W2k',kmesh%ktot
+    write(*,*) 'GETIRRK: total number of k-points read from W2k: ',kmesh%ktot
     close(10)
 
     allocate(kmesh%k_coord(3,kmesh%ktot))
@@ -527,19 +531,21 @@ module Mestruct
        read(11,*)kmesh%k_coord(1,ik),kmesh%k_coord(2,ik),kmesh%k_coord(3,ik),icrap,icrap,nband_loc
 
        ! allocate and initialise the temporary array
-       if (.not. allocated (band_tmp)) allocate(band_tmp(kmesh%ktot,2*nband_loc))
-       band_tmp(ik,:) = band_fill_value  !set the band dispersion to a large value
+       if (.not. allocated (band_tmp)) then
+          allocate(band_tmp(kmesh%ktot,2*nband_loc))
+          band_tmp(:,:) = band_fill_value  !set the band dispersion to a large value
+       endif
 
        if (nband_loc .gt. edspk%nband_max) edspk%nband_max=nband_loc
 
        ! this check has to be already made here
        if (edspk%nband_max .gt. size(band_tmp,2)) then
-          write(*,*) 'you are trying to access energy bands that have not been stored by Wien2k'
+          write(*,*) 'GETIRRK: you are trying to access energy bands that have not been stored by Wien2k'
           STOP
        endif
 
        do nband=1,nband_loc
-          read(11,*) icrap,band_tmp(ik,nband)
+          read(11,*) icrap, band_tmp(ik,nband)
        enddo
     enddo
     !done reading the energy dispersion curves
@@ -606,20 +612,24 @@ module Mestruct
     double precision :: dtmp
     double precision, allocatable :: Mopt_tmp(:,:,:,:)  ! temporary matrices where the Wien2k optical matrices are stored
 
-
-    open(10,file=trim(adjustl(mysyst))//'.symmat',status='old')
-    read(10,*)   !there is a heading line specifying which component of M is printed on file
     ! allocate and initialise the temporary arrays
+    ! on the full band interval
     if (lcubic) then
-       allocate(Mopt_tmp(1:3,kmesh%ktot,1:ek%nband_max,1:ek%nband_max))
+       allocate(Mopt_tmp(3,kmesh%ktot,ek%nband_max,ek%nband_max))
     else
-       allocate(Mopt_tmp(1:6,kmesh%ktot,1:ek%nband_max,1:ek%nband_max))
+       allocate(Mopt_tmp(6,kmesh%ktot,ek%nband_max,ek%nband_max))
     endif
     Mopt_tmp=0.d0
 
-    ek%nbopt_min=1000
-    ek%nbopt_max=0
+    ! read in the data into the temporary array
+    ! and determine the optical interval size
     if (loptic) then
+
+       open(10,file=trim(adjustl(mysyst))//'.symmat',status='old')
+       read(10,*)   !there is a heading line specifying which component of M is printed on file
+
+       ek%nbopt_min=1000
+       ek%nbopt_max=0
        do ik=1,kmesh%ktot
           read(10,*)   !there is an empty line
           read(10,*)ccrap,itmp,ccrap,ccrap,ccrap,min_nopt,max_nopt
@@ -627,11 +637,11 @@ module Mestruct
 
           !sanity tests
           if ( itmp .ne. ik) then
-             write(*,*) 'ERROR: there is a mismatch between k-points in case.energy and case.symmat'
+             write(*,*) 'GETIRROPT: there is a mismatch between k-points in case.energy and case.symmat'
              STOP
           endif
           if ( max_nopt .gt. ek%nband_max) then
-             write(*,*) 'ERROR: there are more bands computed in the optical routine than we have energies for'
+             write(*,*) 'GETIRROPT: there are more bands computed in the optical routine than we have energies for'
              STOP
           endif
 
@@ -680,13 +690,17 @@ module Mestruct
   !!!TEST END
     !ek%nbopt_max=int(ek%nbopt_max/10)
     ! copy over the data to the permanent data structure (with the minimal number of entries consistent for all the k-point considered)
+
     if ((.not. allocated(ek%Mopt)) .and. (lcubic) ) &
       & allocate(ek%Mopt(1:3,kmesh%ktot,ek%nbopt_min:ek%nbopt_max,ek%nbopt_min:ek%nbopt_max))
     if ((.not. allocated(ek%Mopt)) .and. (.not. lcubic) ) &
       & allocate(ek%Mopt(1:6,kmesh%ktot,ek%nbopt_min:ek%nbopt_max,ek%nbopt_min:ek%nbopt_max))
 
-    itmp=6
-    if (lcubic) itmp=3
+    if (lcubic) then
+       itmp=3
+    else
+       itmp=6
+    endif
 
     do i=1,itmp
        do ik=1,kmesh%ktot
@@ -713,23 +727,22 @@ module Mestruct
     !the -Im{Sigma} read in here is added to the temperature dependent scattering rate
     !in the response module
     if (.not. allocated(ek%Z)) then
-       !allocate(ek%Z(kmesh%ktot,ek%nbopt_min:ek%nbopt_max))
        allocate(ek%Z(kmesh%ktot,ek%nband_max))
-       ek%Z=1.0d0
+       ek%Z=ek%ztmp
     endif
     if (.not. allocated(ek%Im)) then
-       !allocate(ek%Im(kmesh%ktot,ek%nbopt_min:ek%nbopt_max))
        allocate(ek%Im(kmesh%ktot,ek%nband_max))
        ek%Im=0.0d0
     endif
+
     if (ldmft) then
        open(11,file=trim(adjustl(mysyst))//'.dmft',status='old')
        read(11,*) ek%efer
        do ik=1,kmesh%ktot
           read(11,*) i, min_nopt, max_nopt
           !sanity checks
-          if (min_nopt < ek%nbopt_min) STOP 'Self-energy bands do not match optical matrix elements'
-          if (max_nopt > ek%nbopt_max) STOP 'Self-energy bands do not match optical matrix elements'
+          if (min_nopt < ek%nbopt_min) STOP 'GETIRROPT: Self-energy bands do not match optical matrix elements'
+          if (max_nopt > ek%nbopt_max) STOP 'GETIRROPT: Self-energy bands do not match optical matrix elements'
           !overwrite the bandstructure with the renormalised one
           do j=min_nopt,max_nopt
              read(11,*) ek%band(ik,j), ek%Z(ik,j), ek%Im(ik,j)
@@ -768,19 +781,6 @@ module Mestruct
     double precision, allocatable :: k_coord(:,:)
     double precision, allocatable :: band(:,:)
 
-
-    ! read the matrix transformations
-    open(9,file=trim(adjustl(mysyst))//'.symop',status='old')
-    read(9,100)symm%nsym
-    if (.not. allocated(symm%Msym)) allocate(symm%Msym(3,3,symm%nsym))
-    if (.not. allocated(symm%Tras)) allocate(symm%Tras(3,symm%nsym))
-    do n=1,symm%nsym
-       read(9,110) ((symm%Msym(j,i,n),i=1,3),j=1,3)
-    enddo
-    close(9)
-
-    ! if the space group is non-symmorphic we have to read in also the
-    ! translation vectors to generate the Brillouin zone
     substring="NUMBER OF SYMMETRY OPERATIONS"
     ix=0
     symm%Tras(:,:) = 0.0d0
@@ -795,10 +795,20 @@ module Mestruct
        write(*,*) 'GETSYMOP: error reading file *.struct'
        STOP
     else
+       substring=trim(adjustl(line(:9)))
+       read(substring,*) symm%nsym
+       write(*,*) 'GETSYMOP: total number of symmetry operations: ', symm%nsym
+       if (.not. allocated(symm%Msym)) allocate(symm%Msym(3,3,symm%nsym))
+       if (.not. allocated(symm%Tras)) allocate(symm%Tras(3,symm%nsym))
        do n=1,symm%nsym
           do j=1,3
-             !thanks to Matthias for pointing out this trick! ;-)
              read(10,'(A)') line
+             substring=trim(adjustl(line(:2)))
+             read(substring,*) symm%Msym(j,1,n)
+             substring=trim(adjustl(line(3:4)))
+             read(substring,*) symm%Msym(j,2,n)
+             substring=trim(adjustl(line(5:6)))
+             read(substring,*) symm%Msym(j,3,n)
              substring=trim(adjustl(line(7:)))
              read(substring,*) symm%Tras(j,n)
           enddo
@@ -813,7 +823,7 @@ module Mestruct
     select case (symm%cntr)
 
        case('B  ') !body centered cell
-          write(*,*) 'body centering unit cell'
+          write(*,*) 'GETSYMOP: body centering unit cell'
           !allocate(Mtmp(3,3,2*symm%nsym))
           !allocate(Ttmp(3,2*symm%nsym))
           !do n=1,symm%nsym
@@ -854,15 +864,15 @@ module Mestruct
           !enddo
           !deallocate(k_coord,band)
        case('F  ') !face centered cell
-          write(*,*) 'face centering unit cell'
+          write(*,*) 'GETSYMOP: face centering unit cell'
        case('H  ') !hexagonal cell?
-          write(*,*) 'hexagonal centering unit cell'
+          write(*,*) 'GETSYMOP: hexagonal centering unit cell'
        case('CXY') !base centered along xy plane
-          write(*,*) 'base centering unit cell'
+          write(*,*) 'GETSYMOP: base centering unit cell'
        case('CXZ') !base centered along xz plane
-          write(*,*) 'base centering unit cell'
+          write(*,*) 'GETSYMOP: base centering unit cell'
        case('CYZ') !base centered along yz plane
-          write(*,*) 'base centering unit cell'
+          write(*,*) 'GETSYMOP: base centering unit cell'
     end select
 
     100  FORMAT (I6)
@@ -898,16 +908,22 @@ module Mestruct
        symm%ltetrag=.false.
        symm%lorthor=.true.
     else
-       write(*,*) 'ERROR: could not work out symmetry group'
+       write(*,*) 'GETSYMOP: could not work out symmetry group'
        STOP
     endif
 
-  ! set the descriptor for nonsymmorphic space groups
+    ! set the descriptor for nonsymmorphic space groups
     do n=1,symm%nsym
        if ((symm%Tras(1,n)/=0.0d0).or.(symm%Tras(2,n)/=0.0d0).or.(symm%Tras(3,n)/=0.0d0)) then
           symm%lnsymmr = .true.
        endif
     enddo
+
+    if (symm%lnsymmr) then
+       write(*,*) 'GETSYMOP: detected non-symmorphic space group'
+    else
+       write(*,*) 'GETSYMOP: detected symmorphic space group'
+    endif
 
   end subroutine
 
@@ -981,6 +997,21 @@ module Mestruct
              else
                 tmpk2 = tmpk
              endif
+
+             ! translate negative k-points into positive ones
+             do j=1,3
+                ! set numerically zero values to absolute zero
+                if(abs(tmpk2(j)) .le. 1.d-6) tmpk2(j) = 0.d0
+                ! sanity check
+                if (abs(tmpk2(j)) .ge. 1.d0) then
+                   write(*,*) 'GENREDK: generated k-point outside of BZ: ', tmpk2(:)
+                   stop
+                endif
+                ! back-translation
+                if(tmpk2(j) .lt. 0.d0) then
+                   tmpk2(j) = tmpk2(j) + 1.d0
+                endif
+             enddo
 
              iexist = 0
              do j=1,ineq
@@ -1061,14 +1092,18 @@ module Mestruct
     if (.not. allocated(redkm%k_coord))  allocate(redkm%k_coord(3,redkm%ktot))
     if (.not. allocated(redkm%k_id))     allocate(redkm%k_id(redkm%kx, redkm%ky, redkm%kz))
     if (.not. allocated(symm%symop_id))  allocate(symm%symop_id(2,redkm%ktot))
-    redkm%k_coord=0.0d0
-    redkm%k_id=0
-    symm%symop_id=0
 
     ! save the new coordinates into the data structure
-    redkm%k_coord(:,:ineq) = tmpkall
-    symm%symop_id(:,:ineq) = tmpoall
+    redkm%k_coord(:,:) = tmpkall
+    symm%symop_id(:,:) = tmpoall
     deallocate(tmpkall, tmpoall)
+
+    ! do the mapping
+    do ik = 1,redkm%ktot
+       redkm%k_id(nint(redkm%kx*redkm%k_coord(1,ik))+1, &
+                  nint(redkm%ky*redkm%k_coord(2,ik))+1, &
+                  nint(redkm%kz*redkm%k_coord(3,ik))+1) = ik
+    enddo
 
   end subroutine !GENREDK
 
@@ -1080,12 +1115,12 @@ module Mestruct
 !
   subroutine genredopt (redkm, symm, eirrk, eredk )
     implicit none
-  !pssed variables
+    !passed variables
     type(kpointmesh) :: redkm ! reducible k-mesh
     type(symop) :: symm       ! contains symmetry operations
     type(edisp) :: eirrk      ! energy dispersion and optical matrix elements over irr k-mesh generated by Wien2k
     type(edisp) :: eredk
-  !iternal variables
+    !internal variables
     integer :: i, j, l, k, ik, isym, iks, nb, nb2
     double precision, allocatable :: osm1(:,:), osm2(:,:), osm3(:,:)
     double precision, allocatable :: Mtmp(:,:,:,:) !only necessary for non-cubic systems
@@ -1194,7 +1229,6 @@ module Mestruct
        deallocate (Mtmp)
     endif
 
-
     !now map the dispersion energies from the old grid to the new one (the energies do not change with the symmetry operation)
     do i=1,size(symm%symop_id,2)
        ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
@@ -1217,6 +1251,8 @@ module Mestruct
 ! into the interval (0, 2pi/a), taking care also of
 ! the band structure and of the optical matrix elements
 !
+
+! obsolete?
   subroutine trnredk (irrkm, redkm, eredk, symm, algo)
     implicit none
     !passed variables
@@ -1547,6 +1583,7 @@ module Mestruct
        offdia=1  !off-diagonal terms for non-cubic systems
     endif
 
+    efulk%nband_max = eredk%nband_max
     efulk%nbopt_min = eredk%nbopt_min
     efulk%nbopt_max = eredk%nbopt_max
 
@@ -1617,7 +1654,7 @@ module Mestruct
     enddo
 
     if (dk(1)==0 .or. dk(2)==0 .or. dk(3)==0) then
-       write(*,*) 'GENFULKM can not extend the k-mesh', dk(:)
+       write(*,*) 'GENFULKM: cannot extend the k-mesh', dk(:)
        STOP
     endif
 

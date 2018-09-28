@@ -172,7 +172,14 @@ program gtmain ! GammaTransport
   ! intrinsic scattering rate ykb (it inherits them from Im{Sigma})
   ! whereas sct%gam has only T dependence
   allocate(sct%gam(sct%nT)) ! always there, value read from input file
-  if (algo%ldmft) allocate(sct%ykb(sct%nT, nk, nband))
+  if (algo%ldmft) then
+     if (algo%ltetra) then
+        allocate(sct%ykb(sct%nT, thdr%ntet, epointer%nband_max))
+     else
+        allocate(sct%ykb(sct%nT, kpointer%ktot, epointer%nband_max))
+     endif
+  endif
+
 
   sct%gam=0.d0
   do iT=1,sct%nT
@@ -214,6 +221,8 @@ program gtmain ! GammaTransport
      write(*,*) "myid: ", myid, "iqstr: ", iqstr, "iqend: ", iqend
   endif
 
+  stop
+
   if (myid.eq.master) then
      select case (algo%imurestart)
         case (0)
@@ -239,7 +248,6 @@ program gtmain ! GammaTransport
      call response_open_files(algo)
   endif !master
 
-  stop
 
   !find minimal gamma for lowest T. If = 0 then we can do (linear) extrapolation... if gam=O(T,T^2) ... strictly not linear...
   gminall=10.d0
@@ -433,6 +441,7 @@ program gtmain ! GammaTransport
         call MPI_BCAST(mu,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
      endif
 #endif
+
      !copy the given value of mu into the datastructure
      sct%mu(iT) = mu
 

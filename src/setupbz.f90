@@ -80,7 +80,7 @@ program setupbz
 
   !also save all the tetrahedron information
   if (algo%ltetra) then
-     call hdf5_write_data(ifile, '/.thdr', thdr%idtet)
+     call hdf5_write_data(ifile, '/.thdr_id', thdr%idtet)
      call hdf5_write_data(ifile, '/.thdr_vol', thdr%vltet)
   endif
 
