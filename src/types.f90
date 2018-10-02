@@ -13,99 +13,105 @@ module Mtypes
     character(100) :: mysyst ! label that is used to open the Wien2k files
   end type
 
+  type lattice
+    real(8) :: alat  ! lattice constant
+    real(8) :: a(3)  ! direct lattice vectors in units of ALAT. needed for derivatives
+    real(8) :: vol   ! volume of the lattice
+    integer :: nalpha ! number of polarization directions (1 for cubic; 3 for everything else)
+    logical :: lcubic
+    logical :: ltetragonal
+    logical :: lorthorhombic
+    ! not used at the moment
+    logical :: lhexagonal
+    logical :: lrhombohedral
+    logical :: lmonoclinic
+    logical :: ltriclinic
+  end type
+
   type kpointmesh
-    integer, allocatable :: k_id(:,:,:)           ! counter idenfifying a specific k-point through values of ikx, iky, ikz
-    double precision, allocatable :: k_coord(:,:) ! coordinates in reciprocal space associated to a k-point (exclunding the BZ endpoints)
-    double precision, allocatable :: k_weight(:)  ! k-point weights
-    double precision, allocatable :: mult(:)      ! k-point multiplicity
-    integer :: kx                                 ! number of k-points in each cartesian direction
+    integer, allocatable :: k_id(:,:,:)  ! counter idenfifying a specific k-point through values of ikx, iky, ikz
+    real(8), allocatable :: k_coord(:,:) ! coordinates in reciprocal space associated to a k-point (exclunding the BZ endpoints)
+    integer :: kx                        ! number of k-points in each cartesian direction
     integer :: ky
     integer :: kz
-    integer :: ktot                               ! total number of k-points (which varies depending on the sampling method for the BZ)
-    double precision :: alat                      ! lattice constant
-    double precision :: a(3)                      ! direct lattice vectors in units of ALAT. needed for derivatives --> units of vk's... ???
-    double precision :: vol                       ! volume of the lattice
+    integer :: ktot                      ! total number of k-points (which varies depending on the sampling method for the BZ)
   end type
 
   type edisp
-    double precision              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
-    double precision, allocatable :: E0(:)            ! TIGHT BINDING PARAMETER: band energy at Gamma point (nbands)
-    double precision, allocatable :: t(:,:)           ! TIGHT BINDING PARAMETER: band width (nbands,tmax), tmax/=1 is used to set anisotropic dispersion
-    double precision, allocatable :: M2(:,:,:,:)      ! TIGHT BINDING PARAMETER: 2nd derivative of the energy dispersion (idir,idir2,nk,nbands), not used if ltbind=F
-
     integer :: nband_max
-    integer :: nbopt_min                              ! number of bands (interval) included in the optical matrix elements
-    integer :: nbopt_max                              ! number of bands (interval) included in the optical matrix elements
-    double precision :: efer                          ! Fermi energy
-    double precision :: nelect                        ! number of electrons (provided from inputfile at first iteration)
-    double precision :: occ_tot                       ! number of electrons computed for the updated value of chemical potential (non-eq value)
-    double precision :: ztmp                          ! (constant) renormalisation factor -only used if algo%ldmft=.false.-
-    double precision, allocatable :: band(:,:)        ! band(k_id,nband) contains nband_max dispersion curves, if for some k-points
-                                                      ! fewer bands are computed, then the missing elements are set to 1000 (arbitrarily large value)
-    double precision, allocatable :: Z(:,:)           ! renormalisation factor 1/z= 1 - (d/dw)S_{k,n}(w) @ w=0
-    double precision, allocatable :: Im(:,:)          ! =-imaginary part of the self-energy at zero frequency
-    double precision, allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
-    double precision, allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
+    integer :: nbopt_min                     ! number of bands (interval) included in the optical matrix elements
+    integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
+    real(8) :: efer                          ! Fermi energy
+    real(8) :: nelect                        ! number of electrons (provided from inputfile at first iteration)
+    real(8) :: occ_tot                       ! number of electrons computed for the updated value of chemical potential (non-eq value)
+    real(8) :: ztmp                          ! (constant) renormalisation factor -only used if algo%ldmft=.false.-
+    real(8), allocatable :: band(:,:)        ! band(k_id,nband) contains nband_max dispersion curves, if for some k-points
+                                             ! fewer bands are computed, then the missing elements are set to 1000 (arbitrarily large value)
+    real(8), allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
+    real(8), allocatable :: Z(:,:)           ! renormalisation factor 1/z= 1 - (d/dw)S_{k,n}(w) @ w=0
+    real(8), allocatable :: Im(:,:)          ! =-imaginary part of the self-energy at zero frequency
+    real(8), allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
+
+    real(8)              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
+    real(8), allocatable :: a(:,:)           ! TIGHT BINDING PARAMETER: lattice spacing to the higher order hoppings (3, tmax)
+    real(8), allocatable :: E0(:)            ! TIGHT BINDING PARAMETER: band energy at Gamma point (nbands)
+    real(8), allocatable :: t(:,:)           ! TIGHT BINDING PARAMETER: hopping parameter (~band width) (nbands,tmax)
+    real(8), allocatable :: M2(:,:,:,:)      ! TIGHT BINDING PARAMETER: 2nd derivative of the energy dispersion (idir,idir2,nk,nbands)
   end type
 
   type symop
-    integer, allocatable :: symop_id(:,:)        ! symop_id(2,redkp) this counter tells me if for a given k-point the corresponding irreducible kpoint (1) and the required symmetry operation (2)
-                                                 ! produces a new element or a redundant one (1 or 0 in the 1st entry)
-    integer :: nsym                              ! number of symmetry operations
-    double precision, allocatable :: Msym(:,:,:) ! Msym(3,3,nsym) matrix containing the 3x3 symmetry transformations
-    double precision, allocatable :: Tras(:,:)   ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
-    logical :: lcubic
-    logical :: ltetrag
-    logical :: lorthor
-    logical :: lnsymmr                           ! .true. for nonsymmorphic space groups
+    integer, allocatable :: symop_id(:,:)   ! symop_id(2,redkp) this counter tells me if for a given reducible k-point the corresponding
+                                            ! irreducible kpoint (1) and the required symmetry operation (2)
+                                            ! produces a new element or a redundant one (1 or 0 in the 1st entry)
+    real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 symmetry transformations
+    real(8), allocatable :: Tras(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
+    integer :: nsym                         ! number of symmetry operations
+    logical :: lnsymmr                      ! .true. for nonsymmorphic space groups
     character(3) :: cntr
   end type
 
   type tetramesh
     integer :: ntet                            ! number of inequivalent tetrahedra found starting from an equally spaced k-grid
     integer, allocatable :: idtet(:,:)         ! dimension (0:4,ntet); idtet(0,ntet) is the tetrahedron's multiplicity, 1:4 are the identifiers of the vertices
-    double precision :: vltot                  ! vltot is the total tetrahedron's volume (in reciprocal space)
-    double precision, allocatable :: vltet(:)  ! dimension (ntet); vltet(itet) is the tetrahedron's volume (in reciprocal space)
-    double precision, allocatable :: nocc(:)   ! dimension (nbands); number of occupied tetrahedra at a given temperature
+    real(8) :: vltot                  ! vltot is the total tetrahedron's volume (in reciprocal space)
+    real(8), allocatable :: vltet(:)  ! dimension (ntet); vltet(itet) is the tetrahedron's volume (in reciprocal space)
+    real(8), allocatable :: nocc(:)   ! dimension (nbands); number of occupied tetrahedra at a given temperature
   end type
 
   type dosgrid
     integer :: nnrg                         ! number of points in the energy window
-    double precision :: emin                ! bottom of the energy window
-    double precision :: emax                ! top of the energy window
-    double precision :: vbm                 ! valence band maximum
-    double precision :: cbm                 ! conduction band minimum
-    double precision :: gap                 ! band gap
-    double precision, allocatable :: enrg(:)! energy grid
-    double precision, allocatable :: dos(:) ! density of states (as computed in PRB,49,16223, appx C )
-    double precision, allocatable :: nos(:) ! number  of states (as computed in PRB,49,16223, appx A )
+    real(8) :: emin                ! bottom of the energy window
+    real(8) :: emax                ! top of the energy window
+    real(8) :: vbm                 ! valence band maximum
+    real(8) :: cbm                 ! conduction band minimum
+    real(8) :: gap                 ! band gap
+    real(8), allocatable :: enrg(:)! energy grid
+    real(8), allocatable :: dos(:) ! density of states (as computed in PRB,49,16223, appx C )
+    real(8), allocatable :: nos(:) ! number  of states (as computed in PRB,49,16223, appx A )
   end type
 
   type scatrate
     integer :: nT                           ! number of points in the temperature window
-    double precision :: Tmin                ! bottom of the temperature window
-    double precision :: Tmax                ! top of the temperature window
-    double precision :: dT                  ! temperature interval
-    double precision, allocatable :: TT(:)  ! temperature grid
-    double precision, allocatable :: mu(:)  ! chemical potential (temperature dependent)
-    double precision, allocatable :: d1(:)  ! square of the 1st derivative of sigma
-    double precision, allocatable :: d2(:)  ! product of the 2nd derivative times sigma
-    double precision, allocatable :: d0(:)  ! linear combination of the two above, whose zero corresponds to T*
-    double precision :: Tstar               ! temperature for which (d^2 rho)/(d beta^2)=0
+    real(8) :: Tmin                ! bottom of the temperature window
+    real(8) :: Tmax                ! top of the temperature window
+    real(8) :: dT                  ! temperature interval
+    real(8), allocatable :: TT(:)  ! temperature grid
+    real(8), allocatable :: mu(:)  ! chemical potential (temperature dependent)
+    real(8), allocatable :: d1(:)  ! square of the 1st derivative of sigma
+    real(8), allocatable :: d2(:)  ! product of the 2nd derivative times sigma
+    real(8), allocatable :: d0(:)  ! linear combination of the two above, whose zero corresponds to T*
+    real(8) :: Tstar               ! temperature for which (d^2 rho)/(d beta^2)=0
                                             ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
-    double precision :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
+    real(8) :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
     !gamma
     integer :: ng                           ! degree of the polynomial temperature dependence of gamma
-    double precision, allocatable :: gc(:)  ! coefficient of the polynomial temperature dependence of gamma
-    double precision, allocatable :: gam(:) ! temparature dependent scattering rate (extrinsic scattering events), defects
-    double precision, allocatable :: ykb(:,:,:) ! intrinsic scattering rate ykb(T,k,band)
+    real(8), allocatable :: gc(:)  ! coefficient of the polynomial temperature dependence of gamma
+    real(8), allocatable :: gam(:) ! temparature dependent scattering rate (extrinsic scattering events), defects
+    real(8), allocatable :: ykb(:,:,:) ! intrinsic scattering rate ykb(T,k,band)
 
   end type
 
-  ! DOUBLE PRECISION
   type dp_resp
-    !integer,parameter :: iq=8
-    !integer, kind :: iq=8
     !kernels
     real(8) ::  s_ker  ! for conductivity
     real(8) ::  sB_ker ! for conductivity in B-field
@@ -120,10 +126,10 @@ module Mtypes
     real(8), allocatable :: sB(:,:,:)        ! nband,3,3 for conductivity in B-field
     real(8), allocatable :: a(:,:,:)         ! nband,3,3 for Peltier
     real(8), allocatable :: aB(:,:,:)        ! nband,3,3 for Peltier in B-field
-    real(8), allocatable :: s_local(:,:,:)   ! used only in the mpi version
-    real(8), allocatable :: sB_local(:,:,:)  !
-    real(8), allocatable :: a_local(:,:,:)   !
-    real(8), allocatable :: aB_local(:,:,:)  !
+    real(8), allocatable :: s_local(:,:,:)
+    real(8), allocatable :: sB_local(:,:,:)
+    real(8), allocatable :: a_local(:,:,:)
+    real(8), allocatable :: aB_local(:,:,:)
 
     real(8) :: s_tot(3,3),  s_tet(3,3)
     real(8) :: sB_tot(3,3), sB_tet(3,3)
@@ -143,7 +149,6 @@ module Mtypes
     real(8) :: gamma1,gamma2, aqp1,aqp2, z1,z2
   end type
 
-  ! QUAD PRECISION
   type qp_resp
     !kernels
     real(16) ::  s_ker  ! for conductivity
@@ -159,10 +164,10 @@ module Mtypes
     real(16), allocatable :: sB(:,:,:)        ! nband,3,3 for conductivity in B-field
     real(16), allocatable :: a(:,:,:)         ! nband,3,3 for Peltier
     real(16), allocatable :: aB(:,:,:)        ! nband,3,3 for Peltier in B-field
-    real(16), allocatable :: s_local(:,:,:)   ! used only in the mpi version
-    real(16), allocatable :: sB_local(:,:,:)  !
-    real(16), allocatable :: a_local(:,:,:)   !
-    real(16), allocatable :: aB_local(:,:,:)  !
+    real(16), allocatable :: s_local(:,:,:)
+    real(16), allocatable :: sB_local(:,:,:)
+    real(16), allocatable :: a_local(:,:,:)
+    real(16), allocatable :: aB_local(:,:,:)
 
     real(16) :: s_tot(3,3),  s_tet(3,3)
     real(16) :: sB_tot(3,3), sB_tet(3,3)

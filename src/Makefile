@@ -52,6 +52,7 @@ main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
+params.o: types.o
 
 setupbz.o: params.o estruct.o types.o
 

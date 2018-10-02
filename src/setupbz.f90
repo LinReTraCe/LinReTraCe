@@ -6,7 +6,6 @@ program setupbz
   use hdf5
   implicit none
 
-  type(algorithm)          :: algo
   type(kpointmesh)         :: irrkm
   type(kpointmesh), target :: redkm
   type(kpointmesh), target :: fulkm
@@ -37,9 +36,9 @@ program setupbz
 
   algo%ldebug = .true.
 
-  call read_config(algo,  irrkm, eirrk, sct)
-  call setup_meshes(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk)
-  call estruct_init(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
+  call read_config(irrkm, eirrk, sct)
+  call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
+  call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
 
   ! if we work with tetrahedrons the reducible BZ got extended to full
   ! i.e. we have some double counting which was necessary for the

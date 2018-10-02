@@ -1,11 +1,15 @@
 module Mparams
+  use Mtypes
   implicit none
 
-  real(8)  :: NE ! #electrons
+  ! since these 2 data structures never change throughout
+  ! we make them available for all routines
+  type(algorithm) :: algo
+  type(lattice)   :: lat
+
   real(8)  :: Tmin,Tmax,dT,T ! Temperature min, max, interval
   real(8)  :: beta, beta2p, threshold
   real(16) :: betaQ,beta2pQ,thresholdQ
-
 
   ! mathematical constants
   complex(8), parameter  :: ci = (0.d0,1.d0)
@@ -31,5 +35,6 @@ module Mparams
   real(8), parameter     :: small=1D-11 ! ~1D-11 for real(8): use 10 significant digits... use 20 for QUAD
   real(16), parameter    :: smallQ=1Q-21 ! ~1Q-18 doesnt seem to matter for QUAD...
 
+  ! parameter to fill out cut off w2k bands
   real(8), parameter     :: band_fill_value = 1.d4
 end module Mparams

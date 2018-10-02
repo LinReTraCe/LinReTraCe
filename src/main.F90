@@ -42,11 +42,6 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-
-! somehow mpif90 on hclm doesn like the more elegant iso way...
-!#define qp 16
-!#define dp 8
-
 program gtmain ! GammaTransport
 
   use Mparams
@@ -60,20 +55,19 @@ program gtmain ! GammaTransport
   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
   !! is negligible
-  type(algorithm)          :: algo
   type(kpointmesh), target :: irrkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh), target :: redkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh), target :: fulkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(edisp), target      :: eirrk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
-  type(edisp), target      :: eredk   ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
-  type(edisp), target      :: efulk   ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
+  type(kpointmesh), target :: redkm
+  type(kpointmesh), target :: fulkm
+  type(edisp), target      :: eirrk   ! contains the band dispersion energy and the optical matrix elements
+  type(edisp), target      :: eredk
+  type(edisp), target      :: efulk
   type(tetramesh)          :: thdr    ! contains the tetrahedra
   type(dosgrid)            :: dos     ! DOS, integrated DOS, Fermi level
   type(scatrate)           :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
   type(dp_resp)            :: dpresp  ! response functions in double precision
   type(dp_resp)            :: respBl  ! response functions in double precision for Boltzmann regime response
   type(dp_respinter)       :: dinter  ! response functions in double precision for interband transitions
-  type(dp_respinter)       :: dderesp ! response function's (intraband conductivity) derivatives in double precision
+  type(dp_respinter)       :: dderesp ! response functions (intraband conductivity) derivatives in double precision
   type(qp_resp)            :: qpresp  ! response functions in 4-ple precision
 
   ! mP note
@@ -120,11 +114,11 @@ program gtmain ! GammaTransport
   algo%ldebug=.true.
 
   ! we read the information into the irreducible datatypes
-  call read_config(algo, irrkm, eirrk, sct)
-  ! based on algo switches we setup the other kind of grids
-  call setup_meshes(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk)
+  call read_config(irrkm, eirrk, sct)
+  ! based on the input we setup the other kind of grids
+  call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
   !read in electronic structure and matrix elements
-  call estruct_init(algo, irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
+  call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
 
   ! now we either have the data in the full BZ or in the reducible one
   if (algo%ltetra) then
@@ -152,7 +146,7 @@ program gtmain ! GammaTransport
   mu = epointer%efer
   if (myid.eq.master) then
      if (algo%imurestart == 0) then
-        write(*,*)'initialized LDA mu = ',mu
+        write(*,*) 'initialized LDA mu = ',mu
      else
         write(*,*) 'mu read from file = ', mu
      endif
@@ -192,9 +186,9 @@ program gtmain ! GammaTransport
   !trivial T-dependence at the moment
   if (algo%ldmft) then
      sct%ykb=0.0d0
-     do iT=1,sct%nT
-        do iband=1,nband
-           do ik=1,nk
+     do iband=1,nband
+        do ik=1,nk
+           do iT=1,sct%nT
               sct%ykb(iT,ik,iband)=epointer%Im(ik,iband)
            enddo
         enddo
@@ -218,10 +212,8 @@ program gtmain ! GammaTransport
 
   if (algo%ldebug) then
      if (myid.eq.master) write(*,*) "number of tetrahedrons: ", thdr%ntet
-     write(*,*) "myid: ", myid, "iqstr: ", iqstr, "iqend: ", iqend
+     write(*,*) "MPI: myid: ", myid, "iqstr: ", iqstr, "iqend: ", iqend
   endif
-
-  stop
 
   if (myid.eq.master) then
      select case (algo%imurestart)
@@ -245,7 +237,7 @@ program gtmain ! GammaTransport
            write(20,*)'using constant mu=',mu
            write(*,*)'using constant mu=',mu
      end select
-     call response_open_files(algo)
+     call response_open_files()
   endif !master
 
 
@@ -264,24 +256,18 @@ program gtmain ! GammaTransport
 
   ! allocation of arrays in the derived datatypes
   if (algo%ltetra) then
-     call dpresp_alloc(algo%lBfield, dpresp, 4, nband)
-     call dprespinter_alloc(.false., dderesp, 4, nband)
-     call dprespinter_alloc(.false., dinter, 4, nband)
-     call dpresp_alloc(algo%lBfield, respBl, 4, nband)
+     nk = 4
   else
-     call dpresp_alloc(algo%lBfield, dpresp, nk, nband)
-     call dprespinter_alloc(.false., dderesp, nk, nband)
-     call dprespinter_alloc(.false., dinter, nk, nband) !eM 16.03.2018 unused at the moment
-     call dpresp_alloc(algo%lBfield, respBl, nk, nband)
+     nk = kpointer%ktot ! which is the number of reducible k-points
   endif
 
-  ! allocation of qp only for production runs
+  ! allocate the arrays once outside of the main (temperature) loop
+  call dpresp_alloc(algo%lBfield, dpresp, nk, nband)
+  call dpresp_alloc(.false., dderesp, nk, nband)
+  call dpresp_alloc(.false., dinter, nk, nband)
+  call dpresp_alloc(algo%lBfield, respBl, nk, nband)
   if (.not. algo%ldebug) then
-     if (algo%ltetra) then
-        call qpresp_alloc(algo%lBfield, qpresp, 4, nband)
-     else
-        call qpresp_alloc(algo%lBfield, qpresp, nk, nband)
-     endif
+     call qpresp_alloc(algo%lBfield, qpresp, nk, nband)
   endif
 
   if (myid.eq.master) then
@@ -299,8 +285,6 @@ program gtmain ! GammaTransport
   sct%Tflat = 0.0d0
   allocate(drhodT(sct%nT))
   drhodT = 0.0d0
-
-  stop
 
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -332,7 +316,6 @@ program gtmain ! GammaTransport
   ! using FWHM of ImDigamma Funktion... see notes:
   ! require here FWHM >=delta/20 for DP to be sufficient
   ! XXX be careful in the case of metals... then delta makes no sense...
-
 
      !if (myid.eq.master) then
      !also the chemical potential search is not parallelised at the moment
@@ -459,14 +442,10 @@ program gtmain ! GammaTransport
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   ! DONE MU. DO TRANSPORT AT THIS POINT.
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-#ifdef MPI
-     call MPI_BARRIER( MPI_COMM_WORLD, mpierr ) !needed?
-#endif
      if (algo%ldebug) then
-        call calc_response(mu, iT, drhodT, algo, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl)
+        call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl)
      else
-        call calc_response(mu, iT, drhodT, algo, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
+        call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
      endif
   enddo ! iT temperature
   ! the values of the derivative of the resistivity have been accumulated over
@@ -503,7 +482,7 @@ program gtmain ! GammaTransport
     !end lines to be removed
 
     close(20) ! mu.dat
-    call response_close_files(algo)
+    call response_close_files()
   endif
 
   call mpi_close()
