@@ -2,10 +2,11 @@ module Mparams
   use Mtypes
   implicit none
 
-  ! since these 2 data structures never change throughout
+  ! since these 3 data structures never change throughout
   ! we make them available for all routines
   type(algorithm) :: algo
   type(lattice)   :: lat
+  type(symop)     :: symm
 
   real(8)  :: Tmin,Tmax,dT,T ! Temperature min, max, interval
   real(8)  :: beta, beta2p, threshold

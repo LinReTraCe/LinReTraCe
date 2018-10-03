@@ -1,4 +1,4 @@
-these are all routines from the CERN mathlib for the polygamma 
+these are all routines from the CERN mathlib for the polygamma
 function wpsipg(z,n)
 
 changes wrt to CERN version:
@@ -7,4 +7,9 @@ changes wrt to CERN version:
 - added Bernouli coefficients up to order 12, reaching deviations lower than 1E-27 to analytical Fermi function
   (beta=2000)
 
+documentation can be found at
+hep.fi.infn.it/cernlib.pdf (last checked: october 2nd 2018)
 
+wpsipg(z,0) = psi(z) = d(ln(Gamma(z)))/dz <- digamma function
+wpsipg(z,k) = psi^k (z) = d^k/dz^k psi(z) <- polygamma function
+  k element 1...4

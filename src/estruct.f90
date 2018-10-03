@@ -15,7 +15,6 @@ module Mestruct
     type(edisp)      :: eirrk  ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the irr-k-mesh
     type(edisp)      :: eredk  ! contains the band dispersion energy and the optical matrix elements (when which > 2) along the red-k-mesh
     type(edisp)      :: efulk  ! contains the band dispersion energy and the optical matrix elements for the red-k-mesh including BZ endpoints
-    type(symop)      :: symm   ! contains the symmetry operations
     type(tetramesh)  :: thdr   ! contains the tetrahedra (should you need them...)
     type(dosgrid)    :: dos
     type(scatrate)   :: sct
@@ -28,11 +27,12 @@ module Mestruct
           call gentbstr(redkm, eredk) ! tb on [0, 1)
        endif
     else
-       call genelstr(irrkm, redkm, eirrk, eredk, symm) ! w2k on [0, 1)
+       call genelstr(irrkm, redkm, eirrk, eredk) ! w2k on [0, 1)
     endif
 
     ! create tetrahedrons if necessary
     ! evaluate DOS / NOS for the non-interacting case
+    ! find Fermi level as a starting point for the full calculation
     if (algo%ltetra) then
        if (.not. algo%ltbind) then
           call genfulkm(redkm, fulkm, eredk, efulk) ! w2k [0, 1) -> [0, 1]
@@ -184,7 +184,7 @@ module Mestruct
     ! .not. tb -> copy everything into RED
     ! .not. tb + tetrahedron -> also copy everything into FUL
     !
-    ! the thing we cannot take care of here is the number of normal and optical bands
+    ! the thing we CANNOT take care of here is the number of normal and optical bands
     ! since they are determined later in getirrk
     !
     if (algo%ltbind) then
@@ -244,7 +244,7 @@ module Mestruct
     lat%lorthorhombic = .false.
     lat%nalpha = 3 ! we need all three directions for the responses
 
-    ! these data points come from the input file
+    ! these data points come directly from the input file
     ! i.e. we shouldnt be worrying about double precision comparisons.
     if (lat%a(1) .eq. lat%a(2) .and. lat%a(1) .eq. lat%a(3) &
         .and. lat%a(1) .eq. lat%a(3)) then
@@ -345,29 +345,6 @@ module Mestruct
        close(12)
        if(algo%lBfield) close(13)
     endif
-    !!!!!!!!!!!!!!!TEST
-    ! costruct the numerical derivative for the band dispersion
-    ! and compare it with the analitycal estimate
-    ! select the direction in which you want to estimate the derivative
-    !allocate(xtmp(1:nkx))
-    !allocate(ytmp(1:nkx))
-    !allocate(dytmp(1:nkx))
-    !iband=1
-    !do ikx=1,nkx
-    !   ik = redkm%k_id(ikx,2,2)
-    !   xtmp(ikx) = redkm%k_coord(1,ik)
-    !   ytmp(ikx) = eredk%band(ik,iband)
-    !   dytmp(ikx)= 0.0d0
-    !enddo
-    !
-    !call derrich(xtmp,ytmp,dytmp)
-    !do ikx=1,nkx
-    !   write(70,*)xtmp(ikx),ytmp(ikx),dytmp(ikx)
-    !   write(71,*)xtmp(ikx),dytmp(ikx),2.0d0*pi*eredk%Mopt(1,redkm%k_id(ikx,2,2),iband,iband)/redkm%alat
-    !enddo
-    !deallocate(xtmp,ytmp,dytmp)
-    !STOP
-    !!!!!!!!!!!!!!!TEST END
 
     if (.not. allocated(ek%Z)) then
        allocate(ek%Z(kmesh%ktot,ek%nband_max))
@@ -395,20 +372,19 @@ module Mestruct
 
   end subroutine !gentbstr
 
-  subroutine genelstr (irrkm, redkm, eirrk, eredk, symm)
+  subroutine genelstr (irrkm, redkm, eirrk, eredk)
     implicit none
     type(kpointmesh) :: irrkm
     type(kpointmesh) :: redkm
     type(edisp)      :: eirrk
     type(edisp)      :: eredk
-    type(symop)      :: symm
 
     integer          :: ik,ikx,iky,ikz,nb,nb1
 
     if (algo%lsymm) then
        ! read in the w2k klist and symmetry operations
        ! also determine the number of bands we have to use
-       call getirrk  (symm%cntr, irrkm, eirrk)
+       call getirrk  (irrkm, eirrk)
        eredk%nband_max = eirrk%nband_max
        ! if we additionally get data from DMFT, read them in
        ! this method overwrites existing band data
@@ -416,45 +392,39 @@ module Mestruct
           call getdmft(irrkm, eirrk)
        endif
        ! get the rotations and translations from the appropriate w2k files
-       call getsymop (symm,  irrkm, eirrk)
+       call getsymop (irrkm, eirrk)
        ! generate a reducible kmesh (redkm) from the set of symmetry operations and the irrek-mesh
        ! also save the rotations required in symm for the optical elements later
-       call genredk  (symm, irrkm, redkm)
+       call genredk  (irrkm, redkm)
        ! read in the optical matrix elements on the irreducible grid
        ! and if algo%ldmft is true also the selfenergy file
-       call getirropt (irrkm, eirrk)
+       call getirropt(irrkm, eirrk)
        ! generate the optical matrix elements evaluated on the new redkm grid
        ! also map the band, Z, Im values from the irrkm to the redkm
-       call genredopt (redkm, symm, eirrk, eredk)
+       call genredopt(irrkm, redkm, eirrk, eredk)
        ! translate the reducible k-mesh and take care of the bandstructure
        ! call trnredk (irrkm, redkm, eredk, symm, algo)
     else !reducible BZ is already provided by W2k
-       call getirrk (symm%cntr, redkm, eredk)
+       call getirrk (redkm, eredk)
        if (algo%ldmft) then
           call getdmft(redkm, eredk)
        endif
-       call getsymop (symm, redkm, eredk) !need to call this routine to set the logical switches in symmop type
-
-       if (.not. allocated(redkm%k_id)) allocate(redkm%k_id(redkm%kx, redkm%ky, redkm%kz)) !if algo%lsymm=.false. redkm%k_id has not been allocated
+       ! I don't know whether this is still necessary to call
+       call getsymop(redkm, eredk)
+       ! assign unique identifier to each k-point
+       if (.not. allocated(redkm%k_id)) allocate(redkm%k_id(redkm%kx, redkm%ky, redkm%kz))
+       if (.not. allocated(symm%symop_id))  allocate(symm%symop_id(2,redkm%ktot))
        ik=0
        do ikx=1,redkm%kx
           do iky=1,redkm%ky
              do ikz=1,redkm%kz
                 ik=ik+1
                 redkm%k_id(ikx, iky, ikz)=ik
+                symm%symop_id(1,ik) = ik  ! one to one mapping
+                symm%symop_id(2,ik) = 0   ! no operations necessary for already reducible points
              enddo
           enddo
        enddo
-       !!!!!!!!!!!!!!!!TEST
-       !do ik=1,redkm%ktot
-       !   write(667,*)'KP',ik,redkm%k_coord(1,ik),redkm%k_coord(2,ik),redkm%k_coord(3,ik)
-       !   do nb=1,eredk%nband_max
-       !      write(667,160)nb,eredk%band(ik,nb)
-       !   enddo
-       !enddo
-       !160  FORMAT  (I4,X,F12.8,X)
-       !!!!!!!!!!!!!!!!TEST END
-
        ! read in the optical matrix elements on the reducible grid
        ! and if algo%ldmft is true also the selfenergy file
        call getirropt (redkm, eredk)
@@ -473,24 +443,6 @@ module Mestruct
              eredk%Mopt(3,ik,nb,nb)=1.0d0
           enddo
        enddo
-       !!!!!!!!!!!!!!!!TEST
-       !do ik=1,redkm%ktot
-       !   do nb=eredk%nbopt_min,eredk%nbopt_max
-       !      do nb1=nb+1,eredk%nbopt_max
-       !         eredk%Mopt(1,ik,nb,nb1)=0.0d0
-       !         eredk%Mopt(2,ik,nb,nb1)=0.0d0
-       !         eredk%Mopt(3,ik,nb,nb1)=0.0d0
-       !      enddo
-       !   enddo
-       !   do nb=eredk%nbopt_min,eredk%nbopt_max
-       !      do nb1=nb+1,eredk%nbopt_max
-       !         eredk%Mopt(1,ik,nb1,nb)=0.0d0
-       !         eredk%Mopt(2,ik,nb1,nb)=0.0d0
-       !         eredk%Mopt(3,ik,nb1,nb)=0.0d0
-       !      enddo
-       !   enddo
-       !enddo
-       !!!!!!!!!!!!!!!!TEST END
     endif
   end subroutine !genelstr
 
@@ -503,11 +455,10 @@ module Mestruct
 ! either in the kpointmesh or in edisp type
 !
 
-  subroutine getirrk (cntr, kmesh, edspk )
+  subroutine getirrk (kmesh, edspk )
     implicit none
 
     !passed variables
-    character(3)     :: cntr   ! centering of the unit cell: P,F,B,H,C??
     type(kpointmesh) :: kmesh  ! k-mesh generated by Wien2k
     type(edisp)      :: edspk  ! energy dispersion and optical matrix elements over k-mesh generated by Wien2k
     !internal variables
@@ -530,7 +481,7 @@ module Mestruct
     !get the number of nonequivalent atoms in cell
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
     read(10,*)
-    read(10,*) cntr, ccrap, ccrap, iatm
+    read(10,*) symm%cntr, ccrap, ccrap, iatm
     !write(*,*) 'number of inequivalent atoms in cell',iatm
     close(10)
 
@@ -574,18 +525,6 @@ module Mestruct
     enddo
 
     deallocate(band_tmp)
-
-    ! deprecated
-    !
-    !!get k-points weight
-    !!TODO: remove because we never use weighted k-point sums
-    !open(12,file=trim(adjustl(algo%mysyst))//'.klist',status='old')
-    !do ik=1,kmesh%ktot
-    !   read(12,*)icrap,icrap,icrap,icrap,icrap,dtmp
-    !   kmesh%mult(ik)=dtmp
-    !   kmesh%k_weight(ik)=1.d0/dtmp
-    !enddo
-    !close(12)
 
   end subroutine !getirrk
 
@@ -682,6 +621,8 @@ module Mestruct
        ek%nbopt_max=ek%nband_max
     endif
 
+    write(*,*) 'GETIRROPT: optical bands minimum: ', ek%nbopt_min
+    write(*,*) 'GETIRROPT: optical bands maximum: ', ek%nbopt_max
 
 
     130  FORMAT (4X,I3,X,I3,3(X,E12.6))
@@ -746,11 +687,10 @@ module Mestruct
        ek%Im=0.0d0
     endif
 
-
   end subroutine
 
   subroutine getdmft(kmesh, ek)
-    !passed variables
+    implicit none
     type(kpointmesh) :: kmesh    ! either irrk or redk
     type(edisp)      :: ek
 
@@ -787,10 +727,9 @@ module Mestruct
 ! acting on the irreducible kmesh generate the reducible
 ! counterpart (see genredk below)
 !
-  subroutine getsymop(symm, kmesh, ek)
+  subroutine getsymop(kmesh, ek)
     implicit none
 
-    type(symop)      :: symm
     type(kpointmesh) :: kmesh
     type(edisp)      :: ek
     integer :: n, i, j
@@ -806,7 +745,6 @@ module Mestruct
 
     substring="NUMBER OF SYMMETRY OPERATIONS"
     ix=0
-    symm%Tras(:,:) = 0.0d0
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
     do i=1, 100
        read(10,'(A)') line
@@ -933,10 +871,9 @@ module Mestruct
 ! This grid is then traslated into the interval (0, 2pi/a)
 ! in the following subroutine
 !
-  subroutine genredk (symm, kmesh, redkm )
+  subroutine genredk (kmesh, redkm )
     implicit none
     !passed variables
-    type(symop)      :: symm   ! contains symmetry operations
     type(kpointmesh) :: kmesh  ! irreducible k-mesh generated by Wien2k
     type(kpointmesh) :: redkm  ! reducible k-mesh generated here
 
@@ -996,6 +933,9 @@ module Mestruct
 
              ! translate negative k-points into positive ones
              do j=1,3
+                ! back-translation
+                if(tmpk2(j) .lt. 0.d0) then
+                   tmpk2(j) = tmpk2(j) + 1.d0
                 ! set numerically zero values to absolute zero
                 if(abs(tmpk2(j)) .le. 1.d-6) tmpk2(j) = 0.d0
                 ! sanity check
@@ -1003,9 +943,6 @@ module Mestruct
                    write(*,*) 'GENREDK: generated k-point outside of BZ: ', tmpk2(:)
                    stop
                 endif
-                ! back-translation
-                if(tmpk2(j) .lt. 0.d0) then
-                   tmpk2(j) = tmpk2(j) + 1.d0
                 endif
              enddo
 
@@ -1070,7 +1007,7 @@ module Mestruct
     ! that means the current cerium test case will never work...
     if ((ineq .ne. redkm%ktot) .and. (mod(redkm%ktot,ineq) .ne. 0) ) then
        write(*,*) 'GENREDK: the number of k-points generated by symmetry is inconsistent',ineq,redkm%ktot,redkm%kx,redkm%ky,redkm%kz
-       write(*,*) 'Produced k-points:'
+       write(*,*) 'Constructed k-points:'
        write(*,*)
        do i=1,size(tmpkall,2)
           write(*,*) tmpkall(:,i)
@@ -1107,11 +1044,11 @@ module Mestruct
 ! This subroutine generates the optical matrix elements
 ! starting from those read in on the irreducible k-mesh
 !
-  subroutine genredopt (redkm, symm, eirrk, eredk )
+  subroutine genredopt (irrkm, redkm, eirrk, eredk )
     implicit none
     !passed variables
+    type(kpointmesh) :: irrkm
     type(kpointmesh) :: redkm ! reducible k-mesh
-    type(symop) :: symm       ! contains symmetry operations
     type(edisp) :: eirrk      ! energy dispersion and optical matrix elements over irr k-mesh generated by Wien2k
     type(edisp) :: eredk
     !internal variables
@@ -1124,116 +1061,142 @@ module Mestruct
     eredk%nbopt_max = eirrk%nbopt_max
     eredk%nbopt_min = eirrk%nbopt_min
 
-    ! if cubic -> we only need the diagonal elements
-    if (.not. allocated(eredk%Mopt) .and. (lat%lcubic)) &
-      allocate(eredk%Mopt(1:3,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-    ! if not cubic -> 6 out of the 9
-    if (.not. allocated(eredk%Mopt) .and. (.not.lat%lcubic)) &
-      allocate(eredk%Mopt(1:6,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-    if (.not. allocated(eredk%band)) &
-      allocate(eredk%band(redkm%ktot,eredk%nband_max))
-    if (.not. allocated(eredk%Z)) &
-      allocate(eredk%Z(redkm%ktot,eredk%nband_max))
-    if (.not. allocated(eredk%Im)) &
-      allocate(eredk%Im(redkm%ktot,eredk%nband_max))
-    eredk%Mopt(:,:,:,:) = 0.d0
-    eredk%band(:,:)     = 0.d0
-    eredk%Im(:,:)       = 0.d0
-    eredk%Z(:,:)        = 0.d0
-    if (lat%lcubic) then
-       allocate(osm1(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-       allocate(osm2(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-       allocate(osm3(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-    else
-       allocate(Mtmp(3,3,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
-    endif
 
-    ! scan the symm%symop_id to check what are the combinations of k-point and symmetry that produce non-redundant element in redkm
-    if (lat%lcubic) then
-       do i=1,redkm%ktot
-          ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
-          isym= symm%symop_id(2,i)
+    if (algo%lpreproc) then ! generate and save everything
+       ! if cubic -> we only need the diagonal elements
+       if (.not. allocated(eredk%Mopt) .and. (lat%lcubic)) &
+         allocate(eredk%Mopt(1:3,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+       ! if not cubic -> 6 out of the 9
+       if (.not. allocated(eredk%Mopt) .and. (.not.lat%lcubic)) &
+         allocate(eredk%Mopt(1:6,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+       if (.not. allocated(eredk%band)) &
+         allocate(eredk%band(redkm%ktot,eredk%nband_max))
+       if (.not. allocated(eredk%Z)) &
+         allocate(eredk%Z(redkm%ktot,eredk%nband_max))
+       if (.not. allocated(eredk%Im)) &
+         allocate(eredk%Im(redkm%ktot,eredk%nband_max))
+       eredk%Mopt(:,:,:,:) = 0.d0
+       eredk%band(:,:)     = 0.d0
+       eredk%Im(:,:)       = 0.d0
+       eredk%Z(:,:)        = 0.d0
+       if (lat%lcubic) then
+          allocate(osm1(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+          allocate(osm2(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+          allocate(osm3(eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+       else
+          allocate(Mtmp(3,3,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
+       endif
 
-          osm1=0.d0; osm2=0.d0; osm3=0.d0
-          ! check eq. 13.16 (pg 479) in "Symmetry and Condensed Matter Physics A Computational Approach" by M. El-Batanouny, F. Wooten, CUP
-          do j=1,3
-             do nb=eredk%nbopt_min,eredk%nbopt_max ; do nb2=eredk%nbopt_min,eredk%nbopt_max
-                osm1(nb,nb2) = osm1(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,1,isym)*symm%Msym(j,1,isym)
-                osm2(nb,nb2) = osm2(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,2,isym)*symm%Msym(j,2,isym)
-                osm3(nb,nb2) = osm3(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,3,isym)*symm%Msym(j,3,isym)
-             enddo ; enddo
+       ! scan the symm%symop_id to check what are the combinations of k-point and symmetry that produce non-redundant element in redkm
+       if (lat%lcubic) then
+          do i=1,redkm%ktot
+             ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
+             isym= symm%symop_id(2,i)
+
+             osm1=0.d0; osm2=0.d0; osm3=0.d0
+             ! check eq. 13.16 (pg 479) in "Symmetry and Condensed Matter Physics A Computational Approach" by M. El-Batanouny, F. Wooten, CUP
+             do j=1,3
+                do nb=eredk%nbopt_min,eredk%nbopt_max ; do nb2=eredk%nbopt_min,eredk%nbopt_max
+                   osm1(nb,nb2) = osm1(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,1,isym)*symm%Msym(j,1,isym)
+                   osm2(nb,nb2) = osm2(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,2,isym)*symm%Msym(j,2,isym)
+                   osm3(nb,nb2) = osm3(nb,nb2) + eirrk%Mopt(j,ik,nb,nb2)*symm%Msym(j,3,isym)*symm%Msym(j,3,isym)
+                enddo ; enddo
+             enddo
+             eredk%Mopt(1,i,:,:)=osm1(:,:)
+             eredk%Mopt(2,i,:,:)=osm2(:,:)
+             eredk%Mopt(3,i,:,:)=osm3(:,:)
           enddo
-          eredk%Mopt(1,i,:,:)=osm1(:,:)
-          eredk%Mopt(2,i,:,:)=osm2(:,:)
-          eredk%Mopt(3,i,:,:)=osm3(:,:)
-       enddo
-       deallocate(osm1,osm2,osm3)
+          deallocate(osm1,osm2,osm3)
 
-       !!!!!!!!!!!!!!!!TEST
-       !write(666,'(A,I6,3f8.4)')'KP ',k,redkm%k_coord(1,k),redkm%k_coord(2,k),redkm%k_coord(3,k)
-       !do nb=eredk%nbopt_min,eredk%nbopt_max
-       !   do nb2=nb,eredk%nbopt_max
-       !      write(666, '(2(I4,X),3(E12.6,X))')nb,nb2,eredk%Mopt(1,k,nb,nb2),eredk%Mopt(2,k,nb,nb2),eredk%Mopt(3,k,nb,nb2)
-       !   enddo
-       !enddo
-       !STOP
-       !!!!!!!!!!!!!!!!TEST END
+          !!!!!!!!!!!!!!!!TEST
+          !write(666,'(A,I6,3f8.4)')'KP ',k,redkm%k_coord(1,k),redkm%k_coord(2,k),redkm%k_coord(3,k)
+          !do nb=eredk%nbopt_min,eredk%nbopt_max
+          !   do nb2=nb,eredk%nbopt_max
+          !      write(666, '(2(I4,X),3(E12.6,X))')nb,nb2,eredk%Mopt(1,k,nb,nb2),eredk%Mopt(2,k,nb,nb2),eredk%Mopt(3,k,nb,nb2)
+          !   enddo
+          !enddo
+          !STOP
+          !!!!!!!!!!!!!!!!TEST END
 
-       ! The new matrix elements are generated by a matrix product of the type:
-       !
-       !  M'_ab = sum (R_aj M_jl R_bl)
-       !          j,l
-       ! along the cartesian indices. The Mopt matrix is indexed following the
-       ! convention in the optic output of Wien2k:
-       !  1  4  5
-       !     2  6
-       !        3
-       ! whereas the symmetry matrices have rows and columns indexed independently.
-       ! To treat the two objects in a consistent way the optical matrix elements are
-       ! copied over to temporary matrices
-    else
-       do i=1,redkm%ktot
-          ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
-          isym= symm%symop_id(2,i)
+          ! The new matrix elements are generated by a matrix product of the type:
+          !
+          !  M'_ab = sum (R_aj M_jl R_bl)
+          !          j,l
+          ! along the cartesian indices. The Mopt matrix is indexed following the
+          ! convention in the optic output of Wien2k:
+          !  1  4  5
+          !     2  6
+          !        3
+          ! whereas the symmetry matrices have rows and columns indexed independently.
+          ! To treat the two objects in a consistent way the optical matrix elements are
+          ! copied over to temporary matrices
+       else
+          do i=1,redkm%ktot
+             ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
+             isym= symm%symop_id(2,i)
 
-          ! copy over the optical matrix elements
-          Mtmp(1,1,:,:) = eirrk%Mopt(1,ik,:,:)
-          Mtmp(2,2,:,:) = eirrk%Mopt(2,ik,:,:)
-          Mtmp(3,3,:,:) = eirrk%Mopt(3,ik,:,:)
-          Mtmp(1,2,:,:) = eirrk%Mopt(4,ik,:,:)
-          Mtmp(1,3,:,:) = eirrk%Mopt(5,ik,:,:)
-          Mtmp(2,3,:,:) = eirrk%Mopt(6,ik,:,:)
-          Mtmp(2,1,:,:) = Mtmp(1,2,:,:)
-          Mtmp(3,1,:,:) = Mtmp(1,3,:,:)
-          Mtmp(3,2,:,:) = Mtmp(2,3,:,:)
+             ! copy over the optical matrix elements
+             Mtmp(1,1,:,:) = eirrk%Mopt(1,ik,:,:)
+             Mtmp(2,2,:,:) = eirrk%Mopt(2,ik,:,:)
+             Mtmp(3,3,:,:) = eirrk%Mopt(3,ik,:,:)
+             Mtmp(1,2,:,:) = eirrk%Mopt(4,ik,:,:)
+             Mtmp(1,3,:,:) = eirrk%Mopt(5,ik,:,:)
+             Mtmp(2,3,:,:) = eirrk%Mopt(6,ik,:,:)
+             Mtmp(2,1,:,:) = Mtmp(1,2,:,:)
+             Mtmp(3,1,:,:) = Mtmp(1,3,:,:)
+             Mtmp(3,2,:,:) = Mtmp(2,3,:,:)
 
-          ! do the contraction with the symmetry matrices
-          ! check eq. 13.16 (pg 479) in "Symmetry and Condensed Matter Physics A Computational Approach" by M. El-Batanouny, F. Wooten, CUP
-          do j = 1,3
-             do l = 1,3
-                eredk%Mopt(1,i,:,:) = eredk%Mopt(1,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,1,isym)
-                eredk%Mopt(2,i,:,:) = eredk%Mopt(2,i,:,:) + symm%Msym(j,2,isym)*Mtmp(j,l,:,:)*symm%Msym(l,2,isym)
-                eredk%Mopt(3,i,:,:) = eredk%Mopt(3,i,:,:) + symm%Msym(j,3,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
-                eredk%Mopt(4,i,:,:) = eredk%Mopt(4,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,2,isym)
-                eredk%Mopt(5,i,:,:) = eredk%Mopt(5,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
-                eredk%Mopt(6,i,:,:) = eredk%Mopt(6,i,:,:) + symm%Msym(j,2,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
+             ! do the contraction with the symmetry matrices
+             ! check eq. 13.16 (pg 479) in "Symmetry and Condensed Matter Physics A Computational Approach" by M. El-Batanouny, F. Wooten, CUP
+             do j = 1,3
+                do l = 1,3
+                   eredk%Mopt(1,i,:,:) = eredk%Mopt(1,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,1,isym)
+                   eredk%Mopt(2,i,:,:) = eredk%Mopt(2,i,:,:) + symm%Msym(j,2,isym)*Mtmp(j,l,:,:)*symm%Msym(l,2,isym)
+                   eredk%Mopt(3,i,:,:) = eredk%Mopt(3,i,:,:) + symm%Msym(j,3,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
+                   eredk%Mopt(4,i,:,:) = eredk%Mopt(4,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,2,isym)
+                   eredk%Mopt(5,i,:,:) = eredk%Mopt(5,i,:,:) + symm%Msym(j,1,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
+                   eredk%Mopt(6,i,:,:) = eredk%Mopt(6,i,:,:) + symm%Msym(j,2,isym)*Mtmp(j,l,:,:)*symm%Msym(l,3,isym)
+                enddo
              enddo
           enddo
+          deallocate (Mtmp)
+       endif
+
+       !now map the dispersion energies from the old grid to the new one (the energies do not change with the symmetry operation)
+       do i=1,size(symm%symop_id,2)
+          ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
+          isym= symm%symop_id(2,i) ! not really necessary here
+
+          do nb=1,eredk%nband_max
+             eredk%band(i,nb) = eirrk%band(ik,nb)
+             eredk%Im(i,nb) = eirrk%Im(ik,nb)
+             eredk%Z(i,nb) = eirrk%Z(ik,nb)
+          enddo
        enddo
-       deallocate (Mtmp)
+
+    else ! just move the datasets to the reducible kind
+       if (.not. allocated(eredk%Mopt) .and. (lat%lcubic)) &
+         allocate(eredk%Mopt(3,irrkm%ktot,eirrk%nbopt_min:eirrk%nbopt_max,eirrk%nbopt_min:eirrk%nbopt_max))
+       if (.not. allocated(eredk%Mopt) .and. (.not.lat%lcubic)) &
+         allocate(eredk%Mopt(6,irrkm%ktot,eirrk%nbopt_min:eirrk%nbopt_max,eirrk%nbopt_min:eirrk%nbopt_max))
+       if (.not. allocated(eredk%band)) &
+         allocate(eredk%band(irrkm%ktot,eirrk%nband_max))
+       if (.not. allocated(eredk%Z)) &
+         allocate(eredk%Z(irrkm%ktot,eirrk%nband_max))
+       if (.not. allocated(eredk%Im)) &
+         allocate(eredk%Im(irrkm%ktot,eirrk%nband_max))
+
+       ! just move it from the irreducible kind to the reducible kind
+       eredk%Mopt = eirrk%Mopt
+       eredk%band = eirrk%band
+       eredk%Z    = eirrk%Z
+       eredk%Im   = eirrk%Im
     endif
 
-    !now map the dispersion energies from the old grid to the new one (the energies do not change with the symmetry operation)
-    do i=1,size(symm%symop_id,2)
-       ik  = symm%symop_id(1,i) ! this counter runs over the irrekpoints
-       isym= symm%symop_id(2,i) ! not really necessary here
+    ! we don't need those arrays anymore
+    deallocate(eirrk%Mopt, eirrk%band, eirrk%Z, eirrk%Im)
 
-       do nb=1,eredk%nband_max
-          eredk%band(i,nb) = eirrk%band(ik,nb)
-          eredk%Im(i,nb) = eirrk%Im(ik,nb)
-          eredk%Z(i,nb) = eirrk%Z(ik,nb)
-       enddo
-    enddo
+
 
   end subroutine
 
@@ -1249,13 +1212,12 @@ module Mestruct
 !
 ! mP: deprecated for the time being
 !
-  subroutine trnredk (irrkm, redkm, eredk, symm)
+  subroutine trnredk (irrkm, redkm, eredk)
     implicit none
     !passed variables
     type(kpointmesh) :: irrkm
     type(kpointmesh) :: redkm
     type(edisp)      :: eredk
-    type(symop)      :: symm
 
     !local variables
     integer :: i, j, ik, ikx, iky, ikz, ibn, ibn2
@@ -1731,6 +1693,12 @@ module Mestruct
        enddo
     enddo
 
+    ! we just created the extended Brillouin zone
+    ! and don't need the reducible one anymore after this
+    ! hence
+    deallocate(redkm%k_id, redkm%k_coord)
+    deallocate(eredk%Mopt, eredk%Z, eredk%Im, eredk%band)
+
     !!!!!!!!!!!!!!!!TEST
     !do ik=1,fulkm%ktot
     !   write(778,171)'KP ',ik,fulkm%k_coord(1,ik),fulkm%k_coord(2,ik),fulkm%k_coord(3,ik)
@@ -1745,6 +1713,7 @@ module Mestruct
     !!!!!!!!!!!!!!!!TEST END
 
     !TODO: no second derivatives of the energy because at the moment there is no way to compute them
+
 
   end subroutine
 
@@ -1797,9 +1766,15 @@ subroutine gentetra (mesh, thdr)
  ! for a simple cubic lattice the reciprocal lattice is also cubic and shrunk by a factor 2pi/alat
  bk=0.d0
  !generalisation to tetragonal and orthorhombic cases:
- bk(1,1)=lat%a(2)*lat%a(3)*(2.d0*pi/lat%alat)
- bk(2,2)=lat%a(3)*lat%a(1)*(2.d0*pi/lat%alat)
- bk(3,3)=lat%a(1)*lat%a(2)*(2.d0*pi/lat%alat)
+
+ ! mP note: this is definitely wrong
+ ! bk(1,1)=lat%a(2)*lat%a(3)*(2.d0*pi/lat%alat)
+ ! bk(2,2)=lat%a(3)*lat%a(1)*(2.d0*pi/lat%alat)
+ ! bk(3,3)=lat%a(1)*lat%a(2)*(2.d0*pi/lat%alat)
+
+ bk(1,1)=2.d0*pi/(lat%alat*lat%a(1))
+ bk(2,2)=2.d0*pi/(lat%alat*lat%a(2))
+ bk(3,3)=2.d0*pi/(lat%alat*lat%a(3))
 
 ! setting up the tetrahedra will be done cutting a cell with eight
 ! corners into six tetrahedra. the edges of the tetrahedra are given by
@@ -2071,10 +2046,6 @@ subroutine intetra (mesh, ek, thdr, dos)
       write(*,*)'INTETRA: tetrahedron method fails (number of k-points < 4)',mesh%ktot
       STOP
    endif
-   if ((2*ek%nband_max- ek%nelect) < 5d-2) then
-      write(*,*) 'INTETRA: too many electrons in the system (2 * #bands - #electrons) << 1'
-      stop
-   endif
 
    ! find the energy interval
    maxenergy=0.d0
@@ -2234,96 +2205,144 @@ end subroutine   !INTETRA
 !
   subroutine findef(dos, ek)
     implicit none
-
     type(dosgrid) :: dos
     type(edisp)   :: ek
     !local variables
-    double precision :: F(4), P(4)
-    double precision :: s
-    double precision :: psave, ptol, ntol
-    integer  :: I(4), iter, maxiter, itmp
+    integer :: i,j
+    integer :: pos
+    real(8) :: ntol
 
-    ! initialise the varibles
-    I(1)= 1
-    I(2)= dos%nnrg
-    P(1)= dos%enrg(1)
-    P(2)= dos%enrg(dos%nnrg)
-    F(1)= dos%nos(1)-ek%nelect
-    F(2)= dos%nos(dos%nnrg)-ek%nelect
-    ptol   =  1.0d-16
-    psave  = -1.1d30
-    maxiter= 60
-
-    do iter = 1, maxiter
-       itmp = I(1)+I(2)
-       I(3) = int(itmp/2)
-       P(3) = dos%enrg(I(3))
-       F(3) = dos%nos(I(3))-ek%nelect
-       s = sqrt((F(3)**2)-(F(1)*F(2)))
-       if (s==0.0d0) then
-          write(*,*) 'Error in Ridders search for Fermi level'
-          write(*,*) 'ITER', iter, 'x1', P(1),'  x2',P(2),'  x3', P(3)
-          write(*,*) 'ITER', iter, 'F1', F(1),'  F2',F(2),'  F3', F(3)
-          goto 400
+    pos = 0
+    do i=1,dos%nnrg
+       if ( (dos%nos(i) - ek%nelect) .ge. 0.d0 ) then ! sign changed
+         pos = i
+         exit
        endif
-       I(4) = I(3)+(I(3)-I(1))*int(sign(1.0d0,F(1)-F(2))*F(3)/s)
-       P(4) = dos%enrg(I(4))
+    enddo
 
-       if(abs(P(4)-psave)<=ptol) goto 400
-       psave= P(4)
-       F(4) = dos%nos(I(4))-ek%nelect
-       if (F(4) ==0.0d0) goto 400
-       if (sign(F(3), F(4)) /= F(3)) then
-       !change of sign btw x3 and x4 then reduce search interval
-          I(1)  = I(3)
-          P(1)  = P(3)
-          F(1)  = F(3)
-          I(2)  = I(4)
-          P(2)  = P(4)
-          F(2)  = F(4)
-       else if (sign(F(1), F(4)) /= F(1)) then
-       !change of sign btw x1 and x4 then reduce search interval
-          I(2)  = I(4)
-          P(2)  = P(4)
-          F(2)  = F(4)
-       else if (sign(F(2), F(4)) /= F(2)) then
-       !change of sign btw x2 and x4 then reduce search interval
-          I(1)  = I(4)
-          P(1)  = P(4)
-          F(1)  = F(4)
+    if (pos > 0) then ! found a changing sign
+       if ( abs(dos%nos(pos) - ek%nelect) .le. abs(dos%nos(pos-1) - ek%nelect) ) then
+          ek%efer = dos%enrg(pos)
+          i = pos
+       else
+          ek%efer = dos%enrg(pos-1)
+          i = pos-1
        endif
-       !condition for termination
-       if (abs(P(2)-P(1)) <= ptol) goto 400
-    enddo ! over number of iterations
-    write (*,*) 'here 6'
-    400 if (iter == maxiter) write(*,*) 'Ridders seach might not have converged'
-    ek%efer=P(4)
-    !find the band gap
-    ntol=4.0d-2
-    I(3)  = I(4)
-    P(3)  = P(4)
-    F(3)  = F(4)
+    else
+       write(*,*) 'FINDEF: No root found for chemical potential, nelect = ', ek%nelect
+       stop
+    endif
 
-    do while(abs(F(3)-F(4)) < ntol)
-       I(3) = I(3)-1
-       P(3) = dos%enrg(I(3))
-       F(3) = dos%nos(I(3))-ek%nelect
+    ! find band gap and valence band maximum, conduction band minimum
+    ! with the help of the number of states (nos)
+    j = i
+    do while(abs(dos%nos(j) - dos%nos(i)) < ntol)
+       j = j-1
     enddo
-    dos%vbm=P(3)
+    dos%vbm=dos%enrg(j)
 
-    I(3)  = I(4)
-    P(3)  = P(4)
-    F(3)  = F(4)
-    do while(abs(F(3)-F(4)) < ntol)
-       I(3) = I(3)+1
-       P(3) = dos%enrg(I(3))
-       F(3) = dos%nos(I(3))-ek%nelect
+    j = i
+    do while(abs(dos%nos(j) - dos%nos(i)) < ntol)
+       j = j+1
     enddo
-    dos%cbm=P(3)
+    dos%cbm=dos%enrg(j)
+
     dos%gap=dos%cbm - dos%vbm
     if (dos%gap < 2.0d-2) dos%gap=0.0d0
 
   end subroutine ! FINDEF
+  !subroutine findef(dos, ek)
+  !  implicit none
+
+  !  type(dosgrid) :: dos
+  !  type(edisp)   :: ek
+  !  !local variables
+  !  double precision :: F(4), P(4)
+  !  double precision :: s
+  !  double precision :: psave, ptol, ntol
+  !  integer  :: I(4), iter, maxiter, itmp
+
+  !  ! initialise the varibles
+  !  I(1)= 1
+  !  I(2)= dos%nnrg
+  !  P(1)= dos%enrg(1)
+  !  P(2)= dos%enrg(dos%nnrg)
+  !  F(1)= dos%nos(1)-ek%nelect
+  !  F(2)= dos%nos(dos%nnrg)-ek%nelect
+  !  ptol   =  1.0d-16
+  !  psave  = -1.1d30
+  !  maxiter= 60
+
+  !  do iter = 1, maxiter
+  !     itmp = I(1)+I(2)
+  !     I(3) = int(itmp/2)
+  !     P(3) = dos%enrg(I(3))
+  !     F(3) = dos%nos(I(3))-ek%nelect
+  !     s = sqrt((F(3)**2)-(F(1)*F(2)))
+  !     if (s==0.0d0) then
+  !        write(*,*) 'Error in Ridders search for Fermi level'
+  !        write(*,*) 'ITER', iter, 'x1', P(1),'  x2',P(2),'  x3', P(3)
+  !        write(*,*) 'ITER', iter, 'F1', F(1),'  F2',F(2),'  F3', F(3)
+  !        goto 400
+  !     endif
+  !     I(4) = I(3)+(I(3)-I(1))*int(sign(1.0d0,F(1)-F(2))*F(3)/s)
+  !     P(4) = dos%enrg(I(4))
+
+  !     if(abs(P(4)-psave)<=ptol) goto 400
+  !     psave= P(4)
+  !     F(4) = dos%nos(I(4))-ek%nelect
+  !     if (F(4) ==0.0d0) goto 400
+  !     if (sign(F(3), F(4)) /= F(3)) then
+  !     !change of sign btw x3 and x4 then reduce search interval
+  !        I(1)  = I(3)
+  !        P(1)  = P(3)
+  !        F(1)  = F(3)
+  !        I(2)  = I(4)
+  !        P(2)  = P(4)
+  !        F(2)  = F(4)
+  !     else if (sign(F(1), F(4)) /= F(1)) then
+  !     !change of sign btw x1 and x4 then reduce search interval
+  !        I(2)  = I(4)
+  !        P(2)  = P(4)
+  !        F(2)  = F(4)
+  !     else if (sign(F(2), F(4)) /= F(2)) then
+  !     !change of sign btw x2 and x4 then reduce search interval
+  !        I(1)  = I(4)
+  !        P(1)  = P(4)
+  !        F(1)  = F(4)
+  !     endif
+  !     !condition for termination
+  !     if (abs(P(2)-P(1)) <= ptol) goto 400
+  !  enddo ! over number of iterations
+  !  write (*,*) 'here 6'
+  !  400 if (iter == maxiter) write(*,*) 'Ridders seach might not have converged'
+  !  ek%efer=P(4)
+  !  !find the band gap
+  !  ntol=4.0d-2
+  !  I(3)  = I(4)
+  !  P(3)  = P(4)
+  !  F(3)  = F(4)
+
+  !  do while(abs(F(3)-F(4)) < ntol)
+  !     I(3) = I(3)-1
+  !     P(3) = dos%enrg(I(3))
+  !     F(3) = dos%nos(I(3))-ek%nelect
+  !  enddo
+  !  dos%vbm=P(3)
+
+  !  I(3)  = I(4)
+  !  P(3)  = P(4)
+  !  F(3)  = F(4)
+  !  do while(abs(F(3)-F(4)) < ntol)
+  !     I(3) = I(3)+1
+  !     P(3) = dos%enrg(I(3))
+  !     F(3) = dos%nos(I(3))-ek%nelect
+  !  enddo
+  !  dos%cbm=P(3)
+  !  dos%gap=dos%cbm - dos%vbm
+  !  if (dos%gap < 2.0d-2) dos%gap=0.0d0
+
+  !end subroutine ! FINDEF
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! INTERPTRA_RE
@@ -2651,6 +2670,7 @@ subroutine interptra_mu (vltet, occ_tet, occ_intp)
    w(3) = c0
    w(4) = c0
 
+   occ_intp = 0.d0
    do i=1,4 !linear interpolation within the  tetrahedron
       occ_intp = occ_intp + (w(i)*occ_tet(i))
    enddo !over corners of the tetrahedron
@@ -2683,6 +2703,7 @@ subroutine interptra_muQ (vltet, target_tet, target_intp)
    w(3) = c0
    w(4) = c0
 
+   target_intp = 0.q0
    do i=1,4 !linear interpolation within the  tetrahedron
       target_intp = target_intp + (w(i)*target_tet(i))
    enddo !over corners of the tetrahedron
@@ -2703,7 +2724,7 @@ end subroutine !INTERPTRA_MUQ
     type(edisp)      :: ek
     type(dosgrid)    :: dos
     !local variables
-    integer :: i, ik, nb !energy, k-point, band counters
+    integer :: i, ik, ikk, nb !energy, k-point, band counters
     integer :: iband
     double precision :: br, de !broadening, energy spacing
     double precision :: maxenergy
@@ -2742,10 +2763,11 @@ end subroutine !INTERPTRA_MUQ
     do i =1,size(dos%enrg)
        do nb=1,ek%nband_max
           do ik=1,mesh%ktot
-             if (ek%band(ik,nb) > band_fill_value) cycle !necessary because big eig'vals
+             ikk = symm%symop_id(1,ik)
+             if (ek%band(ikk,nb) > band_fill_value) cycle !necessary because big eig'vals
                                                 !have been introduced to make matrices square
-             dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-ek%band(ik,nb))**2)+(br**2))))
-             dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-ek%band(ik,nb))/br)))
+             dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-ek%band(ikk,nb))**2)+(br**2))))
+             dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-ek%band(ikk,nb))/br)))
           enddo
        enddo
     enddo
@@ -2755,6 +2777,10 @@ end subroutine !INTERPTRA_MUQ
 
   end subroutine !GENDOSEL
 
+  ! tight binding functions for the nearest neighbor case
+  ! ek_sc -> e(k)
+  ! vk_sc -> e'(k)
+  ! vkk_sc -> e''(k)
   double precision function ek_sc(k,iband,eirrk)
     implicit none
     type(edisp)      :: eirrk
@@ -2802,9 +2828,12 @@ end subroutine !INTERPTRA_MUQ
 !! This function evaluates the length of the tetrahedron edge
 !! required by subroutine GENTETRA
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  double precision  function anrm2(x,y,z)
+  ! elemental function -> you can put in here also 3 equally sized arrays
+  ! and get out the result in form of an identically sized array
+  ! the function is then applied element wise
+  pure elemental double precision function anrm2(x,y,z)
     implicit none
-    double precision :: x, y, z
+    double precision, intent(in) :: x, y, z
     anrm2=x*x*1.00001d0+y*y*1.00002d0+z*z*1.00003d0 &
       &             -x*0.000004d0-y*0.000003d0-z*0.000002d0
   end function

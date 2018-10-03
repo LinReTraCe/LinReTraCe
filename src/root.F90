@@ -26,7 +26,7 @@ module Mroot
 
   contains
 
-subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra, method)
+subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   implicit none
 
   real(8), intent(inout)        :: mu ! chemical potential which is calculated
@@ -34,7 +34,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   real(8), intent(in)           :: dev ! allowed deviation
   real(8), intent(out)          :: target_zero ! deviation from root after convergence
   integer, intent(out)          :: niitact ! number of iterations
-  logical, intent(in)           :: ltetra  ! use the tetrahedron methods
   integer, intent(in), optional :: method  ! choose root finding method
   type(edisp)                   :: ek
   type(scatrate)                :: sct
@@ -88,7 +87,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
 ! deviation from set particle number with initial mu
 ! output: target_zero1 = required - actual electrons
-  call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+  call ndeviation(mu, iT, ek, sct, mesh, thdr, target_zero1)
 
 ! coarse initialization of secant bracket mu1, mu2
   target_zero2=target_zero1
@@ -97,11 +96,11 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
   do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
      mu2=mu2+0.005d0
-     call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
+     call ndeviation(mu2, iT, ek, sct, mesh, thdr, target_zero2)
   enddo
   do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
      mu1=mu1-0.005d0
-     call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+     call ndeviation(mu1, iT, ek, sct, mesh, thdr, target_zero1)
   enddo
 
   ! maximal steps for double precision calculations
@@ -111,7 +110,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   !Secant root finding
     do iit=1,niit0
        mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
-       call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       call ndeviation(mu, iT, ek, sct, mesh, thdr, target_zero)
 
        if (abs(target_zero).lt.dev)  exit
        if (target_zero.gt.0.d0) then
@@ -141,7 +140,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     enddo
     ! evaluate target function in the interval
     do i=2,nmu-1
-       call ndeviation(X(i), iT, ek, sct, mesh, thdr, ltetra, Y(i))
+       call ndeviation(X(i), iT, ek, sct, mesh, thdr, Y(i))
     enddo
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
@@ -176,7 +175,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
                 !write(*,*) b(3), b(4)
                 ! save the values of the intersection
                 mu = B(3)
-                call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+                call ndeviation(mu, iT, ek, sct, mesh, thdr, target_zero)
              endif
           endif
        enddo ! over freq. counter j
@@ -190,7 +189,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
      do j = 1, maxiter
         P(3) = 0.5d0*(P(1)+P(2))
-        call ndeviation(P(3), iT, ek, sct, mesh, thdr, ltetra, F(3))
+        call ndeviation(P(3), iT, ek, sct, mesh, thdr, F(3))
         s = dsqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0d0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -199,7 +198,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
-        call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
+        call ndeviation(P(4), iT, ek, sct, mesh, thdr, F(4))
         if (abs(F(4)) .lt. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -230,7 +229,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     ! Bisection root finding
     do iit=1,niit0
        mu = (mu1+mu2)/2.d0
-       call ndeviation(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       call ndeviation(mu, iT, ek, sct, mesh, thdr, target_zero)
        if (myid.eq.master .and. iit .ge. 50) write(*,*) mu
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -252,7 +251,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   endif
 end subroutine find_mu_D
 
-subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra, method)
+subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   implicit none
   ! passed variables
   real(8), intent(inout)        :: mu
@@ -260,7 +259,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   real(16), intent(in)          :: dev
   real(16), intent(out)         :: target_zero
   integer, intent(out)          :: niitact
-  logical, intent(in)           :: ltetra
   integer, intent(in), optional :: method
   type(edisp)                   :: ek
   type(scatrate)                :: sct
@@ -318,7 +316,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   mu_qp = real(mu,16) ! save into a local qp number
 
 ! deviation from set particle number with initial mu
-  call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+  call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, target_zero1)
 
   target_zero2=target_zero1
   mu1=mu_qp
@@ -326,11 +324,11 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
   do while (target_zero2.gt.0.q0)
      mu2=mu2+0.005q0
-     call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
+     call ndeviation(mu2, iT, ek, sct, mesh, thdr, target_zero2)
   enddo
   do while (target_zero1.le.0.q0)
      mu1=mu1-0.005q0
-     call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+     call ndeviation(mu1, iT, ek, sct, mesh, thdr, target_zero1)
   enddo
 
   niit0=niitQ
@@ -339,17 +337,17 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
   !Secant root finding
     do iit=1,niit0
        mu_qp=mu1-target_zero1*mu2/(target_zero2-target_zero1)+target_zero1*mu1/(target_zero2-target_zero1)
-       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, target_zero)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
           mu1=mu_qp
           target_zero1=target_zero
-          ! call ndeviation(mu2, iT, ek, sct, mesh, thdr, ltetra, target_zero2)
+          ! call ndeviation(mu2, iT, ek, sct, mesh, thdr, target_zero2)
        else
           mu2=mu_qp
           target_zero2=target_zero
-          ! call ndeviation(mu1, iT, ek, sct, mesh, thdr, ltetra, target_zero1)
+          ! call ndeviation(mu1, iT, ek, sct, mesh, thdr, target_zero1)
        endif
     enddo
     niitact=iit
@@ -371,7 +369,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
 
      do j = 1, maxiter
         P(3) = 0.5q0*(P(1)+P(2))
-        call ndeviation(P(3), iT, ek, sct, mesh, thdr, ltetra, F(3))
+        call ndeviation(P(3), iT, ek, sct, mesh, thdr, F(3))
         s = sqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0q0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -380,7 +378,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(sign(1.0q0,F(1)-F(2))*F(3)/s)
-        call ndeviation(P(4), iT, ek, sct, mesh, thdr, ltetra, F(4))
+        call ndeviation(P(4), iT, ek, sct, mesh, thdr, F(4))
         if (abs(F(4)) .le. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -411,7 +409,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, ltetra,
     ! Bisection root finding
     do iit=1,niit0
        mu_qp = (mu1+mu2)/2.q0
-       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+       call ndeviation(mu_qp, iT, ek, sct, mesh, thdr, target_zero)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -457,12 +455,11 @@ end subroutine find_mu_Q
 ! required electrons - current electrons
 ! if positive we have to increase the chemical potential
 ! if negative we have to decrease the chemical potential
-subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, target_zero)
   implicit none
 
   real(8), intent(in)  :: mu
   integer, intent(in)  :: iT
-  logical, intent(in)  :: ltetra
   real(8), intent(out) :: target_zero
   type(edisp)          :: ek
   type(scatrate)       :: sct
@@ -471,7 +468,7 @@ subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
   real(8) :: occ_tot
 
-  if (ltetra) then
+  if (algo%ltetra) then
      call occ_tet(mu, iT, ek, sct, thdr, occ_tot)
   else
      call occ(mu, iT, ek, sct, mesh, occ_tot)
@@ -479,13 +476,12 @@ subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
   target_zero=ek%nelect-occ_tot
 end subroutine ndeviation_D
 
-subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
+subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, target_zero)
   implicit none
 
   !passed variables
-  real(16), intent(in)   :: mu
+  real(16), intent(in)  :: mu
   integer, intent(in)   :: iT
-  logical, intent(in)   :: ltetra
   real(16), intent(out) :: target_zero
   type(edisp)           :: ek
   type(scatrate)        :: sct
@@ -494,7 +490,7 @@ subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, ltetra, target_zero)
 
   real(16) :: occ_tot
 
-  if (ltetra) then
+  if (algo%ltetra) then
      call occ_tet(mu, iT, ek, sct, thdr, occ_tot)
   else
      call occ(mu, iT, ek, sct, mesh, occ_tot)
@@ -518,7 +514,7 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   complex(8) :: z
   real(8) :: nsmall, nbig, eps, tmp
   real(8) :: occ_loc
-  integer :: iband, ik, ikx, iky, ikz
+  integer :: iband, ik, ikx, iky, ikz, ikk
   integer :: ktot !total number of k-points
 !external variables
   complex(8), external :: wpsipg
@@ -531,21 +527,23 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   ktot=mesh%kx*mesh%ky*mesh%kz
 
   do ik = iqstr, iqend
+     ikk = symm%symop_id(1,ik)
      do iband=1,ek%nband_max
-        if (ek%band(ik,iband) .gt. band_fill_value) cycle
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
 
-        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
+        if (ek%band(ikk,iband) .gt. band_fill_value) cycle
+
+        eps=(ek%z(ikk,iband)*ek%band(ikk,iband))-mu
 
         ! the digamma function transitions to the fermi function as Gamma -> 0
         if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,beta)
         else if (allocated(sct%ykb)) then
-           z=0.5d0 + (ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))-ci*eps)*beta2p
+           z=0.5d0 + (ek%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband))-ci*eps)*beta2p
            tmp=0.5d0+aimag(wpsipg(z,0))/pi
         else
-           z=0.5d0 + (ek%z(ik,iband)*sct%gam(iT)-ci*eps)*beta2p
+           z=0.5d0 + (ek%z(ikk,iband)*sct%gam(iT)-ci*eps)*beta2p
            tmp=0.5d0+aimag(wpsipg(z,0))/pi
         endif
 
@@ -591,7 +589,7 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
   complex(16) ::z
   real(16) :: nsmall, nbig, tmp, tmp2
   real(8) :: eps
-  integer :: iband, ik
+  integer :: iband, ik, ikk
   integer :: ktot
   real(16) :: cutQ
   !more sophistication
@@ -611,20 +609,22 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
   cutQ=1.q0/thr
 
   do ik = iqstr, iqend
+     ikk = symm%symop_id(1,ik)
      do iband=1,ek%nband_max
-        if (ek%band(ik,iband) .gt. band_fill_value) cycle
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
-        eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
+
+        if (ek%band(ikk,iband) .gt. band_fill_value) cycle
+        eps=(ek%z(ikk,iband)*ek%band(ikk,iband))-mu
 
         if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
            tmp=fermi(eps,betaQ)
         else if (allocated(sct%ykb)) then
-           z=0.5q0 + real(ek%z(ik,iband)*(sct%gam(iT)+sct%ykb(iT,ik,iband))*beta2p,16) - &
+           z=0.5q0 + real(ek%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband))*beta2p,16) - &
                       ciQ*real(eps*beta2p,16)
            tmp=0.5q0+aimag(wpsipghp(z,0))/piQ
         else
-           z=0.5q0 + real(ek%z(ik,iband)*sct%gam(iT)*beta2p,16) - &
+           z=0.5q0 + real(ek%z(ikk,iband)*sct%gam(iT)*beta2p,16) - &
                       ciQ*real(eps*beta2p,16)
            tmp=0.5q0+aimag(wpsipghp(z,0))/piQ
         endif

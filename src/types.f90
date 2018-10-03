@@ -9,6 +9,7 @@ module Mtypes
     logical :: lBfield      ! calculations in the presence of a magnetic field?
     logical :: ldmft        ! k-point and band dependent renormalisation factor and scattering rate provided
     logical :: lsymm        ! reads in the full BZ or generates it using symmetry operations?
+    logical :: lpreproc     ! use preprocessed data
     integer :: imurestart   ! restart with a privided value of the chemical potential?
     character(100) :: mysyst ! label that is used to open the Wien2k files
   end type

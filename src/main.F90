@@ -65,10 +65,10 @@ program gtmain ! GammaTransport
   type(dosgrid)            :: dos     ! DOS, integrated DOS, Fermi level
   type(scatrate)           :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
   type(dp_resp)            :: dpresp  ! response functions in double precision
-  type(dp_resp)            :: respBl  ! response functions in double precision for Boltzmann regime response
+  type(qp_resp)            :: qpresp  ! response functions in quadruple precision -- same as equations as used in dpresp
+  type(dp_resp)            :: respBl  ! response functions in double precision for Boltzmann regime response ( i.e. Gamma -> 0 )
   type(dp_respinter)       :: dinter  ! response functions in double precision for interband transitions
   type(dp_respinter)       :: dderesp ! response functions (intraband conductivity) derivatives in double precision
-  type(qp_resp)            :: qpresp  ! response functions in 4-ple precision
 
   ! mP note
   ! after we initialized all the kpointer, optical elements, energy dispersion
@@ -86,7 +86,7 @@ program gtmain ! GammaTransport
 
   real(8) :: dum1,dum2,dum3,dum4,muconst !eM 13.03.2018: muconst is likely obsolete
   integer :: idum, i
-  integer :: nk, nband !local values that are assigned depending on the algorithm
+  integer :: nk
   integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
   integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
 
@@ -102,7 +102,7 @@ program gtmain ! GammaTransport
      write(*,*)'#####################################################'
      write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
      write(*,*)'#####################################################'
-     write(*,*)'#  J.M. Tomczak, E. Maggio, M. Pickem               #'
+     write(*,*)'#  E. Maggio, M. Pickem and J.M. Tomczak            #'
      write(*,*)'#####################################################'
      write(*,*)
   endif
@@ -111,7 +111,8 @@ program gtmain ! GammaTransport
 
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
-  algo%ldebug=.true.
+  algo%ldebug = .true.
+  algo%lpreproc = .false.
 
   ! we read the information into the irreducible datatypes
   call read_config(irrkm, eirrk, sct)
@@ -184,10 +185,11 @@ program gtmain ! GammaTransport
 
   !intrinsic scattering rate
   !trivial T-dependence at the moment
+  !TODO: FIX THIS FOR TETRAHEDRONS
   if (algo%ldmft) then
      sct%ykb=0.0d0
-     do iband=1,nband
-        do ik=1,nk
+     do iband=1,epointer%nband_max
+        do ik=1,kpointer%ktot
            do iT=1,sct%nT
               sct%ykb(iT,ik,iband)=epointer%Im(ik,iband)
            enddo
@@ -211,7 +213,6 @@ program gtmain ! GammaTransport
   endif
 
   if (algo%ldebug) then
-     if (myid.eq.master) write(*,*) "number of tetrahedrons: ", thdr%ntet
      write(*,*) "MPI: myid: ", myid, "iqstr: ", iqstr, "iqend: ", iqend
   endif
 
@@ -244,7 +245,7 @@ program gtmain ! GammaTransport
   !find minimal gamma for lowest T. If = 0 then we can do (linear) extrapolation... if gam=O(T,T^2) ... strictly not linear...
   gminall=10.d0
   if (algo%ldmft) then
-     do iband=1,nband
+     do iband=1,epointer%nband_max
         if ((sct%ykb(1,1,iband)<gminall).and.(sct%ykb(1,1,iband)>0.0d0)) &
                gminall=sct%ykb(1,1,iband)
      enddo
@@ -256,18 +257,18 @@ program gtmain ! GammaTransport
 
   ! allocation of arrays in the derived datatypes
   if (algo%ltetra) then
-     nk = 4
+     nk = 4 ! the tetrahedrons methods work differently
   else
      nk = kpointer%ktot ! which is the number of reducible k-points
   endif
 
   ! allocate the arrays once outside of the main (temperature) loop
-  call dpresp_alloc(algo%lBfield, dpresp, nk, nband)
-  call dpresp_alloc(.false., dderesp, nk, nband)
-  call dpresp_alloc(.false., dinter, nk, nband)
-  call dpresp_alloc(algo%lBfield, respBl, nk, nband)
+  call dpresp_alloc(algo%lBfield, dpresp, nk, epointer%nband_max)
+  call dpresp_alloc(algo%lBfield, respBl, nk, epointer%nband_max)
+  call dpresp_alloc(.false., dderesp, nk, epointer%nband_max)
+  call dpresp_alloc(.false., dinter, nk, epointer%nband_max)
   if (.not. algo%ldebug) then
-     call qpresp_alloc(algo%lBfield, qpresp, nk, nband)
+     call qpresp_alloc(algo%lBfield, qpresp, nk, epointer%nband_max)
   endif
 
   if (myid.eq.master) then
@@ -324,20 +325,20 @@ program gtmain ! GammaTransport
      if (algo%imurestart == 0) then
         if (criterion.lt.20.d0) then !DP
            imeth=0
-           call find_mu(mu,iT,ndev,ndevact,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)
+           call find_mu(mu,iT,ndev,ndevact,niitact, epointer, sct, kpointer, thdr, method)
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
            endif
         elseif (criterion.lt.80.d0) then !QP
            imeth=1
-           call find_mu(mu,iT,ndevQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)! full QUAD on particle number
+           call find_mu(mu,iT,ndevQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
         else   ! further refinement
            imeth=2
            if (myid.eq.master) write(*,*) 'SUPER QUAD'
-           call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, algo%ltetra, method)! full QUAD on particle number
+           call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
@@ -429,24 +430,18 @@ program gtmain ! GammaTransport
      sct%mu(iT) = mu
 
      if ((myid == master) .and. (iT == sct%nT)) then
-        call intldos(iT, dos, kpointer, epointer, sct)
-        do ig=1,size(dos%enrg)
-           dos%dos(ig)=2.0d0*dos%dos(ig)
-           dos%nos(ig)=2.0d0*dos%nos(ig)
-        enddo
-        do ig=1,size(dos%enrg)
-           write (120,*) dos%enrg(ig), dos%dos(ig), dos%nos(ig)
-        enddo
+        call intldos(iT, dos, redkm, eredk, sct)
      endif
 
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! DONE MU. DO TRANSPORT AT THIS POINT.
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! DONE MU. DO TRANSPORT AT THIS POINT.
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      if (algo%ldebug) then
         call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl)
      else
         call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
      endif
+
   enddo ! iT temperature
   ! the values of the derivative of the resistivity have been accumulated over
   ! during the temparature loop, now find the critical temperature
