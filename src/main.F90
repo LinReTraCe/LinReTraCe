@@ -112,7 +112,8 @@ program gtmain ! GammaTransport
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
   algo%ldebug = .true.
-  algo%lpreproc = .false.
+  ! algo%lgenred = .false.
+  algo%lgenred = .true.
 
   ! we read the information into the irreducible datatypes
   call read_config(irrkm, eirrk, sct)
@@ -255,20 +256,13 @@ program gtmain ! GammaTransport
 
   iflag_dmudt=0 !!!what is this for?
 
-  ! allocation of arrays in the derived datatypes
-  if (algo%ltetra) then
-     nk = 4 ! the tetrahedrons methods work differently
-  else
-     nk = kpointer%ktot ! which is the number of reducible k-points
-  endif
-
   ! allocate the arrays once outside of the main (temperature) loop
-  call dpresp_alloc(algo%lBfield, dpresp, nk, epointer%nband_max)
-  call dpresp_alloc(algo%lBfield, respBl, nk, epointer%nband_max)
-  call dpresp_alloc(.false., dderesp, nk, epointer%nband_max)
-  call dpresp_alloc(.false., dinter, nk, epointer%nband_max)
+  call dpresp_alloc(algo%lBfield, dpresp, epointer%nband_max)
+  call dpresp_alloc(algo%lBfield, respBl, epointer%nband_max)
+  call dpresp_alloc(.false., dderesp, epointer%nband_max)
+  call dpresp_alloc(.false., dinter, epointer%nband_max)
   if (.not. algo%ldebug) then
-     call qpresp_alloc(algo%lBfield, qpresp, nk, epointer%nband_max)
+     call qpresp_alloc(algo%lBfield, qpresp, epointer%nband_max)
   endif
 
   if (myid.eq.master) then
@@ -296,7 +290,7 @@ program gtmain ! GammaTransport
      beta=1.d0/(kB*T)
      betaQ=1.q0/(kBQ*T)
      beta2p=beta/(2.d0*pi)
-     beta2pQ=beta/(2.q0*piQ)
+     beta2pQ=betaQ/(2.q0*piQ)
      !determine maximal gamma of bands involved in gap
      !gmax=max(gam(it,iband_valence),gam(it,iband_valence+1))
      gmax=sct%gam(iT)

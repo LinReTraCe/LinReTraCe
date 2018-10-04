@@ -672,7 +672,7 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   complex(8) :: z
   real(8) :: nsmall, nbig, ninteger, eps, tmp
   real(8) :: occ_loc, occ_intp, occ_tet(4)
-  integer :: iband, ik, itet, kp
+  integer :: iband, ik, ikk, itet, iktet
 !external variables
   complex(8), external :: wpsipg
 
@@ -680,24 +680,25 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   occ_loc=0.0d0
   do itet = iqstr, iqend
      occ_intp=0.0d0
-     do ik = 1, 4
+     do iktet = 1, 4
         nbig=0.d0
         nsmall=0.d0
-        kp=thdr%idtet(ik,itet)
+        ik=thdr%idtet(iktet,itet)
+        ikk = symm%symop_id(1,ik)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .ge. band_fill_value) cycle
+           if (ek%band(ikk,iband) .ge. band_fill_value) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
 
-           eps=(ek%z(ik,iband)*ek%band(ik,iband))-mu
+           eps=(ek%z(ikk,iband)*ek%band(ikk,iband))-mu
 
            if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,beta)
            else if (allocated(sct%ykb)) then
-              z=0.5d0 + (ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband)) - ci*eps ) * beta2p ! eps --> -eps
+              z=0.5d0 + (ek%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband)) - ci*eps ) * beta2p ! eps --> -eps
               tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            else
-              z=0.5d0 + (ek%z(kp,iband)*sct%gam(iT) - ci*eps ) * beta2p ! eps --> -eps
+              z=0.5d0 + (ek%z(ikk,iband)*sct%gam(iT) - ci*eps ) * beta2p ! eps --> -eps
               tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
            endif
 
@@ -710,7 +711,7 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
 
         nbig=2.d0*nbig
         nsmall=2.d0*nsmall
-        occ_tet(ik)=nbig+nsmall
+        occ_tet(iktet)=nbig+nsmall
      enddo ! corners of the tetrahedron
 
      ! NOTE: this procedure is different from the one used
@@ -735,7 +736,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   implicit none
 
   integer, intent(in)   :: iT
-  real(16), intent(in)   :: mu
+  real(16), intent(in)  :: mu
   real(16), intent(out) :: occ_tot
   type(edisp)           :: ek
   type(scatrate)        :: sct
@@ -748,7 +749,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   real(16) :: occ_loc, occ_tet(4), occ_intp
   real(8) :: eps
   integer :: iband, ik
-  integer :: itet, kp
+  integer :: itet, iktet, ikk
   real(16) :: cutQ
   !more sophistication
   integer(8) ::IEXP
@@ -762,25 +763,26 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
 
   do itet = iqstr, iqend
      occ_intp=0.0q0
-     do ik = 1, 4 ! corners of the tetrahedron
+     do iktet = 1, 4 ! corners of the tetrahedron
+        ik = thdr%idtet(iktet,itet)
+        ikk = symm%symop_id(1,ik)
         ninteger=0.q0
         nbig=0.q0
         nsmall=0.q0
-        kp=thdr%idtet(ik,itet)
         do iband=1,ek%nband_max
-           if (ek%band(thdr%idtet(ik,itet),iband) .ge. band_fill_value) cycle
+           if (ek%band(ikk,iband) .ge. band_fill_value) cycle
            if (iband<ek%nbopt_min) cycle
            if (iband>ek%nbopt_max) cycle
-           eps=(ek%z(kp,iband)*ek%band(kp,iband))-mu
+           eps=(ek%z(ikk,iband)*ek%band(ikk,iband))-mu
 
            if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
               tmp=fermi(eps,betaQ)
            else if (allocated(sct%ykb)) then
-              z=0.5q0+real(ek%z(kp,iband)*(sct%gam(iT)+sct%ykb(iT,kp,iband))*beta2p,16) - &
+              z=0.5q0+real(ek%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband))*beta2p,16) - &
                        ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            else
-              z=0.5q0+real(ek%z(kp,iband)*sct%gam(iT)*beta2p,16) - &
+              z=0.5q0+real(ek%z(ikk,iband)*sct%gam(iT)*beta2p,16) - &
                        ciQ*real(eps*beta2p,16) ! eps --> -eps
               tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
            endif
