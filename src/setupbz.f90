@@ -35,27 +35,48 @@ program setupbz
   write(*,*)
 
   algo%ldebug = .true.
+  algo%lgenred = .false.
+  algo%lpreproc = .true.
 
   call read_config(irrkm, eirrk, sct)
   call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
   call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
 
-  ! if we work with tetrahedrons the reducible BZ got extended to full
-  ! i.e. we have some double counting which was necessary for the
-  ! construction of the tetrahedrons
   if (algo%ltetra) then
-     kpointer => fulkm
-     epointer => efulk
+     STOP 'does not work for tetrahedrons'
+     ! kpointer => fulkm
+     ! epointer => efulk
   else
      kpointer => redkm
      epointer => eredk
   endif
 
+  ! file setup
   call hdf5_init()
   call hdf5_create_file('test.hdf5')
   call hdf5_open_file('test.hdf5', ifile)
 
-  call hdf5_write_data(ifile, '/.kmesh', kpointer%k_coord)
+  call hdf5_write_data(ifile, '/.kmesh/k_coord', kpointer%k_coord)
+  call hdf5_write_data(ifile, '/.kmesh/kx', kpointer%kx)
+  call hdf5_write_data(ifile, '/.kmesh/ky', kpointer%ky)
+  call hdf5_write_data(ifile, '/.kmesh/kz', kpointer%kz)
+  call hdf5_write_data(ifile, '/.kmesh/ktot', irrkm%ktot)
+
+  ! symmetry information
+  call hdf5_write_data(ifile, '/.symmetry/nsym', symm%nsym)
+  call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym)
+  call hdf5_write_data(ifile, '/.symmetry/mapping', symm%symop_id)
+
+  ! lattice information
+  call hdf5_write_data(ifile, '/.crystal/alat', lat%alat)
+  call hdf5_write_data(ifile, '/.crystal/a', lat%a)
+  call hdf5_write_data(ifile, '/.crystal/vol', lat%vol)
+  call hdf5_write_data(ifile, '/.crystal/nalpha', lat%nalpha)
+  if (lat%lcubic) then
+     call hdf5_write_data(ifile, '/.crystal/lcubic', 1)
+  else
+     call hdf5_write_data(ifile, '/.crystal/lcubic', 0)
+  endif
 
   do i=1,size(epointer%band, 1)
      write(string,"('/kpoint/',I6.6, '/energies')") i
@@ -73,8 +94,9 @@ program setupbz
      call hdf5_write_data(ifile, trim(string), epointer%Mopt(:,i,:,:))
   enddo
 
-  call hdf5_write_data(ifile, '/.optical_band_min', epointer%nbopt_min)
-  call hdf5_write_data(ifile, '/.optical_band_max', epointer%nbopt_max)
+  call hdf5_write_data(ifile, '/.bands/band_max',  epointer%nband_max)
+  call hdf5_write_data(ifile, '/.bands/optical_band_min', epointer%nbopt_min)
+  call hdf5_write_data(ifile, '/.bands/optical_band_max', epointer%nbopt_max)
   call hdf5_write_data(ifile, '/.mu_lda', epointer%efer)
 
   !also save all the tetrahedron information

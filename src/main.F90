@@ -50,6 +50,8 @@ program gtmain ! GammaTransport
   use Mestruct
   use Mresponse
   use Mroot
+  use hdf5
+  use hdf5_wrapper
   implicit none
 
   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
@@ -76,6 +78,13 @@ program gtmain ! GammaTransport
   class(kpointmesh), pointer :: kpointer
   class(edisp), pointer      :: epointer
 
+  ! mP: for handling of the hdf5 input
+  integer(hid_t)       :: ifile
+  integer              :: loccubic
+  character(len = 6)   :: nmbstring
+  real(8), allocatable :: rank1arr(:)
+  real(8), allocatable :: rank3arr(:,:,:)
+
   real(8)              :: gmax, gminall
   real(8)              :: mu,mutmp !chemical potential
   integer              :: nT,iT,ierr,imeth,iflag_dmudt,imurestart,niitact
@@ -89,6 +98,7 @@ program gtmain ! GammaTransport
   integer :: nk
   integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
   integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
+
 
   ! mP: should possibly go into the algo datatype
   ! method 0: secant; method 1: linint; method 2: Riddler; method 3: bisection
@@ -111,16 +121,72 @@ program gtmain ! GammaTransport
 
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
-  algo%ldebug = .true.
+  algo%ldebug   = .true.
+  algo%lgenred  = .false.
+  algo%lpreproc = .true.
   ! algo%lgenred = .false.
-  algo%lgenred = .true.
 
   ! we read the information into the irreducible datatypes
   call read_config(irrkm, eirrk, sct)
   ! based on the input we setup the other kind of grids
   call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
-  !read in electronic structure and matrix elements
-  call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
+
+  if (algo%lpreproc) then
+     call hdf5_init()
+     call hdf5_open_file("test.hdf5", ifile, rdonly=.true.)
+
+     ! mesh
+     call hdf5_read_data(ifile, "/.kmesh/k_coord", redkm%k_coord)
+     call hdf5_read_data(ifile, "/.kmesh/ktot",    ik) ! this can either be irreducible or reducible
+     call hdf5_read_data(ifile, "/.kmesh/kx",      redkm%kx)
+     call hdf5_read_data(ifile, "/.kmesh/ky",      redkm%ky)
+     call hdf5_read_data(ifile, "/.kmesh/kz",      redkm%kz)
+     redkm%ktot=redkm%kx*redkm%ky*redkm%kz
+
+     ! symmetry
+     call hdf5_read_data(ifile, "/.symmetry/mapping",   symm%symop_id)
+     call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym)
+     call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%nsym)
+
+     ! crystal
+     call hdf5_read_data(ifile, "/.crystal/lcubic",     loccubic)
+     if (loccubic /= 0) then
+        lat%lcubic = .true.
+     else
+        lat%lcubic = .false.
+     endif
+
+     ! bands
+     call hdf5_read_data(ifile, "/.bands/band_max", eredk%nband_max)
+     call hdf5_read_data(ifile, "/.bands/optical_band_min", eredk%nbopt_min)
+     call hdf5_read_data(ifile, "/.bands/optical_band_max", eredk%nbopt_max)
+
+     ! k-point information
+     allocate(eredk%band(ik, eredk%nband_max))
+     allocate(eredk%Z(ik, eredk%nband_max))
+     if (lat%lcubic) then
+        allocate(eredk%Mopt(3, ik, eredk%nbopt_min:eredk%nbopt_max, eredk%nbopt_min:eredk%nbopt_max))
+     else
+        allocate(eredk%Mopt(6, ik, eredk%nbopt_min:eredk%nbopt_max, eredk%nbopt_min:eredk%nbopt_max))
+     endif
+     do i=1,ik
+        write(nmbstring,'(I6.6)') i
+        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/energies", rank1arr)
+        eredk%band(i,:)     = rank1arr
+        deallocate(rank1arr)
+        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/zqp",      rank1arr)
+        eredk%Z(i,:)        = rank1arr
+        deallocate(rank1arr)
+        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/optical",  rank3arr)
+        eredk%Mopt(:,i,:,:) = rank3arr
+        deallocate(rank3arr)
+     enddo
+     call gendosel (redkm, eredk, dos) ! normalization already taken care of
+     if (algo%imurestart == 0) call findef(dos, eredk)   ! finds the (non-interacting) Fermi level
+  else
+     !read in electronic structure and matrix elements
+     call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
+  endif
 
   ! now we either have the data in the full BZ or in the reducible one
   if (algo%ltetra) then

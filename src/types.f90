@@ -10,6 +10,7 @@ module Mtypes
     logical :: ldmft        ! k-point and band dependent renormalisation factor and scattering rate provided
     logical :: lsymm        ! reads in the full BZ or generates it using symmetry operations?
     logical :: lgenred      ! generate all the reducible data ? (useful for eventual preprocessing)
+    logical :: lpreproc     ! read from preprocessed data
     integer :: imurestart   ! restart with a privided value of the chemical potential?
     character(100) :: mysyst ! label that is used to open the Wien2k files
   end type
