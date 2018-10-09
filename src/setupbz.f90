@@ -2,27 +2,20 @@ program setupbz
   use Mparams
   use Mtypes
   use Mestruct
+  use Minput
   use hdf5_wrapper
   use hdf5
   implicit none
 
-  type(kpointmesh)         :: irrkm
-  type(kpointmesh), target :: redkm
-  type(kpointmesh), target :: fulkm
-  type(edisp)              :: eirrk
-  type(edisp), target      :: eredk
-  type(edisp), target      :: efulk
-  type(tetramesh)          :: thdr
-  type(dosgrid)            :: dos
-  type(scatrate)           :: sct
+  type(kpointmesh) :: kmesh
+  type(energydisp) :: edisp
+  type(tetramesh)  :: thdr
+  type(dosgrid)    :: dos
+  type(scatrate)   :: sct
 
-  integer            :: i,j,k
-  integer            :: kk
+  integer            :: i
   integer(hid_t)     :: ifile
   character(len=100) :: string
-
-  class(kpointmesh), pointer :: kpointer
-  class(edisp), pointer      :: epointer
 
   write(*,*)
   write(*,*)'#####################################################'
@@ -36,73 +29,75 @@ program setupbz
 
   algo%ldebug = .true.
   algo%lgenred = .false.
-  algo%lpreproc = .true.
 
-  call read_config(irrkm, eirrk, sct)
-  call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
-  call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
-
-  if (algo%ltetra) then
-     STOP 'does not work for tetrahedrons'
-     ! kpointer => fulkm
-     ! epointer => efulk
-  else
-     kpointer => redkm
-     epointer => eredk
-  endif
+  call read_config(kmesh, edisp, sct)
+  algo%ltetra = .false. ! we enforce non-tetrahedrons
+  call estruct_init(kmesh, edisp, thdr, dos, sct)
 
   ! file setup
   call hdf5_init()
   call hdf5_create_file('test.hdf5')
   call hdf5_open_file('test.hdf5', ifile)
 
-  call hdf5_write_data(ifile, '/.kmesh/k_coord', kpointer%k_coord)
-  call hdf5_write_data(ifile, '/.kmesh/kx', kpointer%kx)
-  call hdf5_write_data(ifile, '/.kmesh/ky', kpointer%ky)
-  call hdf5_write_data(ifile, '/.kmesh/kz', kpointer%kz)
-  call hdf5_write_data(ifile, '/.kmesh/ktot', irrkm%ktot)
+  call hdf5_write_data(ifile, '/.kmesh/k_coord', kmesh%k_coord)
+  call hdf5_write_data(ifile, '/.kmesh/kx',      kmesh%kx)
+  call hdf5_write_data(ifile, '/.kmesh/ky',      kmesh%ky)
+  call hdf5_write_data(ifile, '/.kmesh/kz',      kmesh%kz)
+  call hdf5_write_data(ifile, '/.kmesh/ktot',    kmesh%ktot)
+  call hdf5_write_data(ifile, '/.kmesh/kred',    kmesh%kred)
+  call hdf5_write_data(ifile, '/.kmesh/kful',    kmesh%kful)
 
   ! symmetry information
-  call hdf5_write_data(ifile, '/.symmetry/nsym', symm%nsym)
+  call hdf5_write_data(ifile, '/.symmetry/nsym',      symm%nsym)
   call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym)
-  call hdf5_write_data(ifile, '/.symmetry/mapping', symm%symop_id)
+  call hdf5_write_data(ifile, '/.symmetry/mapping',   symm%symop_id)
 
   ! lattice information
-  call hdf5_write_data(ifile, '/.crystal/alat', lat%alat)
-  call hdf5_write_data(ifile, '/.crystal/a', lat%a)
-  call hdf5_write_data(ifile, '/.crystal/vol', lat%vol)
-  call hdf5_write_data(ifile, '/.crystal/nalpha', lat%nalpha)
+  call hdf5_write_data(ifile, '/.crystal/alat',      lat%alat)
+  call hdf5_write_data(ifile, '/.crystal/a',         lat%a)
+  call hdf5_write_data(ifile, '/.crystal/vol',       lat%vol)
+  call hdf5_write_data(ifile, '/.crystal/nalpha',    lat%nalpha)
   if (lat%lcubic) then
      call hdf5_write_data(ifile, '/.crystal/lcubic', 1)
   else
      call hdf5_write_data(ifile, '/.crystal/lcubic', 0)
   endif
 
-  do i=1,size(epointer%band, 1)
+  ! band information
+  call hdf5_write_data(ifile, '/.bands/band_max',         edisp%nband_max)
+  call hdf5_write_data(ifile, '/.bands/optical_band_min', edisp%nbopt_min)
+  call hdf5_write_data(ifile, '/.bands/optical_band_max', edisp%nbopt_max)
+
+  ! dispersion
+  do i=1,size(edisp%band, 1)
      write(string,"('/kpoint/',I6.6, '/energies')") i
-     call hdf5_write_data(ifile, trim(string), epointer%band(i,:))
+     call hdf5_write_data(ifile, trim(string), edisp%band(i,:))
   enddo
 
-  do i=1,size(epointer%Z, 1)
+  ! quasiparticle weights
+  do i=1,size(edisp%Z, 1)
      write(string,"('/kpoint/',I6.6, '/zqp')") i
-     call hdf5_write_data(ifile, trim(string), epointer%Z(i,:))
+     call hdf5_write_data(ifile, trim(string), edisp%Z(i,:))
   enddo
 
+  ! DOS
+  call hdf5_write_data(ifile, '/.dos/grid', dos%enrg)
+  call hdf5_write_data(ifile, '/.dos/dos',  dos%dos)
+  call hdf5_write_data(ifile, '/.dos/nos',  dos%nos)
+  call hdf5_write_data(ifile, '/.dos/mu',   edisp%efer)
+
+  ! optical elements
   ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
-  do i=1,size(epointer%Mopt, 2)
+  do i=1,size(edisp%Mopt, 2)
      write(string, "('/kpoint/',I6.6, '/optical/')") i
-     call hdf5_write_data(ifile, trim(string), epointer%Mopt(:,i,:,:))
+     call hdf5_write_data(ifile, trim(string), edisp%Mopt(:,i,:,:))
   enddo
-
-  call hdf5_write_data(ifile, '/.bands/band_max',  epointer%nband_max)
-  call hdf5_write_data(ifile, '/.bands/optical_band_min', epointer%nbopt_min)
-  call hdf5_write_data(ifile, '/.bands/optical_band_max', epointer%nbopt_max)
-  call hdf5_write_data(ifile, '/.mu_lda', epointer%efer)
 
   !also save all the tetrahedron information
   if (algo%ltetra) then
-     call hdf5_write_data(ifile, '/.thdr_id', thdr%idtet)
-     call hdf5_write_data(ifile, '/.thdr_vol', thdr%vltet)
+     call hdf5_write_data(ifile, '/.tetrahedrons/ntet',     thdr%ntet)
+     call hdf5_write_data(ifile, '/.tetrahedrons/thdr_id',  thdr%idtet)
+     call hdf5_write_data(ifile, '/.tetrahedrons/thdr_vol', thdr%vltet)
   endif
 
   call hdf5_close_file(ifile)

@@ -2,7 +2,6 @@
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 ! TRANSPORT CODE for finite static scattering rates.
 ! Jan M. Tomczak, rewritten from scratch, after N. Berlakovich's project work 2015
@@ -43,47 +42,28 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 program gtmain ! GammaTransport
-
   use Mparams
   use Mtypes
   use Mmpi_org
+  use Minput
   use Mestruct
   use Mresponse
   use Mroot
-  use hdf5
-  use hdf5_wrapper
   implicit none
 
   !!eM note: it is necessary to declare dderesp with the extended datatype because by doing so in interptra_mu there is
   !! no extra multiplication for some additional factors (required for the conductivity); the additional memory requirement
   !! is negligible
-  type(kpointmesh), target :: irrkm   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(kpointmesh), target :: redkm
-  type(kpointmesh), target :: fulkm
-  type(edisp), target      :: eirrk   ! contains the band dispersion energy and the optical matrix elements
-  type(edisp), target      :: eredk
-  type(edisp), target      :: efulk
-  type(tetramesh)          :: thdr    ! contains the tetrahedra
-  type(dosgrid)            :: dos     ! DOS, integrated DOS, Fermi level
-  type(scatrate)           :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
-  type(dp_resp)            :: dpresp  ! response functions in double precision
-  type(qp_resp)            :: qpresp  ! response functions in quadruple precision -- same as equations as used in dpresp
-  type(dp_resp)            :: respBl  ! response functions in double precision for Boltzmann regime response ( i.e. Gamma -> 0 )
-  type(dp_respinter)       :: dinter  ! response functions in double precision for interband transitions
-  type(dp_respinter)       :: dderesp ! response functions (intraband conductivity) derivatives in double precision
-
-  ! mP note
-  ! after we initialized all the kpointer, optical elements, energy dispersion
-  ! we just point to the required variable
-  class(kpointmesh), pointer :: kpointer
-  class(edisp), pointer      :: epointer
-
-  ! mP: for handling of the hdf5 input
-  integer(hid_t)       :: ifile
-  integer              :: loccubic
-  character(len = 6)   :: nmbstring
-  real(8), allocatable :: rank1arr(:)
-  real(8), allocatable :: rank3arr(:,:,:)
+  type(kpointmesh)   :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(energydisp)   :: edisp   ! contains the band dispersion energy and the optical matrix elements
+  type(tetramesh)    :: thdr    ! contains the tetrahedra
+  type(dosgrid)      :: dos     ! DOS, integrated DOS, Fermi level
+  type(scatrate)     :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
+  type(dp_resp)      :: dpresp  ! response functions in double precision
+  type(qp_resp)      :: qpresp  ! response functions in quadruple precision -- same as equations as used in dpresp
+  type(dp_resp)      :: respBl  ! response functions in double precision for Boltzmann regime response ( i.e. Gamma -> 0 )
+  type(dp_respinter) :: dinter  ! response functions in double precision for interband transitions
+  type(dp_respinter) :: dderesp ! response functions (intraband conductivity) derivatives in double precision
 
   real(8)              :: gmax, gminall
   real(8)              :: mu,mutmp !chemical potential
@@ -122,79 +102,26 @@ program gtmain ! GammaTransport
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
   algo%ldebug   = .true.
-  algo%lgenred  = .false.
+  ! flag to activate / deactivate calculation of everything at the beginning
+  ! vs on the fly + mapping of redk->irrk
+  algo%lgenred  = .true.
+  ! get the data from the preprocessed hdf5 file
   algo%lpreproc = .true.
-  ! algo%lgenred = .false.
 
-  ! we read the information into the irreducible datatypes
-  call read_config(irrkm, eirrk, sct)
-  ! based on the input we setup the other kind of grids
-  call setup_algo(irrkm, redkm, fulkm, eirrk, eredk, efulk)
+
+  call read_config(kmesh, edisp, sct)
 
   if (algo%lpreproc) then
-     call hdf5_init()
-     call hdf5_open_file("test.hdf5", ifile, rdonly=.true.)
-
-     ! mesh
-     call hdf5_read_data(ifile, "/.kmesh/k_coord", redkm%k_coord)
-     call hdf5_read_data(ifile, "/.kmesh/ktot",    ik) ! this can either be irreducible or reducible
-     call hdf5_read_data(ifile, "/.kmesh/kx",      redkm%kx)
-     call hdf5_read_data(ifile, "/.kmesh/ky",      redkm%ky)
-     call hdf5_read_data(ifile, "/.kmesh/kz",      redkm%kz)
-     redkm%ktot=redkm%kx*redkm%ky*redkm%kz
-
-     ! symmetry
-     call hdf5_read_data(ifile, "/.symmetry/mapping",   symm%symop_id)
-     call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym)
-     call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%nsym)
-
-     ! crystal
-     call hdf5_read_data(ifile, "/.crystal/lcubic",     loccubic)
-     if (loccubic /= 0) then
-        lat%lcubic = .true.
+     call read_preproc_data("test.hdf5", kmesh, edisp, thdr, dos)
+     if (algo%ltetra) then
+        call intetra(kmesh, edisp, thdr, dos)
      else
-        lat%lcubic = .false.
+        call gendosel (kmesh, edisp, dos) ! normalization already taken care of
      endif
-
-     ! bands
-     call hdf5_read_data(ifile, "/.bands/band_max", eredk%nband_max)
-     call hdf5_read_data(ifile, "/.bands/optical_band_min", eredk%nbopt_min)
-     call hdf5_read_data(ifile, "/.bands/optical_band_max", eredk%nbopt_max)
-
-     ! k-point information
-     allocate(eredk%band(ik, eredk%nband_max))
-     allocate(eredk%Z(ik, eredk%nband_max))
-     if (lat%lcubic) then
-        allocate(eredk%Mopt(3, ik, eredk%nbopt_min:eredk%nbopt_max, eredk%nbopt_min:eredk%nbopt_max))
-     else
-        allocate(eredk%Mopt(6, ik, eredk%nbopt_min:eredk%nbopt_max, eredk%nbopt_min:eredk%nbopt_max))
-     endif
-     do i=1,ik
-        write(nmbstring,'(I6.6)') i
-        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/energies", rank1arr)
-        eredk%band(i,:)     = rank1arr
-        deallocate(rank1arr)
-        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/zqp",      rank1arr)
-        eredk%Z(i,:)        = rank1arr
-        deallocate(rank1arr)
-        call hdf5_read_data(ifile, "/kpoint/"//nmbstring//"/optical",  rank3arr)
-        eredk%Mopt(:,i,:,:) = rank3arr
-        deallocate(rank3arr)
-     enddo
-     call gendosel (redkm, eredk, dos) ! normalization already taken care of
-     if (algo%imurestart == 0) call findef(dos, eredk)   ! finds the (non-interacting) Fermi level
+     if (algo%imurestart == 0) call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
   else
      !read in electronic structure and matrix elements
-     call estruct_init(irrkm, redkm, fulkm, eirrk, eredk, efulk, thdr, dos, sct)
-  endif
-
-  ! now we either have the data in the full BZ or in the reducible one
-  if (algo%ltetra) then
-     epointer => efulk
-     kpointer => fulkm
-  else
-     epointer => eredk
-     kpointer => redkm
+     call estruct_init(kmesh, edisp, thdr, dos, sct)
   endif
 
   if(myid .eq. master .and. .not.(algo%lBfield)) then
@@ -211,7 +138,7 @@ program gtmain ! GammaTransport
   endif
 
   ! starting point for the chemical potential
-  mu = epointer%efer
+  mu = edisp%efer
   if (myid.eq.master) then
      if (algo%imurestart == 0) then
         write(*,*) 'initialized LDA mu = ',mu
@@ -236,9 +163,9 @@ program gtmain ! GammaTransport
   allocate(sct%gam(sct%nT)) ! always there, value read from input file
   if (algo%ldmft) then
      if (algo%ltetra) then
-        allocate(sct%ykb(sct%nT, thdr%ntet, epointer%nband_max))
+        allocate(sct%ykb(sct%nT, thdr%ntet, edisp%nband_max))
      else
-        allocate(sct%ykb(sct%nT, kpointer%ktot, epointer%nband_max))
+        allocate(sct%ykb(sct%nT, kmesh%ktot, edisp%nband_max))
      endif
   endif
 
@@ -255,10 +182,10 @@ program gtmain ! GammaTransport
   !TODO: FIX THIS FOR TETRAHEDRONS
   if (algo%ldmft) then
      sct%ykb=0.0d0
-     do iband=1,epointer%nband_max
-        do ik=1,kpointer%ktot
+     do iband=1,edisp%nband_max
+        do ik=1,kmesh%ktot
            do iT=1,sct%nT
-              sct%ykb(iT,ik,iband)=epointer%Im(ik,iband)
+              sct%ykb(iT,ik,iband)=edisp%Im(ik,iband)
            enddo
         enddo
      enddo
@@ -276,7 +203,7 @@ program gtmain ! GammaTransport
   if (algo%ltetra) then
      call mpi_genkstep(thdr%ntet)
   else
-     call mpi_genkstep(kpointer%ktot)
+     call mpi_genkstep(kmesh%kred)
   endif
 
   if (algo%ldebug) then
@@ -287,7 +214,7 @@ program gtmain ! GammaTransport
      select case (algo%imurestart)
         case (0)
            open(20,file='mu.dat',status='unknown')
-           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT,kpointer%ktot,epointer%nelect
+           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT,kmesh%ktot,edisp%nelect
         case (1) ! read and check
            open(20,file='mu.dat',status='old')
            read(20,'(2X,3E15.7,1I10,1E20.12)')dum1,dum2,dum3,idum,dum4
@@ -295,13 +222,13 @@ program gtmain ! GammaTransport
            if (dum1.ne.sct%Tmin) STOP 'wrong Tmin in mu.dat'
            if (dum2.ne.sct%Tmax) STOP 'wrong Tmax in mu.dat'
            if (dum3.ne.sct%dT) STOP   'wrong dT in mu.dat'
-           if (idum.ne.kpointer%ktot) STOP 'wrong nk in mu.dat'
-           if (dum4.ne.epointer%nelect) STOP 'wrong NE in mu.dat'
+           if (idum.ne.kmesh%ktot) STOP 'wrong nk in mu.dat'
+           if (dum4.ne.edisp%nelect) STOP 'wrong NE in mu.dat'
            ! TODO: Here, I should be checking for the Gammas, too...
            write(*,*)'using chemical potential from mu.dat'
         case (2) ! use mu from inp.linretrace
            open(20,file='mu.dat',status='unknown')
-           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT, kpointer%ktot, epointer%nelect
+           write(20,'(A,3E15.7,1I10,1E20.12)')'# ', sct%Tmin, sct%Tmax, sct%dT, kmesh%ktot, edisp%nelect
            write(20,*)'using constant mu=',mu
            write(*,*)'using constant mu=',mu
      end select
@@ -312,7 +239,7 @@ program gtmain ! GammaTransport
   !find minimal gamma for lowest T. If = 0 then we can do (linear) extrapolation... if gam=O(T,T^2) ... strictly not linear...
   gminall=10.d0
   if (algo%ldmft) then
-     do iband=1,epointer%nband_max
+     do iband=1,edisp%nband_max
         if ((sct%ykb(1,1,iband)<gminall).and.(sct%ykb(1,1,iband)>0.0d0)) &
                gminall=sct%ykb(1,1,iband)
      enddo
@@ -323,12 +250,12 @@ program gtmain ! GammaTransport
   iflag_dmudt=0 !!!what is this for?
 
   ! allocate the arrays once outside of the main (temperature) loop
-  call dpresp_alloc(algo%lBfield, dpresp, epointer%nband_max)
-  call dpresp_alloc(algo%lBfield, respBl, epointer%nband_max)
-  call dpresp_alloc(.false., dderesp, epointer%nband_max)
-  call dpresp_alloc(.false., dinter, epointer%nband_max)
+  call dpresp_alloc(algo%lBfield, dpresp, edisp%nband_max)
+  call dpresp_alloc(algo%lBfield, respBl, edisp%nband_max)
+  call dpresp_alloc(.false., dderesp, edisp%nband_max)
+  call dpresp_alloc(.false., dinter, edisp%nband_max)
   if (.not. algo%ldebug) then
-     call qpresp_alloc(algo%lBfield, qpresp, epointer%nband_max)
+     call qpresp_alloc(algo%lBfield, qpresp, edisp%nband_max)
   endif
 
   if (myid.eq.master) then
@@ -385,20 +312,20 @@ program gtmain ! GammaTransport
      if (algo%imurestart == 0) then
         if (criterion.lt.20.d0) then !DP
            imeth=0
-           call find_mu(mu,iT,ndev,ndevact,niitact, epointer, sct, kpointer, thdr, method)
+           call find_mu(mu,iT,ndev,ndevact,niitact, edisp, sct, kmesh, thdr, method)
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
            endif
         elseif (criterion.lt.80.d0) then !QP
            imeth=1
-           call find_mu(mu,iT,ndevQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, method)! full QUAD on particle number
+           call find_mu(mu,iT,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, thdr, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
         else   ! further refinement
            imeth=2
            if (myid.eq.master) write(*,*) 'SUPER QUAD'
-           call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, epointer, sct, kpointer, thdr, method)! full QUAD on particle number
+           call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, thdr, method)! full QUAD on particle number
            if (myid.eq.master) then
               write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
            endif
@@ -471,7 +398,7 @@ program gtmain ! GammaTransport
            niitact=0
            write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
         case (2)
-           mu = eirrk%efer !this is the original assignment to the value read from file
+           mu = edisp%efer !this is the original assignment to the value read from file
                            !unless imurestart == 0, in which case it is the value found from the
                            !dos (if the tetrahedron methos has been selected)
            niitact=0
@@ -489,17 +416,17 @@ program gtmain ! GammaTransport
      !copy the given value of mu into the datastructure
      sct%mu(iT) = mu
 
-     if ((myid == master) .and. (iT == sct%nT)) then
-        call intldos(iT, dos, redkm, eredk, sct)
+     if (.not. algo%ltetra .and. (myid == master) .and. (iT == sct%nT)) then
+        call intldos(iT, dos, kmesh, edisp, sct)
      endif
 
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! DONE MU. DO TRANSPORT AT THIS POINT.
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      if (algo%ldebug) then
-        call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl)
+        call calc_response(mu, iT, drhodT, kmesh, edisp, thdr, sct, dpresp, dderesp, dinter, respBl)
      else
-        call calc_response(mu, iT, drhodT, kpointer, epointer, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
+        call calc_response(mu, iT, drhodT, kmesh, edisp, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
      endif
 
   enddo ! iT temperature

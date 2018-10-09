@@ -7,9 +7,9 @@ INSTALL_DIR = ../bin
 
 DIGAMMA = ./digamma/cern_digamma.a
 OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
-				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o
+				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o input.o
 
-BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o
+BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o input.o
 
 include ../make_include
 
@@ -48,13 +48,14 @@ $(INSTALL_DIR)/$(BZ): $(BZOBJECTS)
 nrutil.o: nrtype.o
 mymath.o: params.o nrtype.o nrutil.o
 estruct.o: params.o types.o mymath.o
-main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o
+main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o input.o
 mpi_org.o: types.o
 response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
+input.o: params.o types.o hdf5_wrapper.o
 params.o: types.o
 
-setupbz.o: params.o estruct.o types.o
+setupbz.o: params.o estruct.o types.o hdf5_wrapper.o input.o
 
 .PHONY: clean
 clean :

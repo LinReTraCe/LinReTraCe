@@ -33,13 +33,15 @@ module Mtypes
   type kpointmesh
     integer, allocatable :: k_id(:,:,:)  ! counter idenfifying a specific k-point through values of ikx, iky, ikz
     real(8), allocatable :: k_coord(:,:) ! coordinates in reciprocal space associated to a k-point (exclunding the BZ endpoints)
-    integer :: kx                        ! number of k-points in each cartesian direction
-    integer :: ky
+    integer :: kx                        ! number of reducible k-points in each cartesian direction
+    integer :: ky                        ! corresponds to a k value of [0, 1)
     integer :: kz
-    integer :: ktot                      ! total number of k-points (which varies depending on the sampling method for the BZ)
+    integer :: ktot                      ! total number of k-points from read-in (either reducible or irreducible)
+    integer :: kred                      ! total number of REDUCIBLE k-points
+    integer :: kful                      ! total number of FULL k-points
   end type
 
-  type edisp
+  type energydisp
     integer :: nband_max
     integer :: nbopt_min                     ! number of bands (interval) included in the optical matrix elements
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
@@ -52,7 +54,7 @@ module Mtypes
     real(8), allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
     real(8), allocatable :: Z(:,:)           ! renormalisation factor 1/z= 1 - (d/dw)S_{k,n}(w) @ w=0
     real(8), allocatable :: Im(:,:)          ! =-imaginary part of the self-energy at zero frequency
-    real(8), allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
+    ! real(8), allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
 
     real(8)              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
     real(8), allocatable :: a(:,:)           ! TIGHT BINDING PARAMETER: lattice spacing to the higher order hoppings (3, tmax)
@@ -67,9 +69,9 @@ module Mtypes
                                             ! produces a new element or a redundant one (1 or 0 in the 1st entry)
     real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 symmetry transformations
     real(8), allocatable :: Tras(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
-    integer :: nsym                         ! number of symmetry operations
-    logical :: lnsymmr                      ! .true. for nonsymmorphic space groups
-    character(3) :: cntr
+    integer              :: nsym            ! number of symmetry operations
+    logical              :: lnsymmr         ! .true. for nonsymmorphic space groups
+    character(3)         :: cntr
   end type
 
   type tetramesh

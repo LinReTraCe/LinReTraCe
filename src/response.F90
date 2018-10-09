@@ -10,7 +10,7 @@ contains
 subroutine calc_response(mu, iT, drhodT, mesh, ek, thdr, sct, dresp, dderesp, dinter, respBl, qresp)
   implicit none
   type(kpointmesh)        :: mesh
-  type(edisp)             :: ek
+  type(energydisp)        :: ek
   type(tetramesh)         :: thdr
   type(scatrate)          :: sct
   type(dp_resp)           :: dresp   !intraband response
@@ -449,13 +449,13 @@ end subroutine calc_response
 !
 subroutine respintet(mu, iT, itet, thdr, ek, sct, resp)
   implicit none
-  type (dp_resp) :: resp ! dynamical datatype allow only for an inclusion through extension of the parent type,
+  type (dp_resp)    :: resp ! dynamical datatype allow only for an inclusion through extension of the parent type,
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type.
                          ! To do so, the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes.
-  type (tetramesh) :: thdr
-  type (edisp) :: ek
-  type (scatrate) :: sct
+  type (tetramesh)  :: thdr
+  type (energydisp) :: ek
+  type (scatrate)   :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
   integer, intent(in) :: itet
@@ -538,14 +538,14 @@ subroutine respintet(mu, iT, itet, thdr, ek, sct, resp)
                resp%tmp=Mopt(ix,iband,iband)
             endif
 
-            s_tmp_tetra(ik,iband,ix,ix)=resp%s_ker * resp%tmp
-            a_tmp_tetra(ik,iband,ix,ix)=resp%a_ker * resp%tmp
+            s_tmp_tetra(iktet,iband,ix,ix)=resp%s_ker * resp%tmp
+            a_tmp_tetra(iktet,iband,ix,ix)=resp%a_ker * resp%tmp
 
             do iy=ix+1,lat%nalpha
                ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
                resp%tmp=Mopt(ix+iy+1,iband,iband)
-               s_tmp_tetra(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-               a_tmp_tetra(ik,iband,ix,iy)=resp%a_ker * resp%tmp
+               s_tmp_tetra(iktet,iband,ix,iy)=resp%s_ker * resp%tmp
+               a_tmp_tetra(iktet,iband,ix,iy)=resp%a_ker * resp%tmp
             enddo !iy
          enddo ! ix
 
@@ -558,19 +558,19 @@ subroutine respintet(mu, iT, itet, thdr, ek, sct, resp)
                   resp%tmp =ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)* &
                     (ek%M2(iy, ix, thdr%idtet(ik,itet), iband)*ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) - &
                     ek%M2(iy, iy, thdr%idtet(ik,itet), iband)* ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) )
-                  sB_tmp_tetra(ik,iband,ix,iy)=resp%sB_ker * resp%tmp
-                  aB_tmp_tetra(ik,iband,ix,iy)=resp%aB_ker * resp%tmp
+                  sB_tmp_tetra(iktet,iband,ix,iy)=resp%sB_ker * resp%tmp
+                  aB_tmp_tetra(iktet,iband,ix,iy)=resp%aB_ker * resp%tmp
 
                enddo !iy
             enddo ! ix
          endif !lBfield
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-         resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
-         resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
+         resp%s_tmp(iktet,iband,:,:) = s_tmp_tetra(iktet,iband,:,:)
+         resp%a_tmp(iktet,iband,:,:) = a_tmp_tetra(iktet,iband,:,:)
          if(algo%lBfield .and. algo%ltbind ) then
-            resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
-            resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
+            resp%sB_tmp(iktet,iband,:,:) = sB_tmp_tetra(iktet,iband,:,:)
+            resp%aB_tmp(iktet,iband,:,:) = aB_tmp_tetra(iktet,iband,:,:)
          endif
 
       enddo ! iband
@@ -606,7 +606,7 @@ subroutine respintet_qp(mu, iT, itet, thdr, ek, sct, resp)
                          ! to do so the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -693,14 +693,14 @@ subroutine respintet_qp(mu, iT, itet, thdr, ek, sct, resp)
               resp%tmp=real(Mopt(ix,iband,iband),16) !the optical matrix elements given by Wien2k are squared already
            endif
 
-           s_tmp_tetra(ik,iband,ix,ix)=resp%s_ker * resp%tmp
-           a_tmp_tetra(ik,iband,ix,ix)=resp%a_ker * resp%tmp
+           s_tmp_tetra(iktet,iband,ix,ix)=resp%s_ker * resp%tmp
+           a_tmp_tetra(iktet,iband,ix,ix)=resp%a_ker * resp%tmp
 
            do iy=ix+1,lat%nalpha
               ! resp%tmp=real(ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), iband, iband),16)
               resp%tmp=real(Mopt(ix+iy+1,iband,iband),16)
-              s_tmp_tetra(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-              a_tmp_tetra(ik,iband,ix,iy)=resp%a_ker * resp%tmp
+              s_tmp_tetra(iktet,iband,ix,iy)=resp%s_ker * resp%tmp
+              a_tmp_tetra(iktet,iband,ix,iy)=resp%a_ker * resp%tmp
            enddo !iy
         enddo ! ix
 
@@ -714,23 +714,23 @@ subroutine respintet_qp(mu, iT, itet, thdr, ek, sct, resp)
                  resp%tmp = real(ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)* &
                    (ek%M2(iy, ix, thdr%idtet(ik,itet), iband)*ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) - &
                    ek%M2(iy, iy, thdr%idtet(ik,itet), iband)* ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) ),16)
-                 sB_tmp_tetra(ik,iband,ix,iy)=resp%sB_ker * resp%tmp
-                 aB_tmp_tetra(ik,iband,ix,iy)=resp%aB_ker * resp%tmp
+                 sB_tmp_tetra(iktet,iband,ix,iy)=resp%sB_ker * resp%tmp
+                 aB_tmp_tetra(iktet,iband,ix,iy)=resp%aB_ker * resp%tmp
 
               enddo !iy
            enddo ! ix
         endif !lBfield
 
         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-        resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
-        resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
+        resp%s_tmp(iktet,iband,:,:) = s_tmp_tetra(iktet,iband,:,:)
+        resp%a_tmp(iktet,iband,:,:) = a_tmp_tetra(iktet,iband,:,:)
         if(algo%lBfield .and. algo%ltbind ) then
-           resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
-           resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
+           resp%sB_tmp(iktet,iband,:,:) = sB_tmp_tetra(iktet,iband,:,:)
+           resp%aB_tmp(iktet,iband,:,:) = aB_tmp_tetra(iktet,iband,:,:)
         endif
 
      enddo ! iband
-  enddo ! ik
+  enddo ! iktet
 
 end subroutine respintet_qp
 
@@ -749,7 +749,7 @@ subroutine respintet_Bl(mu, iT, itet, thdr, ek, sct, resp)
                          ! to do so the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -822,14 +822,14 @@ subroutine respintet_Bl(mu, iT, itet, thdr, ek, sct, resp)
                ! resp%tmp=ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
                resp%tmp=Mopt(ix,iband,iband) !the optical matrix elements given by Wien2k are squared already
             endif
-            s_tmp_tetra(ik,iband,ix,ix)=resp%s_ker * resp%tmp
-            a_tmp_tetra(ik,iband,ix,ix)=resp%a_ker * resp%tmp
+            s_tmp_tetra(iktet,iband,ix,ix)=resp%s_ker * resp%tmp
+            a_tmp_tetra(iktet,iband,ix,ix)=resp%a_ker * resp%tmp
 
             do iy=ix+1,lat%nalpha
                ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
                resp%tmp=Mopt(ix+iy+1,iband,iband)
-               s_tmp_tetra(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-               a_tmp_tetra(ik,iband,ix,iy)=resp%a_ker * resp%tmp
+               s_tmp_tetra(iktet,iband,ix,iy)=resp%s_ker * resp%tmp
+               a_tmp_tetra(iktet,iband,ix,iy)=resp%a_ker * resp%tmp
             enddo !iy
          enddo ! ix
 
@@ -843,23 +843,23 @@ subroutine respintet_Bl(mu, iT, itet, thdr, ek, sct, resp)
                     (ek%M2(iy, ix, thdr%idtet(ik,itet), iband)*ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) - &
                     ek%M2(iy, iy, thdr%idtet(ik,itet), iband)* ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) )
 
-                  sB_tmp_tetra(ik,iband,ix,iy)=resp%sB_ker * resp%tmp
-                  aB_tmp_tetra(ik,iband,ix,iy)=resp%aB_ker * resp%tmp
+                  sB_tmp_tetra(iktet,iband,ix,iy)=resp%sB_ker * resp%tmp
+                  aB_tmp_tetra(iktet,iband,ix,iy)=resp%aB_ker * resp%tmp
 
                enddo !iy
             enddo ! ix
          endif !lBfield
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-         resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
-         resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
+         resp%s_tmp(iktet,iband,:,:) = s_tmp_tetra(iktet,iband,:,:)
+         resp%a_tmp(iktet,iband,:,:) = a_tmp_tetra(iktet,iband,:,:)
          if(algo%lBfield .and. algo%ltbind ) then
-            resp%sB_tmp(ik,iband,:,:) = sB_tmp_tetra(ik,iband,:,:)
-            resp%aB_tmp(ik,iband,:,:) = aB_tmp_tetra(ik,iband,:,:)
+            resp%sB_tmp(iktet,iband,:,:) = sB_tmp_tetra(iktet,iband,:,:)
+            resp%aB_tmp(iktet,iband,:,:) = aB_tmp_tetra(iktet,iband,:,:)
          endif
 
       enddo ! iband
-   enddo ! ik
+   enddo ! iktet - 4 corners
 
 end subroutine respintet_Bl
 
@@ -878,7 +878,7 @@ subroutine respintert(mu, iT, itet, thdr, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -984,21 +984,21 @@ subroutine respintert(mu, iT, itet, thdr, ek, sct, resp)
                   resp%tmp=Mopt(ix,ib1,ib2)
                endif
 
-               s_tmp_tetra(ik,ib1,ix,ix)=s_tmp_tetra(ik,ib1,ix,ix) + (resp%s_ker * resp%tmp)
-               a_tmp_tetra(ik,ib1,ix,ix)=a_tmp_tetra(ik,ib1,ix,ix) + (resp%a_ker * resp%tmp)
+               s_tmp_tetra(iktet,ib1,ix,ix)=s_tmp_tetra(iktet,ib1,ix,ix) + (resp%s_ker * resp%tmp)
+               a_tmp_tetra(iktet,ib1,ix,ix)=a_tmp_tetra(iktet,ib1,ix,ix) + (resp%a_ker * resp%tmp)
 
                do iy=ix+1,lat%nalpha
                   ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), ib1, ib2)
                   resp%tmp=Mopt(ix+iy+1,ib1,ib2)
-                  s_tmp_tetra(ik,ib1,ix,iy)=s_tmp_tetra(ik,ib1,ix,iy) + (resp%s_ker * resp%tmp)
-                  a_tmp_tetra(ik,ib1,ix,iy)=a_tmp_tetra(ik,ib1,ix,iy) + (resp%a_ker * resp%tmp)
+                  s_tmp_tetra(iktet,ib1,ix,iy)=s_tmp_tetra(iktet,ib1,ix,iy) + (resp%s_ker * resp%tmp)
+                  a_tmp_tetra(iktet,ib1,ix,iy)=a_tmp_tetra(iktet,ib1,ix,iy) + (resp%a_ker * resp%tmp)
                enddo !iy
             enddo ! ix
          enddo !ib2
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-         resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
-         resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
+         resp%s_tmp(iktet,ib1,:,:) = s_tmp_tetra(iktet,ib1,:,:)
+         resp%a_tmp(iktet,ib1,:,:) = a_tmp_tetra(iktet,ib1,:,:)
 
       enddo ! ib1
    enddo ! ik
@@ -1023,7 +1023,7 @@ subroutine respintert_symm(mu, iT, itet, thdr, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   !real(8), intent(in) :: gap
@@ -1123,24 +1123,24 @@ subroutine respintert_symm(mu, iT, itet, thdr, ek, sct, resp)
                   resp%tmp=Mopt(ix,ib1,ib2)
                endif
 
-               s_tmp_tetra(ik,ib1,ix,ix)=s_tmp_tetra(ik,ib1,ix,ix) + (resp%s_ker * resp%tmp)
-               a_tmp_tetra(ik,ib1,ix,ix)=a_tmp_tetra(ik,ib1,ix,ix) + (resp%a_ker * resp%tmp)
+               s_tmp_tetra(iktet,ib1,ix,ix)=s_tmp_tetra(iktet,ib1,ix,ix) + (resp%s_ker * resp%tmp)
+               a_tmp_tetra(iktet,ib1,ix,ix)=a_tmp_tetra(iktet,ib1,ix,ix) + (resp%a_ker * resp%tmp)
 
                do iy=ix+1,lat%nalpha
                   ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), ib1, ib2)
                   resp%tmp=Mopt(ix+iy+1,ib1,ib2)
-                  s_tmp_tetra(ik,ib1,ix,iy)=s_tmp_tetra(ik,ib1,ix,iy) + (resp%s_ker * resp%tmp)
-                  a_tmp_tetra(ik,ib1,ix,iy)=a_tmp_tetra(ik,ib1,ix,iy) + (resp%a_ker * resp%tmp)
+                  s_tmp_tetra(iktet,ib1,ix,iy)=s_tmp_tetra(iktet,ib1,ix,iy) + (resp%s_ker * resp%tmp)
+                  a_tmp_tetra(iktet,ib1,ix,iy)=a_tmp_tetra(iktet,ib1,ix,iy) + (resp%a_ker * resp%tmp)
                enddo !iy
             enddo ! ix
          enddo !ib2
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-         resp%s_tmp(ik,ib1,:,:) = s_tmp_tetra(ik,ib1,:,:)
-         resp%a_tmp(ik,ib1,:,:) = a_tmp_tetra(ik,ib1,:,:)
+         resp%s_tmp(iktet,ib1,:,:) = s_tmp_tetra(iktet,ib1,:,:)
+         resp%a_tmp(iktet,ib1,:,:) = a_tmp_tetra(iktet,ib1,:,:)
 
       enddo ! ib1
-   enddo ! ik
+   enddo ! iktet
 
 end subroutine respintert_symm
 
@@ -1157,7 +1157,7 @@ subroutine respinkm(mu, iT, ik, ek, sct, resp)
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -1278,7 +1278,7 @@ subroutine respinkm_qp(mu, iT, ik, ek, sct, resp)
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -1394,7 +1394,7 @@ subroutine respinkm_Bl(mu, iT, ik, ek, sct, resp)
                          ! I could have declared a dummy class pointer that would be assigned to either dp or qp response type
                          ! to do so the varaibles defined in the individual types must have had different names and since I
                          ! REALLY dislike having that extra Q for each varible I decided to stick to static datatypes
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -1493,7 +1493,7 @@ end subroutine respinkm_Bl
 subroutine respinterkm(mu, iT, ik, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -1623,7 +1623,7 @@ end subroutine respinterkm
 subroutine respinterkm_symm(mu, iT, ik, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   !real(8), intent(in) :: gap
@@ -1747,7 +1747,7 @@ subroutine resdertet_symm(mu, iT, itet, thdr, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -1854,7 +1854,7 @@ subroutine resdertet(iT, itet, thdr, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
   type (tetramesh) :: thdr
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   integer, intent(in) :: iT
   integer, intent(in) :: itet
@@ -1955,23 +1955,23 @@ subroutine resdertet(iT, itet, thdr, ek, sct, resp)
                resp%tmp=Mopt(ix,iband,iband)
             endif
 
-            s_tmp_tetra(ik,iband,ix,ix)=resp%s_ker * resp%tmp
-            a_tmp_tetra(ik,iband,ix,ix)=resp%a_ker * resp%tmp
+            s_tmp_tetra(iktet,iband,ix,ix)=resp%s_ker * resp%tmp
+            a_tmp_tetra(iktet,iband,ix,ix)=resp%a_ker * resp%tmp
 
             do iy=ix+1,lat%nalpha
                ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), iband, iband)
                resp%tmp=Mopt(ix+iy+1,iband,iband)
-               s_tmp_tetra(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-               a_tmp_tetra(ik,iband,ix,iy)=resp%a_ker * resp%tmp
+               s_tmp_tetra(iktet,iband,ix,iy)=resp%s_ker * resp%tmp
+               a_tmp_tetra(iktet,iband,ix,iy)=resp%a_ker * resp%tmp
             enddo !iy
          enddo ! ix
 
          ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-         resp%s_tmp(ik,iband,:,:) = s_tmp_tetra(ik,iband,:,:)
-         resp%a_tmp(ik,iband,:,:) = a_tmp_tetra(ik,iband,:,:)
+         resp%s_tmp(iktet,iband,:,:) = s_tmp_tetra(iktet,iband,:,:)
+         resp%a_tmp(iktet,iband,:,:) = a_tmp_tetra(iktet,iband,:,:)
 
       enddo ! iband
-   enddo ! ik
+   enddo ! iktet
 
 end subroutine resdertet
 
@@ -1991,7 +1991,7 @@ end subroutine resdertet
 subroutine resderkm_symm(mu, iT, ik, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   real(8), intent(in) :: mu
   integer, intent(in) :: iT
@@ -2078,7 +2078,7 @@ end subroutine resderkm_symm
 subroutine resderkm(iT, ik, ek, sct, resp)
   implicit none
   type (dp_respinter) :: resp
-  type (edisp) :: ek
+  type (energydisp) :: ek
   type (scatrate) :: sct
   integer, intent(in) :: iT
   integer, intent(in) :: ik
@@ -2271,9 +2271,9 @@ subroutine finddrhomax(iT, resp1, resp2, sct, drhodT)
 
 end subroutine finddrhomax
 
-subroutine globfac(mesh, resp, hpresp)
+subroutine globfac(kmesh, resp, hpresp)
    implicit none
-   type(kpointmesh) :: mesh
+   type(kpointmesh) :: kmesh
    class(dp_resp) :: resp
    type(qp_resp), optional ::hpresp
 !local variables
@@ -2289,7 +2289,7 @@ subroutine globfac(mesh, resp, hpresp)
    if (algo%ltetra) then
       ktot=1
    else
-      ktot=mesh%ktot
+      ktot=kmesh%kred
    endif
 
    !global symmetries of a cubic system
@@ -2794,12 +2794,12 @@ end subroutine qpresp_alloc
  !        energy window (to be defined)
  ! OUTPUT: integrated DOS (summed over bands and over k-points)
  !
-subroutine intldos(iT, dos, mesh, ek, sct)
+subroutine intldos(iT, dos, kmesh, ek, sct)
   !passed variables
   integer :: iT
   type(dosgrid) :: dos
-  type(kpointmesh) :: mesh !reducible k-mesh
-  type(edisp) :: ek
+  type(kpointmesh) :: kmesh !reducible k-mesh
+  type(energydisp) :: ek
   type(scatrate) :: sct
   !local variables
   integer :: ee, ik, ibn, ikk
@@ -2813,7 +2813,7 @@ subroutine intldos(iT, dos, mesh, ek, sct)
   allocate(AA(dos%nnrg))
   AA = 0.0d0
   do ee=1,dos%nnrg
-     do ik=1, mesh%ktot
+     do ik=1, kmesh%kred
         ikk = symm%symop_id(1,ik)
         do ibn=1, ek%nband_max
            if (ek%band(ikk,ibn) > band_fill_value) cycle
@@ -2825,7 +2825,7 @@ subroutine intldos(iT, dos, mesh, ek, sct)
         enddo
      enddo
   enddo !ee
-  AA = AA*2.d0*dee/(pi*mesh%ktot) ! spin, spacing, pi from spectralfunction, kmesh normalization
+  AA = AA*2.d0*dee/(pi*kmesh%kred) ! spin, spacing, pi from spectralfunction, kmesh normalization
   !use trapezoidal rule to evaluate the number of electrons
   s=0.5d0*(AA(1)+AA(dos%nnrg))
   do ee=2,dos%nnrg-1
@@ -2853,7 +2853,7 @@ end function dfermi
   ! construct the reducible optical elements on the fly
   ! this is buffered for one k-point, i.e. we construct it for all the bands of this point
 subroutine getmopt(ek, ik, Mopt, inter)
-  type(edisp) :: ek
+  type(energydisp) :: ek
   integer     :: ik
   real(8)     :: Mopt(6, ek%nbopt_min:ek%nbopt_Max, ek%nbopt_min:ek%nbopt_max)
   logical     :: inter

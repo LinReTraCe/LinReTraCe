@@ -35,7 +35,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   real(8), intent(out)          :: target_zero ! deviation from root after convergence
   integer, intent(out)          :: niitact ! number of iterations
   integer, intent(in), optional :: method  ! choose root finding method
-  type(edisp)                   :: ek
+  type(energydisp)              :: ek
   type(scatrate)                :: sct
   type(kpointmesh)              :: mesh
   type(tetramesh)               :: thdr
@@ -260,7 +260,7 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   real(16), intent(out)         :: target_zero
   integer, intent(out)          :: niitact
   integer, intent(in), optional :: method
-  type(edisp)                   :: ek
+  type(energydisp)              :: ek
   type(scatrate)                :: sct
   type(kpointmesh)              :: mesh
   type(tetramesh)               :: thdr
@@ -461,7 +461,7 @@ subroutine ndeviation_D(mu, iT, ek, sct, mesh, thdr, target_zero)
   real(8), intent(in)  :: mu
   integer, intent(in)  :: iT
   real(8), intent(out) :: target_zero
-  type(edisp)          :: ek
+  type(energydisp)     :: ek
   type(scatrate)       :: sct
   type(kpointmesh)     :: mesh
   type(tetramesh)      :: thdr
@@ -483,7 +483,7 @@ subroutine ndeviation_Q(mu, iT, ek, sct, mesh, thdr, target_zero)
   real(16), intent(in)  :: mu
   integer, intent(in)   :: iT
   real(16), intent(out) :: target_zero
-  type(edisp)           :: ek
+  type(energydisp)      :: ek
   type(scatrate)        :: sct
   type(kpointmesh)      :: mesh
   type(tetramesh)       :: thdr
@@ -506,7 +506,7 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   integer, intent(in)  :: iT
   real(8), intent(in)  :: mu
   real(8), intent(out) :: occ_tot
-  type(edisp)          :: ek
+  type(energydisp)     :: ek
   type(scatrate)       :: sct
   type(kpointmesh)     :: mesh
 !local variables
@@ -576,10 +576,10 @@ end subroutine occ_D
 subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
   implicit none
 
-  real(16), intent(in)   :: mu
+  real(16), intent(in)  :: mu
   integer, intent(in)   :: iT
   real(16), intent(out) :: occ_tot
-  type(edisp)           :: ek
+  type(energydisp)      :: ek
   type(scatrate)        :: sct
   type(kpointmesh)      :: mesh
 
@@ -663,7 +663,7 @@ subroutine occ_tet_D(mu, iT, ek, sct, thdr, occ_tot)
   integer, intent(in)  :: iT
   real(8), intent(in)  :: mu
   real(8), intent(out) :: occ_tot
-  type(edisp)          :: ek
+  type(energydisp)     :: ek
   type(scatrate)       :: sct
   type(tetramesh)      :: thdr
 
@@ -738,7 +738,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
   integer, intent(in)   :: iT
   real(16), intent(in)  :: mu
   real(16), intent(out) :: occ_tot
-  type(edisp)           :: ek
+  type(energydisp)      :: ek
   type(scatrate)        :: sct
   type(tetramesh)       :: thdr
 
@@ -801,7 +801,7 @@ subroutine occ_tet_Q(mu, iT, ek, sct, thdr, occ_tot)
         enddo ! iband
         nbig=2.q0*nbig
         nsmall=2.q0*nsmall
-        occ_tet(ik)=nbig+nsmall
+        occ_tet(iktet)=nbig+nsmall
      enddo ! corners of the tetrahedron
 
      call interptra_muQ (thdr%vltet(itet), occ_tet, occ_intp)
