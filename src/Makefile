@@ -9,7 +9,8 @@ DIGAMMA = ./digamma/cern_digamma.a
 OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
 				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o input.o
 
-BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o input.o
+BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o \
+						lookup.o config.o
 
 include ../make_include
 
@@ -54,8 +55,9 @@ response.o: mpi_org.o types.o params.o estruct.o
 root.o: mpi_org.o params.o types.o estruct.o
 input.o: params.o types.o hdf5_wrapper.o
 params.o: types.o
+config.o: lookup.o
 
-setupbz.o: params.o estruct.o types.o hdf5_wrapper.o input.o
+setupbz.o: params.o estruct.o types.o hdf5_wrapper.o lookup.o config.o
 
 .PHONY: clean
 clean :

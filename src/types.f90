@@ -5,6 +5,7 @@ module Mtypes
     logical :: ltbind       ! tight binding lattice?
     logical :: ltetra       ! use tetrahedron method?
     logical :: lw2k         ! use Wien2k input
+    logical :: lvasp        ! use Vasp input
     logical :: loptic       ! use also optic matrix elements
     logical :: lBfield      ! calculations in the presence of a magnetic field?
     logical :: ldmft        ! k-point and band dependent renormalisation factor and scattering rate provided
@@ -12,7 +13,7 @@ module Mtypes
     logical :: lgenred      ! generate all the reducible data ? (useful for eventual preprocessing)
     logical :: lpreproc     ! read from preprocessed data
     integer :: imurestart   ! restart with a privided value of the chemical potential?
-    character(100) :: mysyst ! label that is used to open the Wien2k files
+    character(150) :: mysyst ! label that is used to open the Wien2k files
   end type
 
   type lattice

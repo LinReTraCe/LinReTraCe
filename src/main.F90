@@ -104,25 +104,11 @@ program gtmain ! GammaTransport
   algo%ldebug   = .true.
   ! flag to activate / deactivate calculation of everything at the beginning
   ! vs on the fly + mapping of redk->irrk
-  algo%lgenred  = .true.
+  algo%lgenred  = .false.
   ! get the data from the preprocessed hdf5 file
-  algo%lpreproc = .true.
-
 
   call read_config(kmesh, edisp, sct)
-
-  if (algo%lpreproc) then
-     call read_preproc_data("test.hdf5", kmesh, edisp, thdr, dos)
-     if (algo%ltetra) then
-        call intetra(kmesh, edisp, thdr, dos)
-     else
-        call gendosel (kmesh, edisp, dos) ! normalization already taken care of
-     endif
-     if (algo%imurestart == 0) call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
-  else
-     !read in electronic structure and matrix elements
-     call estruct_init(kmesh, edisp, thdr, dos, sct)
-  endif
+  call read_preproc_data("test.hdf5", kmesh, edisp, thdr, dos)
 
   if(myid .eq. master .and. .not.(algo%lBfield)) then
      write(*,*)'LINRETRACE will not perform calculations with magnetic field'

@@ -2,7 +2,8 @@ program setupbz
   use Mparams
   use Mtypes
   use Mestruct
-  use Minput
+  use Mlookup
+  use Mconfig
   use hdf5_wrapper
   use hdf5
   implicit none
@@ -15,13 +16,17 @@ program setupbz
 
   integer            :: i
   integer(hid_t)     :: ifile
-  character(len=100) :: string
+  character(len=150) :: outfile
+  character(len=150) :: string
+
+  integer            :: er
+  character(len=150) :: erstr
 
   write(*,*)
   write(*,*)'#####################################################'
   write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
   write(*,*)'#####################################################'
-  write(*,*)'#  Preprocessing irreducible Brillouin Zone         #'
+  write(*,*)'#  Preprocessing Band structure data                #'
   write(*,*)'#####################################################'
   write(*,*)'#  J.M. Tomczak, E. Maggio, M. Pickem               #'
   write(*,*)'#####################################################'
@@ -30,14 +35,24 @@ program setupbz
   algo%ldebug = .true.
   algo%lgenred = .false.
 
-  call read_config(kmesh, edisp, sct)
-  algo%ltetra = .false. ! we enforce non-tetrahedrons
+  call read_config(kmesh, edisp, sct, outfile, er, erstr)
+  if (er /= 0) then
+     write(*,*) erstr
+     stop
+  endif
+  write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
+  call init_config(kmesh)
+  call check_config(er,erstr)
+  if (er /= 0) then
+     write(*,*) erstr
+     stop
+  endif
   call estruct_init(kmesh, edisp, thdr, dos, sct)
 
   ! file setup
   call hdf5_init()
-  call hdf5_create_file('test.hdf5')
-  call hdf5_open_file('test.hdf5', ifile)
+  call hdf5_create_file(trim(adjustl(outfile)))
+  call hdf5_open_file(trim(adjustl(outfile)), ifile)
 
   call hdf5_write_data(ifile, '/.kmesh/k_coord', kmesh%k_coord)
   call hdf5_write_data(ifile, '/.kmesh/kx',      kmesh%kx)

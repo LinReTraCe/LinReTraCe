@@ -2819,7 +2819,7 @@ subroutine intldos(iT, dos, kmesh, ek, sct)
            if (ek%band(ikk,ibn) > band_fill_value) cycle
            eps = ek%z(ikk,ibn)*ek%band(ikk,ibn)-sct%mu(iT)
            if (eps > 0.0d0) exit !occupied bands only -> we skip to the next k-point
-           G0=1.0d0/(dos%enrg(ee) - eps + ci*eta)
+           G0=1.0d0/(dos%enrg(ee) - eps - ci*sct%gam(iT))
            ! A = -1/pi  Im G0
            AA(ee) = AA(ee) - aimag(G0)
         enddo

@@ -196,6 +196,7 @@ module Minput
      dos%emin = dos%enrg(1)
      dos%emax = dos%enrg(dos%nnrg)
 
+     call hdf5_read_data(ifile, '/.dos/mu', edisp%efer)
 
      ! number of saved k-points
      kpoints = hdf5_get_number_groups(ifile, "/kpoint")
