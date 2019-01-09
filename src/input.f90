@@ -119,28 +119,6 @@ module Minput
     kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
     kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
 
-    lat%lcubic = .false.
-    lat%ltetragonal = .false.
-    lat%lorthorhombic = .false.
-    lat%nalpha = 3 ! we need all three directions for the responses
-
-    ! these data points come directly from the input file
-    ! i.e. we shouldnt be worrying about double precision comparisons.
-    if (lat%a(1) .eq. lat%a(2) .and. lat%a(1) .eq. lat%a(3) &
-        .and. lat%a(1) .eq. lat%a(3)) then
-       lat%lcubic = .true.
-       lat%nalpha = 1 ! truncates the number of polarizations in cubic systems
-    elseif(lat%a(1) .eq. lat%a(2) .and. lat%a(1) .ne. lat%a(3)) then
-       lat%ltetragonal = .true.
-    elseif(lat%a(1) .eq. lat%a(3) .and. lat%a(1) .ne. lat%a(2)) then
-       lat%ltetragonal = .true.
-    elseif(lat%a(1) .ne. lat%a(2) .and. lat%a(2) .eq. lat%a(3)) then
-       lat%ltetragonal = .true.
-    elseif(lat%a(1) .ne. lat%a(2) .and. lat%a(1) .ne. lat%a(3) &
-           .and. lat%a(1) .ne. lat%a(3)) then
-       lat%lorthorhombic = .true.
-    endif
-
   end subroutine
 
 

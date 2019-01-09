@@ -116,7 +116,7 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   close(unit=10)
 
 
-  ! setting up switches
+  ! setting up defaults
   algo%ltbind  = .false.
   algo%ltetra  = .false.
   algo%lw2k    = .false.
@@ -125,6 +125,7 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   algo%lBfield = .false.
   algo%ldmft   = .false.
   algo%lsymm   = .true.
+  outfile      = 'preproc_data.hdf5'
 
   ! search for General stuff + Allocation of values
   !--------------------------------------------------------------------------------
@@ -139,9 +140,9 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   endif
 
   call string_find('System', algo%mysyst, search_start, search_end)
-  call int3_find('K-grid', kmesh%kx, kmesh%ky, kmesh%kz, search_start, search_end)
-  call float_find('Nelect', edisp%nelect, search_start, search_end)
   call string_find('Input-type', str_temp, search_start, search_end)
+  call float_find('Nelect', edisp%nelect, search_start, search_end)
+  call int3_find('K-grid', kmesh%kx, kmesh%ky, kmesh%kz, search_start, search_end)
   select case(trim(adjustl(str_temp)))
     case ('wien2k')
       algo%lw2k = .true.
@@ -187,6 +188,20 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
 
   call string_find('Outfile', outfile, search_start, search_end)
 
+  if (algo%ltbind) then
+     call group_find('[Tightbinding]', search_start, search_end)
+     if (search_start .eq. 0) then ! group was not found
+       erstr = 'Lattice Group not found'; er = 10
+       return
+     endif
+     if (search_start .eq. -1) then
+       erstr = 'Lattice Group empty'; er = 11
+       return
+     endif
+
+     call int_find('Nbands', edisp%nband_max, search_start, search_end)
+     call int_find('Tmax', edisp%tmax, search_start, search_end)
+  endif
   !--------------------------------------------------------------------------------
   !verbose = .false.
   !verbstr = ''
@@ -210,34 +225,27 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
 end subroutine read_config
 
 
-subroutine init_config(kmesh)
+subroutine init_config(kmesh, edisp)
   implicit none
   type(kpointmesh) :: kmesh
+  type(energydisp) :: edisp
+  integer :: iband
 
   ! fill out the rest of the datatype
   kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
   kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
 
-  lat%lcubic = .false.
-  lat%ltetragonal = .false.
-  lat%lorthorhombic = .false.
   lat%nalpha = 3 ! we need all three directions for the responses
 
-  ! these data points come directly from the input file
-  ! i.e. we shouldnt be worrying about double precision comparisons.
-  if (lat%a(1) .eq. lat%a(2) .and. lat%a(1) .eq. lat%a(3) &
-      .and. lat%a(1) .eq. lat%a(3)) then
-     lat%lcubic = .true.
-     lat%nalpha = 1 ! truncates the number of polarizations in cubic systems
-  elseif(lat%a(1) .eq. lat%a(2) .and. lat%a(1) .ne. lat%a(3)) then
-     lat%ltetragonal = .true.
-  elseif(lat%a(1) .eq. lat%a(3) .and. lat%a(1) .ne. lat%a(2)) then
-     lat%ltetragonal = .true.
-  elseif(lat%a(1) .ne. lat%a(2) .and. lat%a(2) .eq. lat%a(3)) then
-     lat%ltetragonal = .true.
-  elseif(lat%a(1) .ne. lat%a(2) .and. lat%a(1) .ne. lat%a(3) &
-         .and. lat%a(1) .ne. lat%a(3)) then
-     lat%lorthorhombic = .true.
+  if (algo%ltbind) then
+     write(*,*)'READ_CONFIG: reading TB parameters'
+     allocate(edisp%E0(edisp%nband_max),edisp%t(edisp%nband_max, edisp%tmax))
+     allocate(edisp%a(edisp%tmax))
+     open(unit=10, file=trim(adjustl(algo%mysyst)), status='old')
+     read(10,*) edisp%a
+     do iband=1,edisp%nband_max
+        read(10,*)edisp%E0(iband), edisp%t(iband,:)
+     enddo
   endif
 end subroutine init_config
 
@@ -248,9 +256,9 @@ subroutine check_config(er,erstr)
   logical :: there
 
   if (algo%lw2k) then
-     inquire (file=trim(adjustl(algo%mysyst))//'.weight', exist=there)
+     inquire (file=trim(adjustl(algo%mysyst))//'.klist', exist=there)
      if (.not. there) then
-       erstr = "Error: Can not find the case.weight file"; er = 1
+       erstr = "Error: Can not find the case.klist file"; er = 1
        return
      endif
      inquire (file=trim(adjustl(algo%mysyst))//'.struct', exist=there)
@@ -273,6 +281,14 @@ subroutine check_config(er,erstr)
   endif
   if (algo%lvasp) then
      ! do something
+  endif
+
+  if (algo%ltbind) then
+     inquire (file=trim(adjustl(algo%mysyst)), exist=there)
+     if (.not. there) then
+       erstr = "Error: Can not find the tight-binding file"; er = 5
+       return
+     endif
   endif
 
   return

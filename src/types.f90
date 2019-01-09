@@ -17,18 +17,30 @@ module Mtypes
   end type
 
   type lattice
+    ! remove this
     real(8) :: alat  ! lattice constant
     real(8) :: a(3)  ! direct lattice vectors in units of ALAT. needed for derivatives
+    real(8) :: angle(3)
     real(8) :: vol   ! volume of the lattice
-    integer :: nalpha ! number of polarization directions (1 for cubic; 3 for everything else)
     logical :: lcubic
-    logical :: ltetragonal
-    logical :: lorthorhombic
-    ! not used at the moment
-    logical :: lhexagonal
-    logical :: lrhombohedral
-    logical :: lmonoclinic
-    logical :: ltriclinic
+    integer :: nalpha ! number of polarization directions (1 for cubic; 3 for everything else)
+    integer :: ibravais
+    integer :: spacegroup
+    ! order:
+    ! 1: primitive cubic
+    ! 2: body-centered cubic
+    ! 3: face-centered cubic
+    ! 4: primitive tetragonal
+    ! 5: body-contered tetragonal
+    ! 6: primitive orthorhombic
+    ! 7: base-centered orthorhombic
+    ! 8: body-centered orthorhombic
+    ! 9: face-centered orthorhombic
+    ! 10: primitive hexagonal
+    ! 11: primitive rhombohedral
+    ! 12: primitive monoclinic
+    ! 13: base-centered monoclinic
+    ! 14: primitive triclinic
   end type
 
   type kpointmesh
@@ -57,8 +69,8 @@ module Mtypes
     real(8), allocatable :: Im(:,:)          ! =-imaginary part of the self-energy at zero frequency
     ! real(8), allocatable :: Mopt_tetra(:,:,:,:)    ! M(x,t,n',n)= sum_k(j) {w(j)*|<n',k(j)|p.e_x|n,k(j)>|^2 } with w(j) the tetrahedron weights
 
-    real(8)              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
-    real(8), allocatable :: a(:,:)           ! TIGHT BINDING PARAMETER: lattice spacing to the higher order hoppings (3, tmax)
+    integer              :: tmax             ! TIGHT BINDING PARAMETER: number of hopping parameter -- currently not implemented properly
+    real(8), allocatable :: a(:)             ! TIGHT BINDING PARAMETER: lattice spacing to the higher order hoppings (3, tmax)
     real(8), allocatable :: E0(:)            ! TIGHT BINDING PARAMETER: band energy at Gamma point (nbands)
     real(8), allocatable :: t(:,:)           ! TIGHT BINDING PARAMETER: hopping parameter (~band width) (nbands,tmax)
     real(8), allocatable :: M2(:,:,:,:)      ! TIGHT BINDING PARAMETER: 2nd derivative of the energy dispersion (idir,idir2,nk,nbands)
@@ -68,8 +80,11 @@ module Mtypes
     integer, allocatable :: symop_id(:,:)   ! symop_id(2,redkp) this counter tells me if for a given reducible k-point the corresponding
                                             ! irreducible kpoint (1) and the required symmetry operation (2)
                                             ! produces a new element or a redundant one (1 or 0 in the 1st entry)
-    real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 symmetry transformations
+    real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 real space symmetry transformations
+    real(8), allocatable :: Msym_reciprocal(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 reciprocal space symmetry transformations
+                                            ! necessary for the k-point applications
     real(8), allocatable :: Tras(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
+    real(8), allocatable :: Tras_reciprocal(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
     integer              :: nsym            ! number of symmetry operations
     logical              :: lnsymmr         ! .true. for nonsymmorphic space groups
     character(3)         :: cntr

@@ -102,10 +102,6 @@ program gtmain ! GammaTransport
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
   algo%ldebug   = .true.
-  ! flag to activate / deactivate calculation of everything at the beginning
-  ! vs on the fly + mapping of redk->irrk
-  algo%lgenred  = .false.
-  ! get the data from the preprocessed hdf5 file
 
   call read_config(kmesh, edisp, sct)
   call read_preproc_data("test.hdf5", kmesh, edisp, thdr, dos)

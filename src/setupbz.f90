@@ -37,16 +37,14 @@ program setupbz
 
   call read_config(kmesh, edisp, sct, outfile, er, erstr)
   if (er /= 0) then
-     write(*,*) erstr
-     stop
+     write(*,*) erstr; stop
   endif
-  write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
-  call init_config(kmesh)
   call check_config(er,erstr)
   if (er /= 0) then
-     write(*,*) erstr
-     stop
+     write(*,*) erstr; stop
   endif
+  write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
+  call init_config(kmesh, edisp)
   call estruct_init(kmesh, edisp, thdr, dos, sct)
 
   ! file setup

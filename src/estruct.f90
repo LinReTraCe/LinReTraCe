@@ -40,7 +40,7 @@ module Mestruct
     endif
 
     ! now we have a k and e(k) grid on either
-    !       |               |
+    !
     !       | kmesh         | tetrahedrons
     !       v               v
     ! the reducible or the full Brillouin zone
@@ -222,7 +222,7 @@ module Mestruct
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! GETDISP
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This subroutine extracts from the Wien2k files
+! This subroutine extracts from the Wien2k struct and energy
 ! information about the irreducible k-mesh, this is stored
 ! either in the kpointmesh or in edisp type
 !
@@ -241,30 +241,114 @@ module Mestruct
     double precision :: dtmp
     double precision, allocatable :: band_tmp(:,:)    ! bigger datastructure that will contain all the energy dispersion curves
 
-    !get the number of k-points
-    open(10,file=trim(adjustl(algo%mysyst))//'.weight',status='old')
-    read(10,*) rcrap, rcrap, ccrap
-    read(10,*) kmesh%ktot, ccrap
-    write(*,*) 'GETDISP: total number of k-points read from W2k: ',kmesh%ktot
+    ! extract klist information
+    ! -> number of kpoints
+    ! -> space group identifier
+    ! -> identifier: primitive, face, body, base
+    ! -> lattice constants
+    ! -> lattice vectors
+    open(10,file=trim(adjustl(algo%mysyst))//'.klist',status='old')
+    i = 0
+    do
+       read(10,'(A)') ccrap
+       if (index(ccrap, "END") .eq. 1) exit
+       i = i+1
+    enddo
     close(10)
+    kmesh%ktot = i
+    write(*,*) 'GETDISP: total number of k-points read from W2k: ',kmesh%ktot
 
     allocate(kmesh%k_coord(3,kmesh%ktot))
 
     !get the number of nonequivalent atoms in cell
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
     read(10,*)
-    read(10,*) symm%cntr, ccrap, ccrap, iatm
-    !write(*,*) 'number of inequivalent atoms in cell',iatm
+    read(10,*) symm%cntr, ccrap, ccrap, iatm, lat%spacegroup
+    read(10,*)
+    read(10,*) lat%a(1), lat%a(2), lat%a(3), lat%angle(1), lat%angle(2), lat%angle(3)
     close(10)
 
-    !get k-points coord's and energy dispersion curves
+
+    lat%lcubic = .false. !extra identifier
+    select case (lat%spacegroup)
+      case(1:2)
+         lat%ibravais = 14
+         lat%vol = lat%a(1)*lat%a(2)*lat%a(3)*sqrt(1.d0 - cos(lat%angle(1))**2 &
+                   -cos(lat%angle(2))**2 - cos(lat%angle(3))**3 + 2.d0*cos(lat%angle(1) &
+                   *lat%angle(2) * lat%angle(3)))
+      case(3:15)
+         select case (symm%cntr)
+            case('P  ')
+               lat%ibravais = 12
+            case default
+               lat%ibravais = 13
+         end select
+         if (abs(lat%angle(1) - 90.d0) .gt. 1.d-3) then
+            lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * sin(lat%angle(1))
+         else if (abs(lat%angle(2) - 90.d0) .gt. 1.d-3) then
+            lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * sin(lat%angle(2))
+         else
+            lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * sin(lat%angle(3))
+         endif
+      case(16:74)
+         select case (symm%cntr)
+            case('P  ')
+               lat%ibravais = 6
+            case('B  ')
+               lat%ibravais = 8
+            case('F  ')
+               lat%ibravais = 9
+            case default
+               lat%ibravais = 7
+         end select
+         lat%vol = lat%a(1)*lat%a(2)*lat%a(3)
+      case(75:142)
+         select case (symm%cntr)
+            case('P  ')
+               lat%ibravais = 4
+            case default
+               lat%ibravais = 5
+         end select
+         lat%vol = lat%a(1)*lat%a(2)*lat%a(3)
+      case(143:194)
+         select case(symm%cntr)
+            case('P  ')
+               lat%ibravais = 10
+               lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * sin(pi/3.d0)
+            case default
+               lat%ibravais = 11
+               lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * (1.d0 - cos(lat%angle(1))) &
+                         * sqrt(1.d0 + 2.d0*cos(lat%angle(1)))
+         end select
+      case(195:230)
+         lat%lcubic = .true.
+         select case(symm%cntr)
+            case('P  ')
+               lat%ibravais = 1
+            case('B  ')
+               lat%ibravais = 2
+            case('F  ')
+               lat%ibravais = 3
+         end select
+         lat%vol = lat%a(1)*lat%a(2)*lat%a(3)
+      end select
+
+    write(*,*) 'GETDISP: number of inequivalent atoms in cell: ',iatm
+    write(*,*) 'GETDISP: space group: ', lat%spacegroup
+    write(*,*) 'GETDISP: internal bravais identifier: ', lat%ibravais
+    write(*,*) 'GETDISP: volume of unit cell: ', lat%vol
+
+    ! get k-points coord's and energy dispersion curves
     open(11,file=trim(adjustl(algo%mysyst))//'.energy',status='old')
     do i=1,2*iatm
        read(11,*)
     enddo
     edisp%nband_max=0
+    write(*,*) kmesh%ktot
     do ik=1,kmesh%ktot
-       read(11,*)kmesh%k_coord(1,ik),kmesh%k_coord(2,ik),kmesh%k_coord(3,ik),icrap,icrap,nband_loc
+       read(11,*)kmesh%k_coord(1,ik),kmesh%k_coord(2,ik),kmesh%k_coord(3,ik),icrap,icrap,rcrap
+       nband_loc = int(rcrap)
+       write(*,*) nband_loc
 
        ! allocate and initialise the temporary array
        if (.not. allocated (band_tmp)) then
@@ -476,6 +560,7 @@ module Mestruct
 ! information about the symmetry operations that
 ! acting on the irreducible kmesh generate the reducible
 ! counterpart (see genredk below)
+! I'm not sure about this... they act on the real space optical matrices...
 !
   subroutine getsymop(kmesh, ek)
     implicit none
@@ -493,6 +578,8 @@ module Mestruct
     double precision, allocatable :: k_coord(:,:)
     double precision, allocatable :: band(:,:)
 
+    ! first we get the real space transformations
+    ! these are necessary for the transformation of the optical elements
     substring="NUMBER OF SYMMETRY OPERATIONS"
     ix=0
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
@@ -511,7 +598,9 @@ module Mestruct
        read(substring,*) symm%nsym
        write(*,*) 'GETSYMOP: total number of symmetry operations: ', symm%nsym
        if (.not. allocated(symm%Msym)) allocate(symm%Msym(3,3,symm%nsym))
+       if (.not. allocated(symm%Msym_reciprocal)) allocate(symm%Msym_reciprocal(3,3,symm%nsym))
        if (.not. allocated(symm%Tras)) allocate(symm%Tras(3,symm%nsym))
+       if (.not. allocated(symm%Tras_reciprocal)) allocate(symm%Tras_reciprocal(3,symm%nsym))
        do n=1,symm%nsym
           do j=1,3
              ! this is a bit nasty, but it 100% works
@@ -533,71 +622,9 @@ module Mestruct
     close(10)
 
     ! if the unit cell is not primitive we need to include centering
-    select case (symm%cntr)
-
-       case('B  ') !body centered cell
-          write(*,*) 'GETSYMOP: body centering unit cell'
-          !allocate(Mtmp(3,3,2*symm%nsym))
-          !allocate(Ttmp(3,2*symm%nsym))
-          !do n=1,symm%nsym
-          !   Mtmp(:,:,n)= symm%Msym(:,:,n)
-          !   Ttmp(:,n)  = symm%Tras(:,n)
-          !   Mtmp(:,:,n+symm%nsym)= symm%Msym(:,:,n)
-          !   Ttmp(:,n+symm%nsym)  = modulo(symm%Tras(:,n)+0.5d0,1.0d0)
-          !enddo
-          !deallocate(symm%Msym); deallocate(symm%Tras)
-          !symm%nsym=2*symm%nsym
-          !allocate(symm%Msym(3,3,symm%nsym))
-          !allocate(symm%Tras(3,symm%nsym))
-          !do n=1,symm%nsym
-          !   !do i=1,3 ; do j=1,3
-          !   !symm%Msym(i,j,n)= Mtmp(j,i,n)  !do I take the direct or the inverse rotation??
-          !   !enddo
-          !   !symm%Tras(i,n)  = Ttmp(i,n)
-          !   !enddo
-          !   symm%Msym(:,:,n)= Mtmp(:,:,n)  !do I take the direct or the inverse rotation??
-          !   symm%Tras(:,n)  = Ttmp(:,n)
-          !enddo
-          !deallocate(Mtmp); deallocate(Ttmp)
-          !allocate(band(2*kmesh%ktot, ek%nband_max))
-          !allocate(k_coord(3,2*kmesh%ktot))
-          !do i =1, kmesh%ktot
-          !   k_coord(:,i)=kmesh%k_coord(:,i)
-          !   k_coord(:,kmesh%ktot+i)=modulo(kmesh%k_coord(:,i)+0.5d0,1.0d0)
-          !   band(i,:)=ek%band(i,:)
-          !   band(kmesh%ktot+i,:)=ek%band(i,:)
-          !enddo
-          !kmesh%ktot=2*kmesh%ktot
-          !deallocate(ek%band,kmesh%k_coord)
-          !allocate(ek%band(kmesh%ktot,ek%nband_max))
-          !allocate(kmesh%k_coord(3,kmesh%ktot))
-          !do i=1,kmesh%ktot
-          !   kmesh%k_coord(:,i)=k_coord(:,i)
-          !   ek%band(i,:)=band(i,:)
-          !enddo
-          !deallocate(k_coord,band)
-       case('F  ') !face centered cell
-          write(*,*) 'GETSYMOP: face centering unit cell'
-       case('H  ') !hexagonal cell?
-          write(*,*) 'GETSYMOP: hexagonal centering unit cell'
-       case('CXY') !base centered along xy plane
-          write(*,*) 'GETSYMOP: base centering unit cell'
-       case('CXZ') !base centered along xz plane
-          write(*,*) 'GETSYMOP: base centering unit cell'
-       case('CYZ') !base centered along yz plane
-          write(*,*) 'GETSYMOP: base centering unit cell'
-    end select
 
     100  FORMAT (I6)
     110  FORMAT (3(3f8.5/))
-  !!!!!!!!!!!!!!!!!!!!!!!TEST
-  !  do n=1,symm%nsym
-  !     write(40,120) ((symm%Msym(j,i,n),i=1,3), symm%Tras(j,n),j=1,3)
-  !  enddo
-  !  120  FORMAT (3(4f8.5/))
-  !  STOP
-  !!!!!!!!!!!!!!!!!!!!!!!TEST END
-
     ! set the descriptor for nonsymmorphic space groups
     do n=1,symm%nsym
        if ((symm%Tras(1,n)/=0.0d0).or.(symm%Tras(2,n)/=0.0d0).or.(symm%Tras(3,n)/=0.0d0)) then
@@ -610,6 +637,44 @@ module Mestruct
     else
        write(*,*) 'GETSYMOP: detected symmorphic space group'
     endif
+
+
+    ! now we get the reciprocal space transformations
+    substring="Symmetry operation"
+    ix=0
+    open(10,file=trim(adjustl(algo%mysyst))//'.outputs',status='old')
+    do i=1,200
+       read(10,'(A)') line
+       ix = index(line, trim(substring))
+       if (ix /= 0) exit
+    enddo
+
+    if (ix == 0) then
+       write(*,*) 'GETSYMOP: error reading file *.outputs'
+       STOP
+    else
+       ! we have to change this afterwards
+       ! because of possible error messages in outputs
+       do n=1,symm%nsym
+          do j=1,3
+             read(10,*) symm%Msym_reciprocal(j,1,n), symm%Msym_reciprocal(j,2,n), symm%Msym_reciprocal(j,3,n)
+          enddo
+          read(10,*) symm%Tras_reciprocal(1,n), symm%Tras_reciprocal(2,n), symm%Tras_reciprocal(3,n)
+          read(10,*)
+          read(10,*)
+          read(10,*)
+          read(10,*)
+       enddo
+    endif
+    close(10)
+
+
+    do i=1,symm%nsym
+      symm%Msym_reciprocal(:,:,i) = matmul(transpose(symm%Msym_reciprocal(:,:,i)), &
+         matmul(symm%Msym(:,:,i),symm%Msym_reciprocal(:,:,i)))
+    enddo
+
+    write(*,*) symm%Msym_reciprocal
 
   end subroutine
 
@@ -629,20 +694,49 @@ module Mestruct
 
     !internal variables
     integer :: icrap, itmp,ntmp, i,j,k, ik, isym, isym2, nnsym, ineq
-    integer :: iexist, itest
-    integer :: G0(3,7)
+    integer :: g,h,l,m
+    integer :: iexist, itest, ibackfold, ioutside
+    real(8) :: G0(3,3)
+    real(8) :: Gshift(3,27)
     real    :: rcrap
     double precision, allocatable :: tmpkall(:,:), tmpkall2(:,:)
     integer, allocatable          :: tmpoall(:,:), tmpoall2(:,:)
-    double precision              :: tmpk(3), tmpk2(3)
+    double precision              :: tmpk(3), tmpk2(3), tmpk3(3)
+    integer, allocatable :: counter(:)
 
     ! number of k-points generated by the symmetry operations acting on the irreducible mesh
     ! that is ... without the translations afterwards if we have a nonsymmorphic
     ! crystal structure
     itmp=kmesh%ktot*symm%nsym
 
+    ! pc
+    ! data G0/ &
+    !   &      0,0,1, 0,1,0, 1,0,0, 0,1,1, 1,1,0, 1,0,1, 1,1,1 /
+
     data G0/ &
-      &      0,0,1, 0,1,0, 1,0,0, 0,1,1, 1,1,0, 1,0,1, 1,1,1 /
+      &      0,0,1, 0,1,0, 1,0,0 /
+
+    ! fcc
+    ! data G0/ &
+    !   &      0,1,1, 1,0,1, 1,1,0, 1,1,2, 1,2,1, 2,1,1, 2,2,2 /
+
+    ! bcc
+    ! data G0/ &
+    !   &      -1,1,-1, 1,-1,1, 1,1,-1, 0,0,0, 0,2,-2, 2,0,0, 1,1,1 /
+
+    ! hcp
+    ! data G0/ &
+    !   &      0,0,1, 0,0.866025403784438,0, 1,-0.5773502691896,0 /
+
+    ! Gshift = reshape( (/ 0,0,0, 0,1,1, 1,0,1, 1,1,0/), (/3, 4/))
+    Gshift = reshape( (/ 0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0, 1,0,1, 0,1,1, 1,1,1, &
+                         -1,0,0, 0,-1,0, 0,0,-1, -1,-1,0, -1,0,-1, 0,-1,-1, -1,-1,-1, &
+                         -1,1,0, 1,-1,0, -1,0,1, 1,0,-1, 0,1,-1, 0,-1,1, &
+                         1,-1,-1, -1,1,-1, -1,-1,1, -1,1,1, 1,-1,1, 1,1,-1/), (/3, 27/))
+
+    ! data Gshift/ &
+    !   &      0,0,0, 0,0,1, 0,0.866025403784438,0, 1,-0.5773502691896,0 /
+
 
     if (symm%lnsymmr) then
        nnsym = symm%nsym
@@ -650,19 +744,30 @@ module Mestruct
        nnsym = 1
     endif
 
+    allocate(counter(kmesh%ktot))
+    counter = 0
+
     ineq=0 ! counter for the unique k-points
     ! temporary arrays which gets extended on the fly
     ! if we find another unique k-point
 
-    do ik=1,kmesh%ktot  !loop over irredk
+    ! kmesh%k_coord = kmesh%k_coord
+
+    ! do ik=1,kmesh%ktot  !loop over irredk
+    ! kmesh%k_coord(1,28) = sqrt(3.d0)/4.d0
+    ! kmesh%k_coord(2,28) = sqrt(3.d0)/6.d0 - 1.d0/4
+    ! kmesh%k_coord(3,28) = 1.d0/3
+
+    do ik=kmesh%ktot,kmesh%ktot  !loop over irredk
        do isym=1,symm%nsym
           do isym2=1,nnsym
+             do k=1,3 ! all possible G vectors
              !for symmorphic groups the factor system is equal to one for all k-points
              do j=1,3
              ! create the new k-vector
-                tmpk(j) = ((kmesh%k_coord(1,ik)*symm%Msym(j,1,isym))) &
-                   & + ((kmesh%k_coord(2,ik)*symm%Msym(j,2,isym))) &
-                   & + ((kmesh%k_coord(3,ik)*symm%Msym(j,3,isym)))
+                tmpk(j) = ((kmesh%k_coord(1,ik)*symm%Msym_reciprocal(j,1,isym))) &
+                   & + ((kmesh%k_coord(2,ik)*symm%Msym_reciprocal(j,2,isym))) &
+                   & + ((kmesh%k_coord(3,ik)*symm%Msym_reciprocal(j,3,isym)))
              enddo
 
              !!!!!!!!!!!!!!!!!!!!!!!!
@@ -673,72 +778,110 @@ module Mestruct
              !!!!!!!!!!!!!!!!!!!!!!!!
              if (symm%lnsymmr) then
                 do j=1,3
-                   tmpk2(j)=tmpk(j)*exp(-2.0d0*pi*ci*dot_product(G0(:,6),symm%Tras(:,isym2)))
-                   ! the choice of this reciprocal lattice vector (G0(:,6)) is a bit euristic
-                   ! (tested on FeSi 3x3x3, 4x4x4, 5x5x5)
+                   tmpk2(j)=tmpk(j)*exp(-2.0d0*pi*ci*dot_product(G0(:,k),symm%Tras_reciprocal(:,isym2)))
                 enddo
              else
                 tmpk2 = tmpk
              endif
 
-             ! translate negative k-points into positive ones
+             ! set numerically zero values to absolute zero
              do j=1,3
-                ! set numerically zero values to absolute zero
                 if(abs(tmpk2(j)) .le. 1.d-5) tmpk2(j) = 0.d0
+             enddo
 
-                ! back-translation
-                do while (tmpk2(j) .lt. 0.d0)
-                   tmpk2(j) = tmpk2(j) + 1.d0
-                enddo
-                if (tmpk2(j) .ge. 1.d0) then
-                   tmpk2(j) = tmpk2(j) - 1.d0
+             ! backfolding if necessary
+             ! this should be correct for bcc
+             ! ibackfold = 0
+             ! h = 1
+             ! do g=1,3
+             !    if (tmpk2(g) < 0.d0 .or. tmpk2(g) > 1.d0) then
+             !      ibackfold = 1
+             !      h = 27 ! 3^3
+             !      exit
+             !    endif
+             ! enddo
+
+             h = 27
+             h = 1
+
+             do g=1,h
+                ! after we are inside the BZ we check whether we have this k-point already
+
+                tmpk3 = tmpk2 + Gshift(:,g)
+
+                ! check if any element < 0 again
+                ioutside = 0
+                if (tmpk3(1) .lt. 0.d0 .or. tmpk3(1) .ge. 1.d0) then
+                  ioutside = 1
                 endif
 
-                ! set numerically zero values to absolute zero (again)
-                if(abs(tmpk2(j)) .le. 1.d-5) tmpk2(j) = 0.d0
+                if (tmpk3(2) .lt. 0.d0 .or. tmpk3(2) .ge. 1.d0) then
+                  ioutside = 1
+                endif
+
+                if (tmpk3(3) .lt. 0.d0 .or. tmpk3(3) .ge. 1.d0) then
+                  ioutside = 1
+                endif
+
+                ! if (tmpk3(2) .lt. -0.5d0 .or. tmpk3(2) .ge. sqrt(3.d0)/2.d0) then
+                !   ioutside = 1
+                ! endif
+
+                ! if (tmpk3(3) .lt. 0.d0 .or. tmpk3(3) .ge. sqrt(3.d0)/2.d0) then
+                !   ioutside = 1
+                ! endif
+
+                ! if(ioutside == 1) cycle
+
+                iexist = 0
+                do j=1,ineq
+                   if ( (abs(  tmpk3(1) - tmpkall(1,j) ) < 1.d-1/real(itmp)) &
+                   & .and. (abs(  tmpk3(2) - tmpkall(2,j) ) < 1.d-1/real(itmp)) &
+                   & .and. (abs(  tmpk3(3) - tmpkall(3,j) ) < 1.d-1/real(itmp)) ) then
+                      iexist=1
+                      exit
+                   endif
+                enddo
 
                 ! sanity check
-                if (abs(tmpk2(j)) .ge. 1.d0) then
-                   write(*,*) 'GENREDK: generated k-point outside of BZ: ', tmpk2(:)
-                   stop
+                ! initialize the arrays
+                if ((iexist==0) .and. (ineq==0)) then
+                   counter(ik) = counter(ik) + 1
+                   allocate(tmpkall(3,1), tmpoall(2,1))
+                   tmpkall(:,1) = tmpk3
+                   tmpoall(1,1) = ik; tmpoall(2,1) = isym
+                   ineq = ineq+1
+                ! add the new vector to the end of the existing arrays
+                else if (iexist==0) then
+                   counter(ik) =  counter(ik) + 1
+                   ! k-point extension
+                   allocate(tmpkall2(3,ineq))
+                   allocate(tmpoall2(2,ineq))
+                   tmpkall2  = tmpkall ! save temporarily
+                   tmpoall2  = tmpoall
+                   ineq = ineq+1
+                   deallocate(tmpkall, tmpoall)
+                   allocate(tmpkall(3,ineq))  ! allocate a buffe which is of size +1
+                   allocate(tmpoall(2,ineq))
+                   tmpkall(:,:(ineq-1)) = tmpkall2 ! save back
+                   tmpoall(:,:(ineq-1)) = tmpoall2
+                   tmpkall(:,ineq) = tmpk3 ! add at the end
+                   tmpoall(1,ineq) = ik; tmpoall(2,ineq) = isym ! we only save the rotation number
+                   deallocate(tmpkall2, tmpoall2)
                 endif
-             enddo
+             enddo  ! backfolding
 
-             iexist = 0
-             do j=1,ineq
-                if ( (abs(  tmpk2(1) - tmpkall(1,j) ) < 1.d-1/real(itmp)) &
-                & .and. (abs(  tmpk2(2) - tmpkall(2,j) ) < 1.d-1/real(itmp)) &
-                & .and. (abs(  tmpk2(3) - tmpkall(3,j) ) < 1.d-1/real(itmp)) ) then
-                   iexist=1
-                   exit
-                endif
              enddo
-             ! initialize the arrays
-             if ((iexist==0) .and. (ineq==0)) then
-                allocate(tmpkall(3,1), tmpoall(2,1))
-                tmpkall(:,1) = tmpk2
-                tmpoall(1,1) = ik; tmpoall(2,1) = isym
-                ineq = ineq+1
-             ! add the new vector to the end of the existing arrays
-             else if (iexist==0) then
-                ! k-point extension
-                allocate(tmpkall2(3,ineq))
-                allocate(tmpoall2(2,ineq))
-                tmpkall2  = tmpkall ! save temporarily
-                tmpoall2  = tmpoall
-                ineq = ineq+1
-                deallocate(tmpkall, tmpoall)
-                allocate(tmpkall(3,ineq))  ! allocate a buffe which is of size +1
-                allocate(tmpoall(2,ineq))
-                tmpkall(:,:(ineq-1)) = tmpkall2 ! save back
-                tmpoall(:,:(ineq-1)) = tmpoall2
-                tmpkall(:,ineq) = tmpk2 ! add at the end
-                tmpoall(1,ineq) = ik; tmpoall(2,ineq) = isym ! we only save the rotation number
-                deallocate(tmpkall2, tmpoall2)
-             endif
           enddo
        enddo
     enddo
+
+
+    write(*,*)
+    do i=1,kmesh%ktot
+      write(*,*) i, " : ", counter(i)
+    enddo
+    write(*,*)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! What we've got right now is a k-mesh with equivalent endpoints in a given
@@ -773,6 +916,12 @@ module Mestruct
        endif
     endif
     write(*,*) 'GENREDK: total number of constructed reducible points: ', ineq, ', ', kmesh%kred
+
+       write(*,*) 'Constructed k-points:'
+       write(*,*)
+       do i=1,size(tmpkall,2)
+          write(*,*) tmpkall(:,i), tmpoall(:,i)
+       enddo
 
     deallocate(kmesh%k_coord)
     allocate(kmesh%k_coord(3,kmesh%kred))
