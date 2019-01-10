@@ -84,7 +84,6 @@ module Mtypes
     real(8), allocatable :: Msym_reciprocal(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 reciprocal space symmetry transformations
                                             ! necessary for the k-point applications
     real(8), allocatable :: Tras(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
-    real(8), allocatable :: Tras_reciprocal(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
     integer              :: nsym            ! number of symmetry operations
     logical              :: lnsymmr         ! .true. for nonsymmorphic space groups
     character(3)         :: cntr
