@@ -149,8 +149,8 @@ module Minput
      call hdf5_read_data(ifile, "/.kmesh/kful",    kmesh%kful)
 
      ! symmetry
-     call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%nsym)
-     call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym)
+     call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%knsym)
+     call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym_reciprocal)
      call hdf5_read_data(ifile, "/.symmetry/mapping",   symm%symop_id)
 
      ! crystal

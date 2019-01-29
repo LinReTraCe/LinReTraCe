@@ -239,6 +239,8 @@ module Mestruct
     integer          :: lines
     integer          :: iatm !number of non-equivalent atoms in cell
     integer          :: stat
+    integer          :: id1, id2
+    integer          :: ktest(3)
     real             :: rcrap
     character(100)   :: ccrap ! this works for arbitrary size
     double precision :: dtmp
@@ -257,6 +259,17 @@ module Mestruct
     lines = 0
     do
        read(10,'(A)') ccrap
+       if (lines==0) then
+         id1 = index(ccrap, '(')
+         id2 = index(ccrap, ')')
+         read(ccrap(id1+1:id2-1),*) ktest(1), ktest(2), ktest(3)
+         if (kmesh%kx /= ktest(1) .or. kmesh%ky /= ktest(2) .or. kmesh%kz /= ktest(3)) then
+            write(*,*) "GETDISP: INCONSISTENT K-MESH"
+            write(*,*) "INPUT:     ", kmesh%kx, kmesh%ky, kmesh%kz
+            write(*,*) "EXTRACTED: ", ktest
+            STOP
+         endif
+       endif
        if (index(ccrap, "END") .eq. 1) exit ! the klist ends with an END statement
        lines = lines + 1
     enddo
@@ -357,7 +370,7 @@ module Mestruct
     edisp%nband_max=0
     do ik=1,kmesh%ktot
        read(11,*) rcrap, rcrap, rcrap, icrap, icrap, nband_loc, rcrap
-       write(*,*) "GETDISP: k-point local number of bands: ", nband_loc
+       ! write(*,*) "GETDISP: k-point local number of bands: ", nband_loc
 
        ! allocate and initialise the temporary array
        if (.not. allocated (band_tmp)) then
@@ -603,7 +616,7 @@ module Mestruct
 
     type(kpointmesh) :: kmesh
     type(energydisp)      :: ek
-    integer :: n, i, j
+    integer :: n, i, j, k, rest
     !for the additional detection of roto-translation in non-symmorphic groups
     character (len=80) :: line
     character (len=80) :: substring
@@ -614,12 +627,9 @@ module Mestruct
     double precision, allocatable :: k_coord(:,:)
     double precision, allocatable :: band(:,:)
 
-    ! first we get the real space transformations
-    ! these are necessary for the transformation of the optical elements
     substring="NUMBER OF SYMMETRY OPERATIONS"
     ix=0
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
-    ! open(10,file=trim(adjustl(algo%mysyst))//'.struct_so',status='old')
     do i=1, 200
        read(10,'(A)') line
        ix = index(line, trim(substring))
@@ -631,12 +641,11 @@ module Mestruct
        STOP
     else
        substring=trim(adjustl(line(:9)))
-       read(substring,*) symm%nsym
-       write(*,*) 'GETSYMOP: total number of symmetry operations: ', symm%nsym
-       if (.not. allocated(symm%Msym)) allocate(symm%Msym(3,3,symm%nsym))
-       if (.not. allocated(symm%Msym_reciprocal)) allocate(symm%Msym_reciprocal(3,3,symm%nsym))
-       if (.not. allocated(symm%Tras)) allocate(symm%Tras(3,symm%nsym))
-       do n=1,symm%nsym
+       read(substring,*) symm%rnsym
+       write(*,*) 'GETSYMOP: total number of symmetry operations: ', symm%rnsym
+       if (.not. allocated(symm%Msym)) allocate(symm%Msym(3,3,symm%rnsym))
+       if (.not. allocated(symm%Tras)) allocate(symm%Tras(3,symm%rnsym))
+       do n=1,symm%rnsym
           do j=1,3
              ! this is a bit nasty, but it 100% works
              read(10,'(A)') line
@@ -656,12 +665,10 @@ module Mestruct
     endif
     close(10)
 
-    ! if the unit cell is not primitive we need to include centering
-
     100  FORMAT (I6)
     110  FORMAT (3(3f8.5/))
     ! set the descriptor for nonsymmorphic space groups
-    do n=1,symm%nsym
+    do n=1,symm%rnsym
        if ((symm%Tras(1,n)/=0.0d0).or.(symm%Tras(2,n)/=0.0d0).or.(symm%Tras(3,n)/=0.0d0)) then
           symm%lnsymmr = .true.
        endif
@@ -673,95 +680,55 @@ module Mestruct
        write(*,*) 'GETSYMOP: detected symmorphic space group'
     endif
 
-    ! apparently this is necessary
+
     if (symm%lnsymmr .and. symm%cntr=="B  ") then
-      symm%nsym = symm%nsym*2
-      deallocate(symm%Msym_reciprocal)
-      allocate(symm%Msym_reciprocal(3,3,symm%nsym))
+      symm%knsym = symm%rnsym*2
+    else
+      symm%knsym = symm%rnsym
     endif
 
+    if (algo%lsymm) then
+       ! we get the irreducible k-list
+       allocate(symm%Msym_reciprocal(3,3,symm%knsym))
 
-    ! now we get the reciprocal space transformations
-    substring="SYMMETRY MATRIX"
-    ix=0
-    open(10,file=trim(adjustl(algo%mysyst))//'.outputkgen',status='old')
-    do i=1,200
-       read(10,'(A)') line
-       ix = index(line, trim(substring))
-       if (ix /= 0) exit
-    enddo
-
-    if (ix == 0) then
-       write(*,*) 'GETSYMOP: error reading file *.outputkgen'
-       STOP
-    else
-       ! TODO: FIX THIS
-       do i=1,symm%nsym/4 ! integer division
-          read(10,*) symm%Msym_reciprocal(1,1,(i-1)*4+1), &
-                     symm%Msym_reciprocal(1,2,(i-1)*4+1), &
-                     symm%Msym_reciprocal(1,3,(i-1)*4+1), &
-                     symm%Msym_reciprocal(1,1,(i-1)*4+2), &
-                     symm%Msym_reciprocal(1,2,(i-1)*4+2), &
-                     symm%Msym_reciprocal(1,3,(i-1)*4+2), &
-                     symm%Msym_reciprocal(1,1,(i-1)*4+3), &
-                     symm%Msym_reciprocal(1,2,(i-1)*4+3), &
-                     symm%Msym_reciprocal(1,3,(i-1)*4+3), &
-                     symm%Msym_reciprocal(1,1,(i-1)*4+4), &
-                     symm%Msym_reciprocal(1,2,(i-1)*4+4), &
-                     symm%Msym_reciprocal(1,3,(i-1)*4+4)
-
-          read(10,*) symm%Msym_reciprocal(2,1,(i-1)*4+1), &
-                     symm%Msym_reciprocal(2,2,(i-1)*4+1), &
-                     symm%Msym_reciprocal(2,3,(i-1)*4+1), &
-                     symm%Msym_reciprocal(2,1,(i-1)*4+2), &
-                     symm%Msym_reciprocal(2,2,(i-1)*4+2), &
-                     symm%Msym_reciprocal(2,3,(i-1)*4+2), &
-                     symm%Msym_reciprocal(2,1,(i-1)*4+3), &
-                     symm%Msym_reciprocal(2,2,(i-1)*4+3), &
-                     symm%Msym_reciprocal(2,3,(i-1)*4+3), &
-                     symm%Msym_reciprocal(2,1,(i-1)*4+4), &
-                     symm%Msym_reciprocal(2,2,(i-1)*4+4), &
-                     symm%Msym_reciprocal(2,3,(i-1)*4+4)
-
-          read(10,*) symm%Msym_reciprocal(3,1,(i-1)*4+1), &
-                     symm%Msym_reciprocal(3,2,(i-1)*4+1), &
-                     symm%Msym_reciprocal(3,3,(i-1)*4+1), &
-                     symm%Msym_reciprocal(3,1,(i-1)*4+2), &
-                     symm%Msym_reciprocal(3,2,(i-1)*4+2), &
-                     symm%Msym_reciprocal(3,3,(i-1)*4+2), &
-                     symm%Msym_reciprocal(3,1,(i-1)*4+3), &
-                     symm%Msym_reciprocal(3,2,(i-1)*4+3), &
-                     symm%Msym_reciprocal(3,3,(i-1)*4+3), &
-                     symm%Msym_reciprocal(3,1,(i-1)*4+4), &
-                     symm%Msym_reciprocal(3,2,(i-1)*4+4), &
-                     symm%Msym_reciprocal(3,3,(i-1)*4+4)
-          read(10,*)
+       ! now we get the reciprocal space transformations
+       substring="SYMMETRY MATRIX"
+       ix=0
+       open(10,file=trim(adjustl(algo%mysyst))//'.outputkgen',status='old')
+       do i=1,200
+          read(10,'(A)') line
+          ix = index(line, trim(substring))
+          if (ix /= 0) exit
        enddo
-   endif
 
+       if (ix == 0) then
+          write(*,*) 'GETSYMOP: error reading file *.outputkgen'
+          STOP
+       else
+          do i=1,symm%knsym/4 ! integer division
+             read(10,*) ((symm%Msym_reciprocal(1,j,(i-1)*4+k), j=1,3), k=1,4)
+             read(10,*) ((symm%Msym_reciprocal(2,j,(i-1)*4+k), j=1,3), k=1,4)
+             read(10,*) ((symm%Msym_reciprocal(3,j,(i-1)*4+k), j=1,3), k=1,4)
+             read(10,*)
+          enddo
+          rest = mod(symm%knsym, 4)
+          if (rest>0) then
+             ! read in the rest
+             read(10,*) ((symm%Msym_reciprocal(1,j,(i-1)*4+k), j=1,3), k=1,rest)
+             read(10,*) ((symm%Msym_reciprocal(2,j,(i-1)*4+k), j=1,3), k=1,rest)
+             read(10,*) ((symm%Msym_reciprocal(3,j,(i-1)*4+k), j=1,3), k=1,rest)
+          endif
+      endif
 
+      close(10)
 
-       ! we have to change this afterwards
-       ! because of possible error messages in outputs
-       ! do n=1,symm%nsym
-       !    do j=1,3
-       !       read(10,*) symm%Msym_reciprocal(j,1,n), symm%Msym_reciprocal(j,2,n), symm%Msym_reciprocal(j,3,n)
-       !    enddo
-       !    read(10,*) symm%Tras_reciprocal(1,n), symm%Tras_reciprocal(2,n), symm%Tras_reciprocal(3,n)
-       !    ! do
-       !    !   read(10,'(A)') line
-       !    !   write(*,*) line
-       !    !   ix = index(line, trim(substring))
-       !    !   if (ix /= 0) exit
-       !    ! enddo
-       !    read(10,*)
-       !    read(10,*)
-       !    read(10,*)
-       !    read(10,*)
-       !    read(10,*)
-       ! enddo
-    ! endif
-    close(10)
+    else
+       ! we get the reducible k-list
+       allocate(symm%Msym_reciprocal(3,3,1))
+       symm%Msym_reciprocal(1,1,1) = 1.d0
+       symm%Msym_reciprocal(2,2,1) = 1.d0
+       symm%Msym_reciprocal(3,3,1) = 1.d0
+    endif
 
 
     ! do i=1,symm%nsym
@@ -802,18 +769,14 @@ module Mestruct
     ! number of k-points generated by the symmetry operations acting on the irreducible mesh
     ! that is ... without the translations afterwards if we have a nonsymmorphic
     ! crystal structure
-    itmp=kmesh%ktot*symm%nsym
+    itmp=kmesh%ktot*symm%knsym
 
     data G0/ &
       &      0,0,1, 0,1,0, 1,0,0, 0,1,1, 1,1,0, 1,0,1, 1,1,1 /
 
     ! activate the internal loop for non-symmorphic groups
     if (symm%lnsymmr) then
-       if (symm%cntr == "B  ") then
-          nnsym = symm%nsym/2
-       else
-          nnsym = symm%nsym
-       endif
+       nnsym = symm%rnsym
     else
        nnsym = 1
     endif
@@ -829,97 +792,63 @@ module Mestruct
     ! only much worse
 
 
-    ! TODO: this is pretty brute force at the moment
-    ! refine this later
-
     do ik=1,kmesh%ktot  !loop over irredk
-       do isym=1,symm%nsym
-          do isym2=1,nnsym
-             do k=1,7 ! all possible G vectors
-             !for symmorphic groups the factor system is equal to one for all k-points
-             do j=1,3
-             ! create the new k-vector
-                ! tmpk(j) = ((kmesh%k_coord(1,ik)*symm%Msym_reciprocal(j,1,isym))) &
-                !    & + ((kmesh%k_coord(2,ik)*symm%Msym_reciprocal(j,2,isym))) &
-                !    & + ((kmesh%k_coord(3,ik)*symm%Msym_reciprocal(j,3,isym)))
+       do isym=1,symm%knsym ! refers to the reciprocal matrices
+          do j=1,3
+             tmpk(j) = ((kmesh%k_coord(1,ik)*symm%Msym_reciprocal(j,1,isym))) &
+                & + ((kmesh%k_coord(2,ik)*symm%Msym_reciprocal(j,2,isym))) &
+                & + ((kmesh%k_coord(3,ik)*symm%Msym_reciprocal(j,3,isym)))
+          enddo
 
-                tmpk(j) = ((kmesh%k_coord(1,ik)*symm%Msym_reciprocal(j,1,isym))) &
-                   & + ((kmesh%k_coord(2,ik)*symm%Msym_reciprocal(j,2,isym))) &
-                   & + ((kmesh%k_coord(3,ik)*symm%Msym_reciprocal(j,3,isym)))
+          ! set numerically zero values to absolute zero
+          ! + backfolding
+          do j=1,3
+             if(abs(tmpk(j)) .le. 1.d-5) tmpk(j) = 0.d0
+             do while (tmpk(j) < 0.d0)
+               tmpk(j) = tmpk(j) + 1.d0
              enddo
-
-             !!!!!!!!!!!!!!!!!!!!!!!!
-             !If the space-group is nonsymmorphic we have to
-             !construct the Herring's group which is the direct
-             !product of the representations of the point-group
-             !and the non-unitary translations
-             !!!!!!!!!!!!!!!!!!!!!!!!
-             if (symm%lnsymmr) then
-                ! if (isym2 == 1) then
-                !    tmpk2 = tmpk * exp(-1.d0)
-                ! else
-                !    tmpk2 = tmpk
-                ! endif
-                do j=1,3
-                   tmpk2(j)=tmpk(j)*exp(-2.0d0*pi*ci*dot_product(G0(:,k),symm%Tras(:,isym2)))
-                   tmpk2(j)=tmpk(j)*exp(-2.0d0*pi*ci*dot_product(G0(:,k),symm%Tras(:,isym2)))
-                   tmpk2(j)=tmpk(j)*exp(-2.0d0*pi*ci*dot_product(G0(:,k),symm%Tras(:,isym2)))
-                enddo
-             else
-                tmpk2 = tmpk
-             endif
-
-             ! set numerically zero values to absolute zero
-             ! + backfolding
-             do j=1,3
-                if(abs(tmpk2(j)) .le. 1.d-5) tmpk2(j) = 0.d0
-                do while (tmpk2(j) < 0.d0)
-                  tmpk2(j) = tmpk2(j) + 1.d0
-                enddo
-                do while (tmpk2(j) >= 1.d0)
-                  tmpk2(j) = tmpk2(j) - 1.d0
-                enddo
-             enddo
-
-
-             iexist = 0
-             do j=1,ineq
-                if ( (abs(  tmpk2(1) - tmpkall(1,j) ) < 1.d-1/real(itmp)) &
-                & .and. (abs(  tmpk2(2) - tmpkall(2,j) ) < 1.d-1/real(itmp)) &
-                & .and. (abs(  tmpk2(3) - tmpkall(3,j) ) < 1.d-1/real(itmp)) ) then
-                   iexist=1
-                   exit
-                endif
-             enddo
-
-             ! sanity check
-             ! initialize the arrays
-             if ((iexist==0) .and. (ineq==0)) then
-                counter(ik) = counter(ik) + 1
-                allocate(tmpkall(3,1), tmpoall(2,1))
-                tmpkall(:,1) = tmpk2
-                tmpoall(1,1) = ik; tmpoall(2,1) = isym
-                ineq = ineq+1
-             ! add the new vector to the end of the existing arrays
-             else if (iexist==0) then
-                counter(ik) =  counter(ik) + 1
-                ! k-point extension
-                allocate(tmpkall2(3,ineq))
-                allocate(tmpoall2(2,ineq))
-                tmpkall2  = tmpkall ! save temporarily
-                tmpoall2  = tmpoall
-                ineq = ineq+1
-                deallocate(tmpkall, tmpoall)
-                allocate(tmpkall(3,ineq))  ! allocate a buffe which is of size +1
-                allocate(tmpoall(2,ineq))
-                tmpkall(:,:(ineq-1)) = tmpkall2 ! save back
-                tmpoall(:,:(ineq-1)) = tmpoall2
-                tmpkall(:,ineq) = tmpk2 ! add at the end
-                tmpoall(1,ineq) = ik; tmpoall(2,ineq) = isym ! we only save the rotation number
-                deallocate(tmpkall2, tmpoall2)
-             endif
+             do while (tmpk(j) >= 1.d0)
+               tmpk(j) = tmpk(j) - 1.d0
              enddo
           enddo
+
+
+          iexist = 0
+          do j=1,ineq
+             if ( (abs(  tmpk(1) - tmpkall(1,j) ) < 1.d-1/real(itmp)) &
+             & .and. (abs(  tmpk(2) - tmpkall(2,j) ) < 1.d-1/real(itmp)) &
+             & .and. (abs(  tmpk(3) - tmpkall(3,j) ) < 1.d-1/real(itmp)) ) then
+                iexist=1
+                exit
+             endif
+          enddo
+
+          ! sanity check
+          ! initialize the arrays
+          if ((iexist==0) .and. (ineq==0)) then
+             counter(ik) = counter(ik) + 1
+             allocate(tmpkall(3,1), tmpoall(2,1))
+             tmpkall(:,1) = tmpk
+             tmpoall(1,1) = ik; tmpoall(2,1) = isym
+             ineq = ineq+1
+          ! add the new vector to the end of the existing arrays
+          else if (iexist==0) then
+             counter(ik) =  counter(ik) + 1
+             ! k-point extension
+             allocate(tmpkall2(3,ineq))
+             allocate(tmpoall2(2,ineq))
+             tmpkall2  = tmpkall ! save temporarily
+             tmpoall2  = tmpoall
+             ineq = ineq+1
+             deallocate(tmpkall, tmpoall)
+             allocate(tmpkall(3,ineq))  ! allocate a buffe which is of size +1
+             allocate(tmpoall(2,ineq))
+             tmpkall(:,:(ineq-1)) = tmpkall2 ! save back
+             tmpoall(:,:(ineq-1)) = tmpoall2
+             tmpkall(:,ineq) = tmpk ! add at the end
+             tmpoall(1,ineq) = ik; tmpoall(2,ineq) = isym ! we only save the rotation number
+             deallocate(tmpkall2, tmpoall2)
+          endif
        enddo
     enddo
 
@@ -969,20 +898,14 @@ module Mestruct
        write(*,*) tmpkall(:,i), tmpoall(:,i)
     enddo
 
-    STOP
-
     deallocate(kmesh%k_coord)
     allocate(kmesh%k_coord(3,kmesh%kred))
     allocate(kmesh%k_id(kmesh%kx, kmesh%ky, kmesh%kz))
     allocate(symm%symop_id(2,kmesh%kred))
 
     ! save the new coordinates into the data structure
-    kmesh%k_coord(:,:ineq) = tmpkall
-    symm%symop_id(:,:ineq) = tmpoall
-    if (ineq*2 .eq. kmesh%kred) then
-       kmesh%k_coord(:,ineq+1:) = tmpkall
-       symm%symop_id(:,ineq+1:) = tmpoall
-    endif
+    kmesh%k_coord = tmpkall
+    symm%symop_id = tmpoall
 
     deallocate(tmpkall, tmpoall)
 
@@ -1029,15 +952,59 @@ module Mestruct
        do ik=1,kmesh%kred
           ikk = symm%symop_id(1,ik)
           isym= symm%symop_id(2,ik)
+          ! if (isym > symm%rnsym) then
+          !   isym = isym - symm%rnsym
+          ! endif
           ! check eq. 13.16 (pg 479) in "Symmetry and Condensed Matter Physics A Computational Approach" by M. El-Batanouny, F. Wooten, CUP
-          do j=1,3
-             do nb=edisp%nbopt_min,edisp%nbopt_max
-             do nb2=edisp%nbopt_min,edisp%nbopt_max
-                Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,1,isym)*symm%Msym(j,1,isym)
-                Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,2,isym)*symm%Msym(j,2,isym)
-                Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,3,isym)*symm%Msym(j,3,isym)
-             enddo
-             enddo
+                ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,1,isym)*symm%Msym(j,1,isym)
+                ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,2,isym)*symm%Msym(j,2,isym)
+                ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,3,isym)*symm%Msym(j,3,isym)
+
+                ! if its unitary this is correct
+                ! otherwise not so much
+                ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + &
+                !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(1,j,isym)*symm%Msym_reciprocal(j,1,isym)
+                ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + &
+                !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(2,j,isym)*symm%Msym_reciprocal(j,2,isym)
+                ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + &
+                !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(3,j,isym)*symm%Msym_reciprocal(j,3,isym)
+
+          do nb2=edisp%nbopt_min,edisp%nbopt_max
+          do nb=edisp%nbopt_min,edisp%nbopt_max
+             ! this is wrong
+             ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,1,isym)*symm%Msym(j,1,isym)
+             ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,2,isym)*symm%Msym(j,2,isym)
+             ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(j,3,isym)*symm%Msym(j,3,isym)
+
+             ! also wrong
+             ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(1,j,isym)*symm%Msym(1,j,isym)
+             ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(2,j,isym)*symm%Msym(2,j,isym)
+             ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym(3,j,isym)*symm%Msym(3,j,isym)
+
+             ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(1,j,isym)*symm%Msym_reciprocal(1,j,isym)
+             ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(2,j,isym)*symm%Msym_reciprocal(2,j,isym)
+             ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(3,j,isym)*symm%Msym_reciprocal(3,j,isym)
+
+             ! Mopttmp(1,ik,nb,nb2) = Mopttmp(1,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(j,1,isym)*symm%Msym_reciprocal(j,1,isym)
+             ! Mopttmp(2,ik,nb,nb2) = Mopttmp(2,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(j,2,isym)*symm%Msym_reciprocal(j,2,isym)
+             ! Mopttmp(3,ik,nb,nb2) = Mopttmp(3,ik,nb,nb2) + &
+             !         edisp%Mopt(j,ikk,nb,nb2)*symm%Msym_reciprocal(j,3,isym)*symm%Msym_reciprocal(j,3,isym)
+
+             Mopttmp(1,ik,nb,nb2) = edisp%Mopt(1,ikk,nb,nb2)
+             Mopttmp(2,ik,nb,nb2) = edisp%Mopt(2,ikk,nb,nb2)
+             Mopttmp(3,ik,nb,nb2) = edisp%Mopt(3,ikk,nb,nb2)
+          enddo
           enddo
        enddo
        deallocate(edisp%Mopt)

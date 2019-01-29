@@ -80,11 +80,12 @@ module Mtypes
     integer, allocatable :: symop_id(:,:)   ! symop_id(2,redkp) this counter tells me if for a given reducible k-point the corresponding
                                             ! irreducible kpoint (1) and the required symmetry operation (2)
                                             ! produces a new element or a redundant one (1 or 0 in the 1st entry)
-    real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 real space symmetry transformations
-    real(8), allocatable :: Msym_reciprocal(:,:,:)     ! Msym(3,3,nsym) matrix containing the 3x3 reciprocal space symmetry transformations
+    real(8), allocatable :: Msym(:,:,:)     ! Msym(3,3,rnsym) matrix containing the 3x3 real space symmetry transformations
+    real(8), allocatable :: Msym_reciprocal(:,:,:)     ! Msym(3,3,knsym) matrix containing the 3x3 reciprocal space symmetry transformations
                                             ! necessary for the k-point applications
-    real(8), allocatable :: Tras(:,:)       ! Tras(3,nsym) matrix containing additional lattice traslations for non-symmorphic groups
-    integer              :: nsym            ! number of symmetry operations
+    real(8), allocatable :: Tras(:,:)       ! Tras(3,rnsym) matrix containing additional lattice traslations for non-symmorphic groups
+    integer              :: rnsym            ! number of symmetry operations (from struct file)
+    integer              :: knsym            ! number of symmetry operations (from outputkgen file)
     logical              :: lnsymmr         ! .true. for nonsymmorphic space groups
     character(3)         :: cntr
   end type

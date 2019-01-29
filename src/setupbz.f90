@@ -28,12 +28,12 @@ program setupbz
   write(*,*)'#####################################################'
   write(*,*)'#  Preprocessing Band structure data                #'
   write(*,*)'#####################################################'
-  write(*,*)'#  J.M. Tomczak, E. Maggio, M. Pickem               #'
+  write(*,*)'#   E. Maggio, M. Pickem, J.M. Tomczak              #'
   write(*,*)'#####################################################'
   write(*,*)
 
   algo%ldebug = .true.
-  algo%lgenred = .false.
+  algo%lgenred = .true.
 
   call read_config(kmesh, edisp, sct, outfile, er, erstr)
   if (er /= 0) then
@@ -61,8 +61,8 @@ program setupbz
   call hdf5_write_data(ifile, '/.kmesh/kful',    kmesh%kful)
 
   ! symmetry information
-  call hdf5_write_data(ifile, '/.symmetry/nsym',      symm%nsym)
-  call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym)
+  call hdf5_write_data(ifile, '/.symmetry/knsym',     symm%knsym)
+  call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym_reciprocal)
   call hdf5_write_data(ifile, '/.symmetry/mapping',   symm%symop_id)
 
   ! lattice information
