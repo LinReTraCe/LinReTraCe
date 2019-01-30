@@ -21,91 +21,98 @@ module Minput
     integer :: iband
     character(len=100) :: ctmp
     integer :: itmp
+    real(8) :: mutmp
 
     !read in lattice parameters...
     open(10,file='inp.only',status='old')
-    read(10,*) edisp%nband_max, tmax
-    read(10,*) lat%alat, lat%a(:) ! ALAT in A, a(1:3) in ALAT
-    read(10,*) edisp%nelect              ! read the number of electrons, the fermi level will be computed, consistently with the LINRETRACE routines
-    read(10,*) lat%vol
+    ! read(10,*) edisp%nband_max, tmax
+    ! read(10,*) lat%alat, lat%a(:) ! ALAT in A, a(1:3) in ALAT
+    ! read(10,*) edisp%nelect              ! read the number of electrons, the fermi level will be computed, consistently with the LINRETRACE routines
+    ! read(10,*) lat%vol
 
     ! at this point one should choose in the input file what to do:
     ! case = 1 use the uniform k-mesh generated with tight binding
     ! case = 2 read the k-points and band dispersion from Wien2k
     ! case = 3 read also the optical matrix elements from Wien2k
     ! case = 4 read the renormalised qp energies, renormalisation factor and -Im{selfnrg}
-    read(10,*) which, which_tetra, which_grid
+    ! read(10,*) which, which_tetra, which_grid
 
-    algo%ltbind  = .false.
-    algo%lw2k    = .false.
-    algo%loptic  = .false.
-    algo%lBfield = .false.
-    algo%ldmft   = .false.
+    ! algo%ltbind  = .false.
+    ! algo%lw2k    = .false.
+    ! algo%loptic  = .false.
+    ! algo%lBfield = .false.
+    ! algo%ldmft   = .false.
 
-    select case(which)
-       case(1)
-          algo%ltbind =.true.
-       case(2)
-          algo%lw2k   =.true.
-       case(3)
-          algo%loptic =.true.
-       case(4)
-          algo%loptic =.true.
-          algo%ldmft  =.true.
-       case default
-          write(*,*)'Not a valid algorithm selection'
-          STOP
-    end select
+    ! select case(which)
+    !    case(1)
+    !       algo%ltbind =.true.
+    !    case(2)
+    !       algo%lw2k   =.true.
+    !    case(3)
+    !       algo%loptic =.true.
+    !    case(4)
+    !       algo%loptic =.true.
+    !       algo%ldmft  =.true.
+    !    case default
+    !       write(*,*)'Not a valid algorithm selection'
+    !       STOP
+    ! end select
 
-    select case(which_tetra)
-       case(0)
-          algo%ltetra=.false.
-          write(*,*)'Tetrahedron method not selected'
-       case(1)
-          algo%ltetra=.true.
-          write(*,*)'Tetrahedron method selected'
-       case default
-          write(*,*)'Integration method does not exist',which_tetra
-          STOP
-    end select
+    ! select case(which_tetra)
+    !    case(0)
+    !       algo%ltetra=.false.
+    !       write(*,*)'Tetrahedron method not selected'
+    !    case(1)
+    !       algo%ltetra=.true.
+    !       write(*,*)'Tetrahedron method selected'
+    !    case default
+    !       write(*,*)'Integration method does not exist',which_tetra
+    !       STOP
+    ! end select
 
-    select case(which_grid)
-       case(0)
-          algo%lsymm=.false.
-          write(*,*)'Symmetry switched OFF, REDucible BZ required'
-       case(1)
-          algo%lsymm=.true.
-          write(*,*)'Symmetry switched ON, IRReducible BZ required'
-       case default
-          write(*,*)'You must either provide reducible BZ or switch on symmetry',which_grid
-          STOP
-    end select
+    ! select case(which_grid)
+    !    case(0)
+    !       algo%lsymm=.false.
+    !       write(*,*)'Symmetry switched OFF, REDucible BZ required'
+    !    case(1)
+    !       algo%lsymm=.true.
+    !       write(*,*)'Symmetry switched ON, IRReducible BZ required'
+    !    case default
+    !       write(*,*)'You must either provide reducible BZ or switch on symmetry',which_grid
+    !       STOP
+    ! end select
 
-    if (algo%ltbind) algo%lsymm = .false.
+    ! if (algo%ltbind) algo%lsymm = .false.
 
     ! this is unfortunately necessary if we want arbitrary paths
     ! this whole section will be replaced anyways ...
-    read(10,'(A)') ctmp
-    itmp = index(ctmp,'#')
-    if (itmp .gt. 0) then
-       algo%mysyst = trim(adjustl(ctmp(:itmp-1)))
-    else
-       algo%mysyst = trim(adjustl(ctmp))
-    endif
+    ! read(10,'(A)') ctmp
+    ! itmp = index(ctmp,'#')
+    ! if (itmp .gt. 0) then
+    !    algo%mysyst = trim(adjustl(ctmp(:itmp-1)))
+    ! else
+    !    algo%mysyst = trim(adjustl(ctmp))
+    ! endif
 
-    read(10,*) kmesh%kx,kmesh%ky,kmesh%kz
+    ! read(10,*) kmesh%kx,kmesh%ky,kmesh%kz
 
-    if (algo%ltbind) then
-       write(*,*)'READ_CONFIG: reading TB parameters'
-       allocate(edisp%E0(edisp%nband_max),edisp%t(edisp%nband_max, tmax))
-       do iband=1,edisp%nband_max
-          read(10,*)edisp%E0(iband),edisp%t(iband,:)
-       enddo
-       read(10,*)algo%lBfield
-    endif
+    ! if (algo%ltbind) then
+    !    write(*,*)'READ_CONFIG: reading TB parameters'
+    !    allocate(edisp%E0(edisp%nband_max),edisp%t(edisp%nband_max, tmax))
+    !    do iband=1,edisp%nband_max
+    !       read(10,*)edisp%E0(iband),edisp%t(iband,:)
+    !    enddo
+    !    read(10,*)algo%lBfield
+    ! endif
     !now read the temperature variables
     read(10,*)sct%Tmin,sct%Tmax,sct%dT
-    read(10,*)algo%imurestart, edisp%efer
+    read(10,*)algo%imurestart, mutmp
+
+    ! overwrite it with a fixed mu
+    if (algo%imurestart == 1) then
+      edisp%efer = mutmp
+    endif
+
     !at this point I read in also the coefficients of gamma
     read(10,*)sct%ng
     allocate(sct%gc(0:sct%ng))
@@ -116,8 +123,8 @@ module Minput
 
 
     ! fill out the rest of the datatype
-    kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
-    kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
+    ! kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
+    ! kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
 
   end subroutine
 
@@ -131,7 +138,7 @@ module Minput
      type(dosgrid)    :: dos
 
      integer(hid_t)       :: ifile
-     integer              :: loccubic, kpoints, i
+     integer              :: locortho, kpoints, i
      character(len=6)   :: nmbstring
      real(8), allocatable :: rank1arr(:)
      real(8), allocatable :: rank3arr(:,:,:)
@@ -140,21 +147,31 @@ module Minput
      call hdf5_open_file(trim(adjustl(fname)), ifile, rdonly=.true.)
 
      ! mesh
-     call hdf5_read_data(ifile, "/.kmesh/k_coord", kmesh%k_coord)
-     call hdf5_read_data(ifile, "/.kmesh/kx",      kmesh%kx)
-     call hdf5_read_data(ifile, "/.kmesh/ky",      kmesh%ky)
-     call hdf5_read_data(ifile, "/.kmesh/kz",      kmesh%kz)
-     call hdf5_read_data(ifile, "/.kmesh/ktot",    kmesh%ktot) ! number of k-points from w2k
-     call hdf5_read_data(ifile, "/.kmesh/kred",    kmesh%kred)
-     call hdf5_read_data(ifile, "/.kmesh/kful",    kmesh%kful)
+     ! call hdf5_read_data(ifile, "/.kmesh/k_coord", kmesh%k_coord)
+     call hdf5_read_data(ifile, "/.kmesh/kx",           kmesh%kx)
+     call hdf5_read_data(ifile, "/.kmesh/ky",           kmesh%ky)
+     call hdf5_read_data(ifile, "/.kmesh/kz",           kmesh%kz)
+     call hdf5_read_data(ifile, "/.kmesh/ktot",         kmesh%ktot) ! number of k-points from w2k
+     call hdf5_read_data(ifile, "/.kmesh/kred",         kmesh%kred)
+     call hdf5_read_data(ifile, "/.kmesh/multiplicity", kmesh%multiplicity)
+     call hdf5_read_data(ifile, "/.kmesh/weight",       kmesh%weight)
 
      ! symmetry
-     call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%knsym)
-     call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym_reciprocal)
-     call hdf5_read_data(ifile, "/.symmetry/mapping",   symm%symop_id)
+     ! call hdf5_read_data(ifile, "/.symmetry/nsym",      symm%knsym)
+     ! call hdf5_read_data(ifile, "/.symmetry/rotations", symm%Msym_reciprocal)
+     ! call hdf5_read_data(ifile, "/.symmetry/mapping",   symm%symop_id)
+
+     call hdf5_read_data(ifile, "/.edisp/nelect",   edisp%nelect)
+
 
      ! crystal
-     call hdf5_read_data(ifile, "/.crystal/alat",   lat%alat)
+     ! call hdf5_read_data(ifile, "/.crystal/alat",   lat%alat)
+     call hdf5_read_data(ifile, "/.crystal/lortho", locortho)
+     if (locortho == 1) then
+        lat%lortho = .true.
+     else
+        lat%lortho = .false.
+     endif
      call hdf5_read_data(ifile, "/.crystal/a",      rank1arr)
      call hdf5_read_data(ifile, "/.crystal/vol",    lat%vol)
      call hdf5_read_data(ifile, "/.crystal/nalpha", lat%nalpha)
@@ -183,7 +200,7 @@ module Minput
      ! k-point information
      allocate(edisp%band(kpoints, edisp%nband_max))
      allocate(edisp%Z(kpoints, edisp%nband_max))
-     if (lat%lcubic) then
+     if (lat%lortho) then
         allocate(edisp%Mopt(3, kpoints, edisp%nbopt_min:edisp%nbopt_max, edisp%nbopt_min:edisp%nbopt_max))
      else
         allocate(edisp%Mopt(6, kpoints, edisp%nbopt_min:edisp%nbopt_max, edisp%nbopt_min:edisp%nbopt_max))
@@ -201,11 +218,11 @@ module Minput
         deallocate(rank3arr)
      enddo
 
-     if (algo%ltetra) then
-        call hdf5_read_data(ifile, '/.tetrahedrons/ntet',     thdr%ntet)
-        call hdf5_read_data(ifile, '/.tetrahedrons/thdr_id',  thdr%idtet)
-        call hdf5_read_data(ifile, '/.tetrahedrons/thdr_vol', thdr%vltet)
-     endif
+     ! if (algo%ltetra) then
+     !    call hdf5_read_data(ifile, '/.tetrahedrons/ntet',     thdr%ntet)
+     !    call hdf5_read_data(ifile, '/.tetrahedrons/thdr_id',  thdr%idtet)
+     !    call hdf5_read_data(ifile, '/.tetrahedrons/thdr_vol', thdr%vltet)
+     ! endif
 
   end subroutine
 

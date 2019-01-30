@@ -174,49 +174,36 @@ module Mestruct
     ! read in the optical matrix elements
     call getopt (kmesh, edisp)
     ! get the rotations and translations from the appropriate w2k files
-    call getsymop (kmesh, edisp)
+    ! call getsymop (kmesh, edisp)
 
-    if (algo%lsymm) then
+    ! if (algo%lsymm) then
        ! generate a reducible kmesh from the set of symmetry operations and the irrek-mesh
        ! also save the rotations required in symm for the optical elements later
-       call genredk  (kmesh)
+       ! call genredk  (kmesh)
        ! generate all the reducible data in one shot
        ! otherwise we calculate it on the fly
        ! TODO: MOVE THIS TO A DEBUGGING FLAG
-       if (algo%lgenred) then
-          call genredopt(kmesh, edisp)
-       endif
-    else !reducible BZ is already provided by W2k
+       ! if (algo%lgenred) then
+       !    call genredopt(kmesh, edisp)
+       ! endif
+    ! else !reducible BZ is already provided by W2k
        ! assign unique identifier to each k-point
-       if (.not. allocated(kmesh%k_id))     allocate(kmesh%k_id(kmesh%kx, kmesh%ky, kmesh%kz)) ! kx, ky, kz always reducible
-       if (.not. allocated(symm%symop_id))  allocate(symm%symop_id(2,kmesh%kred))
-       ik=0
-       do ikx=1,kmesh%kx
-          do iky=1,kmesh%ky
-             do ikz=1,kmesh%kz
-                ik=ik+1
-                kmesh%k_id(ikx, iky, ikz)=ik
-                symm%symop_id(1,ik) = ik  ! one to one mapping
-                symm%symop_id(2,ik) = 0   ! no operations necessary for already reducible points
-             enddo
-          enddo
-       enddo
-    endif !lsymm
+       ! if (.not. allocated(kmesh%k_id))     allocate(kmesh%k_id(kmesh%kx, kmesh%ky, kmesh%kz)) ! kx, ky, kz always reducible
+       ! if (.not. allocated(symm%symop_id))  allocate(symm%symop_id(2,kmesh%kred))
+       ! ik=0
+       ! do ikx=1,kmesh%kx
+       !    do iky=1,kmesh%ky
+       !       do ikz=1,kmesh%kz
+       !          ik=ik+1
+       !          kmesh%k_id(ikx, iky, ikz)=ik
+       !          symm%symop_id(1,ik) = ik  ! one to one mapping
+       !          symm%symop_id(2,ik) = 0   ! no operations necessary for already reducible points
+       !       enddo
+       !    enddo
+       ! enddo
+    ! endif !lsymm
 
     ! now we have everything in the reducible datatypes
-    if (.not. algo%loptic) then
-       edisp%Mopt = 0.0d0
-       write(*,*) 'GENELSTR: setting Mopt = identity matrix'
-       write(*,*) 'GENELSTR: size Mopt =',size(edisp%Mopt,1)
-
-       do ik=1,size(edisp%Mopt, 2)
-          do nb=edisp%nbopt_min,edisp%nbopt_max
-             edisp%Mopt(1,ik,nb,nb)=1.0d0
-             edisp%Mopt(2,ik,nb,nb)=1.0d0
-             edisp%Mopt(3,ik,nb,nb)=1.0d0
-          enddo
-       enddo
-    endif
   end subroutine !genelstr
 
 
@@ -241,11 +228,13 @@ module Mestruct
     integer          :: stat
     integer          :: id1, id2
     integer          :: ktest(3)
+    real(8)          :: sum_multiplicity
     real             :: rcrap
     character(100)   :: ccrap ! this works for arbitrary size
     double precision :: dtmp
     double precision, allocatable :: band_tmp(:,:)    ! bigger datastructure that will contain all the energy dispersion curves
-    character(len=33) :: substring = "internal and cartesian k-vectors:"
+    character(len=33) :: substring_outputkgen = "internal and cartesian k-vectors:"
+    character(len=37) :: substring_scf        = "TOTAL VALENCE CHARGE INSIDE UNIT CELL"
     character(len=150) :: line
 
     ! extract klist information
@@ -263,21 +252,53 @@ module Mestruct
          id1 = index(ccrap, '(')
          id2 = index(ccrap, ')')
          read(ccrap(id1+1:id2-1),*) ktest(1), ktest(2), ktest(3)
-         if (kmesh%kx /= ktest(1) .or. kmesh%ky /= ktest(2) .or. kmesh%kz /= ktest(3)) then
-            write(*,*) "GETDISP: INCONSISTENT K-MESH"
-            write(*,*) "INPUT:     ", kmesh%kx, kmesh%ky, kmesh%kz
-            write(*,*) "EXTRACTED: ", ktest
-            STOP
-         endif
+         kmesh%kx = ktest(1)
+         kmesh%ky = ktest(2)
+         kmesh%kz = ktest(3)
+         ! if (kmesh%kx /= ktest(1) .or. kmesh%ky /= ktest(2) .or. kmesh%kz /= ktest(3)) then
+         !    write(*,*) "GETDISP: INCONSISTENT K-MESH"
+         !    write(*,*) "INPUT:     ", kmesh%kx, kmesh%ky, kmesh%kz
+         !    write(*,*) "EXTRACTED: ", ktest
+         !    STOP
+         ! endif
        endif
        if (index(ccrap, "END") .eq. 1) exit ! the klist ends with an END statement
        lines = lines + 1
     enddo
+    rewind(10)
     close(10)
     kmesh%ktot = lines
+    kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
     write(*,*) 'GETDISP: total number of k-points read from W2k: ',kmesh%ktot
+    write(*,*) 'GETDISP: total number of k-points in the reducible BZ: ',kmesh%kred
+
+    if ( kmesh%ktot == kmesh%kred ) then
+      algo%lsymm = .true.
+    else
+      algo%lsymm = .false.
+    endif
 
     allocate(kmesh%k_coord(3,kmesh%ktot))
+    allocate(kmesh%multiplicity(kmesh%ktot))
+    allocate(kmesh%weight(kmesh%ktot))
+
+    open(10,file=trim(adjustl(algo%mysyst))//'.klist',status='old')
+    do i = 1, kmesh%ktot
+      read(10,*) icrap, icrap, icrap, icrap, icrap, rcrap
+      kmesh%multiplicity(i) = rcrap
+    enddo
+
+    sum_multiplicity = sum(kmesh%multiplicity)
+
+    if (abs(sum_multiplicity - kmesh%kx*kmesh%ky*kmesh%kz) > 1e-3) then
+      write(*,*) "GETDISP: sum of multiplicity: ", sum_multiplicity, " differs from #k-points", &
+                 kmesh%kx*kmesh%ky*kmesh%kz
+      STOP
+    else
+       kmesh%weight = kmesh%multiplicity / sum_multiplicity
+    endif
+
+
 
     !get the number of nonequivalent atoms in cell
     open(10,file=trim(adjustl(algo%mysyst))//'.struct',status='old')
@@ -286,11 +307,16 @@ module Mestruct
     lat%spacegroup = 220
     write(*,*) "WARNING: SPACEGROUP HAS BEEN FIXED"
     read(10,*)
-    read(10,*) lat%a(1), lat%a(2), lat%a(3), lat%angle(1), lat%angle(2), lat%angle(3)
+    read(10,'(A)') line
+    read(line(:10),*)   lat%a(1)
+    read(line(11:20),*) lat%a(2)
+    read(line(21:30),*) lat%a(3)
+    read(line(31:40),*) lat%angle(1)
+    read(line(41:50),*) lat%angle(2)
     close(10)
 
 
-    lat%lcubic = .false. !extra identifier
+    lat%lortho = .false. !extra identifier
     select case (lat%spacegroup)
       case(1:2) ! triclinic
          lat%ibravais = 14
@@ -313,6 +339,7 @@ module Mestruct
             lat%vol = lat%a(1)*lat%a(2)*lat%a(3) * sin(lat%angle(3))
          endif
       case(16:74) !orthorhombic
+         lat%lortho = .true.
          select case (symm%cntr)
             case('P  ')
                lat%ibravais = 6
@@ -325,6 +352,7 @@ module Mestruct
          end select
          lat%vol = lat%a(1)*lat%a(2)*lat%a(3)
       case(75:142) ! tetragonal
+         lat%lortho = .true.
          select case (symm%cntr)
             case('P  ')
                lat%ibravais = 4
@@ -343,9 +371,7 @@ module Mestruct
                          * sqrt(1.d0 + 2.d0*cos(lat%angle(1)))
          end select
       case(195:230) ! cubic
-         ! additional identifier so we have easy access to the question
-         ! is it cubic?
-         lat%lcubic = .true.
+         lat%lortho = .true.
          select case(symm%cntr)
             case('P  ')
                lat%ibravais = 1
@@ -400,7 +426,7 @@ module Mestruct
     do
        read(12,'(A)', iostat = stat) line
        if (stat == 0) then
-          ix = index(line, substring)
+          ix = index(line, substring_outputkgen)
           if (ix /= 0) exit
        else
           exit
@@ -416,6 +442,28 @@ module Mestruct
       read(12,*) kmesh%k_coord(1,i), kmesh%k_coord(2,i), kmesh%k_coord(3,i), rcrap, rcrap, rcrap
     enddo
     close(12)
+
+
+
+    ! get number of valence electrons
+    open(12,file=trim(adjustl(algo%mysyst))//'.scf',status='old')
+    do
+       read(12,'(A)', iostat = stat) line
+       if (stat == 0) then
+          ix = index(line, substring_scf)
+          if (ix /= 0) exit
+       else
+          exit
+       endif
+    enddo
+
+    if (ix == 0) then
+       write(*,*) 'GETDISP: error reading file *.scf'
+       STOP
+    else
+      read(line(48:),*) edisp%nelect
+    endif
+    write(*,*) 'GETDISP: number of valence elctrons: ', edisp%nelect
 
     !now fill in the actual data structure by cropping band_tmp
     if (.not. allocated(edisp%band) ) allocate(edisp%band(kmesh%ktot,edisp%nband_max))
@@ -433,6 +481,12 @@ module Mestruct
 
   end subroutine
 
+
+
+! TODO : this has to be generalized
+! with spin-orbit coupling we additionally have complex offdiagonal terms 7...9
+! order is userdefined by wien2k
+! force an order?
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! GETOPT
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -459,7 +513,7 @@ module Mestruct
     type(energydisp)      :: edisp
 
     !internal variables
-    integer :: icrap, itmp, i, j, ik
+    integer :: icrap, itmp, i, j, ik, nb
     integer :: ierr
     integer :: nband, nband_loc, min_nopt, max_nopt
     real :: rcrap
@@ -467,18 +521,19 @@ module Mestruct
     double precision :: dtmp
     double precision, allocatable :: Mopt_tmp(:,:,:,:)  ! temporary matrices where the Wien2k optical matrices are stored
 
-    ! allocate and initialise the temporary arrays
-    ! on the full band interval
-    if (lat%lcubic) then
-       allocate(Mopt_tmp(3,kmesh%ktot,edisp%nband_max,edisp%nband_max))
-    else
-       allocate(Mopt_tmp(6,kmesh%ktot,edisp%nband_max,edisp%nband_max))
-    endif
-    Mopt_tmp=0.d0
 
     ! read in the data into the temporary array
     ! and determine the optical interval size
     if (algo%loptic) then
+
+       ! allocate and initialise the temporary arrays
+       ! on the full band interval
+       if (lat%lortho) then
+          allocate(Mopt_tmp(3,kmesh%ktot,edisp%nband_max,edisp%nband_max))
+       else
+          allocate(Mopt_tmp(6,kmesh%ktot,edisp%nband_max,edisp%nband_max))
+       endif
+       Mopt_tmp=0.d0
 
        open(10,file=trim(adjustl(algo%mysyst))//'.symmat',status='old')
        read(10,*)   !there is a heading line specifying which component of M is printed on file
@@ -505,7 +560,7 @@ module Mestruct
           if (edisp%nbopt_max .lt. max_nopt) edisp%nbopt_max = max_nopt
           ! (basically I want the M matrices to have the same size for all the k-points considered)
           !read the matrix elements
-          if (lat%lcubic) then
+          if (lat%lortho) then
              do i=min_nopt,max_nopt
                 do j=i,max_nopt
                    read(10,130)icrap,icrap,Mopt_tmp(1,ik,i,j),Mopt_tmp(2,ik,i,j),Mopt_tmp(3,ik,i,j)
@@ -521,9 +576,48 @@ module Mestruct
           endif
 
        enddo !over kpoints
+
+       if ((.not. allocated(edisp%Mopt)) .and. (lat%lortho) ) &
+         & allocate(edisp%Mopt(3,kmesh%ktot,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
+       if ((.not. allocated(edisp%Mopt)) .and. (.not. lat%lortho) ) &
+         & allocate(edisp%Mopt(6,kmesh%ktot,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
+
+       if (lat%lortho) then
+          itmp=3
+       else
+          itmp=6
+       endif
+
+       do ik=1,kmesh%ktot
+          do i=1,itmp
+             edisp%Mopt(i,ik,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max)=&
+               & Mopt_tmp(i,ik,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max)
+          enddo
+       enddo
+
+       deallocate(Mopt_tmp)
+
     else ! non optical -> we simply take all bands
        edisp%nbopt_min=1
        edisp%nbopt_max=edisp%nband_max
+
+       if (.not. allocated(edisp%Mopt)) then
+         allocate(edisp%Mopt(3,kmesh%ktot,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
+       endif
+
+       write(*,*) 'GETOPT: setting Mopt = identity matrix'
+       write(*,*) 'GETOPT: size Mopt =',size(edisp%Mopt,1)
+
+       edisp%Mopt = 0.d0
+
+       do nb=edisp%nbopt_min,edisp%nbopt_max
+          do ik=1,size(edisp%Mopt, 2)
+             do i = 1,3
+                edisp%Mopt(i,ik,nb,nb)=1.0d0
+             enddo
+          enddo
+       enddo
+
     endif
 
     write(*,*) 'GETOPT: optical bands minimum: ', edisp%nbopt_min
@@ -533,25 +627,7 @@ module Mestruct
     160  FORMAT (4X,I3,X,I3,6(X,E12.6))
     close(10)
 
-    if ((.not. allocated(edisp%Mopt)) .and. (lat%lcubic) ) &
-      & allocate(edisp%Mopt(3,kmesh%ktot,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
-    if ((.not. allocated(edisp%Mopt)) .and. (.not. lat%lcubic) ) &
-      & allocate(edisp%Mopt(6,kmesh%ktot,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
 
-    if (lat%lcubic) then
-       itmp=3
-    else
-       itmp=6
-    endif
-
-    do ik=1,kmesh%ktot
-       do i=1,itmp
-          edisp%Mopt(i,ik,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max)=&
-            & Mopt_tmp(i,ik,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max)
-       enddo
-    enddo
-
-    deallocate(Mopt_tmp)
 
     !allocation of renormalised bandstructure
     !the -Im{Sigma} read in here is added to the temperature dependent scattering rate
@@ -939,13 +1015,13 @@ module Mestruct
     real(8), allocatable :: Mtmp(:,:,:,:)
 
 
-    if (lat%lcubic) then
+    if (lat%lortho) then
        allocate(Mopttmp(3,kmesh%kred,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
     else
        allocate(Mopttmp(6,kmesh%kred,edisp%nbopt_min:edisp%nbopt_max,edisp%nbopt_min:edisp%nbopt_max))
     endif
 
-    if (lat%lcubic) then
+    if (lat%lortho) then
        ! create the cubic optical elements in Mopttmp
        ! after that save them in the original edisp%Mopt array.
        Mopttmp = 0.d0
@@ -1128,7 +1204,7 @@ module Mestruct
     double precision, allocatable :: Ztmp(:,:),  Ztmp2(:,:)  ! temporary bandstructure arrays
     double precision, allocatable :: Motmp(:,:,:,:), Motmp2(:,:,:,:) ! temporary optical transition matrices
 
-    if (lat%lcubic) then
+    if (lat%lortho) then
        offdia=0  !no off-diagonal terms for cubic systems
     else
        offdia=1  !off-diagonal terms for non-cubic systems
@@ -1138,7 +1214,7 @@ module Mestruct
     allocate(Imtmp(redkm%ktot,eredk%nband_max)); allocate(Imtmp2(redkm%ktot,eredk%nband_max))
     allocate(Ztmp(redkm%ktot,eredk%nband_max));  allocate(Ztmp2(redkm%ktot,eredk%nband_max))
     allocate(cktmp(3,redkm%ktot)); allocate(cktmp2(3,redkm%ktot))
-    if (lat%lcubic) then
+    if (lat%lortho) then
        allocate(Motmp (3,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
        allocate(Motmp2(3,redkm%ktot,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
     else
@@ -1292,7 +1368,7 @@ module Mestruct
     allocate(eredk%band(nk,eredk%nband_max))
     allocate(eredk%Im(nk,eredk%nband_max))
     allocate(eredk%Z(nk,eredk%nband_max))
-    if (lat%lcubic) then
+    if (lat%lortho) then
        allocate(eredk%Mopt(3,nk,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
     else
        allocate(eredk%Mopt(6,nk,eredk%nbopt_min:eredk%nbopt_max,eredk%nbopt_min:eredk%nbopt_max))
@@ -1431,7 +1507,7 @@ module Mestruct
     real(8), allocatable :: kcoord_tmp(:,:)
 
 
-    if (lat%lcubic) then
+    if (lat%lortho) then
        offdia=0  !no off-diagonal terms for cubic systems
     else
        offdia=1  !off-diagonal terms for non-cubic systems
@@ -1579,9 +1655,9 @@ subroutine gentetra (kmesh, thdr)
  ! bk(2,2)=lat%a(3)*lat%a(1)*(2.d0*pi/lat%alat)
  ! bk(3,3)=lat%a(1)*lat%a(2)*(2.d0*pi/lat%alat)
 
- bk(1,1)=2.d0*pi/(lat%alat*lat%a(1))
- bk(2,2)=2.d0*pi/(lat%alat*lat%a(2))
- bk(3,3)=2.d0*pi/(lat%alat*lat%a(3))
+ bk(1,1)=2.d0*pi/(lat%a(1))
+ bk(2,2)=2.d0*pi/(lat%a(2))
+ bk(3,3)=2.d0*pi/(lat%a(3))
 
 ! setting up the tetrahedra will be done cutting a cell with eight
 ! corners into six tetrahedra. the edges of the tetrahedra are given by
@@ -2567,18 +2643,20 @@ end subroutine !INTERPTRA_MUQ
     !lorentian bandshape
     do i =1,size(dos%enrg)
        do nb=1,edisp%nband_max
-          do ik=1,kmesh%kred
-             ikk = symm%symop_id(1,ik)
-             if (edisp%band(ikk,nb) > band_fill_value) cycle !necessary because big eig'vals
+          do ik=1,kmesh%ktot
+             ! ikk = symm%symop_id(1,ik)
+             if (edisp%band(ik,nb) > band_fill_value) cycle !necessary because big eig'vals
                                                 !have been introduced to make matrices square
-             dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band(ikk,nb))**2)+(br**2))))
-             dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band(ikk,nb))/br)))
+             dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band(ik,nb))**2)+(br**2)))) * &
+                        kmesh%weight(ik)
+             dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band(ik,nb))/br))) * &
+                        kmesh%weight(ik)
           enddo
        enddo
     enddo
 
-    dos%dos = 2.d0 * dos%dos / kmesh%kred ! normalizing + spin multiplicity
-    dos%nos = 2.d0 * dos%nos / kmesh%kred
+    dos%dos = 2.d0 * dos%dos
+    dos%nos = 2.d0 * dos%nos
 
   end subroutine !GENDOSEL
 
@@ -2608,7 +2686,7 @@ end subroutine !INTERPTRA_MUQ
     integer iband,i,idir
 
     bw=edisp%t(iband,1)
-    vk_sc=-2.d0*bw*sin(2.d0*pi*k(idir))*lat%a(idir)*lat%alat
+    vk_sc=-2.d0*bw*sin(2.d0*pi*k(idir))*lat%a(idir)
     return
   end function vk_sc
 
@@ -2620,7 +2698,7 @@ end subroutine !INTERPTRA_MUQ
 
     bw =edisp%t(iband,1)
     if (idir.eq.idir2) then
-       vkk_sc=-2.d0*bw*cos(2.d0*pi*k(idir))*(lat%a(idir)*lat%alat)**2
+       vkk_sc=-2.d0*bw*cos(2.d0*pi*k(idir))*(lat%a(idir))**2
     else
        vkk_sc=0.d0
     endif

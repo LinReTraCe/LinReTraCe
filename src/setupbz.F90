@@ -1,5 +1,16 @@
 program setupbz
+#ifdef iso_fortran_env
+   use, intrinsic :: iso_fortran_env, only : stdin =>input_unit, &
+                                             stdout=>output_unit, &
+                                             stderr=>error_unit
+#else
+#define stdin  5
+#define stdout 6
+#define stderr 0
+#endif
+
   use Mparams
+  use Maux
   use Mtypes
   use Mestruct
   use Mlookup
@@ -15,6 +26,7 @@ program setupbz
   type(scatrate)   :: sct
 
   integer            :: i
+  integer            :: filesize
   integer(hid_t)     :: ifile
   character(len=150) :: outfile
   character(len=150) :: string
@@ -22,18 +34,10 @@ program setupbz
   integer            :: er
   character(len=150) :: erstr
 
-  write(*,*)
-  write(*,*)'#####################################################'
-  write(*,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
-  write(*,*)'#####################################################'
-  write(*,*)'#  Preprocessing Band structure data                #'
-  write(*,*)'#####################################################'
-  write(*,*)'#   E. Maggio, M. Pickem, J.M. Tomczak              #'
-  write(*,*)'#####################################################'
-  write(*,*)
+  call preproc_greeting(stdout)
 
   algo%ldebug = .true.
-  algo%lgenred = .true.
+  algo%lgenred = .false.
 
   call read_config(kmesh, edisp, sct, outfile, er, erstr)
   if (er /= 0) then
@@ -52,28 +56,30 @@ program setupbz
   call hdf5_create_file(trim(adjustl(outfile)))
   call hdf5_open_file(trim(adjustl(outfile)), ifile)
 
-  call hdf5_write_data(ifile, '/.kmesh/k_coord', kmesh%k_coord)
-  call hdf5_write_data(ifile, '/.kmesh/kx',      kmesh%kx)
-  call hdf5_write_data(ifile, '/.kmesh/ky',      kmesh%ky)
-  call hdf5_write_data(ifile, '/.kmesh/kz',      kmesh%kz)
-  call hdf5_write_data(ifile, '/.kmesh/ktot',    kmesh%ktot)
-  call hdf5_write_data(ifile, '/.kmesh/kred',    kmesh%kred)
-  call hdf5_write_data(ifile, '/.kmesh/kful',    kmesh%kful)
+  ! call hdf5_write_data(ifile, '/.kmesh/k_coord', kmesh%k_coord)
+  call hdf5_write_data(ifile, '/.kmesh/kx',           kmesh%kx)
+  call hdf5_write_data(ifile, '/.kmesh/ky',           kmesh%ky)
+  call hdf5_write_data(ifile, '/.kmesh/kz',           kmesh%kz)
+  call hdf5_write_data(ifile, '/.kmesh/ktot',         kmesh%ktot)
+  call hdf5_write_data(ifile, '/.kmesh/kred',         kmesh%kred)
+  call hdf5_write_data(ifile, '/.kmesh/multiplicity', kmesh%multiplicity)
+  call hdf5_write_data(ifile, '/.kmesh/weight',       kmesh%weight)
 
   ! symmetry information
-  call hdf5_write_data(ifile, '/.symmetry/knsym',     symm%knsym)
-  call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym_reciprocal)
-  call hdf5_write_data(ifile, '/.symmetry/mapping',   symm%symop_id)
+  ! call hdf5_write_data(ifile, '/.symmetry/knsym',     symm%knsym)
+  ! call hdf5_write_data(ifile, '/.symmetry/rotations', symm%Msym_reciprocal)
+  ! call hdf5_write_data(ifile, '/.symmetry/mapping',   symm%symop_id)
+
+  call hdf5_write_data(ifile, '/.edisp/nelect', edisp%nelect)
 
   ! lattice information
-  call hdf5_write_data(ifile, '/.crystal/alat',      lat%alat)
   call hdf5_write_data(ifile, '/.crystal/a',         lat%a)
   call hdf5_write_data(ifile, '/.crystal/vol',       lat%vol)
   call hdf5_write_data(ifile, '/.crystal/nalpha',    lat%nalpha)
-  if (lat%lcubic) then
-     call hdf5_write_data(ifile, '/.crystal/lcubic', 1)
+  if (lat%lortho) then
+     call hdf5_write_data(ifile, '/.crystal/lortho', 1)
   else
-     call hdf5_write_data(ifile, '/.crystal/lcubic', 0)
+     call hdf5_write_data(ifile, '/.crystal/lortho', 0)
   endif
 
   ! band information
@@ -107,13 +113,22 @@ program setupbz
   enddo
 
   !also save all the tetrahedron information
-  if (algo%ltetra) then
-     call hdf5_write_data(ifile, '/.tetrahedrons/ntet',     thdr%ntet)
-     call hdf5_write_data(ifile, '/.tetrahedrons/thdr_id',  thdr%idtet)
-     call hdf5_write_data(ifile, '/.tetrahedrons/thdr_vol', thdr%vltet)
-  endif
+  ! if (algo%ltetra) then
+  !    call hdf5_write_data(ifile, '/.tetrahedrons/ntet',     thdr%ntet)
+  !    call hdf5_write_data(ifile, '/.tetrahedrons/thdr_id',  thdr%idtet)
+  !    call hdf5_write_data(ifile, '/.tetrahedrons/thdr_vol', thdr%vltet)
+  ! endif
 
   call hdf5_close_file(ifile)
   call hdf5_finalize()
+
+  inquire(file=trim(adjustl(outfile)), SIZE=filesize)
+  if (filesize /= -1) then
+    write(*,*) "Preprocessed file: ", trim(adjustl(outfile)), " successfully created."
+    write(*,"(A,F8.2,A)") "File size: ", dble(filesize)/1000000, " MB."
+  else
+    write(*,*) "Error in creation of preprocessed file."
+    stop
+  endif
 
 end program setupbz

@@ -185,29 +185,21 @@ subroutine calc_response(mu, iT, drhodT, mesh, ek, thdr, sct, dresp, dderesp, di
         if (.not.algo%ldebug) then
            call respinkm_qp (mu, iT, ik, ek, sct, qresp)
         endif
+        call respinterkm(mu, iT, ik, ek, sct, dinter)
+     enddo
+
         !evaluate the derivatives of the response functions
         !if the chemical potential is fixed use a semplified kernel for the
         !derivatives (assuming also gamma to be not T dependent)
-        if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
-           if (algo%ltbind .and. (algo%imurestart==2)) then
-              if (iT < sct%nT) call resderkm_symm(mu, iT, ik, ek, sct, dderesp)
-           else
-              !since one has to evaluate the derivative of mu then the first point must be skipped
-              if (iT < sct%nT) call resderkm(iT, ik, ek, sct, dderesp)
-           endif
-        endif
+        !if ((sct%Tstar == 0.0d0) .or. (sct%Tflat == 0.0d0)) then
+        !   if (algo%ltbind .and. (algo%imurestart==2)) then
+        !      if (iT < sct%nT) call resderkm_symm(mu, iT, ik, ek, sct, dderesp)
+        !   else
+        !      !since one has to evaluate the derivative of mu then the first point must be skipped
+        !      if (iT < sct%nT) call resderkm(iT, ik, ek, sct, dderesp)
+        !   endif
+        !endif
 
-        !interband transitions
-        if (algo%ldebug) then
-           !!!!!!!!!!!!! TEST
-           !if((iT==sct%nT) .and. (itet==1)) write(*,*)'test for 2-band symmetrical SC, check input parameters!!'
-           !call respinterkm_symm(mu, iT, ik, algo, ek, sct, dinter)
-           !!!!!!!!!!!!! TEST END
-           call respinterkm(mu, iT, ik, ek, sct, dinter)
-        else
-           call respinterkm(mu, iT, ik, ek, sct, dinter)
-        endif
-     enddo
 
      ! mP note:
      ! now we have all the data for each optical band and k-point
@@ -223,7 +215,8 @@ subroutine calc_response(mu, iT, drhodT, mesh, ek, thdr, sct, dresp, dderesp, di
 
               ! partial k-sum (in the single-core application this is the whole BZ)
               do ik=iqstr,iqend
-                 ikk = symm%symop_id(1,ik) ! k-point of the corresponding saved data
+                 ! ikk = symm%symop_id(1,ik) ! k-point of the corresponding saved data
+                 ikk = ik
                  !multiply by a factor that includes spin multiplicity and the term
                  !beta/gamma (beta^2/gamma) for s (a) in presence of magnetic field gamma --> gamma^2
                  !for the Boltzmann response beta --> 1
@@ -234,30 +227,46 @@ subroutine calc_response(mu, iT, drhodT, mesh, ek, thdr, sct, dresp, dderesp, di
                     dresp%gamma=real(ek%z(ikk,ib)*sct%gam(iT),8)
                     if (.not.algo%ldebug) qresp%gamma=real(ek%z(ikk,ib)*sct%gam(iT),16)
                  endif
-                 dresp%s_local(ib,ix,iy)=dresp%s_local(ib,ix,iy)+dresp%s_tmp(ik,ib,ix,iy)*2.0d0*beta/dresp%gamma
-                 dresp%a_local(ib,ix,iy)=dresp%a_local(ib,ix,iy)+dresp%a_tmp(ik,ib,ix,iy)*2.0d0*(beta**2)/dresp%gamma
-                 dderesp%s_local(ib,ix,iy)=dderesp%s_local(ib,ix,iy)+dderesp%s_tmp(ik,ib,ix,iy)*2.0d0
-                 dderesp%a_local(ib,ix,iy)=dderesp%a_local(ib,ix,iy)+dderesp%a_tmp(ik,ib,ix,iy)*2.0d0
-                 dinter%s_local(ib,ix,iy)=dinter%s_local(ib,ix,iy)+dinter%s_tmp(ik,ib,ix,iy)*2.0d0
-                 dinter%a_local(ib,ix,iy)=dinter%a_local(ib,ix,iy)+dinter%a_tmp(ik,ib,ix,iy)*2.0d0
+                 dresp%s_local(ib,ix,iy) = dresp%s_local(ib,ix,iy) &
+                                         + dresp%s_tmp(ik,ib,ix,iy)*2.0d0*beta/dresp%gamma * mesh%weight(ikk)
+                 dresp%a_local(ib,ix,iy) = dresp%a_local(ib,ix,iy) &
+                                         + dresp%a_tmp(ik,ib,ix,iy)*2.0d0*(beta**2)/dresp%gamma * mesh%weight(ikk)
+                 dderesp%s_local(ib,ix,iy) = dderesp%s_local(ib,ix,iy) &
+                                           + dderesp%s_tmp(ik,ib,ix,iy)*2.0d0 * mesh%weight(ikk)
+                 dderesp%a_local(ib,ix,iy) = dderesp%a_local(ib,ix,iy) &
+                                           + dderesp%a_tmp(ik,ib,ix,iy)*2.0d0 * mesh%weight(ikk)
+                 dinter%s_local(ib,ix,iy) = dinter%s_local(ib,ix,iy) &
+                                          + dinter%s_tmp(ik,ib,ix,iy)*2.0d0 * mesh%weight(ikk)
+                 dinter%a_local(ib,ix,iy) = dinter%a_local(ib,ix,iy) &
+                                          + dinter%a_tmp(ik,ib,ix,iy)*2.0d0 * mesh%weight(ikk)
                  if (algo%lBfield .and. algo%ltbind ) then
-                    dresp%sB_local(ib,ix,iy)=dresp%sB_local(ib,ix,iy)+dresp%sB_tmp(ik,ib,ix,iy)*2.0d0*beta/(dresp%gamma**2)
-                    dresp%aB_local(ib,ix,iy)=dresp%aB_local(ib,ix,iy)+dresp%aB_tmp(ik,ib,ix,iy)*2.0d0*(beta/dresp%gamma)**2
+                    dresp%sB_local(ib,ix,iy) = dresp%sB_local(ib,ix,iy) &
+                                             + dresp%sB_tmp(ik,ib,ix,iy)*2.0d0*beta/(dresp%gamma**2) * mesh%weight(ikk)
+                    dresp%aB_local(ib,ix,iy) = dresp%aB_local(ib,ix,iy) &
+                                             + dresp%aB_tmp(ik,ib,ix,iy)*2.0d0*(beta/dresp%gamma)**2 * mesh%weight(ikk)
                  endif
 
-                 respBl%s_local(ib,ix,iy)=respBl%s_local(ib,ix,iy)+respBl%s_tmp(ik,ib,ix,iy)*2.0d0/dresp%gamma
-                 respBl%a_local(ib,ix,iy)=respBl%a_local(ib,ix,iy)+respBl%a_tmp(ik,ib,ix,iy)*2.0d0/dresp%gamma
+                 respBl%s_local(ib,ix,iy) = respBl%s_local(ib,ix,iy) &
+                                          + respBl%s_tmp(ik,ib,ix,iy)*2.0d0/dresp%gamma * mesh%weight(ikk)
+                 respBl%a_local(ib,ix,iy) = respBl%a_local(ib,ix,iy) &
+                                          + respBl%a_tmp(ik,ib,ix,iy)*2.0d0/dresp%gamma * mesh%weight(ikk)
                  if (algo%lBfield .and. algo%ltbind ) then
-                    respBl%sB_local(ib,ix,iy)=respBl%sB_local(ib,ix,iy)+respBl%sB_tmp(ik,ib,ix,iy)*2.0d0/(dresp%gamma**2)
-                    respBl%aB_local(ib,ix,iy)=respBl%aB_local(ib,ix,iy)+respBl%aB_tmp(ik,ib,ix,iy)*2.0d0/(dresp%gamma**2)
+                    respBl%sB_local(ib,ix,iy) = respBl%sB_local(ib,ix,iy) &
+                                              + respBl%sB_tmp(ik,ib,ix,iy)*2.0d0/(dresp%gamma**2) * mesh%weight(ikk)
+                    respBl%aB_local(ib,ix,iy) = respBl%aB_local(ib,ix,iy) &
+                                              + respBl%aB_tmp(ik,ib,ix,iy)*2.0d0/(dresp%gamma**2) * mesh%weight(ikk)
                  endif
 
                  if (.not.algo%ldebug) then
-                    qresp%s_local(ib,ix,iy)=qresp%s_local(ib,ix,iy)+qresp%s_tmp(ik,ib,ix,iy)*2.0q0*betaQ/qresp%gamma
-                    qresp%a_local(ib,ix,iy)=qresp%a_local(ib,ix,iy)+qresp%a_tmp(ik,ib,ix,iy)*2.0q0*(betaQ**2)/qresp%gamma
+                    qresp%s_local(ib,ix,iy) = qresp%s_local(ib,ix,iy) &
+                                            + qresp%s_tmp(ik,ib,ix,iy)*2.0q0*betaQ/qresp%gamma * mesh%weight(ikk)
+                    qresp%a_local(ib,ix,iy) = qresp%a_local(ib,ix,iy) &
+                                            + qresp%a_tmp(ik,ib,ix,iy)*2.0q0*(betaQ**2)/qresp%gamma * mesh%weight(ikk)
                     if (algo%lBfield .and. algo%ltbind ) then
-                       qresp%sB_local(ib,ix,iy)=qresp%sB_local(ib,ix,iy)+qresp%sB_tmp(ik,ib,ix,iy)*2.0q0*betaQ/(qresp%gamma**2)
-                       qresp%aB_local(ib,ix,iy)=qresp%aB_local(ib,ix,iy)+qresp%aB_tmp(ik,ib,ix,iy)*2.0q0*(betaQ/qresp%gamma)**2
+                       qresp%sB_local(ib,ix,iy) = qresp%sB_local(ib,ix,iy) &
+                                                + qresp%sB_tmp(ik,ib,ix,iy)*2.0q0*betaQ/(qresp%gamma**2) * mesh%weight(ikk)
+                       qresp%aB_local(ib,ix,iy) = qresp%aB_local(ib,ix,iy) &
+                                                + qresp%aB_tmp(ik,ib,ix,iy)*2.0q0*(betaQ/qresp%gamma)**2 * mesh%weight(ikk)
                     endif
                  endif
               enddo
@@ -485,8 +494,8 @@ subroutine respintet(mu, iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet)
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .false.) ! intra
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
       do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -637,8 +646,8 @@ subroutine respintet_qp(mu, iT, itet, thdr, ek, sct, resp)
   do iktet=1,4  !loop over corners of the tetrahedron
 
      ik = thdr%idtet(iktet,itet)
-     ikk = symm%symop_id(1,ik)
-     call getmopt(ek, ik, Mopt, .false.) ! intra
+     ! ikk = symm%symop_id(1,ik)
+     ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
      do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -780,8 +789,8 @@ subroutine respintet_Bl(mu, iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet) ! itet -> tetrahedron number which is parallelized, iktet the corresponding 4 corners
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .false.) ! intra
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
       do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -904,8 +913,8 @@ subroutine respintert(mu, iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet)
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .true.) ! inter
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .true.) ! inter
 
       do ib1=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -1050,8 +1059,8 @@ subroutine respintert_symm(mu, iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet)
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .true.) ! inter
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .true.) ! inter
 
       do ib1=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -1170,11 +1179,22 @@ subroutine respinkm(mu, iT, ik, ek, sct, resp)
   integer :: ikk
   real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
 
-  ikk  = symm%symop_id(1,ik)
+  ! ikk  = symm%symop_id(1,ik)
+  ikk  = ik
   ! get the optical element and save it into Mopt
   ! if we have a reducible element we just copy it from ek
   ! otherwise we have to rotate the element of the corresponding irreducible k-point
-  call getmopt(ek, ik, Mopt, .false.) ! intra
+  ! call getmopt(ek, ik, Mopt, .false.) ! intra
+
+
+  ! TODO optimize this ... when needed -> read in ??
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+
 
   !loop over k-points is external
   do iband=1,ek%nband_max !loop over bands (these will be traced over)
@@ -1291,8 +1311,15 @@ subroutine respinkm_qp(mu, iT, ik, ek, sct, resp)
   integer :: ikk
   real(8) :: Mopt(6,ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
 
-  ikk  = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .false.) ! intra
+  ikk = ik
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+  ! ikk  = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
   do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -1405,8 +1432,15 @@ subroutine respinkm_Bl(mu, iT, ik, ek, sct, resp)
   integer :: ikk
   real(8) :: Mopt(6,ek%nbopt_min:ek%nbopt_max,ek%nbopt_min:ek%nbopt_max)
 
-  ikk = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .false.) ! intra
+  ikk = ik
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+  ! ikk = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
   do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -1509,8 +1543,16 @@ subroutine respinterkm(mu, iT, ik, ek, sct, resp)
   integer :: ikk
   real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
 
-  ikk = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .true.) ! inter
+
+  ikk = ik
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+  ! ikk = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .true.) ! inter
 
   do ib1=1,ek%nband_max !loop over bands (these will be traced over)
      ! if the band is not contained in the optical matrices just do nothing
@@ -1640,8 +1682,15 @@ subroutine respinterkm_symm(mu, iT, ik, ek, sct, resp)
   integer :: ikk
   real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
 
-  ikk = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .true.) ! inter
+  ikk = ik
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+  ! ikk = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .true.) ! inter
 
   do ib1=1,ek%nband_max !loop over bands (these will be traced over)
      ! if the band is not contained in the optical matrices just do nothing
@@ -1769,8 +1818,8 @@ subroutine resdertet_symm(mu, iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet)
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .false.) ! intra
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
       do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -1885,8 +1934,8 @@ subroutine resdertet(iT, itet, thdr, ek, sct, resp)
    do iktet=1,4  !loop over corners of the tetrahedron
 
       ik = thdr%idtet(iktet,itet)
-      ikk = symm%symop_id(1,ik)
-      call getmopt(ek, ik, Mopt, .false.) ! intra
+      ! ikk = symm%symop_id(1,ik)
+      ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
       do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -2002,8 +2051,15 @@ subroutine resderkm_symm(mu, iT, ik, ek, sct, resp)
   complex(8),external  :: wpsipg
 
 
-  ikk = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .false.) ! intra
+  ikk = ik
+  if (lat%lortho) then
+     Mopt = 0.d0
+     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
+  else
+     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
+  endif
+  ! ikk = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .false.) ! intra
 
   do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -2100,8 +2156,10 @@ subroutine resderkm(iT, ik, ek, sct, resp)
   muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT
   mudot = -kB*muder*((sct%TT(iT))**2)
 
-  ikk = symm%symop_id(1,ik)
-  call getmopt(ek, ik, Mopt, .false.) !intra
+
+  ikk = ik
+  ! ikk = symm%symop_id(1,ik)
+  ! call getmopt(ek, ik, Mopt, .false.) !intra
 
   do iband=1,ek%nband_max !loop over bands (these will be traced over)
 
@@ -2286,75 +2344,27 @@ subroutine globfac(kmesh, resp, hpresp)
    facQ  = 2.q0 * piQ * ( real(echarge,16) / real(lat%vol*hbarevs,16)) * 1.q10
    facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(lat%vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
 
-   if (algo%ltetra) then
-      ktot=1
-   else
-      ktot=kmesh%kred
-   endif
-
-   !global symmetries of a cubic system
-   if (lat%lcubic) then
-      resp%s(:,2,2)=resp%s(:,1,1)
-      resp%s(:,3,3)=resp%s(:,1,1)
-      resp%a(:,2,2)=resp%a(:,1,1)
-      resp%a(:,3,3)=resp%a(:,1,1)
-      resp%s_tot(2,2)=resp%s_tot(1,1)
-      resp%s_tot(3,3)=resp%s_tot(1,1)
-      resp%a_tot(2,2)=resp%a_tot(1,1)
-      resp%a_tot(3,3)=resp%a_tot(1,1)
-      if(algo%lBfield) then
-         resp%sB(:,1,3)=resp%sB(:,1,2)
-         resp%sB(:,2,3)=resp%sB(:,1,2)
-         resp%aB(:,1,3)=resp%aB(:,1,2)
-         resp%aB(:,2,3)=resp%aB(:,1,2)
-         resp%sB_tot(1,3)=resp%sB_tot(1,2)
-         resp%sB_tot(2,3)=resp%sB_tot(1,2)
-         resp%aB_tot(1,3)=resp%aB_tot(1,2)
-         resp%aB_tot(2,3)=resp%aB_tot(1,2)
-      endif
-      if (present(hpresp)) then
-          hpresp%s(:,2,2)=hpresp%s(:,1,1)
-          hpresp%s(:,3,3)=hpresp%s(:,1,1)
-          hpresp%a(:,2,2)=hpresp%a(:,1,1)
-          hpresp%a(:,3,3)=hpresp%a(:,1,1)
-          hpresp%s_tot(2,2)=hpresp%s_tot(1,1)
-          hpresp%s_tot(3,3)=hpresp%s_tot(1,1)
-          hpresp%a_tot(2,2)=hpresp%a_tot(1,1)
-          hpresp%a_tot(3,3)=hpresp%a_tot(1,1)
-          if(algo%lBfield) then
-             hpresp%sB(:,1,3)=hpresp%sB(:,1,2)
-             hpresp%sB(:,2,3)=hpresp%sB(:,1,2)
-             hpresp%aB(:,1,3)=hpresp%aB(:,1,2)
-             hpresp%aB(:,2,3)=hpresp%aB(:,1,2)
-             hpresp%sB_tot(1,3)=hpresp%sB_tot(1,2)
-             hpresp%sB_tot(2,3)=hpresp%sB_tot(1,2)
-             hpresp%aB_tot(1,3)=hpresp%aB_tot(1,2)
-             hpresp%aB_tot(2,3)=hpresp%aB_tot(1,2)
-          endif
-      endif
-   endif
-
-   resp%s  = resp%s/real(ktot,8) * fac ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
-   resp%a  = resp%a/real(ktot,8) * fac * ( - beta * kb)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
-   resp%s_tot  = resp%s_tot/real(ktot,8) * fac
-   resp%a_tot  = resp%a_tot/real(ktot,8) * fac * ( - beta * kb)
+   resp%s  = resp%s * fac ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
+   resp%a  = resp%a * fac * ( - beta * kb)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
+   resp%s_tot  = resp%s_tot * fac
+   resp%a_tot  = resp%a_tot * fac * ( - beta * kb)
    if(algo%lBfield) then
-      resp%sB = resp%sB/real(ktot,8) * facB
-      resp%aB = resp%aB/real(ktot,8) * facB * ( - beta * kb)
-      resp%sB_tot = resp%sB_tot/real(ktot,8) * facB
-      resp%aB_tot = resp%aB_tot/real(ktot,8) * facB * ( - beta * kb)
+      resp%sB = resp%sB * facB
+      resp%aB = resp%aB * facB * ( - beta * kb)
+      resp%sB_tot = resp%sB_tot * facB
+      resp%aB_tot = resp%aB_tot * facB * ( - beta * kb)
    endif
 
    if (present(hpresp)) then
-      hpresp%s  = hpresp%s/real(ktot,16) * facQ ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
-      hpresp%a  = hpresp%a/real(ktot,16) * facQ * ( - betaQ * kbQ)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
-      hpresp%s_tot  = hpresp%s_tot/real(ktot,16) * facQ
-      hpresp%a_tot  = hpresp%a_tot/real(ktot,16) * facQ * ( - betaQ * kbQ)
+      hpresp%s  = hpresp%s * facQ ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
+      hpresp%a  = hpresp%a * facQ * ( - betaQ * kbQ)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
+      hpresp%s_tot  = hpresp%s_tot * facQ
+      hpresp%a_tot  = hpresp%a_tot * facQ * ( - betaQ * kbQ)
       if(algo%lBfield) then
-         hpresp%sB = hpresp%sB/real(ktot,16) * facBQ
-         hpresp%aB = hpresp%aB/real(ktot,16) * facBQ * ( - betaQ * kbQ)
-         hpresp%sB_tot = hpresp%sB_tot/real(ktot,16) * facBQ
-         hpresp%aB_tot = hpresp%aB_tot/real(ktot,16) * facBQ * ( - betaQ * kbQ)
+         hpresp%sB = hpresp%sB * facBQ
+         hpresp%aB = hpresp%aB * facBQ * ( - betaQ * kbQ)
+         hpresp%sB_tot = hpresp%sB_tot * facBQ
+         hpresp%aB_tot = hpresp%aB_tot * facBQ * ( - betaQ * kbQ)
       endif
    endif
 
@@ -2370,7 +2380,7 @@ subroutine derresp(resp, hpresp)
 ! In Seebeck: *1000 so as to yield [S]=mV/K
 
      do ix=1,3
-        if (.not. lat%lcubic) then
+        if (.not. lat%lortho) then
            resp%Seebeck(ix)=1000.d0*resp%a_tot(ix,ix)/resp%s_tot(ix,ix)
            if (present(hpresp)) hpresp%Seebeck(ix)=1000.q0*hpresp%a_tot(ix,ix)/hpresp%s_tot(ix,ix)
         else
@@ -2813,19 +2823,19 @@ subroutine intldos(iT, dos, kmesh, ek, sct)
   allocate(AA(dos%nnrg))
   AA = 0.0d0
   do ee=1,dos%nnrg
-     do ik=1, kmesh%kred
-        ikk = symm%symop_id(1,ik)
-        do ibn=1, ek%nband_max
+     do ibn=1, ek%nband_max
+        do ikk=1, kmesh%ktot
            if (ek%band(ikk,ibn) > band_fill_value) cycle
            eps = ek%z(ikk,ibn)*ek%band(ikk,ibn)-sct%mu(iT)
            if (eps > 0.0d0) exit !occupied bands only -> we skip to the next k-point
            G0=1.0d0/(dos%enrg(ee) - eps - ci*sct%gam(iT))
            ! A = -1/pi  Im G0
-           AA(ee) = AA(ee) - aimag(G0)
+           AA(ee) = AA(ee) - aimag(G0)*kmesh%weight(ikk)
         enddo
      enddo
   enddo !ee
-  AA = AA*2.d0*dee/(pi*kmesh%kred) ! spin, spacing, pi from spectralfunction, kmesh normalization
+  AA = AA*2.d0*dee/(pi) ! spin, spacing, pi from spectralfunction, kmesh normalization
+  ! AA = AA*2.d0*dee/(pi*kmesh%kred) ! spin, spacing, pi from spectralfunction, kmesh normalization
   !use trapezoidal rule to evaluate the number of electrons
   s=0.5d0*(AA(1)+AA(dos%nnrg))
   do ee=2,dos%nnrg-1
@@ -2873,7 +2883,7 @@ subroutine getmopt(ek, ik, Mopt, inter)
 
   Mopt = 0.d0
   if (isym /= 0) then
-     if (lat%lcubic) then
+     if (lat%lortho) then
         do nb2 = ek%nbopt_min, ek%nbopt_max
            if (inter) then
               nbmin = ek%nbopt_min
@@ -2923,7 +2933,7 @@ subroutine getmopt(ek, ik, Mopt, inter)
         enddo
      endif
   else
-     if (lat%lcubic) then
+     if (lat%lortho) then
         mopt(:3,:,:) = ek%Mopt(:,ikk,:,:)
      else
         mopt(:,:,:) = ek%Mopt(:,ikk,:,:)

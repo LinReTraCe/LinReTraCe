@@ -1,5 +1,6 @@
 module Mtypes
 
+  ! switches for the program flow
   type algorithm
     logical :: ldebug       ! evaluate quad precision data?
     logical :: ltbind       ! tight binding lattice?
@@ -12,21 +13,21 @@ module Mtypes
     logical :: lsymm        ! reads in the full BZ or generates it using symmetry operations?
     logical :: lgenred      ! generate all the reducible data ? (useful for eventual preprocessing)
     logical :: lpreproc     ! read from preprocessed data
+    integer :: rootmethod
     integer :: imurestart   ! restart with a privided value of the chemical potential?
     character(150) :: mysyst ! label that is used to open the Wien2k files
   end type
 
+
   type lattice
-    ! remove this
-    real(8) :: alat  ! lattice constant
-    real(8) :: a(3)  ! direct lattice vectors in units of ALAT. needed for derivatives
+    real(8) :: a(3)  ! direct lattice vectors
     real(8) :: angle(3)
     real(8) :: vol   ! volume of the lattice
-    logical :: lcubic
+    logical :: lortho ! extra switch -> if the crystal is orthogonal our matrices reduce in size!
     integer :: nalpha ! number of polarization directions (1 for cubic; 3 for everything else)
     integer :: ibravais
     integer :: spacegroup
-    ! order:
+    ! order for ibravais:
     ! 1: primitive cubic
     ! 2: body-centered cubic
     ! 3: face-centered cubic
@@ -46,12 +47,14 @@ module Mtypes
   type kpointmesh
     integer, allocatable :: k_id(:,:,:)  ! counter idenfifying a specific k-point through values of ikx, iky, ikz
     real(8), allocatable :: k_coord(:,:) ! coordinates in reciprocal space associated to a k-point (exclunding the BZ endpoints)
+    integer, allocatable :: multiplicity(:)
+    real(8), allocatable :: weight(:)
     integer :: kx                        ! number of reducible k-points in each cartesian direction
     integer :: ky                        ! corresponds to a k value of [0, 1)
     integer :: kz
     integer :: ktot                      ! total number of k-points from read-in (either reducible or irreducible)
     integer :: kred                      ! total number of REDUCIBLE k-points
-    integer :: kful                      ! total number of FULL k-points
+    integer :: kful                      ! total number of FULL k-points (inclusive edges)
   end type
 
   type energydisp
@@ -137,6 +140,7 @@ module Mtypes
     real(8) ::  sB_ker ! for conductivity in B-field
     real(8) ::  a_ker  ! for Peltier
     real(8) ::  aB_ker ! for Peltier in B-field
+
     !response functions...
     real(8), allocatable :: s_tmp(:,:,:,:)   ! nk,nband,3,3 for conductivity
     real(8), allocatable :: sB_tmp(:,:,:,:)  ! nk,nband,3,3 for conductivity in B-field
@@ -157,16 +161,18 @@ module Mtypes
     real(8) :: aB_tot(3,3), aB_tet(3,3)
     real(8) :: Seebeck(3),Nernst(3),RH(3)
 
-    real(8) :: RePolyGamma(0:4),ImPolyGamma(0:4),gamma,aqp,z,tmp
+    real(8) :: RePolyGamma(0:4)
+    real(8) :: ImPolyGamma(0:4)
+    real(8) :: gamma, aqp, z, tmp
     complex(8) :: ctmp,zarg
   end type
 
   !interband transitions functions
   type, extends(dp_resp) :: dp_respinter
     !variables for the second band
-    real(8) :: RePolyGamma1(0:4),ImPolyGamma1(0:4)
-    real(8) :: RePolyGamma2(0:4),ImPolyGamma2(0:4)
-    real(8) :: gamma1,gamma2, aqp1,aqp2, z1,z2
+    real(8) :: RePolyGamma1(0:4), ImPolyGamma1(0:4)
+    real(8) :: RePolyGamma2(0:4), ImPolyGamma2(0:4)
+    real(8) :: gamma1, gamma2, aqp1, aqp2, z1, z2
   end type
 
   type qp_resp
@@ -203,6 +209,18 @@ module Mtypes
     real(16) :: RePolyGamma1(0:4),ImPolyGamma1(0:4)
     real(16) :: RePolyGamma2(0:4),ImPolyGamma2(0:4)
     real(16) :: gamma1,gamma2, aqp1,aqp2, z1,z2
+  end type
+
+  type finiteGammaProblem
+    type(lattice)      :: lat
+    type(symop)        :: symm
+    type(kpointmesh)   :: kmesh
+    type(energydisp)   :: edisp
+    type(dp_resp)      :: dpresp
+    type(dp_resp)      :: dpresp_boltzmann
+    type(dp_respinter) :: dpresp_inter
+    type(dp_respinter) :: dpresp_derivative
+    type(qp_resp)      :: qpresp
   end type
 
 end module Mtypes

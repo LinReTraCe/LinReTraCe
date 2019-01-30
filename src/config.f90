@@ -124,7 +124,6 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   algo%loptic  = .false.
   algo%lBfield = .false.
   algo%ldmft   = .false.
-  algo%lsymm   = .true.
   outfile      = 'preproc_data.hdf5'
 
   ! search for General stuff + Allocation of values
@@ -140,9 +139,8 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   endif
 
   call string_find('System', algo%mysyst, search_start, search_end)
+  write(*,*) algo%mysyst
   call string_find('Input-type', str_temp, search_start, search_end)
-  call float_find('Nelect', edisp%nelect, search_start, search_end)
-  call int3_find('K-grid', kmesh%kx, kmesh%ky, kmesh%kz, search_start, search_end)
   select case(trim(adjustl(str_temp)))
     case ('wien2k')
       algo%lw2k = .true.
@@ -158,23 +156,22 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   call bool_find('Optical', algo%loptic, search_start, search_end)
   call bool_find('BField', algo%lBfield, search_start, search_end)
   call bool_find('Dmft', algo%ldmft, search_start, search_end)
-  call bool_find('Irreducible', algo%lsymm, search_start, search_end)
   call float_find('Zqp', edisp%ztmp, search_start, search_end)
 
   ! search for Lattice stuff
-  call group_find('[Lattice]', search_start, search_end)
-  if (search_start .eq. 0) then ! group was not found
-    erstr = 'Lattice Group not found'; er = 6
-    return
-  endif
-  if (search_start .eq. -1) then
-    erstr = 'Lattice Group empty'; er = 7
-    return
-  endif
+  ! call group_find('[Lattice]', search_start, search_end)
+  ! if (search_start .eq. 0) then ! group was not found
+  !   erstr = 'Lattice Group not found'; er = 6
+  !   return
+  ! endif
+  ! if (search_start .eq. -1) then
+  !   erstr = 'Lattice Group empty'; er = 7
+  !   return
+  ! endif
 
-  call float_find('Alat', lat%alat, search_start, search_end)
-  call float_find('Vol', lat%vol, search_start, search_end)
-  call float3_find('Lat-vectors', lat%a(1), lat%a(2), lat%a(3), search_start, search_end)
+  ! call float_find('Alat', lat%alat, search_start, search_end)
+  ! call float_find('Vol', lat%vol, search_start, search_end)
+  ! call float3_find('Lat-vectors', lat%a(1), lat%a(2), lat%a(3), search_start, search_end)
 
   call group_find('[Output]', search_start, search_end)
   if (search_start .eq. 0) then ! group was not found
@@ -256,25 +253,30 @@ subroutine check_config(er,erstr)
   logical :: there
 
   if (algo%lw2k) then
+     inquire (file=trim(adjustl(algo%mysyst))//'.scf', exist=there)
+     if (.not. there) then
+       erstr = "Error: Can not find the case.scf file"; er = 1
+       return
+     endif
      inquire (file=trim(adjustl(algo%mysyst))//'.klist', exist=there)
      if (.not. there) then
-       erstr = "Error: Can not find the case.klist file"; er = 1
+       erstr = "Error: Can not find the case.klist file"; er = 2
        return
      endif
      inquire (file=trim(adjustl(algo%mysyst))//'.struct', exist=there)
      if (.not. there) then
-       erstr = "Error: Can not find the case.struct file"; er = 2
+       erstr = "Error: Can not find the case.struct file"; er = 3
        return
      endif
      inquire (file=trim(adjustl(algo%mysyst))//'.energy', exist=there)
      if (.not. there) then
-       erstr = "Error: Can not find the case.energy file"; er = 3
+       erstr = "Error: Can not find the case.energy file"; er = 4
        return
      endif
      if (algo%loptic) then
         inquire (file=trim(adjustl(algo%mysyst))//'.symmat', exist=there)
         if (.not. there) then
-          erstr = "Error: Can not find the case.symmat file"; er = 4
+          erstr = "Error: Can not find the case.symmat file"; er = 5
           return
         endif
      endif

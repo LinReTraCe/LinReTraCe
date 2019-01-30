@@ -26,7 +26,7 @@ module Mroot
 
   contains
 
-subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
+subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr)
   implicit none
 
   real(8), intent(inout)        :: mu ! chemical potential which is calculated
@@ -34,7 +34,6 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   real(8), intent(in)           :: dev ! allowed deviation
   real(8), intent(out)          :: target_zero ! deviation from root after convergence
   integer, intent(out)          :: niitact ! number of iterations
-  integer, intent(in), optional :: method  ! choose root finding method
   type(energydisp)              :: ek
   type(scatrate)                :: sct
   type(kpointmesh)              :: mesh
@@ -70,20 +69,16 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   lbisec  = .false.
   ! choose method according to input
   ! if method is not provided: default to Riddler
-  if (present(method)) then
-    select case (method)
-      case (0)
-        lsecant = .true.
-      case (1)
-        linint  = .true.
-      case (2)
-        lridd   = .true.
-      case (3)
-        lbisec  = .true.
-    end select
-  else
-    lridd = .true.
-  endif
+ select case (algo%rootmethod)
+   case (0)
+     lsecant = .true.
+   case (1)
+     linint  = .true.
+   case (2)
+     lridd   = .true.
+   case (3)
+     lbisec  = .true.
+ end select
 
 ! deviation from set particle number with initial mu
 ! output: target_zero1 = required - actual electrons
@@ -251,7 +246,7 @@ subroutine find_mu_D(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   endif
 end subroutine find_mu_D
 
-subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
+subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr)
   implicit none
   ! passed variables
   real(8), intent(inout)        :: mu
@@ -259,7 +254,6 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   real(16), intent(in)          :: dev
   real(16), intent(out)         :: target_zero
   integer, intent(out)          :: niitact
-  integer, intent(in), optional :: method
   type(energydisp)              :: ek
   type(scatrate)                :: sct
   type(kpointmesh)              :: mesh
@@ -296,22 +290,18 @@ subroutine find_mu_Q(mu,iT,dev,target_zero,niitact, ek, sct, mesh, thdr, method)
   lbisec  = .false.
   ! choose method according to input
   ! if method is not provided: default to Riddler
-  if (present(method)) then
-     select case (method)
-        case (0)
-           lsecant = .true.
-        case (1)
-           linint  = .true.
-        case (2)
-           lridd   = .true.
-        case (3)
-           lbisec  = .true.
-        case default
-           lridd   = .true.
-     end select
-  else
-     lridd = .true.
-  endif
+  select case (algo%rootmethod)
+     case (0)
+        lsecant = .true.
+     case (1)
+        linint  = .true.
+     case (2)
+        lridd   = .true.
+     case (3)
+        lbisec  = .true.
+     case default
+        lridd   = .true.
+  end select
 
   mu_qp = real(mu,16) ! save into a local qp number
 
@@ -526,13 +516,12 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
   nsmall=0.d0
   ktot=mesh%kx*mesh%ky*mesh%kz
 
-  do ik = iqstr, iqend
-     ikk = symm%symop_id(1,ik)
-     do iband=1,ek%nband_max
-        if (iband<ek%nbopt_min) cycle
-        if (iband>ek%nbopt_max) cycle
-
-        if (ek%band(ikk,iband) .gt. band_fill_value) cycle
+   do iband=1,ek%nband_max
+      do ikk = iqstr, iqend
+      if (iband<ek%nbopt_min) cycle
+      if (iband>ek%nbopt_max) cycle
+      if (ek%band(ikk,iband) .gt. band_fill_value) cycle
+     ! ikk = symm%symop_id(1,ik)
 
         eps=(ek%z(ikk,iband)*ek%band(ikk,iband))-mu
 
@@ -550,16 +539,16 @@ subroutine occ_D(mu, iT, ek, sct, mesh, occ_tot)
         ! here we separate the 'big' and 'small' values
         ! in order to not mess with the significant digits
         if (tmp.gt.thr) then
-           nbig=nbig+tmp
+           nbig=nbig+tmp*mesh%weight(ikk)
         else
-           nsmall=nsmall+tmp
+           nsmall=nsmall+tmp*mesh%weight(ikk)
         endif
      enddo ! iband
   enddo !k-points
 
   !NORMALISATION AND ACCUMULATION
-  nbig=2.d0*nbig/real(ktot,8)
-  nsmall=2.d0*nsmall/real(ktot,8)
+  nbig=2.d0*nbig
+  nsmall=2.d0*nsmall
 
 #ifdef MPI
   occ_loc=nbig+nsmall
@@ -608,8 +597,8 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
   ktot = mesh%kx*mesh%ky*mesh%kz
   cutQ=1.q0/thr
 
-  do ik = iqstr, iqend
-     ikk = symm%symop_id(1,ik)
+  do ikk = iqstr, iqend
+     ! ikk = symm%symop_id(1,ik)
      do iband=1,ek%nband_max
         if (iband<ek%nbopt_min) cycle
         if (iband>ek%nbopt_max) cycle
@@ -633,17 +622,16 @@ subroutine occ_Q(mu, iT, ek, sct, mesh, occ_tot)
            IEXP=int(log10(abs(tmp)),8)
            tmp2=( real(int((tmp/(10.q0**iEXP))*QCUT,8),16)*10.q0**iEXP ) / QCUT
            tmp=tmp-tmp2
-           nbig=nbig+tmp2
-           nsmall=nsmall+tmp
+           nbig=nbig+tmp2*mesh%weight(ikk)
+           nsmall=nsmall+tmp*mesh%weight(ikk)
         else
            nsmall=nsmall+tmp
         endif
 
      enddo ! iband
   enddo
-  nbig=2.q0*nbig/real(ktot,16)
-  nsmall=2.q0*nsmall/real(ktot,16)
-  !ek%occ_tot=real(ninteger+nbig+nsmall,8)
+  nbig=2.q0*nbig
+  nsmall=2.q0*nsmall
 
 #ifdef MPI
   occ_loc=nbig+nsmall
