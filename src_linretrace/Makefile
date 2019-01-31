@@ -1,17 +1,13 @@
 SHELL = /bin/bash
 
 PROG = linretrace
-BZ   = setupbz
 
 INSTALL_DIR = ../bin
 
 DIGAMMA = ./digamma/cern_digamma.a
-OBJECTS = nrtype.o nrutil.o types.o estruct.o params.o mpi_org.o \
-				mymath.o estruct.o root.o response.o main.o hdf5_wrapper.o input.o \
+OBJECTS = types.o estruct.o params.o mpi_org.o \
+				root.o response.o main.o hdf5_wrapper.o input.o \
 				aux.o
-
-BZOBJECTS = types.o estruct.o params.o setupbz.o hdf5_wrapper.o \
-						lookup.o config.o aux.o
 
 include ../make_include
 
@@ -38,27 +34,18 @@ $(INSTALL_DIR):
 $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 	$(FC) $^ -o $@ $(FFLAGS) $(LIBS) $(HDF5) $(DIGAMMA)
 
-$(INSTALL_DIR)/$(BZ): $(BZOBJECTS)
-	$(FCDG) $^ -o $@ $(FFLAGS) $(HDF5)
-
 %.o: %.f90
 	$(FC) $(FFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
 %.o: %.F90
 	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
-nrutil.o: nrtype.o
-mymath.o: params.o nrtype.o nrutil.o
-estruct.o: params.o types.o mymath.o
-main.o: params.o mpi_org.o types.o mymath.o estruct.o response.o root.o input.o aux.o
-mpi_org.o: types.o
-response.o: mpi_org.o types.o params.o estruct.o
-root.o: mpi_org.o params.o types.o estruct.o
+main.o: params.o mpi_org.o types.o response.o root.o input.o aux.o
+response.o: mpi_org.o types.o params.o
+root.o: mpi_org.o params.o types.o
 input.o: params.o types.o hdf5_wrapper.o
 params.o: types.o
 config.o: lookup.o
-
-setupbz.o: params.o estruct.o types.o hdf5_wrapper.o lookup.o config.o aux.o
 
 .PHONY: clean
 clean :
@@ -68,4 +55,3 @@ clean :
 pristine:
 	rm -f *.o *.mod
 	rm -f $(INSTALL_DIR)/$(PROG)
-	rm -f $(INSTALL_DIR)/$(BZ)

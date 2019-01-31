@@ -1,31 +1,3 @@
-! This file is part of the Abinitio Dynamical Vertex Approximation (ADGA)
-! package. It is an electronic structure code which allows the inclusion of
-! non-local correlations beyond DMFT and the calculation of momentum-dependent
-! susceptibilities.
-!
-! The public repository can be found at
-! https://github.com/AbinitioDGA/ADGA
-!
-! The arXiv publication can be found at
-! https://arxiv.org/abs/1710.06651
-!
-! Copyright (C) <2017, 2018>
-! <Anna Galler*, Patrick Thunström, Josef Kaufmann, Matthias Pickem, Jan M. Tomczak, Karsten Held>
-! * Corresponding author. E-mail address: galler.anna@gmail.com
-!
-! This program is free software; you can redistribute it and/or modify
-! it under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 3 of the License, or
-! (at your option) any later version.
-!
-! This program is distributed in the hope that it will be useful,
-! but WITHOUT ANY WARRANTY; without even the implied warranty of
-! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-! GNU General Public License for more details.
-!
-! You should have received a copy of the GNU General Public License
-! along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 module Mconfig
   use Mlookup
   use Mparams
@@ -208,7 +180,7 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
   !   verbstr = file_save(search_start)
   !endif
 
-  !!--------------------------------------------------------------------------------
+  !--------------------------------------------------------------------------------
   !debug = .false.
   !dbgstr = ''
   !call group_find('[Debug]', search_start, search_end)

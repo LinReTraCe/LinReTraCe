@@ -28,25 +28,24 @@ program setupbz
   integer            :: i
   integer            :: filesize
   integer(hid_t)     :: ifile
-  character(len=150) :: outfile
-  character(len=150) :: string
+  character(len=256) :: outfile
+  character(len=256) :: string
 
   integer            :: er
-  character(len=150) :: erstr
+  character(len=256) :: erstr
 
-  call preproc_greeting(stdout)
-
-  algo%ldebug = .true.
-  algo%lgenred = .false.
+  call greeting(stdout)
 
   call read_config(kmesh, edisp, sct, outfile, er, erstr)
   if (er /= 0) then
-     write(*,*) erstr; stop
+     write(stderr,*) erstr; stop
   endif
+
   call check_config(er,erstr)
   if (er /= 0) then
-     write(*,*) erstr; stop
+     write(stderr,*) erstr; stop
   endif
+
   write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
   call init_config(kmesh, edisp)
   call estruct_init(kmesh, edisp, thdr, dos, sct)

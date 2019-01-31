@@ -2,12 +2,6 @@ module Mparams
   use Mtypes
   implicit none
 
-  ! since these 3 data structures never change throughout
-  ! we make them available for all routines
-  type(algorithm) :: algo
-  type(lattice)   :: lat
-  type(symop)     :: symm
-
   real(8)  :: Tmin,Tmax,dT,T ! Temperature min, max, interval
   real(8)  :: beta, beta2p, threshold
   real(16) :: betaQ,beta2pQ,thresholdQ
@@ -28,11 +22,11 @@ module Mparams
   real(16), parameter    :: kBQ=8.6173324Q-5 ! eV/K
 
   ! numerical parameters
-  real(8), parameter     :: ndev=1D-12 ! ~1D-12 allowed deviation from set particle number in mu-root finding.
+  real(8), parameter     :: ndev=1D-13 ! ~1D-12 allowed deviation from set particle number in mu-root finding.
   real(16), parameter    :: ndevQ=5Q-14  ! when using full QUAD in find_muQ
   real(16), parameter    :: ndevVQ=5Q-15
-  integer, parameter     :: niit=1000 ! maximal number of secant or Riddler steps
-  integer, parameter     :: niitQ=1500 ! maximal number of secant or Riddler steps in Quadprecision
+  integer, parameter     :: niit=100 ! maximal number of secant or Riddler steps
+  integer, parameter     :: niitQ=200 ! maximal number of secant or Riddler steps in Quadprecision
   real(8), parameter     :: small=1D-11 ! ~1D-11 for real(8): use 10 significant digits... use 20 for QUAD
   real(16), parameter    :: smallQ=1Q-21 ! ~1Q-18 doesnt seem to matter for QUAD...
 

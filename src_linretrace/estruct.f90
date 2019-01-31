@@ -1,7 +1,6 @@
 module Mestruct
   use Mparams
   use Mtypes
-  use Mmymath
   implicit none
 
   contains

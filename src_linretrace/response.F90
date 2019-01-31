@@ -1,7 +1,6 @@
 module Mresponse
   use Mmpi_org
   use Mtypes
-  use Mestruct
   use Mparams
   implicit none
 
