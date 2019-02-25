@@ -1,14 +1,4 @@
 program main
-#ifdef iso_fortran_env
-   use, intrinsic :: iso_fortran_env, only : stdin =>input_unit, &
-                                             stdout=>output_unit, &
-                                             stderr=>error_unit
-#else
-#define stdin  5
-#define stdout 6
-#define stderr 0
-#endif
-
   use Mparams
   use Maux
   use Mtypes
@@ -47,15 +37,13 @@ program main
   ! with this flag set to false the quad precision response is computed
   ! currently in developing / debugging mode
   algo%ldebug     = .true.
-  algo%ltetra     = .false.
-  algo%rootmethod = 2
 
   call mpi_initialize()
   if (myid.eq.master) call main_greeting(stdout)
   call mpi_barrier(mpi_comm_world, mpierr)
 
-  call read_preproc_data("blakeks.hdf5", kmesh, edisp, thdr, dos)
-  call read_config(kmesh, edisp, sct)
+  call read_config(edisp)
+  call read_preproc_data(kmesh, edisp)
 
   if(myid .eq. master .and. .not.(algo%lBfield)) then
      write(*,*)'LINRETRACE will not perform calculations with magnetic field'

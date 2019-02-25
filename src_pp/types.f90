@@ -1,10 +1,12 @@
 module Mtypes
 
   type algorithm
-    logical :: ltbind         ! tight binding lattice?
-    logical :: lw2k           ! use Wien2k input
-    logical :: lvasp          ! use Vasp input
-    character(256) :: mysyst  ! label that is used to open the Wien2k files
+    logical :: lDerivatives   ! do we have the derivatives somewhere
+    logical :: lW2k           ! use Wien2k input
+    logical :: lVasp          ! use Vasp input
+    logical :: lOptic         ! use optical elements (from Wien2K)
+    character(256) :: mysyst  ! label that is used to open the DFT files
+    character(256) :: myderivatives ! preprocessed derivatives and curvatures
   end type
 
   type lattice
@@ -51,7 +53,7 @@ module Mtypes
     real(8), allocatable :: band(:,:)        ! band(ik,nband)
     real(8), allocatable :: band_dk(:,:)
     real(8), allocatable :: band_d2k(:,:)
-    real(8), allocatable :: Mopt(:,:,:,:)    ! M(x,k,n',n)= | <n',k|p.e_x|n,k> |^2
+    complex(8), allocatable :: Mopt(:,:,:,:)
   end type
 
   type dosgrid

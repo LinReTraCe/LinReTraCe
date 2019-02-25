@@ -36,19 +36,17 @@ program setupbz
 
   call greeting(stdout)
 
+  ! Read the Input
   call read_config(kmesh, edisp, sct, outfile, er, erstr)
-  if (er /= 0) then
-     write(stderr,*) erstr; stop
-  endif
+  if (er /= 0) call stop_with_message(stderr, erstr, er)
 
+  ! Check for existance of files
   call check_config(er,erstr)
-  if (er /= 0) then
-     write(stderr,*) erstr; stop
-  endif
+  if (er /= 0) call stop_with_message(stderr, erstr, er)
 
-  write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
-  call init_config(kmesh, edisp)
+  ! Create the energy dispersion, kmesh, etc
   call estruct_init(kmesh, edisp, thdr, dos, sct)
+  write(*,*) 'SETUPBZ: writing processed data to: ', adjustl(trim(outfile))
 
   ! file setup
   call hdf5_init()

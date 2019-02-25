@@ -89,88 +89,40 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
 
 
   ! setting up defaults
-  algo%ltbind  = .false.
-  algo%ltetra  = .false.
-  algo%lw2k    = .false.
-  algo%lvasp   = .false.
-  algo%loptic  = .false.
-  algo%lBfield = .false.
-  algo%ldmft   = .false.
-  outfile      = 'preproc_data.hdf5'
+  algo%lw2k         = .false.
+  algo%lvasp        = .false.
+  algo%lderivatives = .false.
+  outfile           = 'preproc_data.hdf5'
 
   ! search for General stuff + Allocation of values
   !--------------------------------------------------------------------------------
-  call group_find('[General]', search_start, search_end)
-  if (search_start .eq. 0) then ! group was not found
-    erstr = 'General Group not found'; er = 3
-    return
-  endif
-  if (search_start .eq. -1) then ! group was not found
-    erstr = 'General Group empty'; er = 4
-    return
-  endif
-
-  call string_find('System', algo%mysyst, search_start, search_end)
-  write(*,*) algo%mysyst
-  call string_find('Input-type', str_temp, search_start, search_end)
+  call string_find('System', algo%mysyst, 1, lines)
+  call string_find('SystemType',  str_temp, 1, lines)
   select case(trim(adjustl(str_temp)))
     case ('wien2k')
       algo%lw2k = .true.
+    case ('Wien2k')
+      algo%lw2k = .true.
+    case ('WIEN2k')
+      algo%lw2k = .true.
+    case ('WIEN2K')
+      algo%lw2k = .true.
     case ('vasp')
       algo%lvasp = .true.
-    case ('tightbinding')
-      algo%ltbind = .true.
+    case ('Vasp')
+      algo%lvasp = .true.
+    case ('VASP')
+      algo%lvasp = .true.
     case default
       erstr = 'Unknown input'; er = 5
       return
   end select
 
-  call bool_find('Optical', algo%loptic, search_start, search_end)
-  call bool_find('BField', algo%lBfield, search_start, search_end)
-  call bool_find('Dmft', algo%ldmft, search_start, search_end)
-  call float_find('Zqp', edisp%ztmp, search_start, search_end)
+  call string_find('Derivatives', algo%myderivatives, 1, lines)
+  call bool_find('OpticalElements', algo%loptic, 1, lines)
+  call bool_find('DMFTData', algo%ldmft, 1, lines)
+  call string_find('OutputFile', outfile, 1, lines)
 
-  ! search for Lattice stuff
-  ! call group_find('[Lattice]', search_start, search_end)
-  ! if (search_start .eq. 0) then ! group was not found
-  !   erstr = 'Lattice Group not found'; er = 6
-  !   return
-  ! endif
-  ! if (search_start .eq. -1) then
-  !   erstr = 'Lattice Group empty'; er = 7
-  !   return
-  ! endif
-
-  ! call float_find('Alat', lat%alat, search_start, search_end)
-  ! call float_find('Vol', lat%vol, search_start, search_end)
-  ! call float3_find('Lat-vectors', lat%a(1), lat%a(2), lat%a(3), search_start, search_end)
-
-  call group_find('[Output]', search_start, search_end)
-  if (search_start .eq. 0) then ! group was not found
-    erstr = 'Lattice Group not found'; er = 8
-    return
-  endif
-  if (search_start .eq. -1) then
-    erstr = 'Lattice Group empty'; er = 9
-    return
-  endif
-
-  call string_find('Outfile', outfile, search_start, search_end)
-
-  if (algo%ltbind) then
-     call group_find('[Tightbinding]', search_start, search_end)
-     if (search_start .eq. 0) then ! group was not found
-       erstr = 'Lattice Group not found'; er = 10
-       return
-     endif
-     if (search_start .eq. -1) then
-       erstr = 'Lattice Group empty'; er = 11
-       return
-     endif
-
-     call int_find('Nbands', edisp%nband_max, search_start, search_end)
-     call int_find('Tmax', edisp%tmax, search_start, search_end)
-  endif
   !--------------------------------------------------------------------------------
   !verbose = .false.
   !verbstr = ''
@@ -194,29 +146,29 @@ subroutine read_config(kmesh, edisp, sct, outfile, er, erstr)
 end subroutine read_config
 
 
-subroutine init_config(kmesh, edisp)
-  implicit none
-  type(kpointmesh) :: kmesh
-  type(energydisp) :: edisp
-  integer :: iband
+! subroutine init_config(kmesh, edisp)
+!   implicit none
+!   type(kpointmesh) :: kmesh
+!   type(energydisp) :: edisp
+!   integer :: iband
 
-  ! fill out the rest of the datatype
-  kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
-  kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
+!   ! fill out the rest of the datatype
+!   kmesh%kred = kmesh%kx*kmesh%ky*kmesh%kz
+!   kmesh%kful = (kmesh%kx+1)*(kmesh%ky+1)*(kmesh%kz+1)
 
-  lat%nalpha = 3 ! we need all three directions for the responses
+!   lat%nalpha = 3 ! we need all three directions for the responses
 
-  if (algo%ltbind) then
-     write(*,*)'READ_CONFIG: reading TB parameters'
-     allocate(edisp%E0(edisp%nband_max),edisp%t(edisp%nband_max, edisp%tmax))
-     allocate(edisp%a(edisp%tmax))
-     open(unit=10, file=trim(adjustl(algo%mysyst)), status='old')
-     read(10,*) edisp%a
-     do iband=1,edisp%nband_max
-        read(10,*)edisp%E0(iband), edisp%t(iband,:)
-     enddo
-  endif
-end subroutine init_config
+!   if (algo%ltbind) then
+!      write(*,*)'READ_CONFIG: reading TB parameters'
+!      allocate(edisp%E0(edisp%nband_max),edisp%t(edisp%nband_max, edisp%tmax))
+!      allocate(edisp%a(edisp%tmax))
+!      open(unit=10, file=trim(adjustl(algo%mysyst)), status='old')
+!      read(10,*) edisp%a
+!      do iband=1,edisp%nband_max
+!         read(10,*)edisp%E0(iband), edisp%t(iband,:)
+!      enddo
+!   endif
+! end subroutine init_config
 
 subroutine check_config(er,erstr)
   implicit none
@@ -254,18 +206,13 @@ subroutine check_config(er,erstr)
      endif
   endif
   if (algo%lvasp) then
-     ! do something
-  endif
-
-  if (algo%ltbind) then
-     inquire (file=trim(adjustl(algo%mysyst)), exist=there)
+     inquire(file=trim(adjustl(algo%mysyst))//'vasprun.xml', exist=there)
      if (.not. there) then
-       erstr = "Error: Can not find the tight-binding file"; er = 5
+       erstr = "Error: Can not find vasprun.xml"; er = 6
        return
      endif
   endif
 
-  return
 end subroutine check_config
 
 end module Mconfig
