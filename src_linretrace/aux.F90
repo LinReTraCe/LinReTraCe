@@ -7,7 +7,7 @@ module Maux
 
 contains
 
-subroutine greeting(ounit)
+subroutine main_greeting(ounit)
   implicit none
   integer, intent(in) :: ounit
   write(ounit,*)

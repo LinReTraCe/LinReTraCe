@@ -4,25 +4,28 @@
 module Mtypes
   implicit none
 
-  contains
-
+  ! contains the methods employed for the root-finding and
+  ! the way we treat the chemical potential
+  ! also contains the file names of the input files
   type algorithm
-    logical :: lDebug         ! evaluate quad precision data?
+    logical :: lDebug         ! debug mode --> evaluate quad precision data?
     logical :: lBfield        ! calculations in the presence of a magnetic field
-                              ! this requires the existance of de(k)/dk d2e(k)/dk2
-    logical :: lDerivatives   ! we have the derivatives
-    integer :: rootmethod     ! numerical method to find the chemical potential
-    integer :: mumethod       ! 0: find_mu
+                              ! this requires the existance of the band derivatives
+    integer :: rootMethod     ! numerical method to find the chemical potential
+    integer :: muMethod       ! 0: find_mu
                               ! 1: constant mu
                               ! 2: fixed mu for each temperature
                               ! __used to compare pure Boltzmann with Boltzmann and Kubo mu
-    character(len=256) :: input_bands
+    character(len=256) :: input_energies
     character(len=256) :: input_scattering
   end type
 
+  ! lattice information which is necessary for us
+  ! volume (prefactors) and the orthogonality of the crystal
+  ! note: an orthogonal crystal reduces the effective number of polarization directions
   type lattice
     real(8) :: vol            ! volume of the real space unit cell -- for prefactors
-    logical :: lortho         ! do we have an orthogonal bravais lattice (cubic,tetragonal,orthorhombic)
+    logical :: lOrtho         ! do we have an orthogonal bravais lattice (cubic,tetragonal,orthorhombic)
     integer :: nalpha         ! number of polarization directions ... 3 or 6
   end type
 
@@ -30,24 +33,34 @@ module Mtypes
   ! ( - 2 5 )
   ! ( - - 3 )
 
+  ! information about the k-points which is necessary for us
+  ! that is: number of k-points and its weight
   type kpointmesh
-    integer, allocatable :: multiplicity(:)
+    real(8)              :: weightsum
     real(8), allocatable :: weight(:)
-    integer :: ktot
+    integer              :: nkp
   end type
 
+  ! energy dispersion and derived quantities
+  ! direct derivatives and transition elements
   type energydisp
     integer :: nband_max
     integer :: nbopt_min                     ! number of bands (interval) included in the optical matrix elements
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
+    integer :: iSpin
+    logical :: lDerivatives
     real(8) :: efer                          ! Fermi energy
-    real(8) :: nelect                        ! number of electrons (provided from inputfile at first iteration)
-    real(8) :: band_fill_value               ! if we get incomplete bands (i.e. from wien2k)
-    real(8), allocatable    :: band(:,:)        ! energy(nband,ik)
-    real(8), allocatable    :: band_dk(:,:,:)   ! d/dk_i band(nband,ik)
-    real(8), allocatable    :: band_d2k(:,:,:)  ! d2/(dk_i dk_j) band(nband,ik)
-    complex(8), allocatable :: Mopt(:,:,:,:)    ! M(xy,n,n',k)= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
-    real(8), allocatable    :: band_shift(:,:)
+    real(8) :: mu
+    real(8) :: nelect
+    real(8), allocatable    :: band(:,:,:)        ! energy(nband,ik,ispin)
+    real(8), allocatable    :: band_dk(:,:,:,:)   ! d/dk_i band(nband,ik,ispin)
+    real(8), allocatable    :: band_d2k(:,:,:,:)  ! d2/(dk_i dk_j) band(nband,ik,ispin)
+
+    ! optical elements (because of the double band dependencies)
+    ! are loaded for each k-point
+    complex(8), allocatable :: Mopt(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+                                                ! 6, nband,nband, ispin
+    real(8), allocatable    :: band_shift(:,:,:)
   end type
 
   type dosgrid
@@ -79,6 +92,10 @@ module Mtypes
     real(8) :: Tstar               ! temperature for which (d^2 rho)/(d beta^2)=0
                                    ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
     real(8) :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
+
+    ! NOTE:
+    ! we load these quantities for each T-point
+    ! because increasing this can easily blow up the whole thing
     real(8), allocatable :: gam(:,:) ! n, k
     real(8), allocatable :: zqp(:,:) ! n, k
   end type
@@ -109,15 +126,15 @@ module Mtypes
     real(8), allocatable :: aB_local(:,:)
 
     ! total band and k-summation
-    real(8) :: s_tot(:)
-    real(8) :: sB_tot(:)
-    real(8) :: a_tot(:)
-    real(8) :: aB_tot(:)
+    real(8), allocatable :: s_tot(:)
+    real(8), allocatable :: sB_tot(:)
+    real(8), allocatable :: a_tot(:)
+    real(8), allocatable :: aB_tot(:)
 
     ! derived quantities
-    real(8) :: Seebeck(:)
-    real(8) :: Nernst(:)
-    real(8) :: RH(:)
+    real(8), allocatable :: Seebeck(:)
+    real(8), allocatable :: Nernst(:)
+    real(8), allocatable :: RH(:)
   end type
 
   type response_qp
@@ -146,15 +163,15 @@ module Mtypes
     real(16), allocatable :: aB_local(:,:)
 
     ! total band and k-summation
-    real(16) :: s_tot(:)
-    real(16) :: sB_tot(:)
-    real(16) :: a_tot(:)
-    real(16) :: aB_tot(:)
+    real(16), allocatable :: s_tot(:)
+    real(16), allocatable :: sB_tot(:)
+    real(16), allocatable :: a_tot(:)
+    real(16), allocatable :: aB_tot(:)
 
     ! derived quantities
-    real(16) :: Seebeck(:)
-    real(16) :: Nernst(:)
-    real(16) :: RH(:)
+    real(16), allocatable :: Seebeck(:)
+    real(16), allocatable :: Nernst(:)
+    real(16), allocatable :: RH(:)
   end type
 
 end module Mtypes
