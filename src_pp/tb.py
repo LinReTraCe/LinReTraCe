@@ -69,17 +69,19 @@ class tightbinding(object):
                 one minus sign already included
       '''
 
+
+    # TODO: fix this shit
     nnn = len(dist) # number of nearest neighbors
     for iband in range(self.energyBandMax):
-      ek = 0 # energy
-      vk = 0 # velocity
-      ck = 0 # curvature
+      ek = np.zeros((self.nkx, self.nky, self.nkz),     dtype=np.float64)
+      vk = np.zeros((self.nkx, self.nky, self.nkz, 3) , dtype=np.float64)
+      ck = np.zeros((self.nkx, self.nky, self.nkz, 3,3),dtype=np.float64)
       for i in range(nnn):
         ek += -2. * hopping[i,iband] * (np.cos(self._kmeshx*2*np.pi * dist[i])[:,None,None] \
                                      +  np.cos(self._kmeshy*2*np.pi * dist[i])[None,:,None] \
                                      +  np.cos(self._kmeshz*2*np.pi * dist[i])[:,None,None])
 
-        vk += 2. * hopping[i,iband] * dist[i] * (np.sin(self._kmeshx*2*np.pi * dist[i])[:,None,None] \
+        vk[...,0] += 2. * hopping[i,iband] * dist[i] * (np.sin(self._kmeshx*2*np.pi * dist[i])[:,None,None] \
                                               +  np.sin(self._kmeshy*2*np.pi * dist[i])[None,:,None] \
                                               +  np.sin(self._kmeshz*2*np.pi * dist[i])[:,None,None])
 
@@ -87,9 +89,15 @@ class tightbinding(object):
                                                  +  np.cos(self._kmeshy*2*np.pi * dist[i])[None,:,None] \
                                                  +  np.cos(self._kmeshz*2*np.pi * dist[i])[:,None,None])
 
-      temp += e0[iband]
+      ek += e0[iband]
+      self.energies[0][:,iband] = ek.flatten()
+      print(vk.shape)
+      print(ck.shape)
+
+      # self.derivatives[0][:,iband] = ek.flatten()
+      # self.curvatures[0][:,iband] = ek.flatten()
 
 
 
 if __name__ == '__main__':
-  tb = tightbinding(2, 5, 5, 1)
+  pass

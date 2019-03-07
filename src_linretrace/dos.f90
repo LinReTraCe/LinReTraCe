@@ -28,12 +28,12 @@ subroutine gendosel(kmesh, edisp, dos)
          maxenergy = edisp%band(edisp%nband_max,ik,is)
       endif
       if (minenergy > edisp%band(1,ik,is)) then
-         maxenergy = edisp%band(1,ik,is)
+         minenergy = edisp%band(1,ik,is)
       endif
     enddo
   enddo
 
-  midenergy = (maxenergy-minenergy)/2.d0
+  midenergy = (maxenergy+minenergy)/2.d0
 
   ! generate density of state boundaries
   ! by symmetrically increasing the energy window
@@ -42,7 +42,7 @@ subroutine gendosel(kmesh, edisp, dos)
   dos%nnrg= 10001
 
   ! allocate the arrays and set to 0
-  allocate (dos%enrg(dos%nnrg),dos%dos(dos%nnrg),dos%nos(dos%nnrg))
+  allocate (dos%enrg(dos%nnrg),dos%dos(dos%nnrg, edisp%ispin),dos%nos(dos%nnrg, edisp%ispin))
   dos%enrg= 0.d0
   dos%dos = 0.d0
   dos%nos = 0.d0
@@ -60,14 +60,20 @@ subroutine gendosel(kmesh, edisp, dos)
     do is=1,edisp%ispin
       do ik=1,kmesh%nkp
         do nb=1,edisp%nband_max
-          dos%dos(i)=dos%dos(i)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band(nb,ik,is))**2)+(br**2)))) * &
+          dos%dos(i,is)=dos%dos(i,is)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band(nb,ik,is))**2)+(br**2)))) * &
                      kmesh%weight(ik)
-          dos%nos(i)=dos%nos(i)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band(nb,ik,is))/br))) * &
+          dos%nos(i,is)=dos%nos(i,is)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band(nb,ik,is))/br))) * &
                      kmesh%weight(ik)
         enddo
       enddo
     enddo
   enddo
+
+  open(unit=11, file='dosnos.dat')
+  do i=1,size(dos%enrg)
+    write(11,*) dos%enrg(i), (dos%dos(i,is), is=1,edisp%ispin), (dos%nos(i,is), is=1,edisp%ispin)
+  enddo
+  close(11)
 
   ! spin prefactors are already taken care of with the weight array
 
@@ -78,26 +84,29 @@ subroutine findef(dos, edisp)
   type(dosgrid)    :: dos
   type(energydisp) :: edisp
   !local variables
-  integer :: i,j
+  integer :: i,j,is
   integer :: pos
+  real(8) :: nossum
   real(8) :: ntol
+
 
   pos = 0
   do i=1,dos%nnrg
-     if ( (dos%nos(i) - edisp%nelect) .ge. 0.d0 ) then ! sign changed
+     if ( (sum(dos%nos(i,:)) - edisp%nelect) .ge. 0.d0 ) then ! sign changed
        pos = i
        exit
      endif
   enddo
 
   if (pos > 0) then ! found a changing sign
-     if ( abs(dos%nos(pos) - edisp%nelect) .le. abs(dos%nos(pos-1) - edisp%nelect) ) then
+     if ( abs(sum(dos%nos(pos,:)) - edisp%nelect) .le. abs(sum(dos%nos(pos-1,:)) - edisp%nelect) ) then
         edisp%efer = dos%enrg(pos)
         i = pos
      else
         edisp%efer = dos%enrg(pos-1)
         i = pos-1
      endif
+     write(*,*) 'FINDEF: chemical potential found at: ', dos%enrg(i)
   else
      write(*,*) 'FINDEF: No root found for chemical potential, nelect = ', edisp%nelect
      edisp%efer = 0
@@ -106,22 +115,30 @@ subroutine findef(dos, edisp)
 
   ! find band gap and valence band maximum, conduction band minimum
   ! with the help of the number of states (nos)
-  j = i
-  do while(abs(dos%nos(j) - dos%nos(i)) < ntol)
-     j = j-1
-  enddo
-  dos%vbm=dos%enrg(j)
 
-  j = i
-  do while(abs(dos%nos(j) - dos%nos(i)) < ntol)
-     j = j+1
-  enddo
-  dos%cbm=dos%enrg(j)
+  allocate(dos%vbm(edisp%ispin))
+  allocate(dos%cbm(edisp%ispin))
+  allocate(dos%gap(edisp%ispin))
 
-  dos%gap=dos%cbm - dos%vbm
-  if (dos%gap < 2.0d-2) then
-    dos%gap=0.0d0
-  endif
+  ! we start with the fermi energy from above (saved in i)
+  do is=1,edisp%ispin
+    j = i
+    do while(abs(dos%nos(j,is) - dos%nos(i,is)) < ntol)
+       j = j-1
+    enddo
+    dos%vbm(is)=dos%enrg(j)
+
+    j = i
+    do while(abs(dos%nos(j,is) - dos%nos(i,is)) < ntol)
+       j = j+1
+    enddo
+    dos%cbm(is)=dos%enrg(j)
+
+    dos%gap(is)=dos%cbm(is) - dos%vbm(is)
+    if (dos%gap(is) < 2.0d-2) then
+      dos%gap(is)=0.0d0
+    endif
+  enddo
 
 end subroutine
 

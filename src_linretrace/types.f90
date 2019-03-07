@@ -14,10 +14,10 @@ module Mtypes
     integer :: rootMethod     ! numerical method to find the chemical potential
     integer :: muMethod       ! 0: find_mu
                               ! 1: constant mu
-                              ! 2: fixed mu for each temperature
-                              ! __used to compare pure Boltzmann with Boltzmann and Kubo mu
+    logical :: lScatteringFile
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
+    character(len=256) :: output_file
   end type
 
   ! lattice information which is necessary for us
@@ -47,8 +47,9 @@ module Mtypes
     integer :: nband_max
     integer :: nbopt_min                     ! number of bands (interval) included in the optical matrix elements
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
-    integer :: iSpin
-    logical :: lDerivatives
+    integer :: iSpin                         ! number of spins
+    logical :: lDerivatives                  ! do we have the derivatives (band_dk, band_d2k)
+    logical :: lBandShift
     real(8) :: efer                          ! Fermi energy
     real(8) :: mu
     real(8) :: nelect
@@ -60,19 +61,19 @@ module Mtypes
     ! are loaded for each k-point
     complex(8), allocatable :: Mopt(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
                                                 ! 6, nband,nband, ispin
-    real(8), allocatable    :: band_shift(:,:,:)
+    real(8), allocatable    :: band_shift(:,:,:)  ! same as band
   end type
 
   type dosgrid
     integer :: nnrg                ! number of points in the energy window
     real(8) :: emin                ! bottom of the energy window
     real(8) :: emax                ! top of the energy window
-    real(8) :: vbm                 ! valence band maximum
-    real(8) :: cbm                 ! conduction band minimum
-    real(8) :: gap                 ! band gap
-    real(8), allocatable :: enrg(:)! energy grid
-    real(8), allocatable :: dos(:) ! density of states (as computed in PRB,49,16223, appx C )
-    real(8), allocatable :: nos(:) ! number  of states (as computed in PRB,49,16223, appx A )
+    real(8), allocatable :: vbm(:)                 ! valence band maximum
+    real(8), allocatable :: cbm(:)                 ! conduction band minimum
+    real(8), allocatable :: gap(:)                 ! band gap
+    real(8), allocatable :: enrg(:)  ! energy grid
+    real(8), allocatable :: dos(:,:) ! density of states (as computed in PRB,49,16223, appx C )
+    real(8), allocatable :: nos(:,:) ! number  of states (as computed in PRB,49,16223, appx A )
   end type
 
   type scattering
@@ -93,11 +94,11 @@ module Mtypes
                                    ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
     real(8) :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
 
-    ! NOTE:
-    ! we load these quantities for each T-point
-    ! because increasing this can easily blow up the whole thing
-    real(8), allocatable :: gam(:,:) ! n, k
-    real(8), allocatable :: zqp(:,:) ! n, k
+    real(8), allocatable :: gamcoeff(:)
+    real(8), allocatable :: zqpcoeff(:)
+    real(8), allocatable :: gam(:,:) ! nbands, T
+    real(8), allocatable :: zqp(:,:) ! nbands, T
+    real(8)              :: gamimp   ! additional additivie impurity term
   end type
 
   type response_dp
@@ -108,28 +109,22 @@ module Mtypes
     real(8) ::  aB_ker ! for Peltier in B-field
 
     ! band-resolved response functions
-    real(8), allocatable :: s_full(:,:,:)   ! [3 or 6], nband, nk -- for conductivity
-    real(8), allocatable :: sB_full(:,:,:)  ! for conductivity in B-field
-    real(8), allocatable :: a_full(:,:,:)   ! for Peltier
-    real(8), allocatable :: aB_full(:,:,:)  ! for Peltier in B-field
+    real(8), allocatable :: s_full(:,:,:,:)
+    real(8), allocatable :: sB_full(:,:,:,:)
+    real(8), allocatable :: a_full(:,:,:,:)
+    real(8), allocatable :: aB_full(:,:,:,:)
 
-    ! global k-summation
-    real(8), allocatable :: s_gather(:,:)   ! for conductivity
-    real(8), allocatable :: sB_gather(:,:)  ! for conductivity in B-field
-    real(8), allocatable :: a_gather(:,:)   ! for Peltier
-    real(8), allocatable :: aB_gather(:,:)  ! for Peltier in B-field
-
-    ! local k-summation
-    real(8), allocatable :: s_local(:,:)
-    real(8), allocatable :: sB_local(:,:)
-    real(8), allocatable :: a_local(:,:)
-    real(8), allocatable :: aB_local(:,:)
+    ! gather arrays for MPI
+    real(8), allocatable :: s_gather(:,:,:,:)
+    real(8), allocatable :: sB_gather(:,:,:,:)
+    real(8), allocatable :: a_gather(:,:,:,:)
+    real(8), allocatable :: aB_gather(:,:,:,:)
 
     ! total band and k-summation
-    real(8), allocatable :: s_tot(:)
-    real(8), allocatable :: sB_tot(:)
-    real(8), allocatable :: a_tot(:)
-    real(8), allocatable :: aB_tot(:)
+    real(8), allocatable :: s_sum(:,:,:)
+    real(8), allocatable :: sB_sum(:,:,:)
+    real(8), allocatable :: a_sum(:,:,:)
+    real(8), allocatable :: aB_sum(:,:,:)
 
     ! derived quantities
     real(8), allocatable :: Seebeck(:)
@@ -145,28 +140,22 @@ module Mtypes
     real(16) ::  aB_ker ! for Peltier in B-field
 
     ! band-resolved response functions
-    real(16), allocatable :: s_full(:,:,:)   ! nk,nband,3,3 for conductivity
-    real(16), allocatable :: sB_full(:,:,:)  ! nk,nband,3,3 for conductivity in B-field
-    real(16), allocatable :: a_full(:,:,:)   ! nk,nband,3,3 for Peltier
-    real(16), allocatable :: aB_full(:,:,:)  ! nk,nband,3,3 for Peltier in B-field
+    real(16), allocatable :: s_full(:,:,:,:)
+    real(16), allocatable :: sB_full(:,:,:,:)
+    real(16), allocatable :: a_full(:,:,:,:)
+    real(16), allocatable :: aB_full(:,:,:,:)
 
-    ! global k-summation
-    real(16), allocatable :: s_gather(:,:)   ! nband,3,3 for conductivity
-    real(16), allocatable :: sB_gather(:,:)  ! nband,3,3 for conductivity in B-field
-    real(16), allocatable :: a_gather(:,:)   ! nband,3,3 for Peltier
-    real(16), allocatable :: aB_gather(:,:)  ! nband,3,3 for Peltier in B-field
+    ! gather arrays for MPI
+    real(16), allocatable :: s_gather(:,:,:,:)
+    real(16), allocatable :: sB_gather(:,:,:,:)
+    real(16), allocatable :: a_gather(:,:,:,:)
+    real(16), allocatable :: aB_gather(:,:,:,:)
 
-    ! local k-summation
-    real(16), allocatable :: s_local(:,:)
-    real(16), allocatable :: sB_local(:,:)
-    real(16), allocatable :: a_local(:,:)
-    real(16), allocatable :: aB_local(:,:)
-
-    ! total band and k-summation
-    real(16), allocatable :: s_tot(:)
-    real(16), allocatable :: sB_tot(:)
-    real(16), allocatable :: a_tot(:)
-    real(16), allocatable :: aB_tot(:)
+    ! band and k-summation
+    real(16), allocatable :: s_sum(:,:,:)
+    real(16), allocatable :: sB_sum(:,:,:)
+    real(16), allocatable :: a_sum(:,:,:)
+    real(16), allocatable :: aB_sum(:,:,:)
 
     ! derived quantities
     real(16), allocatable :: Seebeck(:)

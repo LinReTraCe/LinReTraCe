@@ -7,7 +7,7 @@ module Mmpi_org
   integer, parameter   :: master = 0
   integer              :: myid, nproc
   integer, allocatable :: displs(:),rcounts(:)
-  integer              :: iqstr, iqend
+  integer              :: iskstr, iskend
 
   integer              :: mpierr, nkthis
   character(len=5)     :: chmyid
@@ -59,11 +59,11 @@ module Mmpi_org
     enddo
     rcounts(nproc) = (nk - displs(nproc))
 
-    iqstr = displs(myid+1) + 1
-    iqend = displs(myid+1) + rcounts(myid+1)
+    iskstr = displs(myid+1) + 1
+    iskend = displs(myid+1) + rcounts(myid+1)
 #else
-    iqstr = 1
-    iqend = nk
+    iskstr = 1
+    iskend = nk
 #endif
   end subroutine mpi_genkstep
 
