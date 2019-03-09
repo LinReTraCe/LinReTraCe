@@ -7,12 +7,13 @@ module Mconfig
 
 contains
 
-subroutine read_config(algo, edisp, sct)
+subroutine read_config(algo, edisp, sct, temp)
   implicit none
-  type(algorithm)  :: algo
-  type(kpointmesh) :: kmesh
-  type(energydisp) :: edisp
-  type(scattering) :: sct
+  type(algorithm)   :: algo
+  type(kpointmesh)  :: kmesh
+  type(energydisp)  :: edisp
+  type(scattering)  :: sct
+  type(temperature) :: temp
 
   character(len=256) :: config_file, output
   character(len=256) :: str_temp
@@ -138,11 +139,11 @@ subroutine read_config(algo, edisp, sct)
   call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
 
   if (.not. algo%lScatteringFile) then
-    call float_find('TMinimum', sct%Tmin, search_start, search_end, found)
+    call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
     if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
-    call float_find('TMaximum', sct%Tmax, search_start, search_end, found)
+    call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
     if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
-    call int_find('TPoints', sct%nT, search_start, search_end, found)
+    call int_find('TPoints', temp%nT, search_start, search_end, found)
     if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
     call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
     if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')

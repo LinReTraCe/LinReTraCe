@@ -2754,6 +2754,9 @@ subroutine dpresp_alloc(algo, edisp, dpresp)
      allocate(dpresp%sB_sum(3,3,edisp%iSpin))
      allocate(dpresp%aB_sum(3,3,edisp%iSpin))
   endif
+
+  ! for the responses we need psi_1, psi_2 and psi_3
+  allocate(dpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, iskstr:iskend))
 end subroutine dpresp_alloc
 
 subroutine qpresp_alloc(algo, edisp, qpresp)
@@ -2774,6 +2777,8 @@ subroutine qpresp_alloc(algo, edisp, qpresp)
      allocate(qpresp%sB_sum(3,3,edisp%iSpin))
      allocate(qpresp%aB_sum(3,3,edisp%iSpin))
   endif
+
+  allocate(qpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, iskstr:iskend))
 end subroutine qpresp_alloc
 
  ! INPUT: (renolmalised) bandstructure: (sct) ek
@@ -2827,14 +2832,5 @@ end subroutine qpresp_alloc
 
 !end subroutine intldos
 
-
-! d/dz f(z) evaluated at z=beta*eps
-pure elemental function dfermi(eps,beta)
-  implicit none
-  real(8) :: dfermi
-  real(8), intent(in) :: eps,beta
-  dfermi= (-1.d0) / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
-  return
-end function dfermi
 
 end module Mresponse

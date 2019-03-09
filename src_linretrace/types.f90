@@ -53,9 +53,12 @@ module Mtypes
     real(8) :: efer                          ! Fermi energy
     real(8) :: mu
     real(8) :: nelect
+
     real(8), allocatable    :: band(:,:,:)        ! energy(nband,ik,ispin)
     real(8), allocatable    :: band_dk(:,:,:,:)   ! d/dk_i band(nband,ik,ispin)
     real(8), allocatable    :: band_d2k(:,:,:,:)  ! d2/(dk_i dk_j) band(nband,ik,ispin)
+
+    real(8), allocatable    :: occupation(:,:)    ! nband, isk
 
     ! optical elements (because of the double band dependencies)
     ! are loaded for each k-point
@@ -76,24 +79,17 @@ module Mtypes
     real(8), allocatable :: nos(:,:) ! number  of states (as computed in PRB,49,16223, appx A )
   end type
 
-  type scattering
-    ! temperature grid
+  type temperature
     integer :: nT                  ! number of points in the temperature window
     real(8) :: Tmin                ! bottom of the temperature window
     real(8) :: Tmax                ! top of the temperature window
-    real(8) :: dT                  ! temperature interval
-    real(8), allocatable :: TT(:)  ! temperature grid
-    real(8), allocatable :: beta(:)
+    real(8) :: dT                  ! temperature spacing
+    real(8), allocatable :: TT(:)  ! temperature grid [K]
+    real(8), allocatable :: beta(:)! inverse temperature grid [eV]
+  end type
 
-    ! temperature tempendent quantities
-    real(8), allocatable :: mu(:)  ! chemical potential (temperature dependent)
-    real(8), allocatable :: d1(:)  ! square of the 1st derivative of sigma
-    real(8), allocatable :: d2(:)  ! product of the 2nd derivative times sigma
-    real(8), allocatable :: d0(:)  ! linear combination of the two above, whose zero corresponds to T*
-    real(8) :: Tstar               ! temperature for which (d^2 rho)/(d beta^2)=0
-                                   ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
-    real(8) :: Tflat               ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
-
+  type scattering
+    ! scattering rates and quasiparticle weights
     real(8), allocatable :: gamcoeff(:)
     real(8), allocatable :: zqpcoeff(:)
     real(8), allocatable :: gam(:,:) ! nbands, T
@@ -130,6 +126,9 @@ module Mtypes
     real(8), allocatable :: Seebeck(:)
     real(8), allocatable :: Nernst(:)
     real(8), allocatable :: RH(:)
+
+    ! polygamma evaluations
+    complex(8), allocatable :: PolyGamma(:,:,:)
   end type
 
   type response_qp
@@ -161,6 +160,9 @@ module Mtypes
     real(16), allocatable :: Seebeck(:)
     real(16), allocatable :: Nernst(:)
     real(16), allocatable :: RH(:)
+
+    ! polygamma evaluations
+    complex(16), allocatable :: PolyGamma(:,:,:)
   end type
 
 end module Mtypes

@@ -6,7 +6,7 @@ INSTALL_DIR = ../bin
 
 DIGAMMA = ./digamma/cern_digamma.a
 OBJECTS = types.o params.o mpi_org.o dos.o\
-				main.o hdf5_wrapper.o io.o \
+				main.o hdf5_wrapper.o io.o fermi.o \
 				aux.o lookup.o config.o response.o
 
 include ../make_include

@@ -139,12 +139,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, lat)
 
 end subroutine
 
-subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct)
+subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
   type(energydisp)             :: edisp
   type(scattering)             :: sct
+  type(temperature)            :: temp
 
   integer                      :: kpoints
   integer                      :: nbands
@@ -179,31 +180,27 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct)
 
 
   ! temperature grid
-  call hdf5_read_data(ifile, "/.quantities/Tmin", sct%Tmin)
-  call hdf5_read_data(ifile, "/.quantities/Tmax", sct%Tmax)
-  call hdf5_read_data(ifile, "/.quantities/nT",   sct%nT)
+  call hdf5_read_data(ifile, "/.quantities/Tmin", temp%Tmin)
+  call hdf5_read_data(ifile, "/.quantities/Tmax", temp%Tmax)
+  call hdf5_read_data(ifile, "/.quantities/nT",   temp%nT)
 
-  if (abs(sct%Tmin - sct%Tmax) < 1e-5 .and. (sct%nT .ne. 1)) then
+  if (abs(temp%Tmin - temp%Tmax) < 1e-5 .and. (temp%nT .ne. 1)) then
      call stop_with_message(stderr, "Temperature grid is not properly defined")
   endif
 
-  allocate(sct%TT(sct%nT))
-  allocate(sct%mu(sct%nT))
-  allocate(sct%d1(sct%nT))
-  allocate(sct%d2(sct%nT))
-  allocate(sct%d0(sct%nT))
+  allocate(temp%TT(temp%nT))
 
   ! define Temperature grid
-  do iT=1,sct%nT
-     sct%TT(iT)=real(iT-1,8)*sct%dT+sct%Tmin
+  do iT=1,temp%nT
+     temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
   enddo
-  sct%TT(sct%nT) = sct%Tmax ! to avoid numerical errors at the last point
-  sct%beta = 1.d0/(sct%TT * kB)
+  temp%TT(temp%nT) = temp%Tmax ! to avoid numerical errors at the last point
+  temp%beta = 1.d0/(temp%TT * kB)
 
   ! scattering rates
   ! and quasi particle renormalizations
-  allocate(sct%gam(edisp%nband_max, sct%nT))
-  allocate(sct%zqp(edisp%nband_max, sct%nT))
+  allocate(sct%gam(edisp%nband_max, temp%nT))
+  allocate(sct%zqp(edisp%nband_max, temp%nT))
 
   if (edisp%iSpin == 1) then
     if (hdf5_get_number_groups(ifile, "/kPoint/000001") > 2) then

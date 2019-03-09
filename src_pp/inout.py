@@ -8,6 +8,7 @@ def h5output(outfile, dftcalc, btpinterp=None):
   print("\nInitializing output: ", outfile)
   h5out = h5py.File(outfile, 'w')
 
+  h5out['.kmesh/kpoints']      = dftcalc.kpoints
   h5out['.kmesh/nkp']          = dftcalc.nkp
   h5out['.kmesh/weights']      = dftcalc.weights
   h5out['.kmesh/weightsum']    = dftcalc.weightsum

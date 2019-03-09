@@ -9,12 +9,13 @@ program main
   use Mresponse
   implicit none
 
-  type(algorithm)  :: algo
-  type(kpointmesh) :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
-  type(energydisp) :: edisp   ! contains the band dispersion energy and the optical matrix elements
-  type(dosgrid)    :: dos     ! DOS, integrated DOS, Fermi level
-  type(scattering) :: sct     ! temperature grid and scattering rate (only the coefficients, NO BAND DEPENDENCE)
-  type(lattice)    :: lat
+  type(algorithm)   :: algo
+  type(kpointmesh)  :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
+  type(energydisp)  :: edisp   ! contains the band dispersion energy and the optical matrix elements
+  type(dosgrid)     :: dos     ! DOS, integrated DOS, Fermi level
+  type(scattering)  :: sct     ! scattering rates and quasi particle weights
+  type(temperature) :: temp    ! temperature quantities
+  type(lattice)     :: lat
 
   type(response_dp) :: dpresp  ! response double precision
   type(response_qp) :: qpresp  ! response quadruple precision
@@ -27,7 +28,20 @@ program main
   real(8) :: criterion
 
   integer, allocatable :: sk(:,:)   ! spin k compound index
-  real(8), allocatable :: drhodT(:)
+
+  ! quantities saved on the Temperature grid
+  ! and derived quantities
+  real(8), allocatable :: drhodT(:) ! resisity derivative
+  real(8), allocatable :: energy(:) ! total energy
+  real(8), allocatable :: cv(:)     ! specific heat
+  real(8), allocatable :: mu(:)     ! chemical potential (temperature dependent)
+  real(8), allocatable :: d1(:)     ! square of the 1st derivative of sigma
+  real(8), allocatable :: d2(:)     ! product of the 2nd derivative times sigma
+  real(8), allocatable :: d0(:)     ! linear combination of the two above, whose zero corresponds to T*
+  real(8) :: Tstar                  ! temperature for which (d^2 rho)/(d beta^2)=0
+                                    ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
+  real(8) :: Tflat                  ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
+
 
   ! real(8)              :: gmax, gminall
   ! real(8)              :: mu
@@ -49,7 +63,7 @@ program main
   if (myid.eq.master) call main_greeting(stdout)
   call mpi_barrier(mpi_comm_world, mpierr)
 
-  call read_config(algo, edisp, sct)
+  call read_config(algo, edisp, sct, temp)
   call check_config(algo)
 
   call read_preproc_energy_data(algo, kmesh, edisp, lat)
@@ -94,39 +108,60 @@ program main
     ! at this point we just extract the temperature ranges
     ! the scattering rates then gets loaded for each k-point
     ! (similar to the optical elements)
-    call read_preproc_scattering_data(algo, kmesh, edisp, sct)
+    call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   else
-    sct%dT= (sct%Tmax-sct%Tmin)/sct%nT
-    allocate(sct%TT(sct%nT))
-    allocate(sct%beta(sct%nT))
-    allocate(sct%mu(sct%nT))
-    allocate(sct%d0(sct%nT))
-    allocate(sct%d1(sct%nT))
-    allocate(sct%d2(sct%nT))
+    temp%dT= (temp%Tmax-temp%Tmin)/temp%nT
+    allocate(temp%TT(temp%nT))
+    allocate(temp%beta(temp%nT))
 
-    allocate(sct%gam(edisp%nband_max, sct%nT))
-    allocate(sct%zqp(edisp%nband_max, sct%nT))
+    allocate(sct%gam(edisp%nband_max, temp%nT))
+    allocate(sct%zqp(edisp%nband_max, temp%nT))
     sct%gam=0.d0
     sct%zqp=0.d0
 
     ! define Temperature grid
-    do iT=1,sct%nT
-       sct%TT(iT)=real(iT-1,8)*sct%dT+sct%Tmin
+    do iT=1,temp%nT
+       temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
     enddo
-    sct%TT(sct%nT) = sct%Tmax ! to avoid numerical errors at the last point
-    sct%beta = 1.d0/(sct%TT * kB)
+    temp%TT(temp%nT) = temp%Tmax ! to avoid numerical errors at the last point
+    temp%beta = 1.d0/(temp%TT * kB)
 
     ! define scattering rates and quasi particle weights
     ! independent of k and bands
-    do iT=1,sct%nT
+    do iT=1,temp%nT
        do ig=1,size(sct%gamcoeff)
-          sct%gam(:,iT) = sct%gam(:,iT) + sct%gamcoeff(ig)*(sct%TT(iT)**(ig-1))
+          sct%gam(:,iT) = sct%gam(:,iT) + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
        enddo
        do ig=1,size(sct%zqpcoeff)
-          sct%zqp(:,iT) = sct%zqp(:,iT) + sct%zqpcoeff(ig)*(sct%TT(iT)**(ig-1))
+          sct%zqp(:,iT) = sct%zqp(:,iT) + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
        enddo
     enddo
   endif
+
+  if (myid .eq. master) then
+    write(stdout,*) 'Temperature range:'
+    write(stdout,*) 'Tmin: ', temp%Tmin
+    write(stdout,*) 'Tmax: ', temp%Tmax
+    write(stdout,*) 'nT:   ', temp%nT
+  endif
+
+  allocate(mu(temp%nT))
+  allocate(d0(temp%nT))
+  allocate(d1(temp%nT))
+  allocate(d2(temp%nT))
+  allocate(drhodT(temp%nT))
+  allocate(energy(temp%nT))
+  allocate(cv(temp%nT))
+
+  mu     = 0.d0
+  d0     = 0.d0
+  d1     = 0.d0
+  d2     = 0.d0
+  drhodT = 0.d0
+  energy = 0.d0
+  cv     = 0.d0
+  Tstar  = 0.d0
+  Tflat  = 0.d0
 
   call mpi_genkstep(edisp%iSpin*kmesh%nkp) ! thats definitely correct
 
@@ -162,17 +197,13 @@ program main
 
   call log_master(stdout, 'DEBUG MODE')
 
-  sct%Tstar = 0.0d0
-  sct%Tflat = 0.0d0
-  allocate(drhodT(sct%nT))
-  drhodT = 0.0d0
 
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !! START TEMPERATURE LOOP
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  do iT=1,sct%nT
-    T=sct%TT(iT)
+  do iT=1,temp%nT
+    T=temp%TT(iT)
     beta=1.d0/(kB*T)
     betaQ=1.q0/(kB*T)
     beta2p=beta/(2.d0*pi)

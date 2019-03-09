@@ -2,6 +2,7 @@ module Mroot
   use Mmpi_org
   use Mparams
   use Mtypes
+  use Mfunctions
 
   interface find_mu
     module procedure find_mu_D, find_mu_Q
@@ -14,10 +15,6 @@ module Mroot
   interface occ
     module procedure occ_D, occ_Q
   end interface occ
-
-  interface fermi
-    module procedure fermi_dd, fermi_dq, fermi_qd, fermi_qq
-  end interface fermi
 
   contains
 
@@ -783,37 +780,5 @@ end subroutine occ_Q
 !#endif
 
 !end subroutine occ_tet_Q
-
-pure elemental function fermi_dd(eps,beta) result(f)
-  implicit none
-  real(8), intent(in) :: eps
-  real(8), intent(in) :: beta
-  real(8)             :: f
-  f = 1.d0 / (1.d0 + EXP(beta*eps))
-end function fermi_d
-
-pure elemental function fermi_dq(eps,beta) result(f)
-  implicit none
-  real(8), intent(in)  :: eps
-  real(16), intent(in) :: beta
-  real(16)             :: f
-  f = 1.q0 / (1.q0 + EXP(real(eps,16)*beta))
-end function fermi_q
-
-pure elemental function fermi_qd(eps,beta) result(f)
-  implicit none
-  real(16), intent(in) :: eps
-  real(8), intent(in)  :: beta
-  real(16)             :: f
-  f = 1.q0 / (1.q0 + EXP(real(beta,16)*eps))
-end function fermi_q
-
-pure elemental function fermi_qd(eps,beta) result(f)
-  implicit none
-  real(16), intent(in) :: eps
-  real(16), intent(in)  :: beta
-  real(16)             :: f
-  f = 1.q0 / (1.q0 + EXP(eps*beta))
-end function fermi_q
 
 end module Mroot
