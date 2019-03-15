@@ -2,7 +2,7 @@ module Mfermi
   implicit none
 
   interface fermi
-    module procedure fermi_dp, fermi_qp
+    module procedure fermi_dp, fermi_qp, fermi_dpqp, fermi_qpdp
   end interface fermi
 
   interface dfermi
@@ -24,8 +24,24 @@ module Mfermi
     real(16), intent(in) :: eps
     real(16), intent(in) :: beta
     real(16)             :: f
-    f = 1.q0 / (1.q0 + EXP(real(eps,16)*beta))
+    f = 1.q0 / (1.q0 + EXP(eps*beta))
   end function fermi_qp
+
+  pure elemental function fermi_dpqp(eps,beta) result(f)
+    implicit none
+    real(8), intent(in)  :: eps
+    real(16), intent(in) :: beta
+    real(16)             :: f
+    f = 1.q0 / (1.q0 + EXP(beta*eps))
+  end function fermi_dpqp
+
+  pure elemental function fermi_qpdp(eps,beta) result(f)
+    implicit none
+    real(16), intent(in) :: eps
+    real(8), intent(in)  :: beta
+    real(16)             :: f
+    f = 1.q0 / (1.q0 + EXP(eps*beta))
+  end function fermi_qpdp
 
   pure elemental function dfermi_dp(eps,beta)
     implicit none

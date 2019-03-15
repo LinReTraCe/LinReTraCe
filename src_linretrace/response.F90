@@ -2743,20 +2743,20 @@ subroutine dpresp_alloc(algo, edisp, dpresp)
   type(response_dp) :: dpresp
 
   ! allocate transport variables
-  allocate(dpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
-  allocate(dpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
+  allocate(dpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+  allocate(dpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(dpresp%s_sum(3,3,edisp%iSpin))
   allocate(dpresp%a_sum(3,3,edisp%iSpin))
 
   if (algo%lBfield) then
-     allocate(dpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
-     allocate(dpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
+     allocate(dpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+     allocate(dpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(dpresp%sB_sum(3,3,edisp%iSpin))
      allocate(dpresp%aB_sum(3,3,edisp%iSpin))
   endif
 
   ! for the responses we need psi_1, psi_2 and psi_3
-  allocate(dpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, iskstr:iskend))
+  allocate(dpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend))
 end subroutine dpresp_alloc
 
 subroutine qpresp_alloc(algo, edisp, qpresp)
@@ -2766,19 +2766,19 @@ subroutine qpresp_alloc(algo, edisp, qpresp)
   type(response_qp) :: qpresp
 
   ! allocate transport variables
-  allocate(qpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
-  allocate(qpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
+  allocate(qpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+  allocate(qpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(qpresp%s_sum(3,3,edisp%iSpin))
   allocate(qpresp%a_sum(3,3,edisp%iSpin))
 
   if (algo%lBfield) then
-     allocate(qpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
-     allocate(qpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,iskstr:iskend))
+     allocate(qpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+     allocate(qpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(qpresp%sB_sum(3,3,edisp%iSpin))
      allocate(qpresp%aB_sum(3,3,edisp%iSpin))
   endif
 
-  allocate(qpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, iskstr:iskend))
+  allocate(qpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend))
 end subroutine qpresp_alloc
 
  ! INPUT: (renolmalised) bandstructure: (sct) ek

@@ -2,11 +2,14 @@ program main
   use Mparams
   use Maux
   use Mdos
+  use Mroot
   use Mtypes
   use Mmpi_org
   use Mconfig
   use Mio
   use Mresponse
+  use hdf5_wrapper
+  use hdf5
   implicit none
 
   type(algorithm)   :: algo
@@ -15,7 +18,8 @@ program main
   type(dosgrid)     :: dos     ! DOS, integrated DOS, Fermi level
   type(scattering)  :: sct     ! scattering rates and quasi particle weights
   type(temperature) :: temp    ! temperature quantities
-  type(lattice)     :: lat
+  type(lattice)     :: lat     ! lattice information (volume)
+  type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
 
   type(response_dp) :: dpresp  ! response double precision
   type(response_qp) :: qpresp  ! response quadruple precision
@@ -23,11 +27,16 @@ program main
   type(response_dp) :: dinter  ! response interband
   type(response_dp) :: dderesp ! response functions (intraband conductivity) derivatives in double precision
 
-  integer :: is, ig, iT, ik, isk
-  real(8) :: T, beta, beta2p, betaQ, beta2pQ
-  real(8) :: criterion
+  integer(hid_t)    :: ifile_scatter
+  integer(hid_t)    :: ifile_energy
 
-  integer, allocatable :: sk(:,:)   ! spin k compound index
+  integer :: is, ig, iT, ik
+  integer :: niitact
+  real(8) :: ndevact
+  real(16):: ndevactQ
+
+  real(8) :: criterion
+  character(len=128) :: string
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -42,6 +51,10 @@ program main
                                     ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
   real(8) :: Tflat                  ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
 
+  real(8), allocatable :: darr1(:)
+  real(8), allocatable :: darr2(:,:)
+  real(8), allocatable :: darr3(:,:,:)
+  real(8), allocatable :: darr4(:,:,:,:)
 
   ! real(8)              :: gmax, gminall
   ! real(8)              :: mu
@@ -66,6 +79,7 @@ program main
   call read_config(algo, edisp, sct, temp)
   call check_config(algo)
 
+  call hdf5_init()
   call read_preproc_energy_data(algo, kmesh, edisp, lat)
 
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
@@ -94,11 +108,11 @@ program main
 
   ! starting point for the chemical potential
   if (myid.eq.master) then
-     if (algo%muMethod == 0) then
+     if (algo%muSearch) then
         write(*,*) 'initialized LDA mu = ', edisp%efer
      else
         edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
-        write(*,*) 'mu read from file = ',  edisp%efer
+        write(*,*) 'Running with fixed mu read from file = ',  edisp%efer
      endif
   endif
 
@@ -114,10 +128,10 @@ program main
     allocate(temp%TT(temp%nT))
     allocate(temp%beta(temp%nT))
 
-    allocate(sct%gam(edisp%nband_max, temp%nT))
-    allocate(sct%zqp(edisp%nband_max, temp%nT))
-    sct%gam=0.d0
-    sct%zqp=0.d0
+    ! allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    ! allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    sct%gamscalar=0.d0
+    sct%zqpscalar=0.d0
 
     ! define Temperature grid
     do iT=1,temp%nT
@@ -125,17 +139,6 @@ program main
     enddo
     temp%TT(temp%nT) = temp%Tmax ! to avoid numerical errors at the last point
     temp%beta = 1.d0/(temp%TT * kB)
-
-    ! define scattering rates and quasi particle weights
-    ! independent of k and bands
-    do iT=1,temp%nT
-       do ig=1,size(sct%gamcoeff)
-          sct%gam(:,iT) = sct%gam(:,iT) + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
-       enddo
-       do ig=1,size(sct%zqpcoeff)
-          sct%zqp(:,iT) = sct%zqp(:,iT) + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
-       enddo
-    enddo
   endif
 
   if (myid .eq. master) then
@@ -143,6 +146,8 @@ program main
     write(stdout,*) 'Tmin: ', temp%Tmin
     write(stdout,*) 'Tmax: ', temp%Tmax
     write(stdout,*) 'nT:   ', temp%nT
+    ! write(stdout,*) 'Temperatures: ', temp%TT
+    ! write(stdout,*) 'invTemperatures: ', temp%beta
   endif
 
   allocate(mu(temp%nT))
@@ -163,26 +168,12 @@ program main
   Tstar  = 0.d0
   Tflat  = 0.d0
 
-  call mpi_genkstep(edisp%iSpin*kmesh%nkp) ! thats definitely correct
+  call mpi_genkstep(kmesh%nkp) ! thats definitely correct
 
   if (algo%ldebug) then
-     write(stdout,*) "MPI: myid: ", myid, "iskstr: ", iskstr, "iskend: ", iskend
+     write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
   endif
 
-  ! back-mapping
-  allocate(sk(2,edisp%iSpin * kmesh%nkp))
-  isk = 0
-  do is = 1,edisp%iSpin
-    do ik = 1,kmesh%nkp
-      isk = isk + 1
-      sk(1,isk) = ik
-      sk(2,isk) = is
-    enddo
-  enddo
-
-  do isk = iskstr,iskend
-    write(*,*) isk, sk(1,isk), sk(2,isk)
-  enddo
 
 
   ! allocate the arrays once outside of the main (temperature) loop
@@ -197,19 +188,124 @@ program main
 
   call log_master(stdout, 'DEBUG MODE')
 
+  call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
+  if (algo%lScatteringFile) then
+    call hdf5_open_file(algo%input_scattering, ifile_scatter, rdonly=.true.)
+  endif
 
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !! START TEMPERATURE LOOP
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   do iT=1,temp%nT
-    T=temp%TT(iT)
-    beta=1.d0/(kB*T)
-    betaQ=1.q0/(kB*T)
-    beta2p=beta/(2.d0*pi)
-    beta2pQ=betaQ/(2.q0*piQ)
-    criterion=beta/20.d0
-  enddo
+
+    ! run time information
+    info%iT = iT
+    info%Temp=temp%TT(iT)
+    info%beta=1.d0/(kB*info%Temp)
+    info%beta2p=info%beta/(2.d0*pi)
+
+    info%TempQ=real(info%Temp,16)
+    info%betaQ=1.q0/(kB*info%TempQ)
+    info%beta2pQ=info%betaQ/(2.q0*piQ)
+
+    criterion=info%beta/20.d0
+
+    ! define scattering rates and quasi particle weights
+    ! for the current temperature
+    ! move this to a subroutine
+    if (.not. algo%lScatteringFile) then
+      sct%gamscalar = 0.d0
+      sct%zqpscalar = 0.d0
+      do ig=1,size(sct%gamcoeff)
+         sct%gamscalar = sct%gamscalar + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
+      enddo
+      do ig=1,size(sct%zqpcoeff)
+         sct%zqpscalar = sct%zqpscalar + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
+      enddo
+    else
+      if (edisp%ispin == 1) then
+        write(string,'("tPoint/",I6.6,"/scatrate")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%gam(:,:,1) = darr2
+        deallocate(darr2)
+
+        write(string,'("tPoint/",I6.6,"/qpweight")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%zqp(:,:,1) = darr2
+        deallocate(darr2)
+
+        if (edisp%lBandShift) then
+          write(string,'("tPoint/",I6.6,"/bandshift")') iT
+          call hdf5_read_data(ifile_scatter, string, darr2)
+          edisp%band_shift(:,:,1) = darr2
+          deallocate(darr2)
+
+          edisp%band = edisp%band_original + edisp%band_shift
+        endif
+      else
+        write(string,'("up/tPoint/",I6.6,"/scatrate")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%gam(:,:,1) = darr2
+        deallocate(darr2)
+
+        write(string,'("dn/tPoint/",I6.6,"/scatrate")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%gam(:,:,2) = darr2
+        deallocate(darr2)
+
+        write(string,'("up/tPoint/",I6.6,"/qpweight")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%zqp(:,:,1) = darr2
+        deallocate(darr2)
+
+        write(string,'("dn/tPoint/",I6.6,"/qpweight")') iT
+        call hdf5_read_data(ifile_scatter, string, darr2)
+        sct%zqp(:,:,2) = darr2
+        deallocate(darr2)
+
+        if (edisp%lBandShift) then
+          write(string,'("up/tPoint/",I6.6,"/bandshift")') iT
+          call hdf5_read_data(ifile_scatter, string, darr2)
+          edisp%band_shift(:,:,1) = darr2
+          deallocate(darr2)
+
+          write(string,'("dn/tPoint/",I6.6,"/bandshift")') iT
+          call hdf5_read_data(ifile_scatter, string, darr2)
+          edisp%band_shift(:,:,2) = darr2
+          deallocate(darr2)
+
+          edisp%band = edisp%band_original + edisp%band_shift
+        endif
+      endif
+      sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
+    endif
+
+
+
+    if (algo%muSearch) then
+      if (criterion.lt.20.d0) then !DP
+        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
+        if (myid.eq.master) then
+           ! write(*,'(1F10.5,4E15.7,2I5)')info%Temp, mu, criterion, ndev, abs(ndevact),niit,niitact
+           write(*,*)info%Temp, mu(iT), criterion, ndev, abs(ndevact),niit,niitact
+        endif
+      elseif (criterion.lt.80.d0) then !QP
+        call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
+        if (myid.eq.master) then
+           write(*,*) info%Temp, mu(iT), criterion, real(ndevQ,8), abs(real(ndevactQ,8)),niitQ,niitact
+        endif
+      else   ! further refinement
+        call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
+        if (myid.eq.master) then
+           write(*,*)info%Temp ,mu(iT), criterion, real(ndevVQ,8), abs(real(ndevactQ,8)),niitQ,niitact
+        endif
+      endif !criterion
+    endif
+
+
+  enddo ! end of the outer temperature loop
+
+
+
+
+  ! enddo
 
   !   !if (myid.eq.master) then
   !   !also the chemical potential search is not parallelised at the moment
@@ -374,5 +470,10 @@ program main
   !endif
 
   call mpi_close()
+  call hdf5_close_file(ifile_energy)
+  if (algo%lScatteringFile) then
+    call hdf5_close_file(ifile_scatter)
+  endif
+  call hdf5_finalize()
 
 end program main

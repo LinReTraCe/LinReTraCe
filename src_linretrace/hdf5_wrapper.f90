@@ -1,25 +1,3 @@
-! MIT License
-
-! Copyright (c) 2018 Matthias Pickem
-
-! Permission is hereby granted, free of charge, to any person obtaining a copy
-! of this software and associated documentation files (the "Software"), to deal
-! in the Software without restriction, including without limitation the rights
-! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-! copies of the Software, and to permit persons to whom the Software is
-! furnished to do so, subject to the following conditions:
-
-! The above copyright notice and this permission notice shall be included in all
-! copies or substantial portions of the Software.
-
-! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-! SOFTWARE.
-
 module hdf5_wrapper
   use hdf5
   implicit none
@@ -2934,6 +2912,70 @@ module hdf5_wrapper
     character(len=*), intent(in)                :: location
     call h5ldelete_f(ifile, location, hdf_err)
   end subroutine hdf5_delete
+
+  logical function hdf5_group_exists(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+
+    integer(hid_t) :: grp_parent_id, grp_id
+    character(len=150) :: strim
+    integer :: grpcnt, pos, i
+    character(len=128), allocatable :: ngroup(:)
+
+    call h5eset_auto_f(0,hdf_err) ! deactivate error printing
+    call h5gopen_f(ifile, trim(adjustl(location)), grp_id, hdf_err)
+    if (hdf_err .ne. 0) then
+      hdf5_group_exists = .false.
+    else
+      hdf5_group_exists = .true.
+      call h5gclose_f(grp_id, hdf_err)
+    endif
+    call h5eclear_f(hdf_err)      ! clear the error
+    call h5eset_auto_f(1,hdf_err) ! acitvate it again
+  end function
+
+  logical function hdf5_dataset_exists(ifile, location)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+
+    integer(hid_t) :: dset_id
+
+    call h5eset_auto_f(0,hdf_err) ! deactivate error printing
+    call h5dopen_f(ifile, trim(adjustl(location)), dset_id, hdf_err)
+    if (hdf_err .ne. 0) then
+      hdf5_dataset_exists = .false.
+    else
+      hdf5_dataset_exists = .true.
+      call h5dclose_f(dset_id, hdf_err)
+    endif
+    call h5eclear_f(hdf_err)      ! clear the error
+    call h5eset_auto_f(1,hdf_err) ! acitvate it again
+  end function
+
+  logical function hdf5_attribute_exists(ifile, location, attrname)
+    integer(hid_t), intent(in)                  :: ifile
+    character(len=*), intent(in)                :: location
+    character(len=*), intent(in)                :: attrname
+
+    integer(hid_t) :: obj_id, attr_id
+
+    call h5eset_auto_f(0,hdf_err) ! deactivate error printing
+    call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
+    if (hdf_err .ne. 0) then
+      hdf5_attribute_exists = .false.
+    else
+      call h5aopen_f(obj_id, trim(adjustl(attrname)), attr_id, hdf_err)
+      if (hdf_err .ne. 0) then
+        hdf5_attribute_exists = .false.
+      else
+        call h5aclose_f(attr_id, hdf_err)
+        hdf5_attribute_exists = .true.
+      endif
+    endif
+
+    call h5eclear_f(hdf_err)      ! clear the error
+    call h5eset_auto_f(1,hdf_err) ! acitvate it again
+  end function
 
   ! help function with separates /group1/group2/dset -> /group1/group2 and dset
   subroutine hdf5_help_separate_dsetname(dsetfull, gname, dset)

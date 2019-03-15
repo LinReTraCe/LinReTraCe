@@ -87,6 +87,7 @@ subroutine read_config(algo, edisp, sct, temp)
   algo%input_energies = ''
   algo%lBField        = .false.
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
+  algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
   sct%gamimp          = 0.d0
 
   !--------------------------------------------------------------------------------
@@ -109,13 +110,12 @@ subroutine read_config(algo, edisp, sct, temp)
 
   call float_find('ChemicalPotential', edisp%mu, search_start, search_end, found)
   if (found) then
-    algo%muMethod = 1
+    algo%muSearch = .false.
   else
-    algo%muMethod = 0
+    algo%muSearch = .true.
   endif
-  ! 0 -> find mu
-  ! 1 -> fixed mu
 
+  call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
   call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
 
   !--------------------------------------------------------------------------------
@@ -130,7 +130,6 @@ subroutine read_config(algo, edisp, sct, temp)
   endif
   !--------------------------------------------------------------------------------
   call string_find('ScatteringFile', algo%input_scattering, search_start, search_end, found)
-  write(*,*) algo%input_scattering
   if (found) then
     algo%lScatteringFile = .true.
   else
@@ -150,7 +149,7 @@ subroutine read_config(algo, edisp, sct, temp)
     call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
     if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
 
-    edisp%lBandShift = .false. ! only with DMFT input
+    edisp%lBandShift = .false. ! only with scattering File
   endif
 
 
