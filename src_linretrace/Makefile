@@ -45,7 +45,7 @@ aux.o: mpi_org.o
 response.o: mpi_org.o types.o params.o
 root.o: mpi_org.o params.o types.o fermi.o aux.o
 io.o: params.o types.o hdf5_wrapper.o aux.o
-dos.o: params.o types.o
+dos.o: params.o types.o aux.o
 config.o: params.o lookup.o aux.o types.o
 
 .PHONY: clean

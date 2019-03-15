@@ -128,7 +128,7 @@ module Mlookup
     real(8), intent(inout), allocatable :: float_array(:)
     logical, intent(out) :: found
 
-    integer :: cnt = 0
+    integer :: cnt
     character(len=256) :: str_original
     character(len=256) :: str_2save
 
@@ -143,6 +143,7 @@ module Mlookup
         ! we count the number of coefficients
         ! this behaves quite weirdly because of the empty space scan of an empty string
         ! definitely works as intended
+        cnt = 0
         do
           pst=scan(str_temp,multseparator)
           if (pst == 1) then ! we find the empty space in an empty string at the first position

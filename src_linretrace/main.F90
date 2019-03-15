@@ -37,6 +37,7 @@ program main
 
   real(8) :: criterion
   character(len=128) :: string
+  real(8) :: tstart, tfinish, timings(10)
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -51,26 +52,13 @@ program main
                                     ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
   real(8) :: Tflat                  ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
 
+  complex(8), allocatable  :: PolyGamma(:,:,:,:)
+  complex(16), allocatable :: PolyGammaQ(:,:,:,:)
+
   real(8), allocatable :: darr1(:)
   real(8), allocatable :: darr2(:,:)
   real(8), allocatable :: darr3(:,:,:)
   real(8), allocatable :: darr4(:,:,:,:)
-
-  ! real(8)              :: gmax, gminall
-  ! real(8)              :: mu
-  ! integer              :: nT,iT,ierr,imeth,iflag_dmudt,imurestart,niitact
-  ! real(16)             :: test0,test1,ndevactQ
-  ! real(8)              :: criterion,ndevact
-  ! real(8)              :: dmudT ! used only for gamma=0.d0
-
-
-
-  ! real(8) :: dum1,dum2,dum3,dum4
-  ! integer :: idum, i
-  ! integer :: nk
-  ! integer :: ig, iband, ik !counters for polynomial gamma(T), band and k-point index
-  ! integer :: vb, ib   !valence band (at Gamma point) and auxiliary counter
-
 
   call mpi_initialize()
   if (myid.eq.master) call main_greeting(stdout)
@@ -92,7 +80,7 @@ program main
      call log_master(stdout, 'LINRETRACE WILL perform calculations with magnetic field')
   endif
 
-
+  ! calculate a purely DFT density of states with Laurentzian broadening
   call gendosel (kmesh, edisp, dos) ! normalization already taken care of
   call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
 
@@ -116,6 +104,7 @@ program main
      endif
   endif
 
+
   ! construct temperature grid
   if (algo%lScatteringFile) then
     ! we have everything inside here
@@ -127,11 +116,6 @@ program main
     temp%dT= (temp%Tmax-temp%Tmin)/temp%nT
     allocate(temp%TT(temp%nT))
     allocate(temp%beta(temp%nT))
-
-    ! allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-    ! allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
-    sct%gamscalar=0.d0
-    sct%zqpscalar=0.d0
 
     ! define Temperature grid
     do iT=1,temp%nT
@@ -181,10 +165,13 @@ program main
   call allocate_response(algo, edisp, respBl)
   call allocate_response(algo, edisp, dderesp)
   call allocate_response(algo, edisp, dinter)
+  allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   if (.not. algo%ldebug) then
-     call allocate_response(algo, edisp, qpresp)
+    call allocate_response(algo, edisp, qpresp)
+    allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   endif
+  ! for the responses we need psi_1, psi_2 and psi_3
 
   call log_master(stdout, 'DEBUG MODE')
 
@@ -193,8 +180,23 @@ program main
     call hdf5_open_file(algo%input_scattering, ifile_scatter, rdonly=.true.)
   endif
 
-  do iT=1,temp%nT
+  if (.not. edisp%lBandShift) then
+    edisp%band = edisp%band_original ! the energies are constant throughout
+    deallocate(edisp%band_original)
+  endif
 
+
+  if (myid .eq. master) then
+    write(stdout,*) 'Calculation options summary:'
+    write(stdout,*)
+    write(stdout,*)
+  endif
+
+
+  timings = 0.d0 ! reset timings
+
+  ! MAIN LOOP
+  do iT=1,temp%nT
     ! run time information
     info%iT = iT
     info%Temp=temp%TT(iT)
@@ -219,6 +221,10 @@ program main
       do ig=1,size(sct%zqpcoeff)
          sct%zqpscalar = sct%zqpscalar + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
       enddo
+      if (sct%zqpscalar > 1.d0) then
+        call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
+        sct%zqpscalar = 1.d0
+      endif
     else
       if (edisp%ispin == 1) then
         write(string,'("tPoint/",I6.6,"/scatrate")') iT
@@ -280,6 +286,7 @@ program main
 
 
     if (algo%muSearch) then
+      call cpu_time(tstart)
       if (criterion.lt.20.d0) then !DP
         call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
         if (myid.eq.master) then
@@ -297,11 +304,24 @@ program main
            write(*,*)info%Temp ,mu(iT), criterion, real(ndevVQ,8), abs(real(ndevactQ,8)),niitQ,niitact
         endif
       endif !criterion
+      call cpu_time(tfinish)
+      timings(1) = timings(1) + (tfinish - tstart)
+      tstart = tfinish
     endif
 
 
+    call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
+    if (.not. algo%lDebug) then
+      call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+    endif
+    call cpu_time(tfinish)
+    timings(2) = timings(2) + (tfinish - tstart)
+
   enddo ! end of the outer temperature loop
 
+  write(*,*) 'Timings:'
+  write(*,*) timings
+  write(*,*)
 
 
 

@@ -209,9 +209,6 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
   if (edisp%lBandShift) then
     call log_master(stdout, 'Detected band shifts in ScatteringFile')
-  else
-    edisp%band = edisp%band_original
-    deallocate(edisp%band_original)
   endif
 
   call hdf5_close_file(ifile)

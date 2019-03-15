@@ -1,6 +1,7 @@
 module Mdos
   use Mtypes
   use Mparams
+  use Maux
 
 contains
 
@@ -17,18 +18,18 @@ subroutine gendosel(kmesh, edisp, dos)
   double precision :: maxenergy, minenergy, midenergy
 
   ! find the maximum energy
-  maxenergy=edisp%band(edisp%nband_max,1,1)
-  minenergy=edisp%band(1,1,1)
+  maxenergy=edisp%band_original(edisp%nband_max,1,1)
+  minenergy=edisp%band_original(1,1,1)
 
   ! scan the highest band for maxenergy
   ! scan the lowest band for minenergy
   do is = 1,edisp%ispin
     do ik = 2,kmesh%nkp
-      if (maxenergy < edisp%band(edisp%nband_max,ik,is)) then
-         maxenergy = edisp%band(edisp%nband_max,ik,is)
+      if (maxenergy < edisp%band_original(edisp%nband_max,ik,is)) then
+         maxenergy = edisp%band_original(edisp%nband_max,ik,is)
       endif
-      if (minenergy > edisp%band(1,ik,is)) then
-         minenergy = edisp%band(1,ik,is)
+      if (minenergy > edisp%band_original(1,ik,is)) then
+         minenergy = edisp%band_original(1,ik,is)
       endif
     enddo
   enddo
@@ -60,9 +61,9 @@ subroutine gendosel(kmesh, edisp, dos)
     do is=1,edisp%ispin
       do ik=1,kmesh%nkp
         do nb=1,edisp%nband_max
-          dos%dos(i,is)=dos%dos(i,is)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band(nb,ik,is))**2)+(br**2)))) * &
+          dos%dos(i,is)=dos%dos(i,is)+((br/pi)*(1.0d0/(((dos%enrg(i)-edisp%band_original(nb,ik,is))**2)+(br**2)))) * &
                      kmesh%weight(ik)
-          dos%nos(i,is)=dos%nos(i,is)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band(nb,ik,is))/br))) * &
+          dos%nos(i,is)=dos%nos(i,is)+(0.5d0 + ((1.0d0/pi)*atan((dos%enrg(i)-edisp%band_original(nb,ik,is))/br))) * &
                      kmesh%weight(ik)
         enddo
       enddo
@@ -108,9 +109,7 @@ subroutine findef(dos, edisp)
      endif
      write(*,*) 'FINDEF: chemical potential found at: ', dos%enrg(i)
   else
-     write(*,*) 'FINDEF: No root found for chemical potential, nelect = ', edisp%nelect
-     edisp%efer = 0
-     return
+     call stop_with_message(stderr, 'FINDEF: Could not find DFT Fermi level.')
   endif
 
   ! find band gap and valence band maximum, conduction band minimum

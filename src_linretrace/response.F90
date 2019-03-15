@@ -8,6 +8,10 @@ module Mresponse
     module procedure dpresp_alloc, qpresp_alloc
   end interface
 
+  interface calc_polygamma
+    module procedure calc_polygamma_D, calc_polygamma_Q
+  end interface calc_polygamma
+
 contains
 
 !subroutine calc_response(mu, iT, drhodT, mesh, ek, thdr, sct, dresp, dderesp, dinter, respBl, qresp)
@@ -2755,8 +2759,6 @@ subroutine dpresp_alloc(algo, edisp, dpresp)
      allocate(dpresp%aB_sum(3,3,edisp%iSpin))
   endif
 
-  ! for the responses we need psi_1, psi_2 and psi_3
-  allocate(dpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend))
 end subroutine dpresp_alloc
 
 subroutine qpresp_alloc(algo, edisp, qpresp)
@@ -2777,9 +2779,89 @@ subroutine qpresp_alloc(algo, edisp, qpresp)
      allocate(qpresp%sB_sum(3,3,edisp%iSpin))
      allocate(qpresp%aB_sum(3,3,edisp%iSpin))
   endif
-
-  allocate(qpresp%PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend))
 end subroutine qpresp_alloc
+
+subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
+  implicit none
+  type(algorithm)  :: algo
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  real(8), intent(in) :: mu
+  complex(8) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(8), external :: wpsipg
+  complex(8), allocatable :: to_evaluate(:,:,:)
+  integer :: ipg, iband, ik, is
+
+  allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  if (algo%lScatteringFile) then
+    to_evaluate = 0.5d0 + info%beta2p * &
+                  (sct%gam(:,ikstr:ikend,:) + ci*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
+  else
+    to_evaluate = 0.5d0 + info%beta2p * &
+                  (sct%gamscalar + ci*(sct%zqpscalar*edisp%band(:,ikstr:ikend,:) - mu))
+  endif
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        do ipg = 1,3
+          PolyGamma(ipg,iband,ik,is) = wpsipg(to_evaluate(iband,ik,is),ipg)
+        enddo
+      enddo
+    enddo
+  enddo
+
+  deallocate(to_evaluate)
+
+end subroutine calc_polygamma_D
+
+subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
+  implicit none
+  type(algorithm)  :: algo
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  real(8), intent(in) :: mu
+  complex(16) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(16), external :: wpsipghp
+  complex(16), allocatable :: to_evaluate(:,:,:)
+  integer :: ipg, iband, ik, is
+
+  allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  if (algo%lScatteringFile) then
+    to_evaluate = 0.5q0 + info%beta2pQ * &
+                  (sct%gam(:,ikstr:ikend,:) + ciQ*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
+  else
+    to_evaluate = 0.5q0 + info%beta2pQ * &
+                  (sct%gamscalar + ci*(sct%zqpscalar*edisp%band(:,ikstr:ikend,:) - mu))
+  endif
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        do ipg = 1,3
+          PolyGamma(ipg,iband,ik,is) = wpsipghp(to_evaluate(iband,ik,is),ipg)
+        enddo
+      enddo
+    enddo
+  enddo
+
+  deallocate(to_evaluate)
+
+end subroutine calc_polygamma_Q
+
+
+
+
 
  ! INPUT: (renolmalised) bandstructure: (sct) ek
  !        chemical potential
