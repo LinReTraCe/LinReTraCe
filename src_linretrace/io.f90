@@ -69,10 +69,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, lat)
     endif
   endif
 
-  write(*,*) "MAIN: found ", kmesh%nkp, " kpoints in the preprocessed file."
-  if (edisp%lDerivatives) write(*,*) "MAIN: found energy derivatives"
-
-
   ! now we load the energy data into the according arrays
   ! please be aware here about the implicit Fortran memory transposition
   ! which is happening when loading hdf5 files
@@ -93,10 +89,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, lat)
   edisp%iOptical = irank1arr(1)
   deallocate(irank1arr)
 
-  write(*,*) "MAIN: found ", edisp%iOptical, " optical entries per dataset."
-
   ! the optical elements get loaded only for one k-point each time
-  ! allocate(edisp%Mopt(edisp%iOptical, edisp%nbopt_min:edisp%nbopt_max, edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+  allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+                                     edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+
 
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/energies", drank2arr)
@@ -191,15 +187,17 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
   if (edisp%iSpin == 1) then
-    if (hdf5_group_exists(ifile, "/tPoint/000001/bandshift")) then
+    if (hdf5_dataset_exists(ifile, "/tPoint/000001/bandshift")) then
+       write(*,*) 'bandshift exists ....'
        edisp%lBandShift = .true.
        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
     else
+       write(*,*) 'bandshift does not exist .....'
        edisp%lBandShift = .false.
     endif
 
   else if (edisp%iSpin == 2) then
-    if (hdf5_group_exists(ifile, "/up/tPoint/000001/bandshift")) then
+    if (hdf5_dataset_exists(ifile, "/up/tPoint/000001/bandshift")) then
        edisp%lBandShift = .true.
        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
     else
@@ -207,9 +205,37 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
     endif
   endif
 
-  if (edisp%lBandShift) then
-    call log_master(stdout, 'Detected band shifts in ScatteringFile')
+  call hdf5_close_file(ifile)
+
+end subroutine
+
+subroutine output_data(algo, info, temp, dpresp)
+  implicit none
+  type(algorithm)   :: algo
+  type(runinfo)     :: info
+  type(temperature) :: temp
+  type(response_dp) :: dpresp  ! response double precision
+
+  character(len=128) :: string
+  integer(hid_t)     :: ifile
+
+  call hdf5_open_file(algo%output_file, ifile)
+
+  if (info%iT == 1) then
+    call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
+    call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
   endif
+
+  write(string,'(I6.6, "/conductivity/intra/full")') info%iT
+  call hdf5_write_data(ifile, string, dpresp%s_gather)
+  write(string,'(I6.6, "/conductivity/intra/sum")') info%iT
+  call hdf5_write_data(ifile, string, dpresp%s_sum)
+
+  write(string,'(I6.6, "/peltier/intra/full")') info%iT
+  call hdf5_write_data(ifile, string, dpresp%a_gather)
+  write(string,'(I6.6, "/peltier/intra/sum")') info%iT
+  call hdf5_write_data(ifile, string, dpresp%a_sum)
+
 
   call hdf5_close_file(ifile)
 

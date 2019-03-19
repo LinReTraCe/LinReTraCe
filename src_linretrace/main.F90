@@ -30,14 +30,14 @@ program main
   integer(hid_t)    :: ifile_scatter
   integer(hid_t)    :: ifile_energy
 
-  integer :: is, ig, iT, ik
+  integer :: is, ig, iT, ik, iband
   integer :: niitact
   real(8) :: ndevact
   real(16):: ndevactQ
 
   real(8) :: criterion
   character(len=128) :: string
-  real(8) :: tstart, tfinish, timings(10)
+  real(8) :: tstart, tfinish, timings(5)
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -55,10 +55,17 @@ program main
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
 
-  real(8), allocatable :: darr1(:)
-  real(8), allocatable :: darr2(:,:)
-  real(8), allocatable :: darr3(:,:,:)
-  real(8), allocatable :: darr4(:,:,:,:)
+
+  ! work arrays
+  real(8), allocatable    :: darr1(:)
+  real(8), allocatable    :: darr2(:,:)
+  real(8), allocatable    :: darr3(:,:,:)
+  real(8), allocatable    :: darr4(:,:,:,:)
+
+  complex(8), allocatable :: zarr1(:)
+  complex(8), allocatable :: zarr2(:,:)
+  complex(8), allocatable :: zarr3(:,:,:)
+  complex(8), allocatable :: zarr4(:,:,:,:)
 
   call mpi_initialize()
   if (myid.eq.master) call main_greeting(stdout)
@@ -87,9 +94,9 @@ program main
   if (myid.eq.master) then
     do is = 1,edisp%ispin
       if (dos%gap(is) == 0.d0) then
-        write(*,*) 'Detected no band gap in spin ', is, ' / ', edisp%ispin
+        write(stdout,*) 'Detected no band gap in spin ', is, ' / ', edisp%ispin
       else
-        write(*,*) 'Detected band gap of size: ', dos%gap(is), 'in spin ', is, ' / ', edisp%ispin
+        write(stdout,*) 'Detected band gap of size: ', dos%gap(is), 'in spin ', is, ' / ', edisp%ispin
       endif
     enddo
   endif
@@ -97,10 +104,10 @@ program main
   ! starting point for the chemical potential
   if (myid.eq.master) then
      if (algo%muSearch) then
-        write(*,*) 'initialized LDA mu = ', edisp%efer
+        write(stdout,*) 'initialized LDA mu = ', edisp%efer
      else
         edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
-        write(*,*) 'Running with fixed mu read from file = ',  edisp%efer
+        write(stdout,*) 'Running with fixed mu read from file = ',  edisp%efer
      endif
   endif
 
@@ -125,14 +132,6 @@ program main
     temp%beta = 1.d0/(temp%TT * kB)
   endif
 
-  if (myid .eq. master) then
-    write(stdout,*) 'Temperature range:'
-    write(stdout,*) 'Tmin: ', temp%Tmin
-    write(stdout,*) 'Tmax: ', temp%Tmax
-    write(stdout,*) 'nT:   ', temp%nT
-    ! write(stdout,*) 'Temperatures: ', temp%TT
-    ! write(stdout,*) 'invTemperatures: ', temp%beta
-  endif
 
   allocate(mu(temp%nT))
   allocate(d0(temp%nT))
@@ -142,7 +141,7 @@ program main
   allocate(energy(temp%nT))
   allocate(cv(temp%nT))
 
-  mu     = 0.d0
+  mu     = edisp%efer ! here we either have the fixed mu or the LDA initialized one from above
   d0     = 0.d0
   d1     = 0.d0
   d2     = 0.d0
@@ -187,13 +186,36 @@ program main
 
 
   if (myid .eq. master) then
+    write(stdout,*)
+    write(stdout,*)
     write(stdout,*) 'Calculation options summary:'
     write(stdout,*)
+    write(stdout,*) '  Temperature range:'
+    write(stdout,*) '  Tmin: ', temp%Tmin
+    write(stdout,*) '  Tmax: ', temp%Tmax
+    write(stdout,*) '  Temperature points:   ', temp%nT
+    write(stdout,*)
+    write(stdout,*) '  k-Points: ', kmesh%nkp
+    write(stdout,*) '  spins: ', edisp%ispin
+    write(stdout,*)
+    write(stdout,*) '  energy-file: ', trim(algo%input_energies)
+    if (algo%lScatteringFile) then
+      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering)
+      write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    else
+      write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
+      write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
+    endif
     write(stdout,*)
   endif
 
+  if (myid .eq. master) then
+    call hdf5_create_file(algo%output_file)
+  endif
+  call mpi_barrier(mpi_comm_world, mpierr)
 
-  timings = 0.d0 ! reset timings
+  timings = 0.d0        ! reset timings
+  call cpu_time(tstart) ! start timer
 
   ! MAIN LOOP
   do iT=1,temp%nT
@@ -225,6 +247,8 @@ program main
         call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
         sct%zqpscalar = 1.d0
       endif
+
+      sct%gamscalar = sct%zqpscalar * sct%gamscalar  ! convention we use
     else
       if (edisp%ispin == 1) then
         write(string,'("tPoint/",I6.6,"/scatrate")') iT
@@ -243,8 +267,10 @@ program main
           edisp%band_shift(:,:,1) = darr2
           deallocate(darr2)
 
+          write(*,*) 'applying band_shift'
           edisp%band = edisp%band_original + edisp%band_shift
         endif
+
       else
         write(string,'("up/tPoint/",I6.6,"/scatrate")') iT
         call hdf5_read_data(ifile_scatter, string, darr2)
@@ -266,6 +292,7 @@ program main
         sct%zqp(:,:,2) = darr2
         deallocate(darr2)
 
+
         if (edisp%lBandShift) then
           write(string,'("up/tPoint/",I6.6,"/bandshift")') iT
           call hdf5_read_data(ifile_scatter, string, darr2)
@@ -281,6 +308,7 @@ program main
         endif
       endif
       sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
+      sct%gam = sct%gam * sct%zqp    ! convention
     endif
 
 
@@ -289,26 +317,34 @@ program main
       call cpu_time(tstart)
       if (criterion.lt.20.d0) then !DP
         call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
-        if (myid.eq.master) then
-           ! write(*,'(1F10.5,4E15.7,2I5)')info%Temp, mu, criterion, ndev, abs(ndevact),niit,niitact
-           write(*,*)info%Temp, mu(iT), criterion, ndev, abs(ndevact),niit,niitact
-        endif
+        ! if (myid.eq.master) then
+        !    ! write(*,'(1F10.5,4E15.7,2I5)')info%Temp, mu, criterion, ndev, abs(ndevact),niit,niitact
+        !    write(*,*)info%Temp, mu(iT), criterion, ndev, abs(ndevact),niit,niitact
+        ! endif
       elseif (criterion.lt.80.d0) then !QP
         call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-        if (myid.eq.master) then
-           write(*,*) info%Temp, mu(iT), criterion, real(ndevQ,8), abs(real(ndevactQ,8)),niitQ,niitact
-        endif
+        ! if (myid.eq.master) then
+        !    write(*,*) info%Temp, mu(iT), criterion, real(ndevQ,8), abs(real(ndevactQ,8)),niitQ,niitact
+        ! endif
       else   ! further refinement
         call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-        if (myid.eq.master) then
-           write(*,*)info%Temp ,mu(iT), criterion, real(ndevVQ,8), abs(real(ndevactQ,8)),niitQ,niitact
-        endif
+        ! if (myid.eq.master) then
+        !    write(*,*)info%Temp ,mu(iT), criterion, real(ndevVQ,8), abs(real(ndevactQ,8)),niitQ,niitact
+        ! endif
       endif !criterion
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
     endif
 
+    ! call calc_total_energy(mu(iT), energy(iT), edisp, sct, kmesh, algo, info)
+
+    if (myid.eq.master) then
+      if (iT == 1) then
+        write(stdout,*) 'Temperature, invTemperature, chemicalPotential, totalEnergy'
+      endif
+      write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
+    endif
 
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
     if (.not. algo%lDebug) then
@@ -316,44 +352,133 @@ program main
     endif
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
+    tstart = tfinish
+
+
+
+
+    ! initialize the already allocated arrays to 0
+    call initresp (algo, dpresp)
+    call initresp (algo, respBl)
+    call initresp (algo, dinter)
+    if (.not. algo%ldebug) then
+       call initresp_qp (algo, qpresp)
+    endif
+
+    do ik = ikstr,ikend
+      info%ik = ik
+      ! load the moments
+      if (edisp%ispin == 1) then
+        if (allocated(darr3)) deallocate(darr3)
+        write(string,'("kPoint/",I6.6,"/moments")') ik
+        call hdf5_read_data(ifile_energy, string, darr3)
+        edisp%Mopt(:,:,:,1) = darr3
+        deallocate(darr3)
+      else
+        if (allocated(darr3)) deallocate(darr3)
+        write(string,'("up/kPoint/",I6.6,"/moments")') ik
+        call hdf5_read_data(ifile_energy, string, darr3)
+        edisp%Mopt(:,:,:,1) = darr3
+        deallocate(darr3)
+        write(string,'("dn/kPoint/",I6.6,"/moments")') ik
+        call hdf5_read_data(ifile_energy, string, darr3)
+        edisp%Mopt(:,:,:,2) = darr3
+        deallocate(darr3)
+      endif
+
+      call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, dpresp, respBl, dinter, qpresp)
+    enddo
+
+    call cpu_time(tfinish)
+    timings(3) = timings(3) + (tfinish - tstart)
+    tstart = tfinish
+
+    if (myid.eq. master) then
+      call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
+    endif
+
+
+  ! SUMMATIONS
+    if (myid .eq. master) then
+      allocate(dpresp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(dpresp%s_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    call MPI_gatherv(dpresp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, dpresp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                     MPI_COMM_WORLD, mpierr)
+#else
+    dpresp%s_gather = dpresp%s_full
+#endif
+
+    if (myid .eq. master) then
+      do ik = 1,kmesh%nkp
+        do iband = edisp%nbopt_min,edisp%nbopt_max
+          dpresp%s_sum(:,:,:) = dpresp%s_sum(:,:,:) + dpresp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        enddo
+      enddo
+    endif
+
+
+    if (myid .eq. master) then
+      allocate(dpresp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(dpresp%a_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+      call MPI_gatherv(dpresp%a_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, dpresp%a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                       MPI_COMM_WORLD, mpierr)
+#else
+    dpresp%a_gather = dpresp%a_full
+#endif
+
+    if (myid .eq. master) then
+      do ik = 1,kmesh%nkp
+        do iband = edisp%nbopt_min,edisp%nbopt_max
+          dpresp%a_sum(:,:,:) = dpresp%a_sum(:,:,:) + dpresp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        enddo
+      enddo
+    endif
+
+
+    call cpu_time(tfinish)
+    timings(4) = timings(4) + (tfinish - tstart)
+    tstart = tfinish
+
+    if (myid .eq. master) then
+      call output_data(algo, info, temp, dpresp)
+    endif
+
+    call cpu_time(tfinish)
+    timings(5) = timings(5) + (tfinish - tstart)
+    tstart = tfinish
+
+
+    deallocate(dpresp%s_gather)
+    deallocate(dpresp%a_gather)
 
   enddo ! end of the outer temperature loop
 
-  write(*,*) 'Timings:'
-  write(*,*) timings
-  write(*,*)
+#ifdef MPI
+   call MPI_allreduce(MPI_IN_PLACE, timings,size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
+   timings(:3) = timings(:3) / dble(nproc)
+#endif
+  if (myid .eq. master) then
+    write(stdout,*)
+    write(stdout,*) '  Timings (average) [s]:'
+    write(stdout,'(A21,F16.6)') '    mu-search:       ', timings(1)
+    write(stdout,'(A21,F16.6)') '    polygamma-eval:  ', timings(2)
+    write(stdout,'(A21,F16.6)') '    response-eval:   ', timings(3)
+    write(stdout,'(A21,F16.6)') '    mpi + summation: ', timings(4)
+    write(stdout,'(A21,F16.6)') '    hdf5-output:     ', timings(5)
+    write(stdout,*)
+  endif
 
 
-
-  ! enddo
-
-  !   !if (myid.eq.master) then
-  !   !also the chemical potential search is not parallelised at the moment
-  !   !don't know how difficult it would be to revert to the original implementation
-  !   !and/or to implement the tetrahedron method
-  !   if (algo%imurestart == 0) then
-  !      if (criterion.lt.20.d0) then !DP
-  !         call find_mu(mu,iT,ndev,ndevact,niitact, edisp, sct, kmesh, thdr)
-  !         if (myid.eq.master) then
-  !            write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,ndev,abs(ndevact),niit,niitact
-  !         endif
-  !      elseif (criterion.lt.80.d0) then !QP
-  !         call find_mu(mu,iT,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, thdr)! full QUAD on particle number
-  !         if (myid.eq.master) then
-  !            write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta,criterion,real(ndevQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-  !         endif
-  !      else   ! further refinement
-  !         if (myid.eq.master) write(*,*) 'SUPER QUAD'
-  !         call find_mu(mu,iT,ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, thdr)! full QUAD on particle number
-  !         if (myid.eq.master) then
-  !            write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-  !         endif
-  !      endif !criterion
-  !   else
-  !      write(*,'(1F10.5,5E15.7,2I5)')T,mu,beta
-  !   endif
-
-  !   ! mutmp=mu ! possibly unused
 
 !!      if (myid.eq.master) write(*,'(A,3E)') 'XXX ', T,beta,1.1d0/(delta/100.d0-0.64d0*gmax)
 
@@ -489,11 +614,12 @@ program main
   !  call response_close_files()
   !endif
 
-  call mpi_close()
   call hdf5_close_file(ifile_energy)
   if (algo%lScatteringFile) then
     call hdf5_close_file(ifile_scatter)
   endif
+
+  call mpi_close()
   call hdf5_finalize()
 
 end program main

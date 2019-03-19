@@ -63,7 +63,7 @@ module Mtypes
 
     ! optical elements (because of the double band dependencies)
     ! are loaded for each k-point and each spin
-    real(8), allocatable    :: Mopt(:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+    real(8), allocatable    :: Mopt(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
                                                 ! 3..9, nband,nband
   end type
 
@@ -97,6 +97,8 @@ module Mtypes
     real(16) :: TempQ
     real(16) :: betaQ
     real(16) :: beta2pQ
+
+    integer  :: ik
   end type
 
   type scattering
@@ -111,71 +113,53 @@ module Mtypes
   end type
 
   type response_dp
-    !kernels
-    real(8) ::  s_ker  ! for conductivity (s)igma
-    real(8) ::  sB_ker ! for conductivity in B-field
-    real(8) ::  a_ker  ! for Peltier (a)lpha
-    real(8) ::  aB_ker ! for Peltier in B-field
-
     ! band-resolved response functions
-    real(8), allocatable :: s_full(:,:,:,:,:)
-    real(8), allocatable :: sB_full(:,:,:,:,:)
-    real(8), allocatable :: a_full(:,:,:,:,:)
-    real(8), allocatable :: aB_full(:,:,:,:,:)
+    complex(8), allocatable :: s_full(:,:,:,:,:)
+    complex(8), allocatable :: sB_full(:,:,:,:,:)
+    complex(8), allocatable :: a_full(:,:,:,:,:)
+    complex(8), allocatable :: aB_full(:,:,:,:,:)
 
     ! gather arrays for MPI
-    real(8), allocatable :: s_gather(:,:,:,:,:)
-    real(8), allocatable :: sB_gather(:,:,:,:,:)
-    real(8), allocatable :: a_gather(:,:,:,:,:)
-    real(8), allocatable :: aB_gather(:,:,:,:,:)
+    complex(8), allocatable :: s_gather(:,:,:,:,:)
+    complex(8), allocatable :: sB_gather(:,:,:,:,:)
+    complex(8), allocatable :: a_gather(:,:,:,:,:)
+    complex(8), allocatable :: aB_gather(:,:,:,:,:)
 
     ! total band and k-summation
-    real(8), allocatable :: s_sum(:,:,:)
-    real(8), allocatable :: sB_sum(:,:,:)
-    real(8), allocatable :: a_sum(:,:,:)
-    real(8), allocatable :: aB_sum(:,:,:)
+    complex(8), allocatable :: s_sum(:,:,:)
+    complex(8), allocatable :: sB_sum(:,:,:)
+    complex(8), allocatable :: a_sum(:,:,:)
+    complex(8), allocatable :: aB_sum(:,:,:)
 
     ! derived quantities
-    real(8), allocatable :: Seebeck(:)
-    real(8), allocatable :: Nernst(:)
-    real(8), allocatable :: RH(:)
-
-    ! polygamma evaluations
-    complex(8), allocatable :: PolyGamma(:,:,:)
+    complex(8), allocatable :: Seebeck(:)
+    complex(8), allocatable :: Nernst(:)
+    complex(8), allocatable :: RH(:)
   end type
 
   type response_qp
-    !kernels
-    real(16) ::  s_ker  ! for conductivity
-    real(16) ::  sB_ker ! for conductivity in B-field
-    real(16) ::  a_ker  ! for Peltier
-    real(16) ::  aB_ker ! for Peltier in B-field
-
     ! band-resolved response functions
-    real(16), allocatable :: s_full(:,:,:,:,:)
-    real(16), allocatable :: sB_full(:,:,:,:,:)
-    real(16), allocatable :: a_full(:,:,:,:,:)
-    real(16), allocatable :: aB_full(:,:,:,:,:)
+    complex(16), allocatable :: s_full(:,:,:,:,:)
+    complex(16), allocatable :: sB_full(:,:,:,:,:)
+    complex(16), allocatable :: a_full(:,:,:,:,:)
+    complex(16), allocatable :: aB_full(:,:,:,:,:)
 
     ! gather arrays for MPI
-    real(16), allocatable :: s_gather(:,:,:,:,:)
-    real(16), allocatable :: sB_gather(:,:,:,:,:)
-    real(16), allocatable :: a_gather(:,:,:,:,:)
-    real(16), allocatable :: aB_gather(:,:,:,:,:)
+    complex(16), allocatable :: s_gather(:,:,:,:,:)
+    complex(16), allocatable :: sB_gather(:,:,:,:,:)
+    complex(16), allocatable :: a_gather(:,:,:,:,:)
+    complex(16), allocatable :: aB_gather(:,:,:,:,:)
 
     ! band and k-summation
-    real(16), allocatable :: s_sum(:,:,:)
-    real(16), allocatable :: sB_sum(:,:,:)
-    real(16), allocatable :: a_sum(:,:,:)
-    real(16), allocatable :: aB_sum(:,:,:)
+    complex(16), allocatable :: s_sum(:,:,:)
+    complex(16), allocatable :: sB_sum(:,:,:)
+    complex(16), allocatable :: a_sum(:,:,:)
+    complex(16), allocatable :: aB_sum(:,:,:)
 
     ! derived quantities
-    real(16), allocatable :: Seebeck(:)
-    real(16), allocatable :: Nernst(:)
-    real(16), allocatable :: RH(:)
-
-    ! polygamma evaluations
-    complex(16), allocatable :: PolyGamma(:,:,:)
+    complex(16), allocatable :: Seebeck(:)
+    complex(16), allocatable :: Nernst(:)
+    complex(16), allocatable :: RH(:)
   end type
 
 end module Mtypes

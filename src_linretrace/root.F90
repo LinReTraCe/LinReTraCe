@@ -90,11 +90,11 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   mu2=mu
 
   do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
-     mu2=mu2+0.005d0
+     mu2=mu2+0.5d0
      call ndeviation(mu2, target_zero2, edisp, sct, kmesh, algo, info)
   enddo
   do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
-     mu1=mu1-0.005d0
+     mu1=mu1-0.5d0
      call ndeviation(mu1, target_zero1, edisp, sct, kmesh, algo, info)
   enddo
 
@@ -314,11 +314,11 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   mu2=mu_qp
 
   do while (target_zero2.gt.0.q0)
-     mu2=mu2+0.005q0
+     mu2=mu2+0.5q0
      call ndeviation(mu2, target_zero2, edisp, sct, kmesh, algo, info)
   enddo
   do while (target_zero1.le.0.q0)
-     mu1=mu1-0.005q0
+     mu1=mu1-0.5q0
      call ndeviation(mu1, target_zero1, edisp, sct, kmesh, algo, info)
   enddo
 
