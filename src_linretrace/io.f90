@@ -8,6 +8,14 @@ module Mio
 
 contains
 
+subroutine read_optical_moments(algo, edisp, info)
+  implicit none
+  type(algorithm)  :: algo
+  type(energydisp) :: edisp
+  type(runinfo)    :: info
+
+end subroutine
+
 subroutine read_preproc_energy_data(algo, kmesh, edisp)
   implicit none
   type(algorithm)              :: algo
@@ -199,35 +207,21 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_data(algo, info, temp, kmesh, dpresp)
+subroutine output_auxiliary(algo, info, temp, kmesh)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
   type(temperature) :: temp
   type(kpointmesh)  :: kmesh
-  type(response_dp) :: dpresp  ! response double precision
 
   character(len=128) :: string
   integer(hid_t)     :: ifile
 
   call hdf5_open_file(algo%output_file, ifile)
 
-  if (info%iT == 1) then
-    call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
-    call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
-    call hdf5_write_data(ifile, '.quantities/weights', kmesh%weight)
-  endif
-
-  write(string,'(I6.6, "/conductivity/intra/full")') info%iT
-  call hdf5_write_data(ifile, string, dpresp%s_gather)
-  write(string,'(I6.6, "/conductivity/intra/sum")') info%iT
-  call hdf5_write_data(ifile, string, dpresp%s_sum)
-
-  write(string,'(I6.6, "/peltier/intra/full")') info%iT
-  call hdf5_write_data(ifile, string, dpresp%a_gather)
-  write(string,'(I6.6, "/peltier/intra/sum")') info%iT
-  call hdf5_write_data(ifile, string, dpresp%a_sum)
-
+  call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
+  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
+  call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
 
   call hdf5_close_file(ifile)
 

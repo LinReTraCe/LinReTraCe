@@ -206,12 +206,15 @@ program main
       write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
     endif
     write(stdout,*)
+    write(stdout,*) '  output-file: ', trim(algo%output_file)
   endif
 
   if (myid .eq. master) then
     call hdf5_create_file(algo%output_file)
+    call output_auxiliary(algo, info, temp, kmesh)
   endif
   call mpi_barrier(mpi_comm_world, mpierr)
+
 
   timings = 0.d0        ! reset timings
   call cpu_time(tstart) ! start timer
@@ -249,6 +252,7 @@ program main
 
       sct%gamscalar = sct%zqpscalar * sct%gamscalar  ! convention we use
     else
+      ! TODO: put this into io.f90
       if (edisp%ispin == 1) then
         write(string,'("tPoint/",I6.6,"/scatrate")') iT
         call hdf5_read_data(ifile_scatter, string, darr2)
@@ -315,21 +319,11 @@ program main
       call cpu_time(tstart)
       if (criterion.lt.20.d0) then !DP
         call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
-        ! if (myid.eq.master) then
-        !    ! write(*,'(1F10.5,4E15.7,2I5)')info%Temp, mu, criterion, ndev, abs(ndevact),niit,niitact
-        !    write(*,*)info%Temp, mu(iT), criterion, ndev, abs(ndevact),niit,niitact
-        ! endif
       elseif (criterion.lt.80.d0) then !QP
         call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-        ! if (myid.eq.master) then
-        !    write(*,*) info%Temp, mu(iT), criterion, real(ndevQ,8), abs(real(ndevactQ,8)),niitQ,niitact
-        ! endif
       else   ! further refinement
         call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-        ! if (myid.eq.master) then
-        !    write(*,*)info%Temp ,mu(iT), criterion, real(ndevVQ,8), abs(real(ndevactQ,8)),niitQ,niitact
-        ! endif
-      endif !criterion
+      endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
@@ -344,6 +338,9 @@ program main
       write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
     endif
 
+    ! calculate the polygamma function (1...3)
+    ! for all optical bands, spins and each core's kpoints
+    ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
     if (.not. algo%lDebug) then
       call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
@@ -372,7 +369,6 @@ program main
         call hdf5_read_data(ifile_energy, string, darr3)
         edisp%Mopt(:,:,:,1) = darr3
         deallocate(darr3)
-        edisp%Mopt = 1.d0
       else
         if (allocated(darr3)) deallocate(darr3)
         write(string,'("up/kPoint/",I6.6,"/moments")') ik
@@ -396,7 +392,7 @@ program main
     !   call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
     ! endif
 
-
+    ! TODO: config file option
     algo%lInterbandQuantities = .true.
 
     call response_summation(dpresp, "intra", edisp, algo, info, temp, kmesh)
@@ -425,141 +421,6 @@ program main
     write(stdout,*)
   endif
 
-
-
-!!      if (myid.eq.master) write(*,'(A,3E)') 'XXX ', T,beta,1.1d0/(delta/100.d0-0.64d0*gmax)
-
-  !      !if ( (delta.gt.0.d0).and.(criterion.gt.90.d0).and.(gminall.eq.0.d0) ) then
-  !    !if ( (dos%gap .gt. 0.d0).and.(criterion .gt. 90.d0).and.(gminall .eq. 0.d0) ) then
-
-  !    !   if (myid.eq.master) then
-  !    !      write(*,*) 'Using low T extrapolation'
-  !    !      imeth=3
-
-  !    !      if (iflag_dmudt.eq.0) then
-  !    !         !dmudT = ( mu-(emax(iband_valence)+delta/2.d0) ) / T
-  !    !         dmudT = ( mu-(dos%vbm+dos%gap/2.d0) ) / T  !eM: let's hope that this actually means the same as what above
-  !    !         !         write(*,*) ' XXX '
-  !    !         !         write(*,*)mu
-  !    !         !         write(*,*) (emax(iband_valence)+delta/2.d0)
-  !    !         iflag_dmudt=1
-  !    !      endif
-
-  !    !      !      write(*,*)emax(iband_valence),emax(iband_valence)+delta/2.d0,dmudt
-
-  !    !      !mu=emax(iband_valence)+ delta/2.d0 + dmudT * T
-  !    !      mu=dos%vbm+ dos%gap/2.d0 + dmudT * T !eM: let's hope that this actually means the same as what above
-
-  !    !   endif
-
-  !   ! endif
-  !   ! endif !algo%imurestart==0
-
-  !! old_vers
-  !!
-  !!      if (1.eq.2) then ! XXX beware... this is meant to work with gamma=0 ... but check...
-  !!                    ! XXX for gamma=0, we know that it should be linear down to midgap, so we can actually use that...
-  !!                    ! XXX so determine slope and extrapolate... need to think harder for gamma>0
-  !!                    ! e.g. evaluate impsi at homo/lumu... and look (analytically?)
-  !!
-  !!!      if ((delta.gt.0.d0).and.(T/delta.lt.100.d0)) then ! then issues for low gamma... but narrow down by checking more
-  !!         !if ((delta.gt.0.d0).and.(criterion.gt.90.d0)) then ! then issues for low gamma... but narrow down by checking more
-  !!         if ((dos%gap.gt.0.d0).and.(criterion.gt.90.d0)) then ! then issues for low gamma... but narrow down by checking more
-  !!            call ndeviationQ(mu,NE,1,test0)
-  !!            call ndeviationQ(mu+1.d-3,NE,1,test1)
-  !!            imeth=3
-  !!            call find_muQ_lowT(mu,iT)
-  !!            !if (myid.eq.master) write(*,'(A,1E20.12)')' using find_muQ_lowT ', T
-  !!         endif
-  !!
-  !!      endif
-
-  !   !endif !master
-
-
-  !   !if (myid.eq.master) then
-  !   !   select case (imurestart)
-  !   !   case (0)
-  !   !      write(20,'(100E20.12)')T,mu,mutmp,real(imeth,kind=8),criterion
-  !!! only needed for gfortran... if one wants to monitor progress by continous readout
-  !   !      flush(20)
-  !!! maybe need to sync on some systems...    iflush=fsync(fnum(20))
-  !   !   case(1)
-  !!!      else ! read mu
-  !   !      read(20,*)dum1,mu
-  !   !      if (dum1.ne.T) STOP 'inconsistent mu.dat'
-  !!!      endif
-  !   !      niitact=0
-  !   !      write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-  !   !   case (2)
-  !   !      mu = edisp%efer !this is the original assignment to the value read from file
-  !   !                      !unless imurestart == 0, in which case it is the value found from the
-  !   !                      !dos (if the tetrahedron methos has been selected)
-  !   !      niitact=0
-  !   !      write(*,'(1F10.3,5E15.7,2I5)')T,mu,beta,criterion/80.d0,real(ndevVQ,8),abs(real(ndevactQ,8)),niitQ,niitact
-  !   !      write(20,'(100E20.12)')T,mu,mutmp,real(imeth,kind=8),criterion
-  !   !   end select
-  !   !endif !master
-
-!! #ifdef MPI
-!!      if (imurestart.ne.0) then ! if read mu, need to BCAST it to all procs.
-!!         call MPI_BCAST(mu,1,MPI_DOUBLE_PRECISION,master,MPI_COMM_WORLD,mpierr)
-!!      endif
-!! #endif
-
-  !   !copy the given value of mu into the datastructure
-  !   sct%mu(iT) = mu
-
-  !   if (.not. algo%ltetra .and. (myid == master) .and. (iT == sct%nT)) then
-  !      call intldos(iT, dos, kmesh, edisp, sct)
-  !   endif
-
-  !   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !   ! DONE MU. DO TRANSPORT AT THIS POINT.
-  !   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !   if (algo%ldebug) then
-  !      call calc_response(mu, iT, drhodT, kmesh, edisp, thdr, sct, dpresp, dderesp, dinter, respBl)
-  !   else
-  !      call calc_response(mu, iT, drhodT, kmesh, edisp, thdr, sct, dpresp, dderesp, dinter, respBl, qpresp)
-  !   endif
-
-  !enddo ! iT temperature
-  !! the values of the derivative of the resistivity have been accumulated over
-  !! during the temparature loop, now find the critical temperature
-
-
-!! Finished main loop here
-!! output
-  !if (myid.eq.master) then
-  !  do iT=1,sct%nT-1
-  !     write(800,*) sct%TT(iT),sct%d1(iT),sct%d2(iT)
-  !     write(801,*) sct%TT(iT),sct%d0(iT)
-  !  enddo
-
-  !  dum1=drhodT(1)
-  !  do iT=2,sct%nT-1
-  !     if(drhodT(iT) > dum1) then
-  !        dum1=drhodT(iT)
-  !        sct%Tstar=sct%TT(iT)
-  !     endif
-  !  enddo
-  !  ! Lines below to be removed
-  !  if (sct%Tstar > 0.0d0) then
-  !     write(*,*)'found T* (intraband only)', sct%Tstar
-  !  else
-  !     write(*,*)'T* (intraband only) not found'
-  !  endif
-
-  !  if (sct%Tflat > 0.0d0) then
-  !     write(*,*)'found T_s (intraband only)', sct%Tflat
-  !  else
-  !     write(*,*)'T_s (intraband only) not found'
-  !  endif
-  !  !end lines to be removed
-
-  !  close(20) ! mu.dat
-  !  call response_close_files()
-  !endif
 
   call hdf5_close_file(ifile_energy)
   if (algo%lScatteringFile) then
