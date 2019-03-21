@@ -8,15 +8,14 @@ module Mio
 
 contains
 
-subroutine read_preproc_energy_data(algo, kmesh, edisp, lat)
+subroutine read_preproc_energy_data(algo, kmesh, edisp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
   type(energydisp)             :: edisp
-  type(lattice)                :: lat
 
   integer(hid_t)               :: ifile
-  integer                      :: locortho, i, is, locderivatives
+  integer                      :: i, is, locderivatives
   integer, allocatable         :: irank1arr(:)
   real(8), allocatable         :: drank1arr(:)
   real(8), allocatable         :: drank2arr(:,:)
@@ -39,16 +38,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, lat)
 
 
   ! unit cell information
-  call hdf5_read_data(ifile, "/.unitcell/volume", lat%vol)
-  call hdf5_read_data(ifile, "/.unitcell/ortho",  locortho)
-
-  if (locortho == 1) then
-     lat%lOrtho = .true.
-     lat%nalpha = 3 ! polarization directions
-  else
-     lat%lortho = .false.
-     lat%nalpha = 6 ! polarization directions
-  endif
+  call hdf5_read_data(ifile, "/.unitcell/volume", kmesh%vol)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
@@ -209,11 +199,12 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_data(algo, info, temp, dpresp)
+subroutine output_data(algo, info, temp, kmesh, dpresp)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
   type(temperature) :: temp
+  type(kpointmesh)  :: kmesh
   type(response_dp) :: dpresp  ! response double precision
 
   character(len=128) :: string
@@ -224,6 +215,7 @@ subroutine output_data(algo, info, temp, dpresp)
   if (info%iT == 1) then
     call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
     call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
+    call hdf5_write_data(ifile, '.quantities/weights', kmesh%weight)
   endif
 
   write(string,'(I6.6, "/conductivity/intra/full")') info%iT

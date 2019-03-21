@@ -15,23 +15,11 @@ module Mtypes
     logical :: muSearch
     logical :: muFermi
     logical :: lScatteringFile
+    logical :: lInterbandQuantities
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
   end type
-
-  ! lattice information which is necessary for us
-  ! volume (prefactors) and the orthogonality of the crystal
-  ! note: an orthogonal crystal reduces the effective number of polarization directions
-  type lattice
-    real(8) :: vol            ! volume of the real space unit cell -- for prefactors
-    logical :: lOrtho         ! do we have an orthogonal bravais lattice (cubic,tetragonal,orthorhombic)
-    integer :: nalpha         ! number of polarization directions ... 3 or 6
-  end type
-
-  ! ( 1 4 6 )
-  ! ( - 2 5 )
-  ! ( - - 3 )
 
   ! information about the k-points which is necessary for us
   ! that is: number of k-points and its weight
@@ -39,6 +27,7 @@ module Mtypes
     real(8)              :: weightsum
     real(8), allocatable :: weight(:)
     integer              :: nkp
+    real(8)              :: vol
   end type
 
   ! energy dispersion and derived quantities

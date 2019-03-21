@@ -18,7 +18,6 @@ program main
   type(dosgrid)     :: dos     ! DOS, integrated DOS, Fermi level
   type(scattering)  :: sct     ! scattering rates and quasi particle weights
   type(temperature) :: temp    ! temperature quantities
-  type(lattice)     :: lat     ! lattice information (volume)
   type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
 
   type(response_dp) :: dpresp  ! response double precision
@@ -75,7 +74,7 @@ program main
   call check_config(algo)
 
   call hdf5_init()
-  call read_preproc_energy_data(algo, kmesh, edisp, lat)
+  call read_preproc_energy_data(algo, kmesh, edisp)
 
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
     call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')
@@ -267,10 +266,8 @@ program main
           edisp%band_shift(:,:,1) = darr2
           deallocate(darr2)
 
-          write(*,*) 'applying band_shift'
           edisp%band = edisp%band_original + edisp%band_shift
         endif
-
       else
         write(string,'("up/tPoint/",I6.6,"/scatrate")') iT
         call hdf5_read_data(ifile_scatter, string, darr2)
@@ -374,6 +371,7 @@ program main
         call hdf5_read_data(ifile_energy, string, darr3)
         edisp%Mopt(:,:,:,1) = darr3
         deallocate(darr3)
+        edisp%Mopt = 1.d0
       else
         if (allocated(darr3)) deallocate(darr3)
         write(string,'("up/kPoint/",I6.6,"/moments")') ik
@@ -393,9 +391,9 @@ program main
     timings(3) = timings(3) + (tfinish - tstart)
     tstart = tfinish
 
-    if (myid.eq. master) then
-      call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
-    endif
+    ! if (myid.eq. master) then
+    !   call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
+    ! endif
 
 
   ! SUMMATIONS
@@ -450,7 +448,7 @@ program main
     tstart = tfinish
 
     if (myid .eq. master) then
-      call output_data(algo, info, temp, dpresp)
+      call output_data(algo, info, temp, kmesh, dpresp)
     endif
 
     call cpu_time(tfinish)
