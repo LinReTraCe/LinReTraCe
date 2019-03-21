@@ -42,7 +42,7 @@ $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 
 main.o: params.o mpi_org.o types.o io.o aux.o dos.o config.o response.o root.o hdf5_wrapper.o
 aux.o: mpi_org.o
-response.o: mpi_org.o types.o params.o
+response.o: mpi_org.o types.o params.o hdf5_wrapper.o fermi.o
 root.o: mpi_org.o params.o types.o fermi.o aux.o
 io.o: params.o types.o hdf5_wrapper.o aux.o
 dos.o: params.o types.o aux.o

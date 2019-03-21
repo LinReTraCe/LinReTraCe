@@ -36,7 +36,7 @@ program main
 
   real(8) :: criterion
   character(len=128) :: string
-  real(8) :: tstart, tfinish, timings(5)
+  real(8) :: tstart, tfinish, timings(4)
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -87,18 +87,18 @@ program main
   endif
 
   ! calculate a purely DFT density of states with Laurentzian broadening
-  call gendosel (kmesh, edisp, dos) ! normalization already taken care of
-  call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
+  ! call gendosel (kmesh, edisp, dos) ! normalization already taken care of
+  ! call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
 
-  if (myid.eq.master) then
-    do is = 1,edisp%ispin
-      if (dos%gap(is) == 0.d0) then
-        write(stdout,*) 'Detected no band gap in spin ', is, ' / ', edisp%ispin
-      else
-        write(stdout,*) 'Detected band gap of size: ', dos%gap(is), 'in spin ', is, ' / ', edisp%ispin
-      endif
-    enddo
-  endif
+  ! if (myid.eq.master) then
+  !   do is = 1,edisp%ispin
+  !     if (dos%gap(is) == 0.d0) then
+  !       write(stdout,*) 'Detected no band gap in spin ', is, ' / ', edisp%ispin
+  !     else
+  !       write(stdout,*) 'Detected band gap of size: ', dos%gap(is), 'in spin ', is, ' / ', edisp%ispin
+  !     endif
+  !   enddo
+  ! endif
 
   ! starting point for the chemical potential
   if (myid.eq.master) then
@@ -310,6 +310,7 @@ program main
 
 
 
+    niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
       if (criterion.lt.20.d0) then !DP
@@ -396,74 +397,23 @@ program main
     ! endif
 
 
-  ! SUMMATIONS
-    if (myid .eq. master) then
-      allocate(dpresp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-    else
-      allocate(dpresp%s_gather(1,1,1,1,1))
+    algo%lInterbandQuantities = .true.
+
+    call response_summation(dpresp, "intra", edisp, algo, info, temp, kmesh)
+    if (algo%lInterbandQuantities) then
+      call response_summation(dinter, "inter", edisp, algo, info, temp, kmesh, .false.)
     endif
-#ifdef MPI
-    call MPI_gatherv(dpresp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     MPI_DOUBLE_COMPLEX, dpresp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
-                     MPI_COMM_WORLD, mpierr)
-#else
-    dpresp%s_gather = dpresp%s_full
-#endif
-
-    if (myid .eq. master) then
-      do ik = 1,kmesh%nkp
-        do iband = edisp%nbopt_min,edisp%nbopt_max
-          dpresp%s_sum(:,:,:) = dpresp%s_sum(:,:,:) + dpresp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-        enddo
-      enddo
-    endif
-
-
-    if (myid .eq. master) then
-      allocate(dpresp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-    else
-      allocate(dpresp%a_gather(1,1,1,1,1))
-    endif
-#ifdef MPI
-      call MPI_gatherv(dpresp%a_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, dpresp%a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
-                       MPI_COMM_WORLD, mpierr)
-#else
-    dpresp%a_gather = dpresp%a_full
-#endif
-
-    if (myid .eq. master) then
-      do ik = 1,kmesh%nkp
-        do iband = edisp%nbopt_min,edisp%nbopt_max
-          dpresp%a_sum(:,:,:) = dpresp%a_sum(:,:,:) + dpresp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-        enddo
-      enddo
-    endif
-
+    call response_summation(respBl, "intraBoltzmann", edisp, algo, info, temp, kmesh)
 
     call cpu_time(tfinish)
     timings(4) = timings(4) + (tfinish - tstart)
     tstart = tfinish
 
-    if (myid .eq. master) then
-      call output_data(algo, info, temp, kmesh, dpresp)
-    endif
-
-    call cpu_time(tfinish)
-    timings(5) = timings(5) + (tfinish - tstart)
-    tstart = tfinish
-
-
-    deallocate(dpresp%s_gather)
-    deallocate(dpresp%a_gather)
-
   enddo ! end of the outer temperature loop
 
 #ifdef MPI
    call MPI_allreduce(MPI_IN_PLACE, timings,size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
-   timings(:3) = timings(:3) / dble(nproc)
+   timings(:4) = timings(:4) / dble(nproc)
 #endif
   if (myid .eq. master) then
     write(stdout,*)
@@ -472,7 +422,6 @@ program main
     write(stdout,'(A21,F16.6)') '    polygamma-eval:  ', timings(2)
     write(stdout,'(A21,F16.6)') '    response-eval:   ', timings(3)
     write(stdout,'(A21,F16.6)') '    mpi + summation: ', timings(4)
-    write(stdout,'(A21,F16.6)') '    hdf5-output:     ', timings(5)
     write(stdout,*)
   endif
 

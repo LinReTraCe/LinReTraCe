@@ -3,6 +3,9 @@ module Mresponse
   use Mtypes
   use Mparams
   use Mfermi
+  use hdf5
+  use hdf5_wrapper
+
   implicit none
 
   interface allocate_response
@@ -31,8 +34,6 @@ subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, dresp, re
   type(response_qp) :: qresp   !intraband response in quadruple precision
 
   complex(8), intent(in) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
-
-  algo%lInterbandQuantities = .true.
 
   call response_intra_km(dresp,  PolyGamma, mu, edisp, sct, kmesh, algo, info)
   if (algo%lInterbandquantities) then
@@ -240,7 +241,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
         resp%s_full(1,1,iband1,:,info%ik) = resp%s_full(1,1,iband1,:,info%ik) &
             / (2.d0 * pi**2 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-            / ( enrgydiff**2 * (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
+            / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
 
 
         resp%a_full(1,1,iband1,:,info%ik) = resp%a_full(1,1,iband1,:,info%ik) &
@@ -270,7 +271,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
         resp%a_full(1,1,iband1,:,info%ik) = resp%a_full(1,1,iband1,:,info%ik) &
             / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-            / ( enrgydiff**2 * (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
+            / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
       enddo
     enddo
   else
@@ -294,7 +295,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
               * enrgydiff**2 / sct%gamscalar
 
         resp%s_full(1,1,iband1,:,info%ik) = resp%s_full(1,1,iband1,:,info%ik) &
-            + aimag(PolyGamma(1,iband1,info%ik,:)) &
+            + aimag(PolyGamma(1,iband2,info%ik,:)) &
               * ( 2.d0* enrgydiff )
 
         resp%s_full(1,1,iband1,:,info%ik) = resp%s_full(1,1,iband1,:,info%ik) &
@@ -327,8 +328,8 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
         resp%a_full(1,1,iband1,:,info%ik) = resp%a_full(1,1,iband1,:,info%ik) &
             * sct%gamscalar**2 &
-            * sct%zqpscalar**2 * sct%zqp(iband2,info%ik,:) &
-            * info%beta
+            * sct%zqpscalar**2 &
+            * info%beta**2
 
         resp%a_full(1,1,iband1,:,info%ik) = resp%a_full(1,1,iband1,:,info%ik) &
             / (2.d0 * pi**3 * enrgydiff**2) &
@@ -525,820 +526,181 @@ subroutine response_peierls_weights(resp, edisp, info)
   enddo
 end subroutine
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESPINTERKM
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine (QP counterpart missing)
-!! evaluates the conduction kernel, and the
-!! full response functions for a given k-point
-!! in the KUBO formalism for interband transitions
-!! singularities might arise at conical intersections
-!! between the two bands
-!!
-!subroutine respinterkm(mu, iT, ik, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  real(8), intent(in) :: mu
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: ik
-!  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns
-!  integer :: ix,iy
-!  complex(8),external  :: wpsipg
-!  complex(16),external :: wpsipghp
-!!local variables
-!  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
-!  real(8) :: DD1, DD2   !denominators
-!  real(8) :: ReK, ImK, tmp_s, tmp_a
-!  integer :: ikk
-!  real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
+subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
+  implicit none
+  type (response_dp)  :: resp
+  character(len=*)    :: gname
+
+  type(energydisp)    :: edisp
+  type(algorithm)     :: algo
+  type(runinfo)       :: info
+  type(kpointmesh)    :: kmesh
+  type(temperature)   :: temp
+
+  logical, optional, intent(in) :: lBfield
+  logical :: lBoutput
+
+  character(len=128) :: string
+  integer(hid_t)     :: ifile
+
+  integer :: iband, ik
+
+
+  if (algo%lBfield) then
+    if(present(lBfield)) then
+      if (lBfield) then
+        lBoutput = .true.
+      else
+        lBoutput = .false.
+      endif
+    else
+      lBoutput = .true.
+    endif
+  else
+    lBoutput = .false.
+  endif
+
+  if (myid .eq. master) then
+    allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+  else
+    allocate(resp%s_gather(1,1,1,1,1))
+  endif
+#ifdef MPI
+  call MPI_gatherv(resp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                   MPI_DOUBLE_COMPLEX, resp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                   displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                   MPI_COMM_WORLD, mpierr)
+#else
+  resp%s_gather = resp%s_full
+#endif
+
+  if (myid .eq. master) then
+    do ik = 1,kmesh%nkp
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+      enddo
+    enddo
+  endif
+
+
+  if (myid .eq. master) then
+    allocate(resp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+  else
+    allocate(resp%a_gather(1,1,1,1,1))
+  endif
+#ifdef MPI
+    call MPI_gatherv(resp%a_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, resp%a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                     MPI_COMM_WORLD, mpierr)
+#else
+  resp%a_gather = resp%a_full
+#endif
+
+  if (myid .eq. master) then
+    do ik = 1,kmesh%nkp
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+      enddo
+    enddo
+  endif
+
+  if (myid .eq. master) then
+    call hdf5_open_file(algo%output_file, ifile)
+
+    write(string,'(I6.6)') info%iT
+    string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/full"
+    call hdf5_write_data(ifile, string, resp%s_gather)
+    write(string,'(I6.6)') info%iT
+    string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sum"
+    call hdf5_write_data(ifile, string, resp%s_sum)
+
+    write(string,'(I6.6)') info%iT
+    string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/full"
+    call hdf5_write_data(ifile, string, resp%a_gather)
+    write(string,'(I6.6)') info%iT
+    string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sum"
+    call hdf5_write_data(ifile, string, resp%a_sum)
+
+    call hdf5_close_file(ifile)
+  endif
+
+  deallocate(resp%s_gather)
+  deallocate(resp%a_gather)
+
+
+  if (lBoutput) then
+    if (myid .eq. master) then
+      allocate(resp%sB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(resp%sB_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                     MPI_COMM_WORLD, mpierr)
+#else
+    resp%sB_gather = resp%sB_full
+#endif
+
+    if (myid .eq. master) then
+      do ik = 1,kmesh%nkp
+        do iband = edisp%nbopt_min,edisp%nbopt_max
+          resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        enddo
+      enddo
+    endif
+
+
+    if (myid .eq. master) then
+      allocate(resp%aB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(resp%aB_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+      call MPI_gatherv(resp%aB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%aB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                       MPI_COMM_WORLD, mpierr)
+#else
+    resp%aB_gather = resp%aB_full
+#endif
+
+    if (myid .eq. master) then
+      do ik = 1,kmesh%nkp
+        do iband = edisp%nbopt_min,edisp%nbopt_max
+          resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        enddo
+      enddo
+    endif
+
+    if (myid .eq. master) then
+      call hdf5_open_file(algo%output_file, ifile)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/fullB"
+      call hdf5_write_data(ifile, string, resp%sB_gather)
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sumB"
+      call hdf5_write_data(ifile, string, resp%sB_sum)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/fullB"
+      call hdf5_write_data(ifile, string, resp%aB_gather)
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sumB"
+      call hdf5_write_data(ifile, string, resp%aB_sum)
+
+      call hdf5_close_file(ifile)
+    endif
+
+    deallocate(resp%sB_gather)
+    deallocate(resp%aB_gather)
+  endif
+
+end subroutine
 
-
-!  ikk = ik
-!  if (lat%lortho) then
-!     Mopt = 0.d0
-!     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
-!  else
-!     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
-!  endif
-!  ! ikk = symm%symop_id(1,ik)
-!  ! call getmopt(ek, ik, Mopt, .true.) ! inter
-
-!  do ib1=1,ek%nband_max !loop over bands (these will be traced over)
-!     ! if the band is not contained in the optical matrices just do nothing
-!     if (ib1 < ek%nbopt_min) cycle
-!     if (ib1 > ek%nbopt_max) cycle
-
-
-!     resp%z1=real(ek%z(ikk,ib1),8)
-!     if (allocated(sct%ykb)) then
-!        resp%gamma1=resp%z1*real(sct%gam(iT)+sct%ykb(iT,ikk,ib1),8)
-!     else
-!        resp%gamma1=resp%z1*real(sct%gam(iT),8)
-!     endif
-!     resp%aqp1=resp%z1*real(ek%band(ikk,ib1)-mu,8)
-!     !the first state has to belong to the occupied manifold
-!     if (resp%aqp1 > 0.0d0) cycle
-!     resp%zarg=0.5d0+beta2p*(ci*resp%aqp1+resp%gamma1)
-!     do ipg=1,1
-!        resp%ctmp=wpsipg(resp%zarg,ipg)
-!        resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
-!        resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
-!     enddo
-
-!     ! compute transport kernels (omega-part)
-!     !
-!     !do ib2=ib1+1,ek%nband_max
-!     do ib2=1,ek%nband_max
-!        if (ib2 < ek%nbopt_min) cycle
-!        if (ib2 > ek%nbopt_max) cycle
-!        if (ib2 == ib1 ) cycle
-!        !singularities might arise if ek%band1 = ek%band2
-
-
-!        !second band variables and derived quantities
-!        resp%z2=real(ek%z(ikk,ib2),8)
-!        if (allocated(sct%ykb)) then
-!           resp%gamma2=resp%z2*real(sct%gam(iT)+sct%ykb(iT,ikk,ib2),8)
-!        else
-!           resp%gamma2=resp%z2*real(sct%gam(iT),8)
-!        endif
-!        resp%aqp2=resp%z2*real(ek%band(ikk,ib2)-mu,8)
-!        !the second state has to belong to the unoccupied manifold
-!        if (resp%aqp2 < 0.0d0) cycle
-!        resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-!        do ipg=1,1
-!           resp%ctmp=wpsipg(resp%zarg,ipg)
-!           resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
-!           resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
-!        enddo
-
-!        Dqp    = resp%aqp1 - resp%aqp2     !Delta csi in eq
-!        Dgamma = resp%gamma1 - resp%gamma2 !Delta in eq
-!        Ggamma = resp%gamma1 + resp%gamma2 !Gamma in eq
-!        DD1 = 1.0d0/(Dqp**2 + Ggamma**2)
-!        DD2 = 1.0d0/(Dqp**2 + Dgamma**2)
-
-!        ReK = 2.0d0*resp%gamma1*resp%gamma2*DD2*( (resp%gamma2*resp%aqp1) - (resp%gamma1*resp%aqp2) )
-!        ImK = resp%gamma1*resp%gamma2*DD2*( (Ggamma*Dgamma) + (resp%aqp1+resp%aqp2)*Dqp )
-
-!        tmp_s = (resp%z1*resp%z2 * resp%gamma1*resp%gamma2)*DD1*beta/(pi**3)
-!        tmp_a = 0.5d0*resp%z1*resp%z2*DD1*(beta**2)/(pi**3)
-
-
-!        resp%s_ker = tmp_s * ( ((DD2*Dgamma + 0.5d0/resp%gamma2)*resp%RePolyGamma2(1)) &
-!                   - ((DD2*Dgamma - 0.5d0/resp%gamma1)*resp%RePolyGamma1(1)) &
-!                   + (DD2*Dqp*(resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))) )
-
-!        resp%a_ker = tmp_a * ( (resp%aqp1*resp%gamma2*resp%RePolyGamma1(1)) + (resp%aqp2*resp%gamma1*resp%RePolyGamma2(1)) &
-!                   + (ReK*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))) + (ImK*(resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))) )
-
-!        ! B = 0
-!        !tmp=vka(ik,ib,ix)*vka(ik,ib,iy)
-!        do ix=1,lat%nalpha
-!           if (algo%ltbind) then
-!              resp%tmp=ek%Mopt(ix,ik, ib1, ib2)*ek%Mopt(ix,ik, ib1, ib2)
-!           else
-!              ! resp%tmp=ek%Mopt(ix,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
-!              resp%tmp=Mopt(ix,ib1,ib2)
-!           endif
-
-!           resp%s_tmp(ik,ib1,ix,ix)=resp%s_tmp(ik,ib1,ix,ix) + (resp%s_ker * resp%tmp)
-!           resp%a_tmp(ik,ib1,ix,ix)=resp%a_tmp(ik,ib1,ix,ix) + (resp%a_ker * resp%tmp)
-
-!           do iy=ix+1,lat%nalpha
-!              ! resp%tmp=ek%Mopt(ix+iy+1,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
-!              resp%tmp=Mopt(ix+iy+1,ib1,ib2)
-!              resp%s_tmp(ik,ib1,ix,iy)=resp%s_tmp(ik,ib1,ix,iy) + (resp%s_ker * resp%tmp)
-!              resp%a_tmp(ik,ib1,ix,iy)=resp%a_tmp(ik,ib1,ix,iy) + (resp%a_ker * resp%tmp)
-!           enddo !iy
-!        enddo ! ix
-
-!     enddo !ib2
-!  enddo ! ib1
-
-!end subroutine respinterkm
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESPINTERKM_SYMM
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine (QP counterpart missing)
-!! evaluates the conduction kernel, and the
-!! full response functions at a given k-point
-!! in the KUBO formalism for interband transitions.
-!! It uses a semplified kernel obtained for a
-!! 2 band symmetrical semiconductor with
-!! a given band gap !
-!! Expressions valid only at the Gamma point
-!! have been commented out
-!!
-!subroutine respinterkm_symm(mu, iT, ik, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  real(8), intent(in) :: mu
-!  !real(8), intent(in) :: gap
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: ik
-!  integer :: ib1, ib2, ipg !band1, band2, degree of Polygamma f'ns
-!  integer :: ix,iy
-!  complex(8),external  :: wpsipg
-!  complex(16),external :: wpsipghp
-!!local variables
-!  real(8) :: Dqp, Dgamma, Ggamma !qp energy difference, scattering rate difference and sum
-!  real(8) :: DD1, DD2   !denominators
-!  real(8) :: ReK, ImK, tmp_s, tmp_a
-!  integer :: ikk
-!  real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
-
-!  ikk = ik
-!  if (lat%lortho) then
-!     Mopt = 0.d0
-!     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
-!  else
-!     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
-!  endif
-!  ! ikk = symm%symop_id(1,ik)
-!  ! call getmopt(ek, ik, Mopt, .true.) ! inter
-
-!  do ib1=1,ek%nband_max !loop over bands (these will be traced over)
-!     ! if the band is not contained in the optical matrices just do nothing
-!     if (ib1 < ek%nbopt_min) cycle
-!     if (ib1 > ek%nbopt_max) cycle
-
-!     resp%z1=real(ek%z(ikk,ib1),8)
-!     if (allocated(sct%ykb)) then
-!        resp%gamma1=resp%z1*real(sct%gam(iT)+sct%ykb(iT,ikk,ib1),8)
-!     else
-!        resp%gamma1=resp%z1*real(sct%gam(iT),8)
-!     endif
-!     resp%aqp1=resp%z1*real(ek%band(ikk,ib1),8) !in a symmetric SC mu=0
-!     ! if the band is unoccupied cycle
-!     if(resp%aqp1 > mu) cycle
-!     resp%zarg=0.5d0+beta2p*((ci*resp%aqp1)+resp%gamma1)
-!     do ipg=1,1
-!        resp%ctmp=wpsipg(resp%zarg,ipg)
-!        resp%RePolyGamma1(ipg)=real(resp%ctmp,8)
-!        resp%ImPolyGamma1(ipg)=imag(resp%ctmp)
-!     enddo
-
-!     ! compute transport kernels (omega-part)
-!     !
-!     do ib2=1,ek%nband_max
-!        if (ib2 < ek%nbopt_min) cycle
-!        if (ib2 > ek%nbopt_max) cycle
-!        if (ib2 == ib1 ) cycle
-
-
-!        !second band variables and derived quantities
-!        resp%z2=real(ek%z(ikk,ib2),8)
-!        resp%gamma2=resp%gamma1   !only one gamma required !real(sct%gam(iT,ib2),8)
-!        resp%aqp2=resp%z2*real(ek%band(ikk,ib2),8) !in a symmetric SC mu=0
-!        ! if the second state is occupied cycle (interband contribution)
-!        if(resp%aqp2 < mu) cycle
-!        resp%zarg=0.5d0+beta2p*(ci*resp%aqp2+resp%gamma2)
-!        do ipg=1,1
-!           resp%ctmp=wpsipg(resp%zarg,ipg)
-!           resp%RePolyGamma2(ipg)=real(resp%ctmp,8)
-!           resp%ImPolyGamma2(ipg)=imag(resp%ctmp)
-!        enddo
-
-!        Dqp    = resp%aqp1 - resp%aqp2     !Delta csi in eq
-!        !DD1 = 1.0d0/(gap**2 + 4.0d0*(resp%gamma1**2) )
-!        DD1 = 1.0d0/(Dqp**2 + 4.0d0*(resp%gamma1**2) )
-
-!        tmp_s = DD1*((resp%z1 * resp%gamma1)**2)*beta/(pi**3)
-!        tmp_a = DD1*((resp%z1 * beta)**2)/(2.0d0*(pi**3))
-
-
-!        resp%s_ker = tmp_s * ( (resp%RePolyGamma2(1) + resp%RePolyGamma1(1))/(2.0d0*resp%gamma1) &
-!                   + (resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))/Dqp )
-!                   !- (resp%ImPolyGamma2(1) - resp%ImPolyGamma1(1))/gap ) !only at the Gamma point!!
-!        resp%a_ker = tmp_a * ( resp%gamma1*(resp%aqp1*resp%RePolyGamma1(1) + resp%aqp2*resp%RePolyGamma2(1)) &
-!                   + (resp%gamma1**2)*(resp%aqp1+resp%aqp2)*(resp%ImPolyGamma2(1)-resp%ImPolyGamma1(1))/Dqp  &
-!                   + (resp%gamma1**3)*2.0d0*(resp%RePolyGamma1(1) - resp%RePolyGamma2(1))/Dqp )
-
-!        !only at the Gamma point!!
-!        !resp%a_ker = tmp_a * ( resp%gamma1*abs(resp%aqp1)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1)) &
-!        !           + abs(resp%aqp1)*(resp%gamma1**3)*(resp%RePolyGamma2(1)-resp%RePolyGamma1(1))/(resp%aqp1**2) )
-
-!        ! B = 0
-!        !tmp=vka(ik,ib,ix)*vka(ik,ib,iy)
-!        do ix=1,lat%nalpha
-!           if (algo%ltbind) then
-!              resp%tmp=ek%Mopt(ix,ik, ib1, ib2)*ek%Mopt(ix,ik, ib1, ib2)
-!           else
-!              ! resp%tmp=ek%Mopt(ix,ik, ib1, ib2) !the optical matrix elements given by Wien2k are squared already
-!              resp%tmp=Mopt(ix,ib1,ib2)
-!           endif
-
-!           resp%s_tmp(ik,ib1,ix,ix)=resp%s_tmp(ik,ib1,ix,ix) + (resp%s_ker * resp%tmp)
-!           resp%a_tmp(ik,ib1,ix,ix)=resp%a_tmp(ik,ib1,ix,ix) + (resp%a_ker * resp%tmp)
-
-!           do iy=ix+1,lat%nalpha
-!              ! resp%tmp=ek%Mopt(ix+iy+1,ik, ib1, ib2)
-!              resp%tmp=Mopt(ix+iy+1,ib1,ib2)
-!              resp%s_tmp(ik,ib1,ix,iy)=resp%s_tmp(ik,ib1,ix,iy) + (resp%s_ker * resp%tmp)
-!              resp%a_tmp(ik,ib1,ix,iy)=resp%a_tmp(ik,ib1,ix,iy) + (resp%a_ker * resp%tmp)
-!           enddo !iy
-!        enddo ! ix
-
-!     enddo !ib2
-!  enddo ! ib1
-
-!end subroutine respinterkm_symm
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESDERTET_SYMM
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine
-!! evaluates the conduction kernel derivatives
-!! with respect to beta=1/(kB*T) under the assumption
-!! that both the chemical potential and the
-!! scattering rate are temperature independent
-!! (hence it can give meaningful results only for
-!! a symmetric semiconductor).
-!! the first derivative is saved in resp%s
-!! the second derivative is saved in resp%a
-!!
-!subroutine resdertet_symm(mu, iT, itet, thdr, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (tetramesh) :: thdr
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  real(8), intent(in) :: mu
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: itet
-!  integer :: iband, ipg
-!  integer :: ik, ikk, iktet
-!  integer :: ix,iy
-!  complex(8),external  :: wpsipg
-!!local variables
-!  real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
-!  real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
-
-!  !allocation
-!  if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
-!  if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
-!  !initialisation
-!  s_tmp_tetra=0.0d0 ; a_tmp_tetra=0.0d0
-
-!   do iktet=1,4  !loop over corners of the tetrahedron
-
-!      ik = thdr%idtet(iktet,itet)
-!      ! ikk = symm%symop_id(1,ik)
-!      ! call getmopt(ek, ik, Mopt, .false.) ! intra
-
-!      do iband=1,ek%nband_max !loop over bands (these will be traced over)
-
-!         ! if the band is not contained in the optical matrices just do nothing
-!         if (iband < ek%nbopt_min) cycle
-!         if (iband > ek%nbopt_max) cycle
-!         resp%z=real(ek%z(ikk,iband),8)
-!         if (allocated(sct%ykb)) then
-!            resp%gamma=resp%z*real(sct%gam(iT)+sct%ykb(iT,ikk,iband),8)
-!         else
-!            resp%gamma=resp%z*real(sct%gam(iT),8)
-!         endif
-!         ! pre-compute all needed digamma functions
-!         resp%aqp=resp%z*real(ek%band(ikk,iband)-mu,8)
-!         resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-!         do ipg=1,4
-!            resp%ctmp=wpsipg(resp%zarg,ipg)
-!            resp%RePolyGamma(ipg)=real(resp%ctmp,8)
-!            resp%ImPolyGamma(ipg)=imag(resp%ctmp)
-!         enddo
-
-!         ! compute transport kernel derivatives (omega-part)
-!         !
-!         ! 1st derivative w.r.t. beta
-!         resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing
-!         resp%s_ker = resp%tmp * ((1.0d0/resp%gamma)*resp%RePolyGamma(1) - beta2p*resp%RePolyGamma(2) &
-!                    - beta2p*(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) + resp%aqp*(beta2p**2)*resp%ImPolyGamma(3) &
-!                    - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) )
-
-!         !
-!         ! 2nd derivative w.r.t. beta
-!         resp%tmp=resp%z**2 / (4.d0*pi**4)
-!         resp%a_ker = resp%tmp * (-(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) &
-!                    - 0.5d0*resp%gamma*beta2p*(3.0d0+(resp%aqp/resp%gamma)**2 )*resp%RePolyGamma(3) &
-!                    + beta2p*resp%aqp*resp%ImPolyGamma(3) + (beta2p**2)*resp%aqp*resp%gamma*resp%ImPolyGamma(4) &
-!                    + 0.5d0*(beta2p**2)*(resp%aqp**2 - resp%gamma**2)*resp%RePolyGamma(4) )
-
-!         !only the xx component has been evaluated
-!         do ix=1,1
-!            do iy=1,1
-
-!               !tmp=vka(ik,ib,ix)*vka(ik,ib,iy)
-!               if (algo%ltbind) then
-!                  resp%tmp=ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)*ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)
-!               else
-!                  write(*,*) 'resdertet_symm: the expression for the derivatives is only valid for a symmetric SC'
-!                  STOP
-!               endif
-
-!               s_tmp_tetra(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-!               a_tmp_tetra(ik,iband,ix,iy)=resp%a_ker * resp%tmp
-
-!            enddo !iy
-!         enddo ! ix
-
-!         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-!         resp%s_tmp(ik,iband,1,1) = s_tmp_tetra(ik,iband,1,1)
-!         resp%a_tmp(ik,iband,1,1) = a_tmp_tetra(ik,iband,1,1)
-
-!      enddo ! iband
-!   enddo ! ik
-
-!end subroutine resdertet_symm
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESDERTET
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine
-!! evaluates the conduction kernel derivatives
-!! with respect to beta=1/(kB*T) with a temperature
-!! dependent chemical potential and
-!! scattering rate. The 2nd derivative of
-!! the chemical potential is neglected
-!! for the scattering rate it is evaluated assuming
-!! gamma(T) = gc0 + gc2*T^2, so
-!! gam2dot = 6*gc2/(kB^2 * beta^4)
-!! the first derivative of the conductivity is saved in resp%s
-!! the second derivative of the conductivity is saved in resp%a
-!!
-!subroutine resdertet(iT, itet, thdr, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (tetramesh) :: thdr
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: itet
-!  complex(8),external  :: wpsipg
-!!local variables
-!  real(8), allocatable :: s_tmp_tetra(:,:,:,:),  a_tmp_tetra(:,:,:,:)
-!  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta
-!  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta
-!  real(8) :: dlogg          ! gammadot/gamma
-!  real(8) :: gam2dot        ! 2nd derivative of gamma w.r.t. beta, assuming gamma(T) = gc0 + gc2*T^2
-!  real(8) :: csim           ! aqp/beta - mudot
-!  integer :: iband, ipg
-!  integer :: ik, ikk, iktet
-!  integer :: ix,iy
-!  real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
-
-!  !allocation
-!  if(.not. allocated(s_tmp_tetra)) allocate(s_tmp_tetra(4,ek%nband_max,3,3))
-!  if(.not. allocated(a_tmp_tetra)) allocate(a_tmp_tetra(4,ek%nband_max,3,3))
-!  !initialisation
-!  s_tmp_tetra=0.0d0 ; a_tmp_tetra=0.0d0
-
-!  !need to call this subroutine for iT<nT
-!  if(iT == sct%nT) STOP !hopefully this case has been taken care of before calling the routine
-!  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT
-!  mudot = -kB*muder*((sct%TT(iT))**2)
-
-!   do iktet=1,4  !loop over corners of the tetrahedron
-
-!      ik = thdr%idtet(iktet,itet)
-!      ! ikk = symm%symop_id(1,ik)
-!      ! call getmopt(ek, ik, Mopt, .false.) ! intra
-
-!      do iband=1,ek%nband_max !loop over bands (these will be traced over)
-
-!         ! if the band is not contained in the optical matrices just do nothing
-!         if (iband < ek%nbopt_min) cycle
-!         if (iband > ek%nbopt_max) cycle
-!         resp%z=real(ek%z(ikk,iband),8)
-!         if (allocated(sct%ykb)) then
-!            resp%gamma=resp%z*real(sct%gam(iT)+sct%ykb(iT,ikk,iband),8)
-!         else
-!            resp%gamma=resp%z*real(sct%gam(iT),8)
-!         endif
-!         !TODO: replace these values with calls to derrich subroutine
-!         gamder = (sct%gam(iT+1)-sct%gam(iT))/sct%dT !safeguard condition set above
-!         gamdot = -kB*gamder*((sct%TT(iT))**2)
-!         dlogg  = gamdot/resp%gamma
-!         if (sct%ng ==2) then
-!            gam2dot = 6.0d0*sct%gc(2)/((kB**2)*(beta**4))
-!         else
-!            gam2dot = 0.0d0
-!         endif
-
-!         !resp%aqp=resp%z*real(ek%band(thdr%idtet(ik,itet),iband)+selfnrg%Re(thdr%idtet(ik,itet),iband)-sct%mu(iT),8)
-!         resp%aqp=resp%z*real(ek%band(ikk,iband)-sct%mu(iT),8)
-!         csim = (resp%aqp/beta)-mudot
-!         ! pre-compute all needed digamma functions
-!         resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-!         do ipg=1,4
-!            resp%ctmp=wpsipg(resp%zarg,ipg)
-!            resp%RePolyGamma(ipg)=real(resp%ctmp,8)
-!            resp%ImPolyGamma(ipg)=imag(resp%ctmp)
-!         enddo
-
-!         ! compute transport kernel derivatives
-
-!         ! 1st derivative w.r.t. beta (there is a term 2/beta * sigma that needs to be added up)
-!         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
-!         resp%s_ker = resp%tmp*((dlogg+1.0d0/beta)*(resp%RePolyGamma(2)-(1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
-!                    - (csim/resp%gamma)*resp%ImPolyGamma(2) + beta2p*csim*resp%ImPolyGamma(3) &
-!                    - (dlogg + 1.0d0/beta)*beta2p*resp%gamma*resp%RePolyGamma(3) )
-
-
-!         ! 2nd derivative w.r.t. beta (there is a term 2/beta^2 * sigma that needs to be added up)
-!         resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
-!         resp%a_ker = resp%tmp*( ((2.0d0*dlogg/beta) + (2.0d0/(beta**2)) + (gam2dot/resp%gamma) ) &
-!                    * (resp%RePolyGamma(2) - (1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
-!                    + ((csim*(2.0d0*dlogg - 3.0d0/beta)/resp%gamma) + (csim/(beta*resp%gamma)))*resp%ImPolyGamma(2) &
-!                    - beta2p*(resp%gamma*(3.0d0/(beta**2) + 4.0d0*dlogg/beta + gam2dot/resp%gamma - dlogg**2 ) &
-!                              + (csim**2)/resp%gamma )*resp%RePolyGamma(3) &
-!                    - (2.0d0*beta2p*csim*dlogg + (4.0d0*mudot -2.0d0*resp%aqp/beta)/(2.0d0*pi) )*resp%ImPolyGamma(3) &
-!                    + (beta2p**2)*(csim**2 - (gamdot + resp%gamma/beta)**2)*resp%RePolyGamma(4) &
-!                    + 2.0d0*(beta2p**2)*(csim*(gamdot + resp%gamma/beta))*resp%ImPolyGamma(4) )
-
-!         ! Now add the missing terms:
-!         resp%tmp=(((resp%z*beta)**2)/(8.d0*pi**4)) * ((1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1) - resp%RePolyGamma(2))
-!         resp%s_ker = resp%s_ker + (2.0d0*resp%tmp/beta)
-!         resp%a_ker = resp%a_ker + (2.0d0*resp%tmp/(beta**2))
-
-!         !tmp=vka(ik,ib,ix)*vka(ik,ib,iy)
-!         do ix=1,lat%nalpha
-
-!            if (algo%ltbind) then
-!               resp%tmp=ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)*ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband)
-!            else
-!               ! resp%tmp=ek%Mopt(ix,thdr%idtet(ik,itet), iband, iband) !the optical matrix elements given by Wien2k are squared already
-!               resp%tmp=Mopt(ix,iband,iband)
-!            endif
-
-!            s_tmp_tetra(iktet,iband,ix,ix)=resp%s_ker * resp%tmp
-!            a_tmp_tetra(iktet,iband,ix,ix)=resp%a_ker * resp%tmp
-
-!            do iy=ix+1,lat%nalpha
-!               ! resp%tmp=ek%Mopt(ix+iy+1,thdr%idtet(ik,itet), iband, iband)
-!               resp%tmp=Mopt(ix+iy+1,iband,iband)
-!               s_tmp_tetra(iktet,iband,ix,iy)=resp%s_ker * resp%tmp
-!               a_tmp_tetra(iktet,iband,ix,iy)=resp%a_ker * resp%tmp
-!            enddo !iy
-!         enddo ! ix
-
-!         ! Now copy the local variable into the datastructure that will be passed to the interptra_re
-!         resp%s_tmp(iktet,iband,:,:) = s_tmp_tetra(iktet,iband,:,:)
-!         resp%a_tmp(iktet,iband,:,:) = a_tmp_tetra(iktet,iband,:,:)
-
-!      enddo ! iband
-!   enddo ! iktet
-
-!end subroutine resdertet
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESDERKM_SYMM
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine
-!! evaluates the conduction kernel derivatives
-!! with respect to beta=1/(kB*T) under the assumption
-!! that both the chemical potential and the
-!! scattering rate are temperature independent
-!! (hence it can give meaningful results only for
-!! a symmetric semiconductor).
-!! the first derivative is saved in resp%s
-!! the second derivative is saved in resp%a
-!!
-!subroutine resderkm_symm(mu, iT, ik, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  real(8), intent(in) :: mu
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: ik
-!  integer :: iband, ipg
-!  integer :: ix,iy,ikk
-!  real(8) :: Mopt(6,ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
-!  complex(8),external  :: wpsipg
-
-
-!  ikk = ik
-!  if (lat%lortho) then
-!     Mopt = 0.d0
-!     Mopt(:3, :, :) = ek%Mopt(:,ikk,:,:)
-!  else
-!     Mopt(:, :, :) = ek%Mopt(:,ikk,:,:)
-!  endif
-!  ! ikk = symm%symop_id(1,ik)
-!  ! call getmopt(ek, ik, Mopt, .false.) ! intra
-
-!  do iband=1,ek%nband_max !loop over bands (these will be traced over)
-
-!    ! if the band is not contained in the optical matrices just do nothing
-!     if (iband < ek%nbopt_min) cycle
-!     if (iband > ek%nbopt_max) cycle
-
-!     resp%z=real(ek%z(ikk,iband),8)
-!     if (allocated(sct%ykb))then
-!        resp%gamma=resp%z*real(sct%gam(iT)+sct%ykb(iT,ikk,iband),8)
-!     else
-!        resp%gamma=resp%z*real(sct%gam(iT),8)
-!     endif
-!     ! pre-compute all needed digamma functions
-!     resp%aqp=resp%z*real(ek%band(ikk,iband)-mu,8)
-!     resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-!     do ipg=1,4
-!        resp%ctmp=wpsipg(resp%zarg,ipg)
-!        resp%RePolyGamma(ipg)=real(resp%ctmp,8)
-!        resp%ImPolyGamma(ipg)=imag(resp%ctmp)
-!     enddo
-
-!     ! compute transport kernel derivatives (omega-part)
-
-!     ! 1st derivative w.r.t. beta
-!     resp%tmp=resp%z**2 / (4.d0*pi**3) ! for the 2nd derivative there is a factor 1/pi missing
-!     resp%s_ker = resp%tmp * ((1.0d0/resp%gamma)*resp%RePolyGamma(1) - beta2p*resp%RePolyGamma(2) &
-!                - beta2p*(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) + resp%aqp*(beta2p**2)*resp%ImPolyGamma(3) &
-!                - resp%gamma*(beta2p**2)*resp%RePolyGamma(3) )
-
-!     ! 2nd derivative w.r.t. beta
-!     resp%tmp=resp%z**2 / (4.d0*pi**4)
-!     resp%a_ker = resp%tmp * (-(resp%aqp/resp%gamma)*resp%ImPolyGamma(2) &
-!                - 0.5d0*resp%gamma*beta2p*(3.0d0+(resp%aqp/resp%gamma)**2 )*resp%RePolyGamma(3) &
-!                + beta2p*resp%aqp*resp%ImPolyGamma(3) + (beta2p**2)*resp%aqp*resp%gamma*resp%ImPolyGamma(4) &
-!                + 0.5d0*(beta2p**2)*(resp%aqp**2 - resp%gamma**2)*resp%RePolyGamma(4) )
-
-!     !only the xx component has been evaluated
-!     do ix=1,1
-!        do iy=1,1
-
-!           !tmp=vka(ik,ib,ix)*vka(ik,ib,iy)
-!           if (algo%ltbind) then
-!              resp%tmp=ek%Mopt(ix, ik, iband, iband)*ek%Mopt(ix, ik, iband, iband)
-!           else
-!              write(*,*) 'resderkm_symm: the expression for the derivatives is only valid for a symmetric SC'
-!              STOP
-!           endif
-
-!           resp%s_tmp(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-!           resp%a_tmp(ik,iband,ix,iy)=resp%a_ker * resp%tmp
-
-!        enddo !iy
-!     enddo ! ix
-
-!  enddo ! iband
-
-!end subroutine resderkm_symm
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! RESDERKM
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine
-!! evaluates the conduction kernel derivatives
-!! with respect to beta=1/(kB*T) with a temperature
-!! dependent chemical potential and
-!! scattering rate. The 2nd derivatives of both
-!! the chemical potential and gamma are neglected
-!! the first derivative of the conductivity is saved in resp%s
-!! the second derivative of the conductivity is saved in resp%a
-!!
-!subroutine resderkm(iT, ik, ek, sct, resp)
-!  implicit none
-!  type (dp_respinter) :: resp
-!  type (energydisp) :: ek
-!  type (scattering) :: sct
-!  integer, intent(in) :: iT
-!  integer, intent(in) :: ik
-!  complex(8),external  :: wpsipg
-!  !complex(16),external :: wpsipghp
-!!local variables
-!  real(8) :: muder, mudot   ! derivative of the chemical potential w.r.t. T, beta
-!  real(8) :: gamder, gamdot ! derivative of the scattering rate w.r.t. T, beta
-!  real(8) :: dlogg          ! gammadot/gamma
-!  real(8) :: csim           ! aqp/beta - mudot
-!  integer :: iband, ipg
-!  integer :: ix,iy
-!  integer :: ikk
-!  real(8) :: Mopt(6, ek%nbopt_min:ek%nbopt_max, ek%nbopt_min:ek%nbopt_max)
-
-
-!  !need to call this subroutine for iT<nT
-!  if(iT == sct%nT) stop !hopefully this case has been taken care of before calling the routine
-!  muder = (sct%mu(iT+1)-sct%mu(iT))/sct%dT
-!  mudot = -kB*muder*((sct%TT(iT))**2)
-
-
-!  ikk = ik
-!  ! ikk = symm%symop_id(1,ik)
-!  ! call getmopt(ek, ik, Mopt, .false.) !intra
-
-!  do iband=1,ek%nband_max !loop over bands (these will be traced over)
-
-!     ! if the band is not contained in the optical matrices just do nothing
-!     if (iband < ek%nbopt_min) cycle
-!     if (iband > ek%nbopt_max) cycle
-
-
-!     resp%z=real(ek%z(ikk,iband),8)
-!     if (allocated(sct%ykb))then
-!        resp%gamma=resp%z*real(sct%gam(iT)+sct%ykb(iT,ikk,iband),8)
-!     else
-!        resp%gamma=resp%z*real(sct%gam(iT),8)
-!     endif
-!     !TODO: replace these values with calls to derrich subroutine
-!     gamder = (sct%gam(iT+1)-sct%gam(iT))/sct%dT !safeguard condition set above
-!     gamdot = -kB*gamder*((sct%TT(iT))**2)
-!     dlogg  = gamdot/resp%gamma
-
-!     !resp%aqp=resp%z*real(ek%band(ik,iband)+selfnrg%Re(ik,iband)-sct%mu(iT),8)
-!     resp%aqp=resp%z*real(ek%band(ikk,iband)-sct%mu(iT),8)
-!     csim = (resp%aqp/beta)-mudot
-!     ! pre-compute all needed digamma functions
-!     resp%zarg=0.5d0+beta2p*(ci*resp%aqp+resp%gamma)
-!     do ipg=1,4
-!        resp%ctmp=wpsipg(resp%zarg,ipg)
-!        resp%RePolyGamma(ipg)=real(resp%ctmp,8)
-!        resp%ImPolyGamma(ipg)=imag(resp%ctmp)
-!     enddo
-
-!     ! compute transport kernel derivatives
-
-!     ! 1st derivative w.r.t. beta (there is a term 2/beta * sigma that needs to be added up)
-!     resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
-!     resp%s_ker = resp%tmp*((dlogg+1.0d0/beta)*(resp%RePolyGamma(2)-(1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
-!                - (csim/resp%gamma)*resp%ImPolyGamma(2) + beta2p*csim*resp%ImPolyGamma(3) &
-!                - (dlogg + 1.0d0/beta)*beta2p*resp%gamma*resp%RePolyGamma(3) )
-
-!     ! 2nd derivative w.r.t. beta (there is a term 2/beta^2 * sigma that needs to be added up)
-!     resp%tmp=((resp%z*beta)**2) / (8.d0*pi**4)
-!     resp%a_ker = resp%tmp*( ((2.0d0*dlogg/beta) + (2.0d0/(beta**2))) &
-!                * (resp%RePolyGamma(2) - (1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1)) &
-!                + ((csim*(2.0d0*dlogg - 3.0d0/beta)/resp%gamma) + (csim/(beta*resp%gamma)))*resp%ImPolyGamma(2) &
-!                - beta2p*(resp%gamma*(3.0d0/(beta**2) + 4.0d0*dlogg/beta) + (csim**2)/resp%gamma )*resp%RePolyGamma(3) &
-!                - (2.0d0*beta2p*csim*dlogg + (4.0d0*mudot -2.0d0*resp%aqp/beta)/(2.0d0*pi) )*resp%ImPolyGamma(3) &
-!                + (beta2p**2)*(csim**2 - (gamdot + resp%gamma/beta)**2)*resp%RePolyGamma(4) &
-!                + 2.0d0*(beta2p**2)*(csim*(gamdot + resp%gamma/beta))*resp%ImPolyGamma(4) )
-
-
-!     ! Now add the missing terms:
-!     resp%tmp=(((resp%z*beta)**2)/(8.d0*pi**4)) * ((1.0d0/(beta2p*resp%gamma))*resp%RePolyGamma(1) - resp%RePolyGamma(2))
-!     resp%s_ker = resp%s_ker + (2.0d0*resp%tmp/beta)
-!     resp%a_ker = resp%a_ker + (2.0d0*resp%tmp/(beta**2))
-
-!     do ix=1,lat%nalpha
-!           if (algo%ltbind) then
-!              !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated
-!              resp%tmp=ek%Mopt(ix, ik, iband, iband)*ek%Mopt(ix, ik, iband, iband)
-!           else
-!              !the expression requires only the diagonal of the optical matrix elements because a trace is evaluated
-!              ! resp%tmp=ek%Mopt(ix, ik, iband, iband) !the optical matrix elements given by Wien2k are squared already
-!              resp%tmp=Mopt(ix,iband,iband)
-!           endif
-
-!           resp%s_tmp(ik,iband,ix,ix)=resp%s_ker * resp%tmp
-!           resp%a_tmp(ik,iband,ix,ix)=resp%a_ker * resp%tmp
-
-!        do iy=ix+1,lat%nalpha
-!           ! resp%tmp=ek%Mopt(ix+iy+1,ik, iband, iband)
-!           resp%tmp=Mopt(ix+iy+1,iband,iband)
-!           resp%s_tmp(ik,iband,ix,iy)=resp%s_ker * resp%tmp
-!           resp%a_tmp(ik,iband,ix,iy)=resp%a_ker * resp%tmp
-!        enddo !iy
-!     enddo ! ix
-
-!  enddo ! iband
-
-!end subroutine resderkm
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! FINDRHOFLEX
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine tries to solve the equation
-!! 2*(d sigma/d beta)^2 - sigma*(d^2 sigma/d beta^2) = 0
-!! for a given temperature and stores away the first
-!! temperature that fulfills it (in sct%Tstar)
-!! since the equation is difficult to solve point by point
-!! (i.e. w/o knowing the global behaviour with T)
-!! I neglect the term 2*(d sigma/d beta)^2 and find the T
-!! for which the 2nd derivative changes sign
-!! the first derivative of the conductivity saved in resp2%s
-!! the second derivative of the conductivity saved in resp2%a
-!!
-!subroutine findrhoflex(iT, resp1, resp2, sct)
-!   implicit none
-!   integer, intent(in) :: iT
-!   type(dp_resp) :: resp1      !contains the intraband conductivity
-!   type(dp_respinter) :: resp2 !contains its derivatives
-!   type(scattering):: sct
-!   !local variables
-!   real(8), parameter :: tol=1.0d-12
-!   real(8) :: tmp, tmp1, tmp2
-
-!   if (.not. allocated(sct%d0)) then
-!      allocate(sct%d0(1:sct%nT))
-!      allocate(sct%d1(1:sct%nT))
-!      allocate(sct%d2(1:sct%nT))
-!   endif
-
-!   tmp1 = 2.0d0*((resp2%s_tot(1,1))**2)
-!   tmp2 = resp1%s_tot(1,1)*resp2%a_tot(1,1)
-!   tmp  = tmp1 - tmp2
-!   sct%d0(iT) = tmp
-!   sct%d1(iT) = tmp1
-!   sct%d2(iT) = tmp2
-
-!end subroutine findrhoflex
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! FINDRHOFLAT
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine finds the value of T for which
-!! the derivative  d sigma/d beta changes sign
-!! (onset of saturation for the resistivity)
-!! the first derivative of the conductivity saved in resp2%s
-!! the second derivative of the conductivity saved in resp2%a
-!!
-!subroutine findrhoflat(iT, resp1, resp2, sct)
-!   implicit none
-!   integer, intent(in) :: iT
-!   type(dp_resp) :: resp1      !contains the intraband conductivity
-!   type(dp_respinter) :: resp2 !contains its derivatives
-!   type(scattering):: sct
-!   !local variables
-!   real(8), parameter :: tol=1.0d-12
-!   real(8) :: tmp
-
-!   tmp = -resp2%s_tot(1,1)
-!   if (tmp < tol) then
-!      sct%Tflat = sct%TT(iT)
-!   else
-!      sct%Tflat = 0.0d0
-!   endif
-
-!end subroutine findrhoflat
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! FINDDRHOMAX
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! This routine evaluates the 1st derivative of the
-!! resistivity at a given temperature and saves it
-!! in the variable sct%drhodT
-!! the first derivative of the conductivity saved in resp2%s
-!! the second derivative of the conductivity saved in resp2%a
-!!
-!subroutine finddrhomax(iT, resp1, resp2, sct, drhodT)
-!   implicit none
-
-!   integer, intent(in) :: iT
-!   type(dp_resp) :: resp1      !contains the intraband conductivity
-!   type(dp_respinter) :: resp2 !contains its derivatives
-!   type(scattering):: sct
-!   real(8), intent(out) :: drhodT(sct%nT)
-
-!   !drhodT(iT) = resp2%s_tot(1,1)/(kB*((sct%TT(iT)*resp1%s_tot(1,1))**2))
-!   drhodT(iT) = -resp2%s_tot(1,1)/(resp1%s_tot(1,1)**2)
-
-!end subroutine finddrhomax
 
 !subroutine globfac(kmesh, resp, hpresp)
 !   implicit none
@@ -1431,161 +793,6 @@ end subroutine
 !        endif
 !     endif
 !end subroutine derresp
-
-!subroutine wrtresp(iT, sct, resp, respinter, respBl, hpresp)
-!   implicit none
-!   integer, intent(in) :: iT
-!   type(scattering)  :: sct
-!   type(dp_resp)   :: resp
-!   type(dp_respinter) :: respinter
-!   type(dp_resp)   :: respBl
-!   type(response_qp),optional :: hpresp
-!!local variable
-!   integer :: ia, ib
-!   real(8) :: T, det, tmp, Mtmp(3,3)
-!   real(16):: dpdet, dptmp
-
-!   T = sct%TT(iT)
-
-!   write(30,'(100E20.12)') T,(resp%s_tot(ia,ia), ia=1,lat%nalpha )
-!   do ib =1,size(resp%s,1)
-!   !write(31,'(100E20.12)') T, (resp%s(:,ia,ia),   ia=1,lat%nalpha )
-!   ! this creates a compiler bug
-!   !
-!   ! write(31,'(E20.12, I6, E20.12)') T,ib, (resp%s(ib,ia,ia),   ia=1,lat%nalpha )
-!   !
-!   enddo
-!   write(40,'(100E20.12)') T,(resp%a_tot(ia,ia), ia=1,lat%nalpha )
-!   write(41,'(100E20.12)') T,(resp%a(:,ia,ia),   ia=1,lat%nalpha )
-!   if (present(hpresp)) then
-!      write(130,'(100E20.12)') T,(hpresp%s_tot(ia,ia), ia=1,lat%nalpha )
-!      write(131,'(100E20.12)') T,(hpresp%s(:,ia,ia),   ia=1,lat%nalpha )
-!      write(140,'(100E20.12)') T,(hpresp%a_tot(ia,ia), ia=1,lat%nalpha )
-!      write(141,'(100E20.12)') T,(hpresp%a(:,ia,ia),   ia=1,lat%nalpha )
-!   endif
-!   write(230,'(100E20.12)') T,(respBl%s_tot(ia,ia), ia=1,lat%nalpha )
-!   write(231,'(100E20.12)') T,(respBl%s(:,ia,ia),   ia=1,lat%nalpha )
-!   write(240,'(100E20.12)') T,(respBl%a_tot(ia,ia), ia=1,lat%nalpha )
-!   write(241,'(100E20.12)') T,(respBl%a(:,ia,ia),   ia=1,lat%nalpha )
-
-!   write(330,'(100E20.12)') T,(respinter%s_tot(ia,ia), ia=1,lat%nalpha )
-!   write(331,'(100E20.12)') T,(respinter%s(:,ia,ia),   ia=1,lat%nalpha )
-!   write(340,'(100E20.12)') T,(respinter%a_tot(ia,ia), ia=1,lat%nalpha )
-!   write(341,'(100E20.12)') T,(respinter%a(:,ia,ia),   ia=1,lat%nalpha )
-
-!! XXX ACHTUNG not writing out all combinations...
-!   if (algo%lBfield) then
-!      write(50,'(100E20.12)') T,resp%sB_tot(1,2)
-!      write(51,'(100E20.12)') T,resp%sB(:,1,2)
-!      write(60,'(100E20.12)') T,resp%aB_tot(1,2)
-!      write(61,'(100E20.12)') T,resp%aB(:,1,2)
-!      if (present(hpresp)) then
-!         write(150,'(100E20.12)') T,hpresp%sB_tot(1,2)
-!         write(151,'(100E20.12)') T,hpresp%sB(:,1,2)
-!         write(160,'(100E20.12)') T,hpresp%aB_tot(1,2)
-!         write(161,'(100E20.12)') T,hpresp%aB(:,1,2)
-!      endif
-!      write(250,'(100E20.12)') T,respBl%sB_tot(1,2)
-!      write(251,'(100E20.12)') T,respBl%sB(:,1,2)
-!      write(260,'(100E20.12)') T,respBl%aB_tot(1,2)
-!      write(261,'(100E20.12)') T,respBl%aB(:,1,2)
-!   endif
-
-!   write(70,'(100E20.12)') T,resp%Seebeck(:) ! in mV/K
-!   write(370,'(100E20.12)') T,respinter%Seebeck(:) ! in mV/K
-!   if (algo%lBfield) then
-!      write(71,'(100E20.12)') T, resp%Nernst(:)  ! in mV/KT
-!      write(72,'(100E20.12)') T, resp%RH(:) ! in 10^-7 m^3/C
-!      write(73,'(100E20.12)') T, resp%sB_tot(1,2) / resp%s_tot(1,1) ! in 1/T
-!      write(74,'(100E20.12)') T, resp%aB_tot(1,2) / resp%a_tot(1,1) ! in 1/T
-!   endif
-!   if (lat%nalpha==1) then
-!   ! diagonal conductivity tensor
-!      write(75,'(100E20.12)') T, (1.d0/resp%s_tot(1,1)) ! resistivity in Ohm m
-!      write(375,'(100E20.12)') T, (1.d0/respinter%s_tot(1,1)) ! resistivity in Ohm m
-!   else
-!      if (algo%ldebug) then
-!         write(75,'(100E20.12)') T, (1.d0/resp%s_tot(ia,ia),ia=1,lat%nalpha) ! resistivity in Ohm m
-!         write(375,'(100E20.12)') T, (1.d0/respinter%s_tot(ia,ia),ia=1,lat%nalpha) ! resistivity in Ohm m
-!      else
-!   ! evaluate the inverse of conductivity tensor
-!         det = (resp%s_tot(1,1)*resp%s_tot(2,2)*resp%s_tot(3,3)) &
-!               + (2.0d0*resp%s_tot(1,2)*resp%s_tot(2,3)*resp%s_tot(1,3)) &
-!               - (resp%s_tot(1,1)*(resp%s_tot(2,3)**2)) &
-!               - (resp%s_tot(2,2)*(resp%s_tot(1,3)**2)) &
-!               - (resp%s_tot(3,3)*(resp%s_tot(1,2)**2))
-!         tmp = ((resp%s_tot(3,3)*resp%s_tot(2,2)) - (resp%s_tot(2,3)**2))/det
-!         write(75,'(100E20.12)') T, tmp, det, resp%s_tot(1,2),resp%s_tot(2,3),resp%s_tot(1,3) ! resistivity in Ohm m (xx component of the inverted matrix)
-!         Mtmp(:,:) = resp%s_tot(:,:)+respinter%s_tot(:,:)
-!         det = (Mtmp(1,1)*Mtmp(2,2)*Mtmp(3,3)) &
-!               + (2.0d0*Mtmp(1,2)*Mtmp(2,3)*Mtmp(1,3)) &
-!               - (Mtmp(1,1)*(Mtmp(2,3)**2)) &
-!               - (Mtmp(2,2)*(Mtmp(1,3)**2)) &
-!               - (Mtmp(3,3)*(Mtmp(1,2)**2))
-!         tmp = ((Mtmp(3,3)*Mtmp(2,2)) - (Mtmp(2,3)**2))/det
-!         write(375,'(100E20.12)') T, tmp ! resistivity in Ohm m (xx component of the inverted matrix)
-!      endif
-!   endif
-
-!   if (present(hpresp)) then
-!      write(170,'(100E20.12)') T, real(hpresp%Seebeck(:),8) ! in mV/K
-!      if (algo%lBfield) then
-!         write(171,'(100E20.12)') T, real(hpresp%Nernst(:),8)  ! in mV/KT
-!         write(172,'(100E20.12)') T, real(hpresp%RH(:),8)      ! in 10^-7 m^3/C
-!         write(173,'(100E20.12)') T, real(hpresp%sB_tot(1,2) / resp%s_tot(1,1) ,8)    ! in 1/T
-!         write(174,'(100E20.12)') T, real(hpresp%aB_tot(1,2) / resp%a_tot(1,1) ,8)    ! in 1/T
-
-!         write(180,'(100E20.12)') T,real(hpresp%Nernstpart(1),8)  ! in mV/K
-!         write(181,'(100E20.12)') T,real(hpresp%Nernstpart(2),8)  ! in mV/K
-
-!      endif
-!      if (lat%nalpha==1) then
-!      ! diagonal conductivity tensor
-!         write(175,'(100E20.12)') T, (real(1.q0/hpresp%s_tot(ia,ia),16),ia=1,lat%nalpha) ! resistivity in Ohm m
-!      else
-!         if (algo%ldebug) then
-!            write(175,'(100E20.12)') T, (real(1.q0/hpresp%s_tot(ia,ia),16),ia=1,lat%nalpha) ! resistivity in Ohm m
-!         else
-!      ! evaluate the inverse of conductivity tensor
-!            dpdet = (hpresp%s_tot(1,1)*hpresp%s_tot(2,2)*hpresp%s_tot(3,3)) &
-!                    + (2.0q0*hpresp%s_tot(1,2)*hpresp%s_tot(2,3)*hpresp%s_tot(1,3)) &
-!                    - (hpresp%s_tot(1,1)*(hpresp%s_tot(2,3)**2)) &
-!                    - (hpresp%s_tot(2,2)*(hpresp%s_tot(1,3)**2)) &
-!                    - (hpresp%s_tot(3,3)*(hpresp%s_tot(1,2)**2))
-!            dptmp = ((hpresp%s_tot(3,3)*hpresp%s_tot(2,2)) - (hpresp%s_tot(2,3)**2))/dpdet
-!            write(175,'(100E20.12)') T, real(dptmp,16),dpdet,hpresp%s_tot(1,2),hpresp%s_tot(2,3),hpresp%s_tot(1,3)! resistivity in Ohm m (xx component of the inverted matrix)
-!         endif
-!      endif
-!   endif
-
-!   write(270,'(100E20.12)') T,respBl%Seebeck(:) ! in mV/K
-!   if (algo%lBfield) then
-!      write(271,'(100E20.12)') T, respBl%Nernst(:)  ! in mV/KT
-!      write(272,'(100E20.12)') T, respBl%RH(:) ! in 10^-7 m^3/C
-!      write(273,'(100E20.12)') T, respBl%sB_tot(1,2) / resp%s_tot(1,1) ! in 1/T
-!      write(274,'(100E20.12)') T, respBl%aB_tot(1,2) / resp%a_tot(1,1) ! in 1/T
-!   endif
-!   if (lat%nalpha==1) then
-!   ! diagonal conductivity tensor
-!      write(275,'(100E20.12)') T, (1.d0/respBl%s_tot(ia,ia),ia=1,lat%nalpha) ! resistivity in Ohm m
-!   else
-!      if (algo%ldebug) then
-!         write(275,'(100E20.12)') T, (1.d0/respBl%s_tot(ia,ia),ia=1,lat%nalpha) ! resistivity in Ohm m
-!      else
-!   ! evaluate the inverse of conductivity tensor
-!         det = (respBl%s_tot(1,1)*respBl%s_tot(2,2)*respBl%s_tot(3,3)) &
-!               + (2.0d0*respBl%s_tot(1,2)*respBl%s_tot(2,3)*respBl%s_tot(1,3)) &
-!               - (respBl%s_tot(1,1)*respBl%s_tot(2,3)**2) &
-!               - (respBl%s_tot(2,2)*respBl%s_tot(1,3)**2) &
-!               - (respBl%s_tot(3,3)*respBl%s_tot(1,2)**2)
-!         tmp = ((respBl%s_tot(3,3)*respBl%s_tot(2,2)) - (respBl%s_tot(2,3)**2))/det
-!         write(275,'(100E20.12)') T, tmp ! resistivity in Ohm m (xx component of the inverted matrix)
-!      endif
-!   endif
-
-!end subroutine wrtresp
-
-
 
 subroutine dpresp_alloc(algo, edisp, dpresp)
   implicit none
