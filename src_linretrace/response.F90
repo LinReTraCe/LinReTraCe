@@ -635,6 +635,10 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     lBoutput = .false.
   endif
 
+  if (myid.eq.master) then
+    call hdf5_open_file(algo%output_file, ifile)
+  endif
+
   ! conductivity and seebeck coefficient without B-field
   if (algo%lFullOutput) then
     ! we gather all the data at the master node and write it to hdf5
@@ -667,8 +671,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
     if (myid .eq. master) then
-      call hdf5_open_file(algo%output_file, ifile)
-
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%s_gather)
@@ -677,7 +679,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%a_gather)
 
-      call hdf5_close_file(ifile)
     endif
 
     deallocate(resp%s_gather)
@@ -687,15 +688,24 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   ! perform a local summation
   do ik = ikstr,ikend
     do iband = edisp%nbopt_min,edisp%nbopt_max
-      resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-      resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+      resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_full(:,:,iband,:,ik) * kmesh%weight(ik)
+      resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_full(:,:,iband,:,ik) * kmesh%weight(ik)
     enddo
   enddo
 
   ! perform MPI summation
 #ifdef MPI
-  call MPI_REDUCE(MPI_IN_PLACE, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  call MPI_REDUCE(MPI_IN_PLACE, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  if (myid.eq.master) then
+    call MPI_REDUCE(MPI_IN_PLACE, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%s_sum, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
+
+  if (myid.eq.master) then
+    call MPI_REDUCE(MPI_IN_PLACE, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%a_sum, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
 #endif
 
   if (myid .eq. master) then
@@ -707,7 +717,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sum"
     call hdf5_write_data(ifile, string, resp%a_sum)
 
-    call hdf5_close_file(ifile)
   endif
 
 
@@ -743,8 +752,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
       if (myid .eq. master) then
-        call hdf5_open_file(algo%output_file, ifile)
-
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%sB_gather)
@@ -753,7 +760,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
         string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%aB_gather)
 
-        call hdf5_close_file(ifile)
       endif
 
       deallocate(resp%sB_gather)
@@ -763,15 +769,24 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     ! perform a local summation
     do ik = ikstr,ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
-        resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-        resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_full(:,:,iband,:,ik) * kmesh%weight(ik)
       enddo
     enddo
 
   ! perform MPI summation
 #ifdef MPI
+  if (myid.eq.master) then
     call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
+
+  if (myid.eq.master) then
     call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
 #endif
 
     if (myid .eq. master) then
@@ -783,9 +798,12 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sumB"
       call hdf5_write_data(ifile, string, resp%aB_sum)
 
-      call hdf5_close_file(ifile)
     endif
   endif ! Boutput
+
+  if (myid.eq.master) then
+    call hdf5_close_file(ifile)
+  endif
 
 end subroutine
 
