@@ -395,11 +395,11 @@ program main
     ! TODO: config file option
     algo%lInterbandQuantities = .true.
 
-    call response_summation(dpresp, "intra", edisp, algo, info, temp, kmesh)
+    call response_h5_output(dpresp, "intra", edisp, algo, info, temp, kmesh)
     if (algo%lInterbandQuantities) then
-      call response_summation(dinter, "inter", edisp, algo, info, temp, kmesh, .false.)
+      call response_h5_output(dinter, "inter", edisp, algo, info, temp, kmesh, .false.)
     endif
-    call response_summation(respBl, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+    call response_h5_output(respBl, "intraBoltzmann", edisp, algo, info, temp, kmesh)
 
     call cpu_time(tfinish)
     timings(4) = timings(4) + (tfinish - tstart)

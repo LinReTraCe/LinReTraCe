@@ -601,7 +601,7 @@ subroutine response_peierls_weights(resp, edisp, info)
   enddo
 end subroutine
 
-subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
+subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
   implicit none
   type (response_dp)  :: resp
   character(len=*)    :: gname
@@ -635,55 +635,40 @@ subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     lBoutput = .false.
   endif
 
-  if (myid .eq. master) then
-    allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-  else
-    allocate(resp%s_gather(1,1,1,1,1))
-  endif
+  ! conductivity and seebeck coefficient without B-field
+  if (algo%lFullOutput) then
+    ! we gather all the data at the master node and write it to hdf5
+    if (myid .eq. master) then
+      allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(resp%s_gather(1,1,1,1,1))
+    endif
 #ifdef MPI
-  call MPI_gatherv(resp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                   MPI_DOUBLE_COMPLEX, resp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                   displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
-                   MPI_COMM_WORLD, mpierr)
+    call MPI_gatherv(resp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, resp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                     MPI_COMM_WORLD, mpierr)
 #else
-  resp%s_gather = resp%s_full
+    resp%s_gather = resp%s_full
 #endif
 
-  if (myid .eq. master) then
-    do ik = 1,kmesh%nkp
-      do iband = edisp%nbopt_min,edisp%nbopt_max
-        resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-      enddo
-    enddo
-  endif
-
-
-  if (myid .eq. master) then
-    allocate(resp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-  else
-    allocate(resp%a_gather(1,1,1,1,1))
-  endif
+    if (myid .eq. master) then
+      allocate(resp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(resp%a_gather(1,1,1,1,1))
+    endif
 #ifdef MPI
     call MPI_gatherv(resp%a_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                      MPI_DOUBLE_COMPLEX, resp%a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                      displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                      MPI_COMM_WORLD, mpierr)
 #else
-  resp%a_gather = resp%a_full
+    resp%a_gather = resp%a_full
 #endif
 
-  if (myid .eq. master) then
-    do ik = 1,kmesh%nkp
-      do iband = edisp%nbopt_min,edisp%nbopt_max
-        resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-      enddo
-    enddo
-  endif
+    if (myid .eq. master) then
+      call hdf5_open_file(algo%output_file, ifile)
 
-  if (myid .eq. master) then
-    call hdf5_open_file(algo%output_file, ifile)
-
-    if (algo%lFullOutput) then
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%s_gather)
@@ -691,8 +676,29 @@ subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%a_gather)
+
+      call hdf5_close_file(ifile)
     endif
 
+    deallocate(resp%s_gather)
+    deallocate(resp%a_gather)
+  endif ! full output
+
+  ! perform a local summation
+  do ik = ikstr,ikend
+    do iband = edisp%nbopt_min,edisp%nbopt_max
+      resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+      resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+    enddo
+  enddo
+
+  ! perform MPI summation
+#ifdef MPI
+  call MPI_REDUCE(MPI_IN_PLACE, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  call MPI_REDUCE(MPI_IN_PLACE, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+#endif
+
+  if (myid .eq. master) then
     write(string,'(I6.6)') info%iT
     string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sum"
     call hdf5_write_data(ifile, string, resp%s_sum)
@@ -704,60 +710,41 @@ subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     call hdf5_close_file(ifile)
   endif
 
-  deallocate(resp%s_gather)
-  deallocate(resp%a_gather)
-
 
   if (lBoutput) then
-    if (myid .eq. master) then
-      allocate(resp%sB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-    else
-      allocate(resp%sB_gather(1,1,1,1,1))
-    endif
+    ! conductivity and seebeck coefficient without B-field
+    if (algo%lFullOutput) then
+      if (myid .eq. master) then
+        allocate(resp%sB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      else
+        allocate(resp%sB_gather(1,1,1,1,1))
+      endif
 #ifdef MPI
-    call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
-                     MPI_COMM_WORLD, mpierr)
+      call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                       MPI_COMM_WORLD, mpierr)
 #else
-    resp%sB_gather = resp%sB_full
+      resp%sB_gather = resp%sB_full
 #endif
 
-    if (myid .eq. master) then
-      do ik = 1,kmesh%nkp
-        do iband = edisp%nbopt_min,edisp%nbopt_max
-          resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-        enddo
-      enddo
-    endif
-
-
-    if (myid .eq. master) then
-      allocate(resp%aB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
-    else
-      allocate(resp%aB_gather(1,1,1,1,1))
-    endif
+      if (myid .eq. master) then
+        allocate(resp%aB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      else
+        allocate(resp%aB_gather(1,1,1,1,1))
+      endif
 #ifdef MPI
       call MPI_gatherv(resp%aB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        MPI_DOUBLE_COMPLEX, resp%aB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
-    resp%aB_gather = resp%aB_full
+      resp%aB_gather = resp%aB_full
 #endif
 
-    if (myid .eq. master) then
-      do ik = 1,kmesh%nkp
-        do iband = edisp%nbopt_min,edisp%nbopt_max
-          resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
-        enddo
-      enddo
-    endif
+      if (myid .eq. master) then
+        call hdf5_open_file(algo%output_file, ifile)
 
-    if (myid .eq. master) then
-      call hdf5_open_file(algo%output_file, ifile)
-
-      if (algo%lFullOutput) then
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%sB_gather)
@@ -765,8 +752,29 @@ subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfie
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%aB_gather)
+
+        call hdf5_close_file(ifile)
       endif
 
+      deallocate(resp%sB_gather)
+      deallocate(resp%aB_gather)
+    endif ! full output
+
+    ! perform a local summation
+    do ik = ikstr,ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_gather(:,:,iband,:,ik) * kmesh%weight(ik)
+      enddo
+    enddo
+
+  ! perform MPI summation
+#ifdef MPI
+    call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+#endif
+
+    if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sumB"
       call hdf5_write_data(ifile, string, resp%sB_sum)
@@ -777,10 +785,7 @@ subroutine response_summation(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
       call hdf5_close_file(ifile)
     endif
-
-    deallocate(resp%sB_gather)
-    deallocate(resp%aB_gather)
-  endif
+  endif ! Boutput
 
 end subroutine
 
