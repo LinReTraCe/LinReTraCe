@@ -186,11 +186,9 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
   if (edisp%iSpin == 1) then
     if (hdf5_dataset_exists(ifile, "/tPoint/000001/bandshift")) then
-       write(*,*) 'bandshift exists ....'
        edisp%lBandShift = .true.
        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
     else
-       write(*,*) 'bandshift does not exist .....'
        edisp%lBandShift = .false.
     endif
 

@@ -16,6 +16,7 @@ module Mtypes
     logical :: muFermi
     logical :: lScatteringFile
     logical :: lInterbandQuantities
+    logical :: lFullOutput
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file

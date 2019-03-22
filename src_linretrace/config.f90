@@ -118,6 +118,8 @@ subroutine read_config(algo, edisp, sct, temp)
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
   call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
 
+  call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
+
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
