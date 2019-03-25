@@ -17,6 +17,7 @@ module Mtypes
     logical :: lScatteringFile
     logical :: lInterbandQuantities
     logical :: lFullOutput
+    logical :: lEnergyOutput
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file

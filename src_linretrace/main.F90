@@ -105,9 +105,14 @@ program main
      if (algo%muSearch) then
         write(stdout,*) 'initialized LDA mu = ', edisp%efer
      else
-        edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
         write(stdout,*) 'Running with fixed mu read from file = ',  edisp%efer
      endif
+  endif
+
+
+  ! so every single process runs with this given mu
+  if (.not. algo%muSearch) then
+    edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
   endif
 
 
@@ -140,6 +145,8 @@ program main
   allocate(energy(temp%nT))
   allocate(cv(temp%nT))
 
+  ! either we start with the LDA mu
+  ! or with the fixed mu from above
   mu     = edisp%efer ! here we either have the fixed mu or the LDA initialized one from above
   d0     = 0.d0
   d1     = 0.d0
@@ -213,7 +220,6 @@ program main
     call hdf5_create_file(algo%output_file)
     call output_auxiliary(algo, info, temp, kmesh)
   endif
-  call mpi_barrier(mpi_comm_world, mpierr)
 
 
   timings = 0.d0        ! reset timings
@@ -361,7 +367,7 @@ program main
     endif
 
     do ik = ikstr,ikend
-      info%ik = ik
+      info%ik = ik ! save into the runinformation datatype
       ! load the moments
       if (edisp%ispin == 1) then
         if (allocated(darr3)) deallocate(darr3)
@@ -400,6 +406,11 @@ program main
       call response_h5_output(dinter, "inter", edisp, algo, info, temp, kmesh, .false.)
     endif
     call response_h5_output(respBl, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+
+
+    if (myid.eq.master .and. algo%lEnergyOutput) then
+      call output_energies(mu(iT), algo, edisp,kmesh,sct,info)
+    endif
 
     call cpu_time(tfinish)
     timings(4) = timings(4) + (tfinish - tstart)

@@ -119,6 +119,7 @@ subroutine read_config(algo, edisp, sct, temp)
   call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
 
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
+  call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
 
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------

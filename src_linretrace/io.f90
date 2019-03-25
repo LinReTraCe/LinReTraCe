@@ -225,4 +225,33 @@ subroutine output_auxiliary(algo, info, temp, kmesh)
 
 end subroutine
 
+subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
+  implicit none
+  type(algorithm)  :: algo
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  real(8), intent(in) :: mu
+
+  integer(hid_t)     :: ifile
+  real(8), allocatable :: enrgy(:,:,:)
+
+  allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,kmesh%nkp,edisp%ispin))
+
+  if (algo%lScatteringFile) then
+    enrgy = sct%zqp(:,:,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
+  else
+    enrgy = sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
+  endif
+
+  call hdf5_open_file(algo%output_file, ifile)
+  call hdf5_write_data(ifile, '.quantities/energies', enrgy)
+  call hdf5_close_file(ifile)
+
+  deallocate(enrgy)
+
+end subroutine
+
 end module Mio

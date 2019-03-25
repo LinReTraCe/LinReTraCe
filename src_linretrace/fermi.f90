@@ -47,14 +47,14 @@ module Mfermi
     implicit none
     real(8), intent(in) :: eps,beta
     real(8) :: dfermi_dp
-    dfermi_dp = (-beta) / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
+    dfermi_dp = beta / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
   end function dfermi_dp
 
   pure elemental function dfermi_qp(eps,beta)
     implicit none
     real(16), intent(in) :: eps,beta
     real(16) :: dfermi_qp
-    dfermi_qp = (-beta) / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
+    dfermi_qp = beta / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
   end function dfermi_qp
 
 end module Mfermi
