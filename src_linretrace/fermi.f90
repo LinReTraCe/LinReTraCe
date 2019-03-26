@@ -1,13 +1,14 @@
 module Mfermi
+  use Mparams
   implicit none
 
   interface fermi
     module procedure fermi_dp, fermi_qp, fermi_dpqp, fermi_qpdp
   end interface fermi
 
-  interface dfermi
-    module procedure dfermi_dp, dfermi_qp
-  end interface dfermi
+  interface polygamma2fermi
+    module procedure polygamma2fermi_dp, polygamma2fermi_qp
+  end interface polygamma2fermi
 
   contains
 
@@ -43,18 +44,22 @@ module Mfermi
     f = 1.q0 / (1.q0 + EXP(eps*beta))
   end function fermi_qpdp
 
-  pure elemental function dfermi_dp(eps,beta)
+
+  ! these functions represent the analytical limit of
+  ! lim Gamma-> 0     Re[psi_1[0.5 + beta/2pi * (Gamma + i*a)]]
+  ! used in the Boltzmann regime equations
+  pure elemental function polygamma2fermi_dp(eps,beta)
     implicit none
     real(8), intent(in) :: eps,beta
-    real(8) :: dfermi_dp
-    dfermi_dp = beta / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
-  end function dfermi_dp
+    real(8) :: polygamma2fermi_dp
+    polygamma2fermi_dp = pi**2 / (2.d0 * cosh(beta*eps/2.d0)**2)
+  end function polygamma2fermi_dp
 
-  pure elemental function dfermi_qp(eps,beta)
+  pure elemental function polygamma2fermi_qp(eps,beta)
     implicit none
     real(16), intent(in) :: eps,beta
-    real(16) :: dfermi_qp
-    dfermi_qp = beta / ( exp(-beta*eps/2.d0) + exp(beta*eps/2.d0) )**2
-  end function dfermi_qp
+    real(16) :: polygamma2fermi_qp
+    polygamma2fermi_qp = piQ**2 / (2.d0 * cosh(beta*eps/2.d0)**2)
+  end function polygamma2fermi_qp
 
 end module Mfermi

@@ -18,6 +18,7 @@ module Mtypes
     logical :: lInterbandQuantities
     logical :: lFullOutput
     logical :: lEnergyOutput
+    logical :: lBoltzmann
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file

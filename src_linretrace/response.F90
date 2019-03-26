@@ -18,7 +18,9 @@ module Mresponse
 
   contains
 
-subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, dresp, respBl, dinter, qresp)
+subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, &
+           resp_intra, resp_intra_Boltzmann, &
+           resp_inter, resp_inter_Boltzmann)
   implicit none
   real(8), intent(in) :: mu
 
@@ -28,18 +30,20 @@ subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, dresp, re
   type(algorithm)     :: algo
   type(runinfo)       :: info
 
-  type(response_dp) :: dresp   !intraband response
-  type(response_dp) :: dinter  !interband response
-  type(response_dp) :: respBl  !intrabond response in the Boltzman regime
-  type(response_qp) :: qresp   !intraband response in quadruple precision
+  type(response_dp) :: resp_intra
+  type(response_dp) :: resp_intra_Boltzmann
+  type(response_dp) :: resp_inter
+  type(response_dp) :: resp_inter_Boltzmann
 
   complex(8), intent(in) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
-  call response_intra_km(dresp,  PolyGamma, mu, edisp, sct, kmesh, algo, info)
+  call response_intra_km(resp_intra,  PolyGamma, mu, edisp, sct, kmesh, algo, info)
+  call response_intra_Boltzmann_km(resp_intra_Boltzmann, mu, edisp, sct, kmesh, algo, info)
+
   if (algo%lInterbandquantities) then
-    call response_inter_km(dinter, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+    call response_inter_km(resp_inter, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+    call response_inter_Boltzmann_km(resp_inter_Boltzmann, mu, edisp, sct, kmesh, algo, info)
   endif
-  call response_intra_Boltzmann_km(respBl, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_response
 
@@ -442,7 +446,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
     enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
     ! asymptotic term in the Gamma-> 0 limit
-    resp%s_full(1,1,:,:,info%ik) = dfermi(enrgy,info%beta) &
+    resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                     * sct%zqp(:,info%ik,:)**2 * info%beta &
                                     / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
 
@@ -451,7 +455,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
     if (algo%lBfield) then
 
-      resp%sB_full(1,1,:,:,info%ik) = dfermi(enrgy,info%beta) &
+      resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                       * 3.d0 * sct%zqp(:,info%ik,:)**3 * info%beta &
                                       / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
 
@@ -463,7 +467,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
     enrgy = (sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu))
 
     ! asymptotic term in the Gamma-> 0 limit
-    resp%s_full(1,1,:,:,info%ik) = dfermi(enrgy,info%beta) &
+    resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                     * sct%zqpscalar**2 * info%beta &
                                     / (4.d0 * pi**3 * sct%gamscalar)
 
@@ -472,7 +476,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
     if (algo%lBfield) then
 
-      resp%sB_full(1,1,:,:,info%ik) = dfermi(enrgy,info%beta) &
+      resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                       * 3.d0 * sct%zqpscalar**3 * info%beta &
                                       / (16.d0 * pi**4 * sct%gamscalar**2)
 
@@ -491,230 +495,195 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine response_intra_Boltzmann_km
 
-! subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
-!   implicit none
-!   real(8), intent(in) :: mu
-!   type (response_dp)  :: resp
+subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
+  implicit none
+  real(8), intent(in) :: mu
+  type (response_dp)  :: resp
 
-!   type(energydisp)    :: edisp
-!   type(scattering)    :: sct
-!   type(kpointmesh)    :: kmesh
-!   type(algorithm)     :: algo
-!   type(runinfo)       :: info
+  type(energydisp)    :: edisp
+  type(scattering)    :: sct
+  type(kpointmesh)    :: kmesh
+  type(algorithm)     :: algo
+  type(runinfo)       :: info
 
-!   real(8) :: zqp
-!   real(8) :: gam
-!   real(8), allocatable :: enrgy(:,:)
-!   real(8), allocatable :: enrgydiff(:)
+  real(8) :: zqp
+  real(8) :: gam
+  real(8), allocatable :: enrgy(:,:)
+  real(8), allocatable :: enrgydiff(:)
 
-!   complex(8), allocatable :: calc_cond(:)
-!   complex(8), allocatable :: calc_seeb(:)
+  complex(8), allocatable :: calc_cond(:)
+  complex(8), allocatable :: calc_seeb(:)
 
-!   integer :: index1(9), index2(9)
-!   integer :: i,j,idir
-!   integer :: iband1, iband2, iband
+  integer :: index1(9), index2(9)
+  integer :: i,j,idir
+  integer :: iband1, iband2, iband
 
-!   index1 = (/1,2,3,1,1,2,1,1,2/)
-!   index2 = (/1,2,3,2,3,3,2,3,3/)
-
-
-!   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
-!   allocate(enrgydiff(edisp%ispin))
-!   allocate(calc_cond(edisp%ispin))
-!   allocate(calc_seeb(edisp%ispin))
-
-!   ! first we write the kernel into the 1 1 component
-!   if (algo%lScatteringFile) then
-!     enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
-
-!     do iband1 = edisp%nbopt_min, edisp%nbopt_max
-!       do iband2 = edisp%nbopt_min, edisp%nbopt_max
-!         if (iband1 == iband2) cycle
-!         enrgydiff = enrgy(iband1,:) - enrgy(iband2,:)
-
-!         calc_cond = 0.d0
-
-!         calc_cond = calc_cond &
-!             + dfermi(enrgy(iband1,:), info%beta) &
-!               * ( enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2) &
-!               / sct%gam(iband1,info%ik,:)
-
-!         calc_cond = calc_cond &
-!             + dfermi(enrgy(iband2,:), info%beta) &
-!               * ( enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2) &
-!               / sct%gam(iband2,info%ik,:)
-
-!         calc_cond = calc_cond &
-!             * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
-!             * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
-!             * info%beta
-
-!         calc_cond = calc_cond &
-!             / (2.d0 * pi**2 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-!             / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
+  index1 = (/1,2,3,1,1,2,1,1,2/)
+  index2 = (/1,2,3,2,3,3,2,3,3/)
 
 
-!         calc_seeb = 0.d0
+  allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+  allocate(enrgydiff(edisp%ispin))
+  allocate(calc_cond(edisp%ispin))
+  allocate(calc_seeb(edisp%ispin))
 
-!         calc_seeb = calc_seeb &
-!             + real(PolyGamma(1,iband1,info%ik,:)) &
-!               * (enrgy(iband1,:) * (enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2) &
-!               / sct%gam(iband1,info%ik,:) + 2.d0*sct%gam(iband1,info%ik,:)*enrgydiff)
+  ! first we write the kernel into the 1 1 component
+  if (algo%lScatteringFile) then
+    enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
-!         calc_seeb = calc_seeb &
-!             + aimag(PolyGamma(1,iband1,info%ik,:)) &
-!               * (enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2 &
-!               - 2.d0*enrgy(iband1,:)*enrgydiff)
+    do iband1 = edisp%nbopt_min, edisp%nbopt_max
+      do iband2 = edisp%nbopt_min, edisp%nbopt_max
+        if (iband1 == iband2) cycle
+        enrgydiff = enrgy(iband1,:) - enrgy(iband2,:)
 
-!         calc_seeb = calc_seeb &
-!             + real(PolyGamma(1,iband2,info%ik,:)) &
-!               * (enrgy(iband2,:) * (enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2) &
-!               / sct%gam(iband2,info%ik,:) + 2.d0*sct%gam(iband2,info%ik,:)*enrgydiff*(-1.d0))
+        calc_cond = 0.d0
 
-!         calc_seeb = calc_seeb &
-!             + aimag(PolyGamma(1,iband2,info%ik,:)) &
-!               * (enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2 &
-!               - 2.d0*enrgy(iband2,:)*enrgydiff*(-1.d0))
+        calc_cond = calc_cond &
+            + polygamma2fermi(enrgy(iband1,:), info%beta) &
+              *  enrgydiff**2 / sct%gam(iband1,info%ik,:)
 
-!         calc_seeb = calc_seeb &
-!             * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
-!             * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
-!             * info%beta
+        calc_cond = calc_cond &
+            + polygamma2fermi(enrgy(iband2,:), info%beta) &
+              * enrgydiff**2 / sct%gam(iband2,info%ik,:)
 
-!         calc_seeb = calc_seeb &
-!             / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-!             / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
+        calc_cond = calc_cond &
+            * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
+            * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
+            * info%beta
 
-
-!         ! multiply optical elements
-!         do idir = 1,edisp%iOptical
-!           if (idir <= 6) then
-!             ! ATTENTION
-!             ! we read the wien2k files via 1 - 2
-!             ! we save those in hdf5
-!             ! and read them via Fortran -> implicit transposition
-!             ! we have to use 2 - 1 here
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
-
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
-!           else
-!             ! here we ADD the complex part to the response
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
-
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
-!           endif
-!         enddo
-
-!       enddo
-!     enddo
-!   else
-
-!     enrgy = sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
-
-!     do iband1 = edisp%nbopt_min, edisp%nbopt_max
-!       do iband2 = edisp%nbopt_min, edisp%nbopt_max
-!         if (iband1 == iband2) cycle
-!         enrgydiff = enrgy(iband1,:) - enrgy(iband2,:)
-
-!         calc_cond = 0.d0
-
-!         calc_cond = calc_cond &
-!             + real(PolyGamma(1,iband1,info%ik,:)) &
-!               * enrgydiff**2 &
-!               / sct%gamscalar
-
-!         calc_cond = calc_cond &
-!             + aimag(PolyGamma(1,iband1,info%ik,:)) &
-!               * ( 2.d0* (-enrgydiff) )
-
-!         calc_cond = calc_cond &
-!             + real(PolyGamma(1,iband2,info%ik,:)) &
-!               * enrgydiff**2 &
-!               / sct%gamscalar
-
-!         calc_cond = calc_cond &
-!             + aimag(PolyGamma(1,iband2,info%ik,:)) &
-!               * ( 2.d0* enrgydiff )
-
-!         calc_cond = calc_cond &
-!             * sct%gamscalar**2 &
-!             * sct%zqpscalar**2 &
-!             * info%beta
-
-!         calc_cond = calc_cond &
-!             / (2.d0 * pi**2 * enrgydiff**2 ) &
-!             / ( enrgydiff**2 + (2.d0 * sct%gamscalar)**2)
+        calc_cond = calc_cond &
+            / (2.d0 * pi**2 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
+            / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
 
 
+        calc_seeb = 0.d0
 
-!         calc_seeb = 0.d0
+        calc_seeb = calc_seeb &
+            + polygamma2fermi(enrgy(iband1,:), info%beta) &
+              * enrgy(iband1,:) * enrgydiff**2 / sct%gam(iband1,info%ik,:)
 
-!         calc_seeb = calc_seeb &
-!             + real(PolyGamma(1,iband1,info%ik,:)) &
-!               * (enrgy(iband1,:) * enrgydiff**2 &
-!               / sct%gam(iband1,info%ik,:) + 2.d0*sct%gamscalar*enrgydiff)
+        calc_seeb = calc_seeb &
+            + polygamma2fermi(enrgy(iband2,:), info%beta) &
+              * enrgy(iband2,:) * enrgydiff**2 / sct%gam(iband2,info%ik,:)
 
-!         calc_seeb = calc_seeb &
-!             + aimag(PolyGamma(1,iband1,info%ik,:)) &
-!               * (enrgydiff**2 - 2.d0*enrgy(iband1,:)*enrgydiff)
+        calc_seeb = calc_seeb &
+            * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
+            * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
+            * info%beta
 
-!         calc_seeb = calc_seeb &
-!             + real(PolyGamma(1,iband2,info%ik,:)) &
-!               * (enrgy(iband2,:) * enrgydiff**2 &
-!               / sct%gam(iband2,info%ik,:) + 2.d0*sct%gamscalar*enrgydiff*(-1.d0))
-
-!         calc_seeb = calc_seeb &
-!             + aimag(PolyGamma(1,iband2,info%ik,:)) &
-!               * (enrgydiff**2 - 2.d0*enrgy(iband2,:)*enrgydiff*(-1.d0))
-
-!         calc_seeb = calc_seeb &
-!             * sct%gamscalar**2 &
-!             * sct%zqpscalar**2 &
-!             * info%beta
-
-!         calc_seeb = calc_seeb &
-!             / (2.d0 * pi**3 * enrgydiff**2 ) &
-!             / ( enrgydiff**2 + (2.d0 * sct%gamscalar)**2)
+        calc_seeb = calc_seeb &
+            / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
+            / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
 
 
-!         ! multiply optical elements
-!         do idir = 1,edisp%iOptical
-!           if (idir <= 6) then
-!             ! ATTENTION
-!             ! we read the wien2k files via 1 - 2
-!             ! we save those in hdf5
-!             ! and read them via Fortran -> implicit transposition
-!             ! we have to use 2 - 1 here
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
+        ! multiply optical elements
+        do idir = 1,edisp%iOptical
+          if (idir <= 6) then
+            ! ATTENTION
+            ! we read the wien2k files via 1 - 2
+            ! we save those in hdf5
+            ! and read them via Fortran -> implicit transposition
+            ! we have to use 2 - 1 here
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
 
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
-!           else
-!             ! here we ADD the complex part to the response
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
+          else
+            ! here we ADD the complex part to the response
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
 
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-!             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
-!           endif
-!         enddo
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
+          endif
+        enddo
 
-!       enddo
-!     enddo
+      enddo
+    enddo
+  else
 
-!   endif
+    enrgy = sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+
+    do iband1 = edisp%nbopt_min, edisp%nbopt_max
+      do iband2 = edisp%nbopt_min, edisp%nbopt_max
+        if (iband1 == iband2) cycle
+        enrgydiff = enrgy(iband1,:) - enrgy(iband2,:)
+
+        calc_cond = 0.d0
+
+        calc_cond = calc_cond &
+            + polygamma2fermi(enrgy(iband1,:), info%beta) &
+              *  enrgydiff**2 / sct%gamscalar
+
+        calc_cond = calc_cond &
+            + polygamma2fermi(enrgy(iband2,:), info%beta) &
+              * enrgydiff**2 / sct%gamscalar
+
+        calc_cond = calc_cond &
+            * sct%gamscalar**2 &
+            * sct%zqpscalar**2 &
+            * info%beta
+
+        calc_cond = calc_cond &
+            / (2.d0 * pi**2 * enrgydiff**2 ) &
+            / ( enrgydiff**2 + (2.d0 * sct%gamscalar)**2)
 
 
-!   deallocate(enrgy)
-!   deallocate(enrgydiff)
-!   deallocate(calc_cond, calc_seeb)
+        calc_seeb = 0.d0
 
-! end subroutine response_intra_Boltzmann_km
+        calc_seeb = calc_seeb &
+            + polygamma2fermi(enrgy(iband1,:), info%beta) &
+              * enrgy(iband1,:) * enrgydiff**2 / sct%gamscalar
+
+        calc_seeb = calc_seeb &
+            + polygamma2fermi(enrgy(iband2,:), info%beta) &
+              * enrgy(iband2,:) * enrgydiff**2 / sct%gamscalar
+
+        calc_seeb = calc_seeb &
+            * sct%gamscalar**2 &
+            * sct%zqpscalar**2 &
+            * info%beta
+
+        calc_seeb = calc_seeb &
+            / (2.d0 * pi**3 * enrgydiff**2 ) &
+            / ( enrgydiff**2 + (2.d0 * sct%gamscalar)**2)
+
+
+        ! multiply optical elements
+        do idir = 1,edisp%iOptical
+          if (idir <= 6) then
+            ! ATTENTION
+            ! we read the wien2k files via 1 - 2
+            ! we save those in hdf5
+            ! and read them via Fortran -> implicit transposition
+            ! we have to use 2 - 1 here
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
+
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
+          else
+            ! here we ADD the complex part to the response
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
+
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
+          endif
+        enddo
+
+      enddo
+    enddo
+
+  endif
+
+
+  deallocate(enrgy)
+  deallocate(enrgydiff)
+  deallocate(calc_cond, calc_seeb)
+
+end subroutine response_inter_Boltzmann_km
 
 
 ! multiply optical elements onto quantities without B-Field

@@ -20,11 +20,12 @@ program main
   type(temperature) :: temp    ! temperature quantities
   type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
 
-  type(response_dp) :: dpresp  ! response double precision
-  type(response_qp) :: qpresp  ! response quadruple precision
-  type(response_dp) :: respBl  ! response Boltzman regime
-  type(response_dp) :: dinter  ! response interband
-  type(response_dp) :: dderesp ! response functions (intraband conductivity) derivatives in double precision
+  type(response_dp) :: resp_intra
+  type(response_dp) :: resp_intra_Boltzmann
+  type(response_dp) :: resp_inter
+  type(response_dp) :: resp_inter_Boltzmann
+
+  ! type(response_qp) :: qpresp  ! response quadruple precision
 
   integer(hid_t)    :: ifile_scatter
   integer(hid_t)    :: ifile_energy
@@ -166,16 +167,17 @@ program main
 
 
   ! allocate the arrays once outside of the main (temperature) loop
-  call allocate_response(algo, edisp, dpresp)
-  call allocate_response(algo, edisp, respBl)
-  call allocate_response(algo, edisp, dderesp)
-  call allocate_response(algo, edisp, dinter)
+  call allocate_response(algo, edisp, resp_intra)
+  call allocate_response(algo, edisp, resp_intra_Boltzmann)
+  call allocate_response(algo, edisp, resp_inter)
+  call allocate_response(algo, edisp, resp_inter_Boltzmann)
+
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
-  if (.not. algo%ldebug) then
-    call allocate_response(algo, edisp, qpresp)
-    allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
-  endif
+  ! if (.not. algo%ldebug) then
+  !   call allocate_response(algo, edisp, qpresp)
+  !   allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  ! endif
   ! for the responses we need psi_1, psi_2 and psi_3
 
   call log_master(stdout, 'DEBUG MODE')
@@ -359,12 +361,19 @@ program main
 
 
     ! initialize the already allocated arrays to 0
-    call initresp (algo, dpresp)
-    call initresp (algo, respBl)
-    call initresp (algo, dinter)
-    if (.not. algo%ldebug) then
-       call initresp_qp (algo, qpresp)
-    endif
+    call initresp (algo, resp_intra)
+    call initresp (algo, resp_intra_Boltzmann)
+    call initresp (algo, resp_inter)
+    call initresp (algo, resp_inter_Boltzmann)
+
+    ! if (.not. algo%ldebug) then
+    !    call initresp_qp (algo, qpresp)
+    ! endif
+
+
+    ! TODO: config file option
+    algo%lInterbandQuantities = .true.
+    algo%lBoltzmann = .true.
 
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
@@ -387,7 +396,9 @@ program main
         deallocate(darr3)
       endif
 
-      call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, dpresp, respBl, dinter, qpresp)
+      call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
+                         resp_intra, resp_intra_Boltzmann, &
+                         resp_inter, resp_inter_Boltzmann)
     enddo
 
     call cpu_time(tfinish)
@@ -398,15 +409,15 @@ program main
     !   call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
     ! endif
 
-    ! TODO: config file option
-    algo%lInterbandQuantities = .true.
 
-    call response_h5_output(dpresp, "intra", edisp, algo, info, temp, kmesh)
+    call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
+    call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+
     if (algo%lInterbandQuantities) then
-      call response_h5_output(dinter, "inter", edisp, algo, info, temp, kmesh, .false.)
+      ! here we don't have the Bfield quantities
+      call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+      call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
     endif
-    call response_h5_output(respBl, "intraBoltzmann", edisp, algo, info, temp, kmesh)
-
 
     if (myid.eq.master .and. algo%lEnergyOutput) then
       call output_energies(mu(iT), algo, edisp,kmesh,sct,info)
