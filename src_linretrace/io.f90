@@ -8,14 +8,6 @@ module Mio
 
 contains
 
-subroutine read_optical_moments(algo, edisp, info)
-  implicit none
-  type(algorithm)  :: algo
-  type(energydisp) :: edisp
-  type(runinfo)    :: info
-
-end subroutine
-
 subroutine read_preproc_energy_data(algo, kmesh, edisp)
   implicit none
   type(algorithm)              :: algo
@@ -237,6 +229,7 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
   integer(hid_t)     :: ifile
   real(8), allocatable :: enrgy(:,:,:)
+  character(len=128) :: string
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,kmesh%nkp,edisp%ispin))
 
@@ -246,8 +239,14 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
     enrgy = sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
   endif
 
+  write(string,'(I6.6,"/energies")') info%iT
   call hdf5_open_file(algo%output_file, ifile)
-  call hdf5_write_data(ifile, '.quantities/energies', enrgy)
+  call hdf5_write_data(ifile, string, enrgy)
+
+  write(string,'(I6.6)') info%iT
+  call hdf5_write_attribute(ifile, string, "temperature", info%temp)
+  call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
+
   call hdf5_close_file(ifile)
 
   deallocate(enrgy)

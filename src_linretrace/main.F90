@@ -76,12 +76,6 @@ program main
     call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')
   endif
 
-  if(.not.(algo%lBfield)) then
-     call log_master(stdout, 'LINRETRACE will NOT perform calculations with magnetic field')
-  else
-     call log_master(stdout, 'LINRETRACE WILL perform calculations with magnetic field')
-  endif
-
   ! calculate a purely DFT density of states with Laurentzian broadening
   ! call gendosel (kmesh, edisp, dos) ! normalization already taken care of
   ! call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
@@ -97,13 +91,13 @@ program main
   ! endif
 
   ! starting point for the chemical potential
-  if (myid.eq.master) then
-     if (algo%muSearch) then
-        write(stdout,*) 'initialized LDA mu = ', edisp%efer
-     else
-        write(stdout,*) 'Running with fixed mu read from file = ',  edisp%efer
-     endif
-  endif
+  ! if (myid.eq.master) then
+  !    if (algo%muSearch) then
+  !       write(stdout,*) 'initialized LDA mu = ', edisp%efer
+  !    else
+  !       write(stdout,*) 'Running with fixed mu read from file = ',  edisp%mu
+  !    endif
+  ! endif
 
 
   ! so every single process runs with this given mu
@@ -146,6 +140,9 @@ program main
 
   if (algo%ldebug) then
      write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
+#ifdef MPI
+     call mpi_barrier(mpi_comm_world, mpierr)
+#endif
   endif
 
 
@@ -183,7 +180,7 @@ program main
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*)
-    write(stdout,*) 'Calculation options summary:'
+    write(stdout,*) 'Calculation summary:'
     write(stdout,*)
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
@@ -194,6 +191,10 @@ program main
     write(stdout,*) '  spins: ', edisp%ispin
     write(stdout,*)
     write(stdout,*) '  energy-file: ', trim(algo%input_energies)
+    if (.not. algo%muSearch) then
+      write(stdout,*) '  constant chemical potential: ', edisp%efer
+    endif
+      write(stdout,*)
     if (algo%lScatteringFile) then
       write(stdout,*) '  scattering-file: ', trim(algo%input_scattering)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
@@ -202,7 +203,19 @@ program main
       write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
     endif
     write(stdout,*)
+    write(stdout,*) '  output-options:'
     write(stdout,*) '  output-file: ', trim(algo%output_file)
+    write(stdout,*) '  full-output: ', algo%lFullOutput
+    write(stdout,*)
+    write(stdout,*) '  run-options:'
+    write(stdout,*) '  interband quantities: ', algo%lInterbandQuantities
+    write(stdout,*) '  Boltzmann quantities: ', algo%lBoltzmann
+    write(stdout,*) '  B-field   quantities: ', algo%lBfield
+    write(stdout,*)
+    write(stdout,*)
+    write(stdout,*) 'Starting calculation...'
+    write(stdout,*) '____________________________________________________________________________'
+    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV], totalEnergy[eV]'
   endif
 
   if (myid .eq. master) then
@@ -269,9 +282,6 @@ program main
     ! call calc_total_energy(mu(iT), energy(iT), edisp, sct, kmesh, algo, info)
 
     if (myid.eq.master) then
-      if (iT == 1) then
-        write(stdout,*) 'Temperature, invTemperature, chemicalPotential, totalEnergy'
-      endif
       write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
     endif
 
