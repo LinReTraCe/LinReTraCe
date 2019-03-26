@@ -513,10 +513,10 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   if (algo%lScatteringFile) then
     to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gam(:,ikstr:ikend,:) - ci*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
+                  (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
   else
     to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gamscalar - ci*(sct%zqpscalar*edisp%band(:,ikstr:ikend,:) - mu))
+                  (sct%gamscalar - ci*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
   endif
 
   ! evaluate the function

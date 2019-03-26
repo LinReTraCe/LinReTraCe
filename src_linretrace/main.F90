@@ -176,6 +176,9 @@ program main
     deallocate(edisp%band_original)
   endif
 
+  if (edisp%ispin == 1) then
+    edisp%nelect = edisp%nelect * 2
+  endif
 
   if (myid .eq. master) then
     write(stdout,*)
@@ -189,6 +192,7 @@ program main
     write(stdout,*)
     write(stdout,*) '  k-Points: ', kmesh%nkp
     write(stdout,*) '  spins: ', edisp%ispin
+    write(stdout,*) '  electrons: ', edisp%nelect
     write(stdout,*)
     write(stdout,*) '  energy-file: ', trim(algo%input_energies)
     if (.not. algo%muSearch) then
