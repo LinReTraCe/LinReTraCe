@@ -45,12 +45,6 @@ program main
   real(8), allocatable :: energy(:) ! total energy
   real(8), allocatable :: cv(:)     ! specific heat
   real(8), allocatable :: mu(:)     ! chemical potential (temperature dependent)
-  real(8), allocatable :: d1(:)     ! square of the 1st derivative of sigma
-  real(8), allocatable :: d2(:)     ! product of the 2nd derivative times sigma
-  real(8), allocatable :: d0(:)     ! linear combination of the two above, whose zero corresponds to T*
-  real(8) :: Tstar                  ! temperature for which (d^2 rho)/(d beta^2)=0
-                                    ! in practice it is the T for which (d^2 sigma)/(d beta^2) changes sign
-  real(8) :: Tflat                  ! T for which (d sigma)/(d beta) changes sign (onset of saturation)
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -75,6 +69,7 @@ program main
   call check_config(algo)
 
   call hdf5_init()
+  ! read the energies ( and derivatives if they exist )
   call read_preproc_energy_data(algo, kmesh, edisp)
 
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
@@ -116,13 +111,11 @@ program main
     edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
   endif
 
-
   ! construct temperature grid
   if (algo%lScatteringFile) then
-    ! we have everything inside here
     ! at this point we just extract the temperature ranges
-    ! the scattering rates then gets loaded for each k-point
-    ! (similar to the optical elements)
+    ! and check wether bandshifts exist
+    ! the scattering rates then gets loaded for each temperature-point
     call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   else
     temp%dT= (temp%Tmax-temp%Tmin)/temp%nT
@@ -139,48 +132,42 @@ program main
 
 
   allocate(mu(temp%nT))
-  allocate(d0(temp%nT))
-  allocate(d1(temp%nT))
-  allocate(d2(temp%nT))
-  allocate(drhodT(temp%nT))
   allocate(energy(temp%nT))
   allocate(cv(temp%nT))
 
   ! either we start with the LDA mu
   ! or with the fixed mu from above
   mu     = edisp%efer ! here we either have the fixed mu or the LDA initialized one from above
-  d0     = 0.d0
-  d1     = 0.d0
-  d2     = 0.d0
-  drhodT = 0.d0
   energy = 0.d0
   cv     = 0.d0
-  Tstar  = 0.d0
-  Tflat  = 0.d0
 
-  call mpi_genkstep(kmesh%nkp) ! thats definitely correct
+
+  call mpi_genkstep(kmesh%nkp)
 
   if (algo%ldebug) then
      write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
   endif
 
 
-
   ! allocate the arrays once outside of the main (temperature) loop
   call allocate_response(algo, edisp, resp_intra)
-  call allocate_response(algo, edisp, resp_intra_Boltzmann)
-  call allocate_response(algo, edisp, resp_inter)
-  call allocate_response(algo, edisp, resp_inter_Boltzmann)
+  if (algo%lBoltzmann) then
+    call allocate_response(algo, edisp, resp_intra_Boltzmann)
+  endif
+  if (algo%lInterbandquantities) then
+    call allocate_response(algo, edisp, resp_inter)
+    if (algo%lBoltzmann) then
+      call allocate_response(algo, edisp, resp_inter_Boltzmann)
+    endif
+  endif
 
+  ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   ! if (.not. algo%ldebug) then
   !   call allocate_response(algo, edisp, qpresp)
   !   allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   ! endif
-  ! for the responses we need psi_1, psi_2 and psi_3
-
-  call log_master(stdout, 'DEBUG MODE')
 
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
   if (algo%lScatteringFile) then
@@ -243,8 +230,11 @@ program main
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature
-    ! move this to a subroutine
-    if (.not. algo%lScatteringFile) then
+    if (algo%lScatteringFile) then
+      ! read in the scattering data for the current temperature
+      ! scattering rates; quasi-particle weights and possible band-shifts
+      call read_scattering_data(ifile_scatter, edisp, sct, info)
+    else
       sct%gamscalar = 0.d0
       sct%zqpscalar = 0.d0
       do ig=1,size(sct%gamcoeff)
@@ -257,69 +247,8 @@ program main
         call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
         sct%zqpscalar = 1.d0
       endif
-
       sct%gamscalar = sct%zqpscalar * sct%gamscalar  ! convention we use
-    else
-      ! TODO: put this into io.f90
-      if (edisp%ispin == 1) then
-        write(string,'("tPoint/",I6.6,"/scatrate")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%gam(:,:,1) = darr2
-        deallocate(darr2)
-
-        write(string,'("tPoint/",I6.6,"/qpweight")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%zqp(:,:,1) = darr2
-        deallocate(darr2)
-
-        if (edisp%lBandShift) then
-          write(string,'("tPoint/",I6.6,"/bandshift")') iT
-          call hdf5_read_data(ifile_scatter, string, darr2)
-          edisp%band_shift(:,:,1) = darr2
-          deallocate(darr2)
-
-          edisp%band = edisp%band_original + edisp%band_shift
-        endif
-      else
-        write(string,'("up/tPoint/",I6.6,"/scatrate")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%gam(:,:,1) = darr2
-        deallocate(darr2)
-
-        write(string,'("dn/tPoint/",I6.6,"/scatrate")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%gam(:,:,2) = darr2
-        deallocate(darr2)
-
-        write(string,'("up/tPoint/",I6.6,"/qpweight")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%zqp(:,:,1) = darr2
-        deallocate(darr2)
-
-        write(string,'("dn/tPoint/",I6.6,"/qpweight")') iT
-        call hdf5_read_data(ifile_scatter, string, darr2)
-        sct%zqp(:,:,2) = darr2
-        deallocate(darr2)
-
-
-        if (edisp%lBandShift) then
-          write(string,'("up/tPoint/",I6.6,"/bandshift")') iT
-          call hdf5_read_data(ifile_scatter, string, darr2)
-          edisp%band_shift(:,:,1) = darr2
-          deallocate(darr2)
-
-          write(string,'("dn/tPoint/",I6.6,"/bandshift")') iT
-          call hdf5_read_data(ifile_scatter, string, darr2)
-          edisp%band_shift(:,:,2) = darr2
-          deallocate(darr2)
-
-          edisp%band = edisp%band_original + edisp%band_shift
-        endif
-      endif
-      sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
-      sct%gam = sct%gam * sct%zqp    ! convention
     endif
-
 
 
     niitact = 0
@@ -350,9 +279,9 @@ program main
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
-    if (.not. algo%lDebug) then
-      call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
-    endif
+    ! if (.not. algo%lDebug) then
+    !   call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+    ! endif
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
     tstart = tfinish
@@ -361,41 +290,23 @@ program main
 
 
     ! initialize the already allocated arrays to 0
-    call initresp (algo, resp_intra)
-    call initresp (algo, resp_intra_Boltzmann)
-    call initresp (algo, resp_inter)
-    call initresp (algo, resp_inter_Boltzmann)
+    call initresp(algo, resp_intra)
+    call initresp(algo, resp_intra_Boltzmann)
+    call initresp(algo, resp_inter)
+    call initresp(algo, resp_inter_Boltzmann)
 
     ! if (.not. algo%ldebug) then
     !    call initresp_qp (algo, qpresp)
     ! endif
 
 
-    ! TODO: config file option
-    algo%lInterbandQuantities = .true.
-    algo%lBoltzmann = .true.
-
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-      ! load the moments
-      if (edisp%ispin == 1) then
-        if (allocated(darr3)) deallocate(darr3)
-        write(string,'("kPoint/",I6.6,"/moments")') ik
-        call hdf5_read_data(ifile_energy, string, darr3)
-        edisp%Mopt(:,:,:,1) = darr3
-        deallocate(darr3)
-      else
-        if (allocated(darr3)) deallocate(darr3)
-        write(string,'("up/kPoint/",I6.6,"/moments")') ik
-        call hdf5_read_data(ifile_energy, string, darr3)
-        edisp%Mopt(:,:,:,1) = darr3
-        deallocate(darr3)
-        write(string,'("dn/kPoint/",I6.6,"/moments")') ik
-        call hdf5_read_data(ifile_energy, string, darr3)
-        edisp%Mopt(:,:,:,2) = darr3
-        deallocate(darr3)
-      endif
 
+      ! load the moments for the current k-point
+      call read_optical_elements(ifile_energy, edisp, sct, info)
+
+      ! calculate the response
       call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
                          resp_intra, resp_intra_Boltzmann, &
                          resp_inter, resp_inter_Boltzmann)
@@ -411,12 +322,15 @@ program main
 
 
     call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
-    call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
-
+    if (algo%lBoltzmann) then
+      call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+    endif
     if (algo%lInterbandQuantities) then
       ! here we don't have the Bfield quantities
       call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
-      call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+      if (algo%lBoltzmann) then
+        call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+      endif
     endif
 
     if (myid.eq.master .and. algo%lEnergyOutput) then
@@ -429,6 +343,8 @@ program main
 
   enddo ! end of the outer temperature loop
 
+
+   ! gather the timings
 #ifdef MPI
    call MPI_allreduce(MPI_IN_PLACE, timings,size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
    timings(:4) = timings(:4) / dble(nproc)
@@ -451,5 +367,4 @@ program main
 
   call mpi_close()
   call hdf5_finalize()
-
 end program main

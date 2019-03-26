@@ -1,0 +1,36 @@
+________________________________________________________________________________
+[General]
+EnergyFile = (default '')
+OutputFile = (default='linretrace-output.hdf5')
+BFieldMode = (default = F)
+DebugMode  = (default = F)
+
+ChemicalPotential = (default = 0)  # if here run with the given mu
+
+FermiOccupation   = (default = F)  # use fermi functions to determine occupation
+
+RootMethod        = (default = 2)  # 0 secant
+                                   # 1 linint
+                                   # 2 riddler
+                                   # 3 bisection
+
+FullOutput        = (default = F)  # output band- and k-resolved quantities
+EnergyOutput      = (default = T)  # output renormalized bands
+Boltzmann         = (default = T)  # calculate Boltzmann regime
+Interband         = (default = T)  # calculate Interband quantities
+
+________________________________________________________________________________
+[Scattering]
+ScatteringFile    = (default = '') # if existent use all the quantities from this file only
+ScatteringImpurity = (default = 0) # in combination with Scattering File
+                                   # adds an additional constant scattering rate
+
+# if we do NOT have a Scattering file
+# we can supply a temperature range (in Kelvin)
+# and a polynomial for the scattering rate
+# and the quasi particle weights
+TMinimum                  = (default = None)
+TMaximum                  = (default = None)
+TPoints                   = (default = None)
+ScatteringCoefficients    = (default = None)
+QuasiParticleCoefficients = (default = None)

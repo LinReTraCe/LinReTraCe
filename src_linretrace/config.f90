@@ -88,6 +88,10 @@ subroutine read_config(algo, edisp, sct, temp)
   algo%lBField        = .false.
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
   algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
+  algo%lInterbandQuantities = .true.
+  algo%lEnergyOutput  = .true.
+  algo%lBoltzmann     = .true.
+  algo%lFullOutput    = .false.
   sct%gamimp          = 0.d0
 
   !--------------------------------------------------------------------------------
@@ -120,6 +124,8 @@ subroutine read_config(algo, edisp, sct, temp)
 
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
+  call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
+  call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
 
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------

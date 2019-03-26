@@ -38,11 +38,15 @@ subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, &
   complex(8), intent(in) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   call response_intra_km(resp_intra,  PolyGamma, mu, edisp, sct, kmesh, algo, info)
-  call response_intra_Boltzmann_km(resp_intra_Boltzmann, mu, edisp, sct, kmesh, algo, info)
+  if (algo%lBoltzmann) then
+    call response_intra_Boltzmann_km(resp_intra_Boltzmann, mu, edisp, sct, kmesh, algo, info)
+  endif
 
   if (algo%lInterbandquantities) then
     call response_inter_km(resp_inter, PolyGamma, mu, edisp, sct, kmesh, algo, info)
-    call response_inter_Boltzmann_km(resp_inter_Boltzmann, mu, edisp, sct, kmesh, algo, info)
+    if (algo%lBoltzmann) then
+      call response_inter_Boltzmann_km(resp_inter_Boltzmann, mu, edisp, sct, kmesh, algo, info)
+    endif
   endif
 
 end subroutine calc_response
@@ -864,6 +868,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%a_gather = resp%a_full
 #endif
 
+    resp%s_gather = resp%s_gather * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
+    resp%a_gather = resp%a_gather * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 * kB
+
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/full"
@@ -901,6 +908,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     call MPI_REDUCE(resp%a_sum, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 #endif
+
+  resp%s_sum = resp%s_sum * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
+  resp%a_sum = resp%a_sum * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 * kB
 
   if (myid .eq. master) then
     write(string,'(I6.6)') info%iT
@@ -945,6 +955,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       resp%aB_gather = resp%aB_full
 #endif
 
+      resp%sB_gather = resp%sB_gather * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs)
+      resp%aB_gather = resp%aB_gather * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs) * kB
+
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/fullB"
@@ -982,6 +995,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 #endif
+
+    resp%sB_sum = resp%sB_sum * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs)
+    resp%aB_sum = resp%aB_sum * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs) * kB
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT

@@ -254,4 +254,104 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
 end subroutine
 
+subroutine read_scattering_data(ifile, edisp, sct, info)
+  implicit none
+  integer(hid_t)   :: ifile
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  real(8), allocatable :: darr2(:,:)
+  character(len=128)   :: string
+
+  if (edisp%ispin == 1) then
+    write(string,'("tPoint/",I6.6,"/scatrate")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%gam(:,:,1) = darr2
+    deallocate(darr2)
+
+    write(string,'("tPoint/",I6.6,"/qpweight")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%zqp(:,:,1) = darr2
+    deallocate(darr2)
+
+    if (edisp%lBandShift) then
+      write(string,'("tPoint/",I6.6,"/bandshift")') info%iT
+      call hdf5_read_data(ifile, string, darr2)
+      edisp%band_shift(:,:,1) = darr2
+      deallocate(darr2)
+
+      edisp%band = edisp%band_original + edisp%band_shift
+    endif
+  else
+    write(string,'("up/tPoint/",I6.6,"/scatrate")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%gam(:,:,1) = darr2
+    deallocate(darr2)
+
+    write(string,'("dn/tPoint/",I6.6,"/scatrate")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%gam(:,:,2) = darr2
+    deallocate(darr2)
+
+    write(string,'("up/tPoint/",I6.6,"/qpweight")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%zqp(:,:,1) = darr2
+    deallocate(darr2)
+
+    write(string,'("dn/tPoint/",I6.6,"/qpweight")') info%iT
+    call hdf5_read_data(ifile, string, darr2)
+    sct%zqp(:,:,2) = darr2
+    deallocate(darr2)
+
+
+    if (edisp%lBandShift) then
+      write(string,'("up/tPoint/",I6.6,"/bandshift")') info%iT
+      call hdf5_read_data(ifile, string, darr2)
+      edisp%band_shift(:,:,1) = darr2
+      deallocate(darr2)
+
+      write(string,'("dn/tPoint/",I6.6,"/bandshift")') info%iT
+      call hdf5_read_data(ifile, string, darr2)
+      edisp%band_shift(:,:,2) = darr2
+      deallocate(darr2)
+
+      edisp%band = edisp%band_original + edisp%band_shift
+    endif
+  endif
+  sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
+  sct%gam = sct%gam * sct%zqp    ! convention
+
+end subroutine
+
+subroutine read_optical_elements(ifile, edisp, sct, info)
+  implicit none
+  integer(hid_t)   :: ifile
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  real(8), allocatable :: darr3(:,:,:)
+  character(len=128)   :: string
+
+  if (edisp%ispin == 1) then
+    if (allocated(darr3)) deallocate(darr3)
+    write(string,'("kPoint/",I6.6,"/moments")') info%ik
+    call hdf5_read_data(ifile, string, darr3)
+    edisp%Mopt(:,:,:,1) = darr3
+    deallocate(darr3)
+  else
+    if (allocated(darr3)) deallocate(darr3)
+    write(string,'("up/kPoint/",I6.6,"/moments")') info%ik
+    call hdf5_read_data(ifile, string, darr3)
+    edisp%Mopt(:,:,:,1) = darr3
+    deallocate(darr3)
+    write(string,'("dn/kPoint/",I6.6,"/moments")') info%ik
+    call hdf5_read_data(ifile, string, darr3)
+    edisp%Mopt(:,:,:,2) = darr3
+    deallocate(darr3)
+  endif
+
+end subroutine
+
 end module Mio
