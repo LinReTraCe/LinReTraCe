@@ -365,7 +365,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
         calc_seeb = calc_seeb &
             + real(PolyGamma(1,iband1,info%ik,:)) &
               * (enrgy(iband1,:) * enrgydiff**2 &
-              / sct%gam(iband1,info%ik,:) + 2.d0*sct%gamscalar*enrgydiff)
+              / sct%gamscalar + 2.d0*sct%gamscalar*enrgydiff)
 
         calc_seeb = calc_seeb &
             + aimag(PolyGamma(1,iband1,info%ik,:)) &
@@ -374,7 +374,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
         calc_seeb = calc_seeb &
             + real(PolyGamma(1,iband2,info%ik,:)) &
               * (enrgy(iband2,:) * enrgydiff**2 &
-              / sct%gam(iband2,info%ik,:) + 2.d0*sct%gamscalar*enrgydiff*(-1.d0))
+              / sct%gamscalar + 2.d0*sct%gamscalar*enrgydiff*(-1.d0))
 
         calc_seeb = calc_seeb &
             + aimag(PolyGamma(1,iband2,info%ik,:)) &

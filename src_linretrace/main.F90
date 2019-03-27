@@ -35,7 +35,6 @@ program main
   real(8) :: ndevact
   real(16):: ndevactQ
 
-  real(8) :: criterion
   character(len=128) :: string
   real(8) :: tstart, tfinish, timings(4)
 
@@ -112,7 +111,7 @@ program main
     ! the scattering rates then gets loaded for each temperature-point
     call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   else
-    temp%dT= (temp%Tmax-temp%Tmin)/temp%nT
+    temp%dT= (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
     allocate(temp%TT(temp%nT))
     allocate(temp%beta(temp%nT))
 
@@ -120,7 +119,6 @@ program main
     do iT=1,temp%nT
        temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
     enddo
-    temp%TT(temp%nT) = temp%Tmax ! to avoid numerical errors at the last point
     temp%beta = 1.d0/(temp%TT * kB)
   endif
 
@@ -183,7 +181,7 @@ program main
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*)
-    write(stdout,*) 'Calculation summary:'
+    write(stdout,*) 'Option summary:'
     write(stdout,*)
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
@@ -243,8 +241,6 @@ program main
     info%betaQ=1.q0/(kB*info%TempQ)
     info%beta2pQ=info%betaQ/(2.q0*piQ)
 
-    criterion=info%beta/20.d0
-
     ! define scattering rates and quasi particle weights
     ! for the current temperature
     if (algo%lScatteringFile) then
@@ -271,13 +267,9 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      if (criterion.lt.20.d0) then !DP
-        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
-      elseif (criterion.lt.80.d0) then !QP
-        call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-      else   ! further refinement
-        call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-      endif
+      call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
+      ! call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
+      ! call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
@@ -305,9 +297,15 @@ program main
 
     ! initialize the already allocated arrays to 0
     call initresp(algo, resp_intra)
-    call initresp(algo, resp_intra_Boltzmann)
-    call initresp(algo, resp_inter)
-    call initresp(algo, resp_inter_Boltzmann)
+    if(algo%lBoltzmann) then
+      call initresp(algo, resp_intra_Boltzmann)
+    endif
+    if (algo%lInterBandQuantities) then
+      call initresp(algo, resp_inter)
+      if (algo%lBoltzmann) then
+        call initresp(algo, resp_inter_Boltzmann)
+      endif
+    endif
 
     ! if (.not. algo%ldebug) then
     !    call initresp_qp (algo, qpresp)

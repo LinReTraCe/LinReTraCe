@@ -15,7 +15,7 @@ module Mparams
   real(8),     parameter :: echarge = 1.6021766208d-19 ! C
 
   ! numerical parameters
-  real(8),     parameter :: ndev    = 1D-13
+  real(8),     parameter :: ndev    = 5D-13
   real(16),    parameter :: ndevQ   = 5Q-14
   real(16),    parameter :: ndevVQ  = 5Q-15
   integer,     parameter :: niit    = 100

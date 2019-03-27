@@ -90,11 +90,11 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   mu2=mu
 
   do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
-     mu2=mu2+0.5d0
+     mu2 = mu2 + 0.5d0
      call ndeviation(mu2, target_zero2, edisp, sct, kmesh, algo, info)
   enddo
   do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
-     mu1=mu1-0.5d0
+     mu1 = mu1 - 0.5d0
      call ndeviation(mu1, target_zero1, edisp, sct, kmesh, algo, info)
   enddo
 
@@ -457,8 +457,10 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, algo, info)
 
   if (algo%muFermi) then
     call occ_fermi(mu, occ_tot, edisp, kmesh, info)
+    ! call occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   else
     call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+    ! call occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
 
   target_zero = edisp%nelect - occ_tot
@@ -569,10 +571,10 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   if (algo%lScatteringFile) then
     to_evaluate = 0.5q0 + info%beta2pQ * &
-                  (sct%gam(:,ikstr:ikend,:) - ciQ*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
+                  (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
   else
     to_evaluate = 0.5q0 + info%beta2pQ * &
-                  (sct%gamscalar - ciQ*(sct%zqpscalar*edisp%band(:,ikstr:ikend,:) - mu))
+                  (sct%gamscalar - ciQ*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
   endif
 
   ! evaluate the function
@@ -636,6 +638,59 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, info)
 
 end subroutine occ_fermi_D
 
+! Neumaier algorithm to increase summation accuracy
+subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
+  implicit none
+
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: occ_sum
+  integer :: is, ik, iband
+
+  real(8), allocatable :: occupation(:,:,:)
+  real(8) :: t,c
+
+  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
+
+  ! evaluate the function
+  occ_sum = 0.d0
+  t = 0.d0
+  c = 0.d0
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occupation(iband,ik,is) = fermi_dp((edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+
+        t = occ_sum + occupation(iband,ik,is)
+        if (abs(occ_sum) >= abs(occupation(iband,ik,is))) then
+          c = c + (occ_sum - t) + occupation(iband,ik,is)
+        else
+          c = c + (occupation(iband,ik,is) - t) + occ_sum
+        endif
+        occ_sum = t
+
+      enddo
+    enddo
+  enddo
+
+  occ_sum = occ_sum + c
+  deallocate(occupation)
+
+#ifdef MPI
+  call MPI_ALLREDUCE(occ_sum, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  occ_tot = occ_sum
+#endif
+
+end subroutine occ_fermi_comp_D
+
 subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, info)
   implicit none
 
@@ -675,165 +730,72 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, info)
 
 end subroutine occ_fermi_Q
 
-!subroutine occ_tet_D(mu, iT, edisp, sct, thdr, occ_tot)
-!  implicit none
+subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  implicit none
 
-!  integer, intent(in)  :: iT
-!  real(8), intent(in)  :: mu
-!  real(8), intent(out) :: occ_tot
-!  type(energydisp)     :: edisp
-!  type(scattering)       :: sct
-!  type(tetramesh)      :: thdr
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: occ_tot
 
-!!local variables
-!  real(8),parameter :: thr = 1.0d-30
-!  complex(8) :: z
-!  real(8) :: nsmall, nbig, ninteger, eps, tmp
-!  real(8) :: occ_loc, occ_intp, occ_tet(4)
-!  integer :: iband, ik, ikk, itet, iktet
-!!external variables
-!  complex(8), external :: wpsipg
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
 
-!  edisp%occ_tot=0.0d0
-!  occ_loc=0.0d0
-!  do itet = iqstr, iqend
-!     occ_intp=0.0d0
-!     do iktet = 1, 4
-!        nbig=0.d0
-!        nsmall=0.d0
-!        ik=thdr%idtet(iktet,itet)
-!        ikk = symm%symop_id(1,ik)
-!        do iband=1,edisp%nband_max
-!           if (edisp%band(ikk,iband) .ge. band_fill_value) cycle
-!           if (iband<edisp%nbopt_min) cycle
-!           if (iband>edisp%nbopt_max) cycle
+  real(8) :: occ_sum
+  integer :: is, ik, iband
+  complex(8), allocatable :: to_evaluate(:,:,:)
+  real(8), allocatable    :: occupation(:,:,:)
+  !external variables
+  complex(8), external :: wpsipg
 
-!           eps=(edisp%z(ikk,iband)*edisp%band(ikk,iband))-mu
+  real(8) :: t,c
 
-!           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
-!              tmp=fermi(eps,beta)
-!           else if (allocated(sct%ykb)) then
-!              z=0.5d0 + (edisp%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband)) - ci*eps ) * beta2p ! eps --> -eps
-!              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
-!           else
-!              z=0.5d0 + (edisp%z(ikk,iband)*sct%gam(iT) - ci*eps ) * beta2p ! eps --> -eps
-!              tmp=0.5d0+aimag(wpsipg(z,0))/pi ! >0
-!           endif
+  allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
-!           if (tmp.gt.thr) then
-!              nbig=nbig+tmp
-!           else
-!              nsmall=nsmall+tmp
-!           endif
-!        enddo ! iband
+  if (algo%lScatteringFile) then
+    to_evaluate = 0.5d0 + info%beta2p * &
+                  (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+  else
+    to_evaluate = 0.5d0 + info%beta2p * &
+                  (sct%gamscalar - ci*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
+  endif
 
-!        nbig=2.d0*nbig
-!        nsmall=2.d0*nsmall
-!        occ_tet(iktet)=nbig+nsmall
-!     enddo ! corners of the tetrahedron
+  ! evaluate the function
+  occ_sum = 0.d0
+  t = 0.d0
+  c = 0.d0
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occupation(iband,ik,is) = 0.5d0 + aimag(wpsipg(to_evaluate(iband,ik,is),0))/pi
+        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
 
-!     ! NOTE: this procedure is different from the one used
-!     ! for the response function, for the latter the interpolation
-!     ! is done band by band, whereas here I'm summing over bands
-!     ! first
-!     call interptra_mu (thdr%vltet(itet), occ_tet, occ_intp)
-!     occ_loc = occ_loc + occ_intp
-!  enddo    ! tetrahedra
+        ! what the fuck
+        t = occ_sum + occupation(iband,ik,is)
+        if (abs(occ_sum) >= abs(occupation(iband,ik,is))) then
+          c = c + (occ_sum - t) + occupation(iband,ik,is)
+        else
+          c = c + (occupation(iband,ik,is) - t) + occ_sum
+        endif
+        occ_sum = t
 
-!#ifdef MPI
-!  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
-!  edisp%occ_tot = occ_tot
-!#else
-!  occ_tot = occ_loc
-!  edisp%occ_tot = occ_loc
-!#endif
+      enddo
+    enddo
+  enddo
 
-!end subroutine occ_tet_D
+  occ_sum = occ_sum + c
+  deallocate(to_evaluate)
+  deallocate(occupation)
 
-!subroutine occ_tet_Q(mu, iT, edisp, sct, thdr, occ_tot)
-!  implicit none
+#ifdef MPI
+  call MPI_ALLREDUCE(occ_sum, occ_tot, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  occ_tot = occ_sum
+#endif
 
-!  integer, intent(in)   :: iT
-!  real(16), intent(in)  :: mu
-!  real(16), intent(out) :: occ_tot
-!  type(energydisp)      :: edisp
-!  type(scattering)        :: sct
-!  type(tetramesh)       :: thdr
-
-!!local variables
-!  real(16),parameter :: thr = 1.0q-30
-!  complex(16) :: z
-!  real(16) :: nsmall, nbig, ninteger, tmp, tmp2
-!  real(16) :: occ_loc, occ_tet(4), occ_intp
-!  real(8) :: eps
-!  integer :: iband, ik
-!  integer :: itet, iktet, ikk
-!  real(16) :: cutQ
-!  !more sophistication
-!  integer(8) ::IEXP
-!  !parameters
-!  real(16),parameter :: QCUT=1.Q14 ! not the same as cutQ!!!!!
-!!external variables
-!  complex(16), external :: wpsipghp
-
-!  occ_loc=0.0q0
-!  cutQ=1.q0/thr
-
-!  do itet = iqstr, iqend
-!     occ_intp=0.0q0
-!     do iktet = 1, 4 ! corners of the tetrahedron
-!        ik = thdr%idtet(iktet,itet)
-!        ikk = symm%symop_id(1,ik)
-!        ninteger=0.q0
-!        nbig=0.q0
-!        nsmall=0.q0
-!        do iband=1,edisp%nband_max
-!           if (edisp%band(ikk,iband) .ge. band_fill_value) cycle
-!           if (iband<edisp%nbopt_min) cycle
-!           if (iband>edisp%nbopt_max) cycle
-!           eps=(edisp%z(ikk,iband)*edisp%band(ikk,iband))-mu
-
-!           if ((sct%gam(iT).eq.0.d0) .and. (.not. allocated(sct%ykb))) then
-!              tmp=fermi(eps,betaQ)
-!           else if (allocated(sct%ykb)) then
-!              z=0.5q0+real(edisp%z(ikk,iband)*(sct%gam(iT)+sct%ykb(iT,ikk,iband))*beta2p,16) - &
-!                       ciQ*real(eps*beta2p,16) ! eps --> -eps
-!              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
-!           else
-!              z=0.5q0+real(edisp%z(ikk,iband)*sct%gam(iT)*beta2p,16) - &
-!                       ciQ*real(eps*beta2p,16) ! eps --> -eps
-!              tmp=0.5q0+aimag(wpsipghp(z,0))/piQ ! >0
-!           endif
-
-!           if (tmp.gt.thr) then
-!              IEXP=int(log10(abs(tmp)),8)
-!              tmp2=( real(int((tmp/(10.q0**iEXP))*QCUT,8),16)*10.q0**iEXP ) / QCUT
-!              tmp=tmp-tmp2
-
-!              nbig=nbig+tmp2
-!              nsmall=nsmall+tmp
-!           else
-!              nsmall=nsmall+tmp
-!           endif
-
-!        enddo ! iband
-!        nbig=2.q0*nbig
-!        nsmall=2.q0*nsmall
-!        occ_tet(iktet)=nbig+nsmall
-!     enddo ! corners of the tetrahedron
-
-!     call interptra_muQ (thdr%vltet(itet), occ_tet, occ_intp)
-!     occ_loc = occ_loc + occ_intp
-!  enddo ! tetrahedra
-
-!#ifdef MPI
-!  call mpi_reduce_quad(occ_loc, occ_tot)
-!  edisp%occ_tot = real(occ_tot,8)
-!#else
-!  occ_tot = occ_loc
-!  edisp%occ_tot = real(occ_tot,8)
-!#endif
-
-!end subroutine occ_tet_Q
+end subroutine occ_digamma_comp_D
 
 end module Mroot
