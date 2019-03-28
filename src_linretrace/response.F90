@@ -258,7 +258,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
             * info%beta
 
         calc_cond = calc_cond &
-            / (2.d0 * pi**2 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
+            / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
             / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
 
 
@@ -556,7 +556,7 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
             * info%beta
 
         calc_cond = calc_cond &
-            / (2.d0 * pi**2 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
+            / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
             / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
 
 
