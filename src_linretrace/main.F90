@@ -29,6 +29,8 @@ program main
 
   integer(hid_t)    :: ifile_scatter
   integer(hid_t)    :: ifile_energy
+  integer(hid_t)    :: ifile_output
+
 
   integer :: is, ig, iT, ik, iband
   integer :: niitact
@@ -275,7 +277,7 @@ program main
       tstart = tfinish
     endif
 
-    ! call calc_total_energy(mu(iT), energy(iT), edisp, sct, kmesh, algo, info)
+    call calc_total_energy(mu(iT), energy(iT), edisp, sct, kmesh, algo, info)
 
     if (myid.eq.master) then
       write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
@@ -345,6 +347,8 @@ program main
       endif
     endif
 
+    ! output the renormalized energies defined by Z*(ek - mu)
+    ! for each temperature point
     if (myid.eq.master .and. algo%lEnergyOutput) then
       call output_energies(mu(iT), algo, edisp,kmesh,sct,info)
     endif
@@ -354,6 +358,12 @@ program main
     tstart = tfinish
 
   enddo ! end of the outer temperature loop
+
+  if (myid.eq.master) then
+    call hdf5_open_file(algo%output_file, ifile_output)
+    call hdf5_write_data(ifile_output, '.quantities/mu', mu)
+    call hdf5_close_file(ifile_output)
+  endif
 
 
    ! gather the timings

@@ -877,7 +877,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       call hdf5_write_data(ifile, string, resp%s_gather)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/full"
+      string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%a_gather)
 
     endif
@@ -918,7 +918,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     call hdf5_write_data(ifile, string, resp%s_sum)
 
     write(string,'(I6.6)') info%iT
-    string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sum"
+    string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/sum"
     call hdf5_write_data(ifile, string, resp%a_sum)
 
   endif
@@ -964,7 +964,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
         call hdf5_write_data(ifile, string, resp%sB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%aB_gather)
 
       endif
@@ -1005,7 +1005,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       call hdf5_write_data(ifile, string, resp%sB_sum)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/seebeckcoeff/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/sumB"
       call hdf5_write_data(ifile, string, resp%aB_sum)
 
     endif
