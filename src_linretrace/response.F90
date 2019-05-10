@@ -197,7 +197,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
       do is = 1,edisp%ispin
 
-        if ((abs(enrgydiff(is)) .lt. 1d-13) .and. (abs(gamdiff(is)) .lt. 1d-13)) then
+        if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
         ! use the intra-band limit .....
           calc_cond  = real(PolyGamma(1,iband1,info%ik,is)) &
                       - info%beta2p*sct%gam(iband1,info%ik,is)*real(PolyGamma(2,iband1,info%ik,is))
@@ -404,7 +404,7 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
       gamdiff   = sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:)
 
       do is = 1,edisp%ispin
-        if ((abs(enrgydiff(is)) .lt. 1d-13) .and. (abs(gamdiff(is)) .lt. 1d-13)) then
+        if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
         ! use the intra-band limit .....
           calc_cond = polygamma2fermi(enrgy(iband1,is),info%beta) &
                                           * sct%zqp(iband1,info%ik,is)**2 * info%beta &

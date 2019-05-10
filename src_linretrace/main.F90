@@ -140,12 +140,12 @@ program main
 
   call mpi_genkstep(kmesh%nkp)
 
+#ifdef MPI
   if (algo%ldebug) then
      write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
-#ifdef MPI
      call mpi_barrier(mpi_comm_world, mpierr)
-#endif
   endif
+#endif
 
 
   ! allocate the arrays once outside of the main (temperature) loop
@@ -232,6 +232,10 @@ program main
 
   timings = 0.d0        ! reset timings
   call cpu_time(tstart) ! start timer
+
+#ifdef MPI
+  call mpi_barrier(mpi_comm_world, mpierr)
+#endif
 
   ! MAIN LOOP
   do iT=1,temp%nT
