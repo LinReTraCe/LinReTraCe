@@ -170,13 +170,14 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   real(8) :: gam
   real(8), allocatable :: enrgy(:,:)
   real(8), allocatable :: enrgydiff(:)
+  real(8), allocatable :: gamdiff(:)
 
-  complex(8), allocatable :: calc_cond(:)
-  complex(8), allocatable :: calc_seeb(:)
+  complex(8) :: calc_cond
+  complex(8) :: calc_seeb
 
   integer :: index1(9), index2(9)
   integer :: i,j,idir
-  integer :: iband1, iband2, iband
+  integer :: iband1, iband2, iband, is
 
   index1 = (/1,2,3,1,1,2,1,1,2/)
   index2 = (/1,2,3,2,3,3,2,3,3/)
@@ -184,8 +185,6 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   allocate(enrgydiff(edisp%ispin))
-  allocate(calc_cond(edisp%ispin))
-  allocate(calc_seeb(edisp%ispin))
 
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
@@ -194,99 +193,121 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
       if (iband1 == iband2) cycle
       enrgydiff = enrgy(iband1,:) - enrgy(iband2,:)
+      gamdiff   = sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:)
 
-      calc_cond = 0.d0
+      do is = 1,edisp%ispin
 
-      calc_cond = calc_cond &
-          + real(PolyGamma(1,iband1,info%ik,:)) &
-            * ( enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2) &
-            / sct%gam(iband1,info%ik,:)
+        if ((abs(enrgydiff(is)) .lt. 1d-13) .and. (abs(gamdiff(is)) .lt. 1d-13)) then
+        ! use the intra-band limit .....
+          calc_cond  = real(PolyGamma(1,iband1,info%ik,is)) &
+                      - info%beta2p*sct%gam(iband1,info%ik,is)*real(PolyGamma(2,iband1,info%ik,is))
 
-      calc_cond = calc_cond &
-          + aimag(PolyGamma(1,iband1,info%ik,:)) &
-            * ( 2.d0* (-enrgydiff) )
+          calc_cond = calc_cond &
+                      * sct%zqp(iband1,info%ik,is)**2 * info%beta &
+                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
-      calc_cond = calc_cond &
-          + real(PolyGamma(1,iband2,info%ik,:)) &
-            * ( enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2) &
-            / sct%gam(iband2,info%ik,:)
+          calc_seeb = enrgy(iband1,is) * real(PolyGamma(1,iband1,info%ik,is)) &
+                      - enrgy(iband1,is) * sct%gam(iband1,info%ik,is) * info%beta2p * real(PolyGamma(2,iband1,info%ik,is)) &
+                      - sct%gam(iband1,info%ik,is)**2 * info%beta2p * aimag(PolyGamma(2,iband1,info%ik,is))
 
-      calc_cond = calc_cond &
-          + aimag(PolyGamma(1,iband2,info%ik,:)) &
-            * ( 2.d0* enrgydiff )
+          calc_seeb = calc_seeb &
+                      * sct%zqp(iband1,info%ik,is)**2 * info%beta**2 &
+                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
-      calc_cond = calc_cond &
-          * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
-          * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
-          * info%beta
-
-      calc_cond = calc_cond &
-          / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-          / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
-
-
-
-      calc_seeb = 0.d0
-
-      calc_seeb = calc_seeb &
-          + real(PolyGamma(1,iband1,info%ik,:)) &
-            * (enrgy(iband1,:) * (enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2) &
-            / sct%gam(iband1,info%ik,:) + 2.d0*sct%gam(iband1,info%ik,:)*enrgydiff)
-
-      calc_seeb = calc_seeb &
-          + aimag(PolyGamma(1,iband1,info%ik,:)) &
-            * (enrgydiff**2 + sct%gam(iband2,info%ik,:)**2 - sct%gam(iband1,info%ik,:)**2 &
-            - 2.d0*enrgy(iband1,:)*enrgydiff)
-
-      calc_seeb = calc_seeb &
-          + real(PolyGamma(1,iband2,info%ik,:)) &
-            * (enrgy(iband2,:) * (enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2) &
-            / sct%gam(iband2,info%ik,:) + 2.d0*sct%gam(iband2,info%ik,:)*enrgydiff*(-1.d0))
-
-      calc_seeb = calc_seeb &
-          + aimag(PolyGamma(1,iband2,info%ik,:)) &
-            * (enrgydiff**2 + sct%gam(iband1,info%ik,:)**2 - sct%gam(iband2,info%ik,:)**2 &
-            - 2.d0*enrgy(iband2,:)*enrgydiff*(-1.d0))
-
-      calc_seeb = calc_seeb &
-          * sct%gam(iband1,info%ik,:) * sct%gam(iband2,info%ik,:) &
-          * sct%zqp(iband1,info%ik,:) * sct%zqp(iband2,info%ik,:) &
-          * info%beta
-
-      calc_seeb = calc_seeb &
-          / (2.d0 * pi**3 * ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) - sct%gam(iband2,info%ik,:))**2)) &
-          / ( enrgydiff**2 + (sct%gam(iband1,info%ik,:) + sct%gam(iband2,info%ik,:))**2)
-
-
-      ! multiply optical elements
-      do idir = 1,edisp%iOptical
-        if (idir <= 6) then
-          ! ATTENTION
-          ! we read the wien2k files via 1 - 2
-          ! we save those in hdf5
-          ! and read them via Fortran -> implicit transposition
-          ! we have to use 2 - 1 here
-          resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-          resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
-
-          resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-          resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
         else
-          ! here we ADD the complex part to the response
-          resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-          resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
+          calc_cond = 0.d0
 
-          resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-          resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
+          calc_cond = calc_cond &
+              + real(PolyGamma(1,iband1,info%ik,is)) &
+                * ( enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
+                / sct%gam(iband1,info%ik,is)
+
+          calc_cond = calc_cond &
+              + aimag(PolyGamma(1,iband1,info%ik,is)) &
+                * ( 2.d0* (-enrgydiff(is)) )
+
+          calc_cond = calc_cond &
+              + real(PolyGamma(1,iband2,info%ik,is)) &
+                * ( enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
+                / sct%gam(iband2,info%ik,is)
+
+          calc_cond = calc_cond &
+              + aimag(PolyGamma(1,iband2,info%ik,is)) &
+                * ( 2.d0* enrgydiff(is) )
+
+          calc_cond = calc_cond &
+              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+              * info%beta
+
+          calc_cond = calc_cond &
+              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+
+
+
+          calc_seeb = 0.d0
+
+          calc_seeb = calc_seeb &
+              + real(PolyGamma(1,iband1,info%ik,is)) &
+                * (enrgy(iband1,is) * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
+                / sct%gam(iband1,info%ik,is) + 2.d0*sct%gam(iband1,info%ik,is)*enrgydiff(is))
+
+          calc_seeb = calc_seeb &
+              + aimag(PolyGamma(1,iband1,info%ik,is)) &
+                * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
+                - 2.d0*enrgy(iband1,is)*enrgydiff(is))
+
+          calc_seeb = calc_seeb &
+              + real(PolyGamma(1,iband2,info%ik,is)) &
+                * (enrgy(iband2,is) * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
+                / sct%gam(iband2,info%ik,is) + 2.d0*sct%gam(iband2,info%ik,is)*enrgydiff(is)*(-1.d0))
+
+          calc_seeb = calc_seeb &
+              + aimag(PolyGamma(1,iband2,info%ik,is)) &
+                * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
+                - 2.d0*enrgy(iband2,is)*enrgydiff(is)*(-1.d0))
+
+          calc_seeb = calc_seeb &
+              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+              * info%beta
+
+          calc_seeb = calc_seeb &
+              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
-      enddo
 
+
+        ! multiply optical elements
+        do idir = 1,edisp%iOptical
+          if (idir <= 6) then
+            ! ATTENTION
+            ! we read the wien2k files via 1 - 2
+            ! we save those in hdf5
+            ! and read them via Fortran -> implicit transposition
+            ! we have to use 2 - 1 here
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,is)
+
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,is)
+          else
+            ! here we ADD the complex part to the response
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,is) * ci
+
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,is) * ci
+          endif
+        enddo
+      enddo
     enddo
   enddo
 
   deallocate(enrgy)
   deallocate(enrgydiff)
-  deallocate(calc_cond, calc_seeb)
+  deallocate(gamdiff)
 
 end subroutine response_inter_km
 
