@@ -116,6 +116,8 @@ program main
     temp%dT= (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
     allocate(temp%TT(temp%nT))
     allocate(temp%beta(temp%nT))
+    allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
     ! define Temperature grid
     do iT=1,temp%nT
@@ -177,7 +179,7 @@ program main
   endif
 
   if (edisp%ispin == 1) then
-    edisp%nelect = edisp%nelect * 2
+    edisp%nelect = edisp%nelect
   endif
 
   if (myid .eq. master) then
@@ -250,19 +252,21 @@ program main
       ! scattering rates; quasi-particle weights and possible band-shifts
       call read_scattering_data(ifile_scatter, edisp, sct, info)
     else
-      sct%gamscalar = 0.d0
-      sct%zqpscalar = 0.d0
+      ! here we are wasting memory however
+      ! otherwise we would have to write every single response twice
+      sct%gam = 0.d0
+      sct%zqp = 0.d0
       do ig=1,size(sct%gamcoeff)
-         sct%gamscalar = sct%gamscalar + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
+         sct%gam = sct%gam + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
       enddo
       do ig=1,size(sct%zqpcoeff)
-         sct%zqpscalar = sct%zqpscalar + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
+         sct%zqp = sct%zqp + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
       enddo
-      if (sct%zqpscalar > 1.d0) then
+      if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
         call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
-        sct%zqpscalar = 1.d0
+        sct%zqp = 1.d0
       endif
-      sct%gamscalar = sct%zqpscalar * sct%gamscalar  ! convention we use
+      sct%gam = sct%zqp * sct%gam  ! convention we use
     endif
 
 

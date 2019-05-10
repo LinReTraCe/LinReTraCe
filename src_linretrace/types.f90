@@ -99,8 +99,6 @@ module Mtypes
     real(8), allocatable :: zqpcoeff(:)
     real(8), allocatable :: gam(:,:,:) ! same as band
     real(8), allocatable :: zqp(:,:,:) ! same as band
-    real(8)              :: gamscalar
-    real(8)              :: zqpscalar
     real(8)              :: gamimp   ! additional additivie impurity term
   end type
 

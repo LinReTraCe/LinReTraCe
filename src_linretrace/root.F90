@@ -513,13 +513,8 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lScatteringFile) then
-    to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-  else
-    to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gamscalar - ci*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
-  endif
+  to_evaluate = 0.5d0 + info%beta2p * &
+                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
 
   ! evaluate the function
   do is = 1,edisp%ispin
@@ -569,13 +564,8 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lScatteringFile) then
-    to_evaluate = 0.5q0 + info%beta2pQ * &
-                  (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-  else
-    to_evaluate = 0.5q0 + info%beta2pQ * &
-                  (sct%gamscalar - ciQ*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
-  endif
+  to_evaluate = 0.5q0 + info%beta2pQ * &
+                (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
 
   ! evaluate the function
   do is = 1,edisp%ispin
@@ -755,13 +745,8 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lScatteringFile) then
-    to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-  else
-    to_evaluate = 0.5d0 + info%beta2p * &
-                  (sct%gamscalar - ci*sct%zqpscalar*(edisp%band(:,ikstr:ikend,:) - mu))
-  endif
+  to_evaluate = 0.5d0 + info%beta2p * &
+                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
 
   ! evaluate the function
   occ_sum = 0.d0

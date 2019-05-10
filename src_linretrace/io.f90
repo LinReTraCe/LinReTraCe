@@ -233,11 +233,7 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,kmesh%nkp,edisp%ispin))
 
-  if (algo%lScatteringFile) then
-    enrgy = sct%zqp(:,:,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
-  else
-    enrgy = sct%zqpscalar * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
-  endif
+  enrgy = sct%zqp(:,:,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
 
   write(string,'(I6.6,"/energies")') info%iT
   call hdf5_open_file(algo%output_file, ifile)
