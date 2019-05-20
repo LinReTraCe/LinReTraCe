@@ -19,6 +19,7 @@ module Mtypes
     logical :: lFullOutput
     logical :: lEnergyOutput
     logical :: lBoltzmann
+    logical :: lScissors
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
@@ -46,6 +47,11 @@ module Mtypes
     real(8) :: efer                          ! Fermi energy
     real(8) :: mu
     real(8) :: nelect
+
+    logical, allocatable :: gapped(:)
+    real(8), allocatable :: gap(:)
+    integer :: valenceBand
+    real(8), allocatable :: scissors(:)
 
     real(8), allocatable    :: band_original(:,:,:)
     real(8), allocatable    :: band_shift(:,:,:)  ! same as band

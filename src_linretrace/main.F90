@@ -178,6 +178,11 @@ program main
     deallocate(edisp%band_original)
   endif
 
+  if (algo%lScissors) then
+    edisp%band = edisp%band + edisp%band_shift ! constant throughout now
+    deallocate(edisp%band_shift)
+  endif
+
   if (edisp%ispin == 1) then
     edisp%nelect = edisp%nelect
   endif
@@ -197,6 +202,10 @@ program main
     write(stdout,*) '  electrons: ', edisp%nelect
     write(stdout,*)
     write(stdout,*) '  energy-file: ', trim(algo%input_energies)
+    write(stdout,*) '  gap: ', edisp%gap
+    if (algo%lScissors) then
+      write(stdout,*) '  scissors: ', edisp%scissors
+    endif
     if (.not. algo%muSearch) then
       write(stdout,*) '  constant chemical potential: ', edisp%efer
     endif

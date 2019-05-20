@@ -10,16 +10,19 @@ contains
 
 subroutine read_preproc_energy_data(algo, kmesh, edisp)
   implicit none
-  type(algorithm)              :: algo
-  type(kpointmesh)             :: kmesh
-  type(energydisp)             :: edisp
+  type(algorithm)      :: algo
+  type(kpointmesh)     :: kmesh
+  type(energydisp)     :: edisp
 
-  integer(hid_t)               :: ifile
-  integer                      :: i, is, locderivatives
-  integer, allocatable         :: irank1arr(:)
-  real(8), allocatable         :: drank1arr(:)
-  real(8), allocatable         :: drank2arr(:,:)
-  real(8), allocatable         :: drank3arr(:,:,:)
+  integer(hid_t)       :: ifile
+  integer              :: i, is, locderivatives
+  integer              :: locgapped
+  integer              :: nshape(1)
+
+  integer, allocatable :: irank1arr(:)
+  real(8), allocatable :: drank1arr(:)
+  real(8), allocatable :: drank2arr(:,:)
+  real(8), allocatable :: drank3arr(:,:,:)
 
   call hdf5_open_file(trim(adjustl(algo%input_energies)), ifile, rdonly=.true.)
 
@@ -36,6 +39,58 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
   call hdf5_read_data(ifile, "/.bands/opticalBandMax", edisp%nbopt_max)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
+  allocate(edisp%gapped(edisp%ispin))
+  allocate(edisp%gap(edisp%ispin))
+
+  ! read band gap information
+  if (edisp%ispin == 1) then
+    call hdf5_read_data(ifile, "/.bands/bandgap/gapped", locgapped)
+    if (locgapped == 1) then
+      edisp%gapped(1) = .true.
+      call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+    else
+      edisp%gapped(1) = .false.
+    endif
+  else
+    call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", locgapped)
+    if (locgapped == 1) then
+      edisp%gapped(1) = .true.
+      call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+    else
+      edisp%gapped(1) = .false.
+    endif
+
+    call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", locgapped)
+    if (locgapped == 1) then
+      edisp%gapped(2) = .true.
+      call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(2))
+      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+    else
+      edisp%gapped(2) = .false.
+    endif
+  endif
+
+  if (algo%lScissors) then
+    nshape = shape(edisp%scissors)
+    if (nshape(1) /= edisp%iSpin) then
+      call stop_with_message(stderr, 'Must have as many scissor parameters as spins')
+    endif
+
+    do is=1,edisp%ispin
+      if (edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
+        call log_master(stdout, 'Warning: Cannot apply scissors to gapless energies')
+      endif
+    enddo
+  endif
+
+  if (algo%lScissors .and. .not. algo%lScatteringFile) then
+    allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    do is=1,edisp%ispin
+      edisp%band_shift(edisp%valenceBand+1:, :, is) = edisp%scissors(is)
+    enddo
+  endif
 
   ! unit cell information
   call hdf5_read_data(ifile, "/.unitcell/volume", kmesh%vol)

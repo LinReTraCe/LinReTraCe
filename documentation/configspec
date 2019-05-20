@@ -7,6 +7,8 @@ DebugMode  = (default = F)
 
 ChemicalPotential = (default = 0)  # if here run with the given mu
 
+Scissors   = (default = None) # increase/decrease of an existing energy gap
+
 FermiOccupation   = (default = F)  # use fermi functions to determine occupation
 
 RootMethod        = (default = 2)  # 0 secant
