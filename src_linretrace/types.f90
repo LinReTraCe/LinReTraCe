@@ -20,6 +20,7 @@ module Mtypes
     logical :: lEnergyOutput
     logical :: lBoltzmann
     logical :: lScissors
+    logical :: lImpurities
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
@@ -63,6 +64,14 @@ module Mtypes
     ! are loaded for each k-point and each spin
     real(8), allocatable    :: Mopt(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
                                                 ! 3..9, nband,nband
+  end type
+
+  type impurity
+    integer :: nimp                          ! number of impurities
+    real(8), allocatable :: Dopant(:)
+    real(8), allocatable :: Density(:)
+    real(8), allocatable :: Energy(:)
+    real(8), allocatable :: Degeneracy(:)
   end type
 
   type dosgrid

@@ -79,7 +79,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
     endif
 
     do is=1,edisp%ispin
-      if (edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
+      if (.not. edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
         call log_master(stdout, 'Warning: Cannot apply scissors to gapless energies')
       endif
     enddo
@@ -88,6 +88,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
   if (algo%lScissors .and. .not. algo%lScatteringFile) then
     allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
     do is=1,edisp%ispin
+      edisp%band_shift(:edisp%valenceBand, :, is)   = 0.d0
       edisp%band_shift(edisp%valenceBand+1:, :, is) = edisp%scissors(is)
     enddo
   endif

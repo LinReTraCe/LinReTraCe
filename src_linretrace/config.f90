@@ -7,21 +7,25 @@ module Mconfig
 
 contains
 
-subroutine read_config(algo, edisp, sct, temp)
+subroutine read_config(algo, edisp, sct, temp, imp)
   implicit none
   type(algorithm)   :: algo
   type(kpointmesh)  :: kmesh
   type(energydisp)  :: edisp
   type(scattering)  :: sct
   type(temperature) :: temp
+  type(impurity)    :: imp
 
   character(len=256) :: config_file, output
-  character(len=256) :: str_temp
-  integer :: i,j,k,l,stat
+  character(len=256) :: str_temp, str_imp
+  integer :: i,j,k,l,stat,iimp
 
   integer :: search_start, search_end
   integer :: subsearch_start, subsearch_end
   integer :: pst, empty
+
+  real(8), allocatable :: impurityinfo(:)
+  integer :: nshape(1)
 
   logical :: found
 
@@ -93,6 +97,7 @@ subroutine read_config(algo, edisp, sct, temp)
   algo%lBoltzmann     = .true.
   algo%lFullOutput    = .false.
   sct%gamimp          = 0.d0
+  imp%nimp            = 0
 
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
@@ -134,6 +139,22 @@ subroutine read_config(algo, edisp, sct, temp)
     algo%lScissors = .false.
   endif
 
+  call int_find('NImp', imp%nimp, search_start, search_end, found)
+  if (found) then
+    if (imp%nimp > 0) then
+      algo%lImpurities = .true.
+      allocate(imp%Dopant(imp%nimp))
+      allocate(imp%Density(imp%nimp))
+      allocate(imp%Energy(imp%nimp))
+      allocate(imp%Degeneracy(imp%nimp))
+    else if (imp%nimp == 0) then
+      algo%lImpurities = .false.
+    else
+      call stop_with_message(stderr, 'Error: Negative number of impurities')
+    endif
+  else
+    algo%lImpurities = .false.
+  endif
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
@@ -168,6 +189,40 @@ subroutine read_config(algo, edisp, sct, temp)
     edisp%lBandShift = .false. ! only with scattering File
   endif
 
+  call group_find('[Impurities]', search_start, search_end)
+  if (algo%lImpurities .and. search_start .eq. 0) then
+    call stop_with_message(stderr, 'Impurities group not found')
+  else if (algo%lImpurities .and. search_start .eq. -1) then
+    call stop_with_message(stderr, 'Impurities group empty')
+  else if (imp%nimp == 0 .and. search_start .gt. 0) then
+    call stop_with_message(stderr, 'Impurities found but no NImp supplied')
+  endif
+
+  if (search_start .gt. 0) then ! found
+    do iimp=1,imp%nimp
+      write(str_imp,'(A2,I1,A2)') '[[',iimp,']]'
+      call subgroup_find(str_imp, search_start, search_end, subsearch_start, subsearch_end)
+      if (subsearch_start .le. 0) then
+        call stop_with_message(stderr, 'Impurity sub group not found')
+      endif
+      if ((iimp .eq. imp%nimp) .and. (subsearch_end .ne. search_end)) then
+        call stop_with_message(stderr,'More Impurity descriptions than provided in NImp')
+      endif
+
+      call floatn_find('Description', impurityinfo, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'Impurity Description not found')
+      nshape = shape(impurityinfo)
+      if (nshape(1) /= 4) then
+        call stop_with_message(stderr, 'Wrong impurity description')
+      endif
+
+      imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
+      imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
+      imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
+      imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
+      deallocate(impurityinfo)
+    enddo
+  endif
 
   deallocate(file_save)
 end subroutine read_config

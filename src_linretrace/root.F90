@@ -23,7 +23,7 @@ module Mroot
 
   contains
 
-subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
+subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(inout)        :: mu ! chemical potential which is calculated
@@ -35,6 +35,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
   type(scattering) :: sct
+  type(impurity)   :: imp
   type(runinfo)    :: info
 
   ! local variables
@@ -82,7 +83,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
 
 ! deviation from set particle number with initial mu
 ! output: target_zero1 = required - actual electrons
-  call ndeviation(mu, target_zero1, edisp, sct, kmesh, algo, info)
+  call ndeviation(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
 ! coarse initialization of secant bracket mu1, mu2
   target_zero2=target_zero1
@@ -91,11 +92,11 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
 
   do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
      mu2 = mu2 + 0.5d0
-     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
   enddo
   do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
      mu1 = mu1 - 0.5d0
-     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, algo, info)
+     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, imp, algo, info)
   enddo
 
   ! maximal steps for double precision calculations
@@ -105,7 +106,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   !Secant root finding
     do iit=1,niit0
        mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
-       call ndeviation(mu, target_zero, edisp, sct, kmesh, algo, info)
+       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev)  exit
        if (target_zero.gt.0.d0) then
@@ -135,7 +136,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
     enddo
     ! evaluate target function in the interval
     do i=2,nmu-1
-       call ndeviation(X(i), Y(i), edisp, sct, kmesh, algo, info)
+       call ndeviation(X(i), Y(i), edisp, sct, kmesh, imp, algo, info)
     enddo
     do i=1,nmu
       Y(i)=Y(i)+X(i) !this is the correct target function for this method
@@ -170,7 +171,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
                 !write(*,*) b(3), b(4)
                 ! save the values of the intersection
                 mu = B(3)
-                call ndeviation(mu, target_zero, edisp, sct, kmesh, algo, info)
+                call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
              endif
           endif
        enddo ! over freq. counter j
@@ -184,7 +185,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
 
      do j = 1, maxiter
         P(3) = 0.5d0*(P(1)+P(2))
-        call ndeviation(P(3), F(3), edisp, sct, kmesh, algo, info)
+        call ndeviation(P(3), F(3), edisp, sct, kmesh, imp, algo, info)
         s = dsqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0d0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -193,7 +194,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
-        call ndeviation(P(4), F(4), edisp, sct, kmesh, algo, info)
+        call ndeviation(P(4), F(4), edisp, sct, kmesh, imp, algo, info)
         if (abs(F(4)) .lt. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -224,7 +225,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
     ! Bisection root finding
     do iit=1,niit0
        mu = (mu1+mu2)/2.d0
-       call ndeviation(mu, target_zero, edisp, sct, kmesh, algo, info)
+       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
        if (myid.eq.master .and. iit .ge. 50) write(*,*) mu
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -245,7 +246,7 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   ! endif
 end subroutine find_mu_D
 
-subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
+subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
   real(8), intent(inout)        :: mu
@@ -256,6 +257,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
@@ -307,7 +309,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   mu_qp = real(mu,16) ! save into a local qp number
 
 ! deviation from set particle number with initial mu
-  call ndeviation(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
+  call ndeviation(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
   target_zero2=target_zero1
   mu1=mu_qp
@@ -315,11 +317,11 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
 
   do while (target_zero2.gt.0.q0)
      mu2=mu2+0.5q0
-     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
   enddo
   do while (target_zero1.le.0.q0)
      mu1=mu1-0.5q0
-     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, algo, info)
+     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, imp, algo, info)
   enddo
 
   niit0=niitQ
@@ -328,7 +330,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
   !Secant root finding
     do iit=1,niit0
        mu_qp=mu1-target_zero1*mu2/(target_zero2-target_zero1)+target_zero1*mu1/(target_zero2-target_zero1)
-       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, algo, info)
+       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -355,7 +357,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
 
      do j = 1, maxiter
         P(3) = 0.5q0*(P(1)+P(2))
-        call ndeviation(P(3), F(3), edisp, sct, kmesh, algo, info)
+        call ndeviation(P(3), F(3), edisp, sct, kmesh, imp, algo, info)
         s = sqrt((F(3)**2)-(F(1)*F(2)))
         if (s==0.0q0) then
            write(*,*) 'Error in Ridders search for chemical potential'
@@ -364,7 +366,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
            goto 400
         endif
         P(4) = P(3)+(P(3)-P(1))*(sign(1.0q0,F(1)-F(2))*F(3)/s)
-        call ndeviation(P(4), F(4), edisp, sct, kmesh, algo, info)
+        call ndeviation(P(4), F(4), edisp, sct, kmesh, imp, algo, info)
         if (abs(F(4)) .le. dev) goto 400
         if (sign(F(3), F(4)) /= F(3)) then
         !change of sign btw x3 and x4 then reduce search interval
@@ -395,7 +397,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, algo, info)
     ! Bisection root finding
     do iit=1,niit0
        mu_qp = (mu1+mu2)/2.q0
-       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, algo, info)
+       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
@@ -441,7 +443,7 @@ end subroutine find_mu_Q
 ! required electrons - current electrons
 ! if positive we have to increase the chemical potential
 ! if negative we have to decrease the chemical potential
-subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, algo, info)
+subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -450,23 +452,24 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
   real(8) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, info)
+    call occ_fermi(mu, occ_tot, edisp, kmesh, imp, algo, info)
     ! call occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
     ! call occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
 
   target_zero = edisp%nelect - occ_tot
 end subroutine ndeviation_D
 
-subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, algo, info)
+subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   !passed variables
@@ -476,21 +479,22 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
   real(16) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, info)
+    call occ_fermi(mu, occ_tot, edisp, kmesh, imp, algo, info)
   else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   endif
 
   target_zero=real(edisp%nelect,16) - occ_tot
 end subroutine ndeviation_Q
 
-subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -499,12 +503,13 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
   complex(8), allocatable :: to_evaluate(:,:,:)
   real(8), allocatable    :: occupation(:,:,:)
   !external variables
@@ -536,10 +541,17 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   occ_tot = occ_loc
 #endif
 
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
+
 end subroutine occ_digamma_D
 
 
-subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
+subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -548,12 +560,13 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
   !local variables
   real(16) :: occ_loc
-  integer  :: iband, is, ik
+  integer  :: iband, is, ik, iimp
 
   complex(16), allocatable :: to_evaluate(:,:,:)
   real(16), allocatable    :: occupation(:,:,:)
@@ -587,9 +600,16 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   occ_tot = occ_loc
 #endif
 
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
+
 end subroutine occ_digamma_Q
 
-subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, info)
+subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -597,11 +617,13 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
 
   real(8), allocatable :: occupation(:,:,:)
 
@@ -626,10 +648,17 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, info)
   occ_tot = occ_loc
 #endif
 
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
+
 end subroutine occ_fermi_D
 
 ! Neumaier algorithm to increase summation accuracy
-subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
+subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -637,11 +666,13 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(runinfo)    :: info
+  type(algorithm)  :: algo
   !local variables
 
   real(8) :: occ_sum
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
 
   real(8), allocatable :: occupation(:,:,:)
   real(8) :: t,c
@@ -679,9 +710,16 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   occ_tot = occ_sum
 #endif
 
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
+
 end subroutine occ_fermi_comp_D
 
-subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, info)
+subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, imp, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -689,11 +727,13 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(runinfo)    :: info
+  type(algorithm)  :: algo
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
 
   real(16), allocatable :: occupation(:,:,:)
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
@@ -718,9 +758,16 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, info)
   occ_tot = occ_loc
 #endif
 
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
+
 end subroutine occ_fermi_Q
 
-subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -729,12 +776,13 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_sum
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
   complex(8), allocatable :: to_evaluate(:,:,:)
   real(8), allocatable    :: occupation(:,:,:)
   !external variables
@@ -780,6 +828,13 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 #else
   occ_tot = occ_sum
 #endif
+
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot + imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
+  endif
 
 end subroutine occ_digamma_comp_D
 

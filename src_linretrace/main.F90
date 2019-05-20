@@ -19,6 +19,7 @@ program main
   type(scattering)  :: sct     ! scattering rates and quasi particle weights
   type(temperature) :: temp    ! temperature quantities
   type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
+  type(impurity)    :: imp
 
   type(response_dp) :: resp_intra
   type(response_dp) :: resp_intra_Boltzmann
@@ -66,7 +67,7 @@ program main
   if (myid.eq.master) call main_greeting(stdout)
   call mpi_barrier(mpi_comm_world, mpierr)
 
-  call read_config(algo, edisp, sct, temp)
+  call read_config(algo, edisp, sct, temp, imp)
   call check_config(algo)
 
   call hdf5_init()
@@ -286,7 +287,7 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, algo, info)
+      call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
       ! call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
       ! call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
       call cpu_time(tfinish)
