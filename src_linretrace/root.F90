@@ -546,8 +546,8 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -608,8 +608,8 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -659,8 +659,8 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -724,8 +724,8 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -775,8 +775,8 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -849,8 +849,8 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Density(iimp) &
-        / (1.d0 + imp%Dopant(iimp)*imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
