@@ -1018,19 +1018,20 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_polygamma_Q
 
-subroutine calc_total_energy(mu, energy_tot, edisp, sct, kmesh, algo, info)
+subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(in)  :: mu
   real(8), intent(out) :: energy_tot
 
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: energy_loc
-  integer :: is, ik, iband
+  integer :: is, ik, iband, iimp
   complex(8), allocatable :: to_evaluate(:,:,:)
   real(8), allocatable    :: energy_post_factor(:,:,:)
   real(8), allocatable    :: energy(:,:,:)
@@ -1041,9 +1042,11 @@ subroutine calc_total_energy(mu, energy_tot, edisp, sct, kmesh, algo, info)
   allocate(energy_post_factor(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(energy(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
+  ! for the occupation
   to_evaluate = 0.5d0 + info%beta2p * &
-                (sct%gam(:,ikstr:ikend,:) - ci*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
-  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * edisp%band(:,ikstr:ikend,:) - mu
+                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+  ! energy contribution : occupation * energy of this occupation
+  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - mu)
 
   ! evaluate the function
   do is = 1,edisp%ispin
@@ -1065,6 +1068,71 @@ subroutine calc_total_energy(mu, energy_tot, edisp, sct, kmesh, algo, info)
 #else
   energy_tot = energy_loc
 #endif
+
+  ! if we have impurity levels add their energy contribution here
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
+        * imp%Energy(iimp)
+    enddo
+  endif
+
+end subroutine
+
+subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: energy_tot
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: energy_loc
+  integer :: is, ik, iband, iimp
+  real(8), allocatable    :: energy_post_factor(:,:,:)
+  real(8), allocatable    :: energy(:,:,:)
+  !external variables
+  complex(8), external :: wpsipg
+
+  allocate(energy_post_factor(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(energy(edisp%nband_max, ikstr:ikend, edisp%ispin))
+
+  ! energy contribution : occupation * energy of this occupation
+  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - mu)
+
+  ! evaluate the function
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        energy(iband,ik,is) = fermi_dp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)   ! occupation
+        energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weight(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
+      enddo
+    enddo
+  enddo
+
+  deallocate(energy_post_factor)
+  energy_loc = sum(energy)
+  deallocate(energy)
+
+#ifdef MPI
+  call MPI_ALLREDUCE(energy_loc, energy_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  energy_tot = energy_loc
+#endif
+
+  ! if we have impurity levels add their energy contribution here
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
+        * imp%Energy(iimp)
+    enddo
+  endif
 
 end subroutine
 

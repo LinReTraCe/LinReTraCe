@@ -460,7 +460,7 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   real(8) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, algo, info)
+    call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
     ! call occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   else
     call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
@@ -498,7 +498,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   real(16) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, algo, info)
+    call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
   else
     call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
@@ -615,13 +615,14 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_digamma_Q
 
-subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, algo, info)
+subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
   real(8), intent(out) :: occ_tot
 
   type(energydisp) :: edisp
+  type(scattering) :: sct
   type(kpointmesh) :: kmesh
   type(algorithm)  :: algo
   type(runinfo)    :: info
@@ -638,7 +639,7 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_dp((edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = fermi_dp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
       enddo
     enddo
@@ -709,13 +710,14 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, algo, info)
 
 end subroutine occ_fermi_comp_D
 
-subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, algo, info)
+subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
   real(16), intent(out) :: occ_tot
 
   type(energydisp) :: edisp
+  type(scattering) :: sct
   type(kpointmesh) :: kmesh
   type(runinfo)    :: info
   type(algorithm)  :: algo
@@ -732,7 +734,7 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, algo, info)
       do iband=1,edisp%nband_max
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
-        occupation(iband,ik,is) = fermi_qp((edisp%band(iband,ik,is)-mu), info%betaQ)
+        occupation(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
       enddo
     enddo

@@ -284,6 +284,7 @@ program main
     endif
 
 
+    ! root finding (mu)
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
@@ -295,7 +296,12 @@ program main
       tstart = tfinish
     endif
 
-    call calc_total_energy(mu(iT), energy(iT), edisp, sct, kmesh, algo, info)
+    ! calculating total energy according to the occuption above
+    if (algo%muFermi) then
+      call calc_total_energy_fermi(mu(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+    else
+      call calc_total_energy_digamma(mu(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+    endif
 
     if (myid.eq.master) then
       write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
@@ -332,6 +338,7 @@ program main
     ! endif
 
 
+    ! do the k-point loop and calculate the response
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
 
@@ -353,6 +360,8 @@ program main
     ! endif
 
 
+    ! output the response
+    ! this subroutines include the summations necessary
     call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
     if (algo%lBoltzmann) then
       call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
@@ -380,6 +389,7 @@ program main
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
     call hdf5_write_data(ifile_output, '.quantities/mu', mu)
+    call hdf5_write_data(ifile_output, '.quantities/energy', energy)
     call hdf5_close_file(ifile_output)
   endif
 
