@@ -456,14 +456,25 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
+  integer :: iimp
   real(8) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, imp, algo, info)
+    call occ_fermi(mu, occ_tot, edisp, kmesh, algo, info)
     ! call occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
+    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
     ! call occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  endif
+
+  ! nvalence = nsearch - N_D^+ + N_A^-
+  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
+  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
   endif
 
   target_zero = edisp%nelect - occ_tot
@@ -483,18 +494,29 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
+  integer  :: iimp
   real(16) :: occ_tot
 
   if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, kmesh, imp, algo, info)
+    call occ_fermi(mu, occ_tot, edisp, kmesh, algo, info)
   else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
+    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  endif
+
+  ! nvalence = nsearch - N_D^+ + N_A^-
+  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
+  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    enddo
   endif
 
   target_zero=real(edisp%nelect,16) - occ_tot
 end subroutine ndeviation_Q
 
-subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
+subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -503,13 +525,12 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband, iimp
+  integer :: is, ik, iband
   complex(8), allocatable :: to_evaluate(:,:,:)
   real(8), allocatable    :: occupation(:,:,:)
   !external variables
@@ -541,20 +562,10 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   occ_tot = occ_loc
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
-
 end subroutine occ_digamma_D
 
 
-subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
+subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -563,13 +574,12 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
   !local variables
   real(16) :: occ_loc
-  integer  :: iband, is, ik, iimp
+  integer  :: iband, is, ik
 
   complex(16), allocatable :: to_evaluate(:,:,:)
   real(16), allocatable    :: occupation(:,:,:)
@@ -603,19 +613,9 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   occ_tot = occ_loc
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
-
 end subroutine occ_digamma_Q
 
-subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
+subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -623,13 +623,12 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband, iimp
+  integer :: is, ik, iband
 
   real(8), allocatable :: occupation(:,:,:)
 
@@ -654,20 +653,10 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   occ_tot = occ_loc
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
-
 end subroutine occ_fermi_D
 
 ! Neumaier algorithm to increase summation accuracy
-subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
+subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -675,13 +664,12 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(runinfo)    :: info
   type(algorithm)  :: algo
   !local variables
 
   real(8) :: occ_sum
-  integer :: is, ik, iband, iimp
+  integer :: is, ik, iband
 
   real(8), allocatable :: occupation(:,:,:)
   real(8) :: t,c
@@ -719,19 +707,9 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, imp, algo, info)
   occ_tot = occ_sum
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
-
 end subroutine occ_fermi_comp_D
 
-subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, imp, algo, info)
+subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -739,13 +717,12 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, imp, algo, info)
 
   type(energydisp) :: edisp
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(runinfo)    :: info
   type(algorithm)  :: algo
   !local variables
 
   real(8) :: occ_loc
-  integer :: is, ik, iband, iimp
+  integer :: is, ik, iband
 
   real(16), allocatable :: occupation(:,:,:)
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
@@ -770,19 +747,9 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, kmesh, imp, algo, info)
   occ_tot = occ_loc
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
-
 end subroutine occ_fermi_Q
 
-subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
+subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
   real(8), intent(in)  :: mu
@@ -791,13 +758,12 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
-  type(impurity)   :: imp
   type(algorithm)  :: algo
   type(runinfo)    :: info
   !local variables
 
   real(8) :: occ_sum
-  integer :: is, ik, iband, iimp
+  integer :: is, ik, iband
   complex(8), allocatable :: to_evaluate(:,:,:)
   real(8), allocatable    :: occupation(:,:,:)
   !external variables
@@ -844,15 +810,6 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, imp, algo, info)
   occ_tot = occ_sum
 #endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-    enddo
-  endif
 
 end subroutine occ_digamma_comp_D
 
