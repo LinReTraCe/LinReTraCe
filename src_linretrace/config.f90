@@ -236,7 +236,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       nshape = shape(impurityinfo)
       if (imp%inputtype(iimp) == 0) then
         if (nshape(1) /= 4) then
-          call stop_with_message(stderr, 'Wrong impurity description')
+          call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
         else
           imp%inputspin(iimp) = 1 ! default to spin up
           ! we don't really need a spin descprtion because this is an absolute energy level
@@ -247,7 +247,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         else if (nshape(1) == 5) then
           imp%inputspin(iimp) = impurityinfo(5)
         else
-          call stop_with_message(stderr, 'Wrong impurity description')
+          call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
         endif
       endif
 

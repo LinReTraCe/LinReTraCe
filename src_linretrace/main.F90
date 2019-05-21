@@ -33,7 +33,7 @@ program main
   integer(hid_t)    :: ifile_output
 
 
-  integer :: is, ig, iT, ik, iband
+  integer :: is, ig, iT, ik, iband, iimp
   integer :: niitact
   real(8) :: ndevact
   real(16):: ndevactQ
@@ -174,18 +174,24 @@ program main
     call hdf5_open_file(algo%input_scattering, ifile_scatter, rdonly=.true.)
   endif
 
+  ! for this option we can do the shifts once
+  ! and deallocate the unused arrays
+  ! otherwise we have to recalculate the shifts for every T-point
   if (.not. edisp%lBandShift) then
-    edisp%band = edisp%band_original ! the energies are constant throughout
-    deallocate(edisp%band_original)
-  endif
-
-  if (algo%lScissors) then
-    edisp%band = edisp%band + edisp%band_shift ! constant throughout now
-    deallocate(edisp%band_shift)
-  endif
-
-  if (edisp%ispin == 1) then
-    edisp%nelect = edisp%nelect
+    if (algo%lScissors) then
+      do is=1,edisp%ispin
+        edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
+        edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+      enddo
+      ! apply once and deallocate the unused arrays
+      edisp%band = edisp%band_original + edisp%band_shift
+      deallocate(edisp%band_original)
+      deallocate(edisp%band_shift)
+    else
+      edisp%band = edisp%band_original ! the energies are constant throughout
+      deallocate(edisp%band_shift)
+      deallocate(edisp%band_original)
+    endif
   endif
 
   if (myid .eq. master) then
@@ -210,13 +216,22 @@ program main
     if (.not. algo%muSearch) then
       write(stdout,*) '  constant chemical potential: ', edisp%efer
     endif
-      write(stdout,*)
+    write(stdout,*)
     if (algo%lScatteringFile) then
       write(stdout,*) '  scattering-file: ', trim(algo%input_scattering)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
     else
       write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
       write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
+    endif
+    write(stdout,*)
+    if (algo%lImpurities) then
+      write(stdout,*) '  impurity levels: ', imp%nimp
+      write(stdout,*) '    ______________________________________________'
+      write(stdout,*) '    iimp, dopant, density, energy [eV], degeneracy'
+      do iimp = 1,imp%nimp
+        write(stdout,'(2X,I5,3X,I5,3F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), imp%Energy(iimp), imp%Degeneracy(iimp)
+      enddo
     endif
     write(stdout,*)
     write(stdout,*) '  output-options:'
@@ -262,8 +277,18 @@ program main
     ! define scattering rates and quasi particle weights
     ! for the current temperature
     if (algo%lScatteringFile) then
+      ! as mentioned above
+      ! apply the scissors:
+      if (algo%lScissors) then
+        edisp%band_shift = 0.d0
+        do is=1,edisp%ispin
+          edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
+          edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+        enddo
+      endif
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
+      ! this are in ADDITION to the scissors
       call read_scattering_data(ifile_scatter, edisp, sct, info)
     else
       ! here we are wasting memory however
@@ -317,7 +342,6 @@ program main
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
     tstart = tfinish
-
 
 
 

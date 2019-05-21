@@ -88,13 +88,21 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
+      if (edisp%ispin == 1 .and. imp%inputspin(iimp) /= 1.d0) then
+        call stop_with_message(stderr, 'Error: Spin type must be 1')
+      else if (edisp%ispin == 2 .and. .not. (imp%inputspin(iimp) == 1.d0 .or. imp%inputspin(iimp) == 2.d0)) then
+        call stop_with_message(stderr, 'Error: Spin type must be 1 or 2')
+      endif
+
       if ((imp%inputtype(iimp) > 0) .and. (edisp%gapped(imp%inputspin(iimp)) .eqv. .false.)) then
         call stop_with_message(stderr, 'Error: Relative impurity position not available in gapless system')
       endif
     enddo
   endif
 
+
   if (algo%lScissors) then
+    ! check for inconsitencies
     nshape = shape(edisp%scissors)
     if (nshape(1) /= edisp%iSpin) then
       call stop_with_message(stderr, 'Must have as many scissor parameters as spins')
@@ -105,14 +113,11 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
         call stop_with_message(stdout, 'Error: Cannot apply scissors to gapless band structure')
       endif
     enddo
-  endif
 
-  if (algo%lScissors) then
-    if (.not. allocated(edisp%band_shift)) allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    ! apply scissors
     do is=1,edisp%ispin
-      edisp%band_shift(:edisp%valenceBand(is), :, is)   = 0.d0
-      edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
-      ! also shift the gap
+      ! scissors shift the conduction band
+      ! and therefore the gap
       edisp%gap(is) = edisp%gap(is) + edisp%scissors(is)
       edisp%ene_conductionBand(is) = edisp%ene_conductionBand(is) + edisp%scissors(is)
     enddo
@@ -161,6 +166,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   ! which is happening when loading hdf5 files
 
   allocate(edisp%band_original(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
   if (edisp%lDerivatives) then
     allocate(edisp%band_dk(3, edisp%nband_max, kmesh%nkp, edisp%ispin))
@@ -275,18 +281,24 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
   if (edisp%iSpin == 1) then
     if (hdf5_dataset_exists(ifile, "/tPoint/000001/bandshift")) then
-       edisp%lBandShift = .true.
-       allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
+      edisp%lBandShift = .true.
+      if (.not. allocated(edisp%band_shift)) then
+        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
+        edisp%band_shift = 0.d0
+      endif
     else
        edisp%lBandShift = .false.
     endif
 
   else if (edisp%iSpin == 2) then
     if (hdf5_dataset_exists(ifile, "/up/tPoint/000001/bandshift")) then
-       edisp%lBandShift = .true.
-       allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
+      edisp%lBandShift = .true.
+      if (.not. allocated(edisp%band_shift)) then
+        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
+        edisp%band_shift = 0.d0
+      endif
     else
-       edisp%lBandShift = .false.
+      edisp%lBandShift = .false.
     endif
   endif
 
@@ -370,7 +382,7 @@ subroutine read_scattering_data(ifile, edisp, sct, info)
     if (edisp%lBandShift) then
       write(string,'("tPoint/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,1) = darr2
+      edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2 ! there might be scissors applied before hand
       deallocate(darr2)
 
       edisp%band = edisp%band_original + edisp%band_shift
@@ -400,12 +412,12 @@ subroutine read_scattering_data(ifile, edisp, sct, info)
     if (edisp%lBandShift) then
       write(string,'("up/tPoint/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,1) = darr2
+      edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2
       deallocate(darr2)
 
       write(string,'("dn/tPoint/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,2) = darr2
+      edisp%band_shift(:,:,2) = edisp%band_shift(:,:,2) + darr2
       deallocate(darr2)
 
       edisp%band = edisp%band_original + edisp%band_shift
