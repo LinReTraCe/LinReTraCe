@@ -11,6 +11,8 @@ Scissors   = (default = None) # increase/decrease of an existing energy gap
 
 FermiOccupation   = (default = F)  # use fermi functions to determine occupation
 
+NImp = (default = 0) # number of additional impurity levels
+
 RootMethod        = (default = 2)  # 0 secant
                                    # 1 linint
                                    # 2 riddler
@@ -36,3 +38,19 @@ TMaximum                  = (default = None)
 TPoints                   = (default = None)
 ScatteringCoefficients    = (default = None)
 QuasiParticleCoefficients = (default = None)
+
+________________________________________________________________________________
+[Impurities]
+[[1]]
+# one of these 4 input types
+# inputs are 4 numbers
+# donor(+1)/acceptor(-1) density(per unit cell) energy degenracy
+# e.g.: +1 1e-4 8.2514 2
+Absolute   = (default = None) # energy is absolute in [eV]
+Valence    = (default = None) # relative upwards shift from top of valence band [eV]
+Conduction = (default = None) # relative downwards shift from bottom of conduction band [eV]
+Percentage = (default = None) # relative position inside the gap
+[[2]]
+... # as many as there are NImp supplied
+# these shifts are applied AFTER the application of scissors
+

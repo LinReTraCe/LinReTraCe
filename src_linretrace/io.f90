@@ -8,14 +8,15 @@ module Mio
 
 contains
 
-subroutine read_preproc_energy_data(algo, kmesh, edisp)
+subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   implicit none
   type(algorithm)      :: algo
   type(kpointmesh)     :: kmesh
   type(energydisp)     :: edisp
+  type(impurity)       :: imp
 
   integer(hid_t)       :: ifile
-  integer              :: i, is, locderivatives
+  integer              :: i, is, locderivatives, iimp
   integer              :: locgapped
   integer              :: nshape(1)
 
@@ -41,6 +42,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
 
   allocate(edisp%gapped(edisp%ispin))
   allocate(edisp%gap(edisp%ispin))
+  allocate(edisp%valenceBand(edisp%ispin))
+  allocate(edisp%conductionBand(edisp%ispin))
+  allocate(edisp%ene_valenceBand(edisp%ispin))
+  allocate(edisp%ene_conductionBand(edisp%ispin))
 
   ! read band gap information
   if (edisp%ispin == 1) then
@@ -48,7 +53,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
     if (locgapped == 1) then
       edisp%gapped(1) = .true.
       call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(1))
-      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/cband", edisp%conductionBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
     endif
@@ -56,8 +64,11 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
     call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", locgapped)
     if (locgapped == 1) then
       edisp%gapped(1) = .true.
-      call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(1))
-      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+      call hdf5_read_data(ifile, "/.bands/bandgap/up/gapsize", edisp%gap(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/up/vband", edisp%valenceBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/up/cband", edisp%conductionBand(1))
+      call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
     endif
@@ -65,11 +76,22 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
     call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", locgapped)
     if (locgapped == 1) then
       edisp%gapped(2) = .true.
-      call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(2))
-      call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand)
+      call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapsize", edisp%gap(2))
+      call hdf5_read_data(ifile, "/.bands/bandgap/dn/vband", edisp%valenceBand(2))
+      call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
+      call hdf5_read_data(ifile, "/.bands/bandgap/dn/cband", edisp%conductionBand(2))
+      call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
     else
       edisp%gapped(2) = .false.
     endif
+  endif
+
+  if (algo%lImpurities) then
+    do iimp = 1, imp%nimp
+      if ((imp%inputtype(iimp) > 0) .and. (edisp%gapped(imp%inputspin(iimp)) .eqv. .false.)) then
+        call stop_with_message(stderr, 'Error: Relative impurity position not available in gapless system')
+      endif
+    enddo
   endif
 
   if (algo%lScissors) then
@@ -80,16 +102,35 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp)
 
     do is=1,edisp%ispin
       if (.not. edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
-        call log_master(stdout, 'Warning: Cannot apply scissors to gapless energies')
+        call stop_with_message(stdout, 'Error: Cannot apply scissors to gapless band structure')
       endif
     enddo
   endif
 
-  if (algo%lScissors .and. .not. algo%lScatteringFile) then
-    allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  if (algo%lScissors) then
+    if (.not. allocated(edisp%band_shift)) allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
     do is=1,edisp%ispin
-      edisp%band_shift(:edisp%valenceBand, :, is)   = 0.d0
-      edisp%band_shift(edisp%valenceBand+1:, :, is) = edisp%scissors(is)
+      edisp%band_shift(:edisp%valenceBand(is), :, is)   = 0.d0
+      edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+      ! also shift the gap
+      edisp%gap(is) = edisp%gap(is) + edisp%scissors(is)
+      edisp%ene_conductionBand(is) = edisp%ene_conductionBand(is) + edisp%scissors(is)
+    enddo
+  endif
+
+  ! now that we have all the information we can adjust the energies of the impurity levels
+  if (algo%lImpurities) then
+    do iimp = 1, imp%nimp
+      select case (imp%inputtype(iimp))
+        ! case 0 -> already absolute
+        case (1) ! relative upwards shift from top of valence band
+          imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
+        case (2) ! relative downwards shift from bottom of conduction band
+          imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
+        case (3) ! percentage gap shift from top of valence band
+          imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
+                           + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
+      end select
     enddo
   endif
 

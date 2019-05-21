@@ -143,6 +143,8 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   if (found) then
     if (imp%nimp > 0) then
       algo%lImpurities = .true.
+      allocate(imp%inputspin(imp%nimp))
+      allocate(imp%inputtype(imp%nimp))
       allocate(imp%Dopant(imp%nimp))
       allocate(imp%Density(imp%nimp))
       allocate(imp%Energy(imp%nimp))
@@ -209,20 +211,60 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         call stop_with_message(stderr,'More Impurity descriptions than provided in NImp')
       endif
 
-      call floatn_find('Description', impurityinfo, subsearch_start, subsearch_end, found)
-      if (.not. found) call stop_with_message(stderr, 'Impurity Description not found')
-      nshape = shape(impurityinfo)
-      if (nshape(1) /= 4) then
-        call stop_with_message(stderr, 'Wrong impurity description')
+      call floatn_find('Absolute', impurityinfo, subsearch_start, subsearch_end, found)
+      if (.not. found) then
+        call floatn_find('Valence', impurityinfo, subsearch_start, subsearch_end, found)
+        if (.not. found) then
+          call floatn_find('Conduction', impurityinfo, subsearch_start, subsearch_end, found)
+          if (.not. found) then
+            call floatn_find('Percentage', impurityinfo, subsearch_start, subsearch_end, found)
+            if (.not. found) then
+              call stop_with_message(stderr, 'Impurity Description not found')
+            else
+              imp%inputtype(iimp) = 3
+            endif
+          else
+            imp%inputtype(iimp) = 2
+          endif
+        else
+          imp%inputtype(iimp) = 1
+        endif
+      else
+        imp%inputtype(iimp) = 0
       endif
 
-      imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
+      nshape = shape(impurityinfo)
+      if (imp%inputtype(iimp) == 0) then
+        if (nshape(1) /= 4) then
+          call stop_with_message(stderr, 'Wrong impurity description')
+        else
+          imp%inputspin(iimp) = 1 ! default to spin up
+          ! we don't really need a spin descprtion because this is an absolute energy level
+        endif
+      else
+        if (nshape(1) == 4) then
+          imp%inputspin(iimp) = 1 ! default to spin up
+        else if (nshape(1) == 5) then
+          imp%inputspin(iimp) = impurityinfo(5)
+        else
+          call stop_with_message(stderr, 'Wrong impurity description')
+        endif
+      endif
+
+      if (abs(impurityinfo(1)) == 1.d0) then
+        imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
+      else
+        call stop_with_message(stderr, 'Dopant description is either +1 or -1')
+      endif
       imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
       imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
       imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
       deallocate(impurityinfo)
     enddo
   endif
+
+  ! note here: the adjustment for the energy level
+  ! will be after we read in the gap information
 
   deallocate(file_save)
 end subroutine read_config

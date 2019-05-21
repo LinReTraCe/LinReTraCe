@@ -72,7 +72,7 @@ program main
 
   call hdf5_init()
   ! read the energies ( and derivatives if they exist )
-  call read_preproc_energy_data(algo, kmesh, edisp)
+  call read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
     call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')

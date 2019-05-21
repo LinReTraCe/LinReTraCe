@@ -49,9 +49,15 @@ module Mtypes
     real(8) :: mu
     real(8) :: nelect
 
+    ! gap information
     logical, allocatable :: gapped(:)
     real(8), allocatable :: gap(:)
-    integer :: valenceBand
+    integer, allocatable :: valenceBand(:)        ! band number
+    integer, allocatable :: conductionBand(:)     ! band number
+    real(8), allocatable :: ene_valenceBand(:)    ! highest energy of valence band
+    real(8), allocatable :: ene_conductionBand(:) ! lowest energy of conduction band
+
+    ! gap widening
     real(8), allocatable :: scissors(:)
 
     real(8), allocatable    :: band_original(:,:,:)
@@ -68,6 +74,12 @@ module Mtypes
 
   type impurity
     integer :: nimp                          ! number of impurities
+    integer, allocatable :: inputtype(:)     ! how the energy is provided
+    integer, allocatable :: inputspin(:)
+      ! 0: absolute
+      ! 1: relative from top of the valence band (+ -> higher)
+      ! 2: relative from bottom of conduction band (+ -> lower)
+      ! 3: percentage of gap -> added to the top of the valence band
     real(8), allocatable :: Dopant(:)
     real(8), allocatable :: Density(:)
     real(8), allocatable :: Energy(:)
