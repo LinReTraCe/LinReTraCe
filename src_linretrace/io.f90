@@ -100,7 +100,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
     enddo
   endif
 
-
   if (algo%lScissors) then
     ! check for inconsitencies
     nshape = shape(edisp%scissors)
@@ -165,6 +164,57 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   ! please be aware here about the implicit Fortran memory transposition
   ! which is happening when loading hdf5 files
 
+
+  ! LOAD THE DIAGONAL ELEMENTS -> these are always here
+  if (edisp%ispin == 2) then
+    ! get the shape for the number of optical directions
+    call hdf5_get_shape(ifile, "up/momentsDiagonal", irank1arr)
+  else
+    call hdf5_get_shape(ifile, "momentsDiagonal", irank1arr)
+  endif
+  edisp%iOptical = irank1arr(1)
+  deallocate(irank1arr)
+  allocate(edisp%MoptDiag(edisp%iOptical, edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, kmesh%nkp))
+
+  if (edisp%ispin == 2) then
+    call hdf5_read_data(ifile, "up/momentsDiagonal", drank3arr)
+    edisp%MoptDiag(:,:,1,:) = drank3arr
+    deallocate(drank3arr)
+    call hdf5_read_data(ifile, "dn/momentsDiagonal", drank3arr)
+    edisp%MoptDiag(:,:,2,:) = drank3arr
+    deallocate(drank3arr)
+  else
+    call hdf5_read_data(ifile, "momentsDiagonal", drank3arr)
+    edisp%MoptDiag(:,:,1,:) = drank3arr
+    deallocate(drank3arr)
+  endif
+
+  ! FULL ELEMENTS -> if they are here we detect it and are able to calculate inter band contributions
+  if (edisp%ispin == 2) then
+    if (hdf5_dataset_exists(ifile, "up/kPoint/000001/moments") .and. &
+        hdf5_dataset_exists(ifile, "dn/kPoint/000001/moments")) then
+      edisp%lFullMoments = .true.
+      call hdf5_get_shape(ifile, "up/kPoint/000001/moments", irank1arr)
+    else
+      edisp%lFullMoments = .false.
+    endif
+  else
+    if (hdf5_dataset_exists(ifile, "kPoint/000001/moments")) then
+      edisp%lFullMoments = .true.
+      call hdf5_get_shape(ifile, "/kPoint/000001/moments", irank1arr)
+    else
+      edisp%lFullMoments = .false.
+    endif
+  endif
+
+  ! the optical elements get loaded only for one k-point each time
+  if (edisp%lFullMoments) then
+    allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+  endif
+
+
+  ! ENERGIES & DERIVATIVES
   allocate(edisp%band_original(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
@@ -172,20 +222,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
     allocate(edisp%band_dk(3, edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(edisp%band_d2k(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
   endif
-
-
-  if (edisp%ispin == 2) then
-    call hdf5_get_shape(ifile, "/up/kPoint/000001/moments", irank1arr)
-  else
-    call hdf5_get_shape(ifile, "/kPoint/000001/moments", irank1arr)
-  endif
-  edisp%iOptical = irank1arr(1)
-  deallocate(irank1arr)
-
-  ! the optical elements get loaded only for one k-point each time
-  allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
-                                     edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
-
 
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/energies", drank2arr)

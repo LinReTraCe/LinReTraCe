@@ -71,11 +71,16 @@ program main
   call check_config(algo)
 
   call hdf5_init()
-  ! read the energies ( and derivatives if they exist )
+  ! read the energies, derivatives, diagonal optical elements
   call read_preproc_energy_data(algo, kmesh, edisp, imp)
 
+  ! quick checks if run-options are in agreement with provided data
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
     call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')
+  endif
+
+  if (algo%lInterbandQuantities .and. .not. edisp%lFullMoments) then
+    call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
   endif
 
   ! calculate a purely DFT density of states with Laurentzian broadening
@@ -230,7 +235,7 @@ program main
       write(stdout,*) '    ______________________________________________'
       write(stdout,*) '    iimp, dopant, density, energy [eV], degeneracy'
       do iimp = 1,imp%nimp
-        write(stdout,'(2X,I5,3X,I5,3F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), imp%Energy(iimp), imp%Degeneracy(iimp)
+        write(stdout,'(2X,I5,I5,3F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), imp%Energy(iimp), imp%Degeneracy(iimp)
       enddo
     endif
     write(stdout,*)
@@ -366,8 +371,10 @@ program main
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
 
-      ! load the moments for the current k-point
-      call read_optical_elements(ifile_energy, edisp, sct, info)
+      ! load the full moments for the current k-point
+      if (algo%lInterbandQuantities) then
+        call read_optical_elements(ifile_energy, edisp, sct, info)
+      endif
 
       ! calculate the response
       call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
@@ -426,10 +433,13 @@ program main
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*) '  Timings (average) [s]:'
-    write(stdout,'(A21,F16.6)') '    mu-search:       ', timings(1)
-    write(stdout,'(A21,F16.6)') '    polygamma-eval:  ', timings(2)
-    write(stdout,'(A21,F16.6)') '    response-eval:   ', timings(3)
-    write(stdout,'(A21,F16.6)') '    mpi + summation: ', timings(4)
+    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(1)
+    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(2)
+    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(3)
+    write(stdout,'(A21,F19.6)') '    mpi + summation: ', timings(4)
+    write(stdout,*)
+    write(stdout,'(A23,F17.6)') 'Total real time [s]:', sum(timings)
+    write(stdout,'(A23,F17.6)') 'Total CPU  time [s]:', sum(timings) * dble(nproc)
     write(stdout,*)
   endif
 

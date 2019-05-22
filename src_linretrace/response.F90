@@ -514,31 +514,27 @@ subroutine response_intra_optical_weights(resp, edisp, info)
     do idir = 2,edisp%iOptical
       if (idir <= 6) then
         resp%s_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%s_full(1,1,iband,:,info%ik) * edisp%Mopt(idir,iband,iband,:)
+        resp%s_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik)
 
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%a_full(1,1,iband,:,info%ik) * edisp%Mopt(idir,iband,iband,:)
+        resp%a_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik)
       else
         ! here we ADD the complex part to the response
         resp%s_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%s_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%Mopt(idir,iband,iband,:) * ci
+        resp%s_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
 
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%a_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%Mopt(idir,iband,iband,:) * ci
+        resp%a_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
       endif
     enddo
 
     resp%s_full(1,1,iband,:,info%ik) = &
-    resp%s_full(1,1,iband,:,info%ik) * edisp%Mopt(1,iband,iband,:)
+    resp%s_full(1,1,iband,:,info%ik) * edisp%MoptDiag(1,iband,:,info%ik)
 
     resp%a_full(1,1,iband,:,info%ik) = &
-    resp%a_full(1,1,iband,:,info%ik) * edisp%Mopt(1,iband,iband,:)
-
-    ! symmetrize
-    ! do idir=6,9
-    !   resp%s_full(index2(idir),index1(idir),iband,:,info%ik) = conjg(resp%s_full(index1(idir),index2(idir),iband,:,info%ik))
-    ! enddo
+    resp%a_full(1,1,iband,:,info%ik) * edisp%MoptDiag(1,iband,:,info%ik)
   enddo
+
 end subroutine response_intra_optical_weights
 
 subroutine response_peierls_weights(resp, edisp, info)

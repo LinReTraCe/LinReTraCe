@@ -12,15 +12,15 @@ module Mtypes
     logical :: lBfield        ! calculations in the presence of a magnetic field
                               ! this requires the existance of the band derivatives
     integer :: rootMethod     ! numerical method to find the chemical potential
-    logical :: muSearch
-    logical :: muFermi
-    logical :: lScatteringFile
-    logical :: lInterbandQuantities
-    logical :: lFullOutput
-    logical :: lEnergyOutput
-    logical :: lBoltzmann
-    logical :: lScissors
-    logical :: lImpurities
+    logical :: muSearch              ! mu fixed or find mu?
+    logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
+    logical :: lScatteringFile       ! do we get the scattering information from another file
+    logical :: lInterbandQuantities  ! calc inter band response
+    logical :: lFullOutput    ! output full response dependency
+    logical :: lEnergyOutput  ! output renormalized energies
+    logical :: lBoltzmann     ! calc boltzmann response
+    logical :: lScissors      ! apply gap widening
+    logical :: lImpurities    ! include impurity levels
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
@@ -43,10 +43,11 @@ module Mtypes
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
     integer :: iSpin                         ! number of spins
     logical :: lDerivatives                  ! do we have the derivatives (band_dk, band_d2k)
-    logical :: lBandShift
-    integer :: iOptical
-    real(8) :: efer                          ! Fermi energy
-    real(8) :: mu
+    logical :: lBandShift   ! do we get band_shifts from the scattering file?
+    logical :: lFullMoments ! do we have the full optical elements (n n' dependence)
+    integer :: iOptical     ! number of optical elements 3 6 or 9
+    real(8) :: efer         ! Fermi energy       -- only for temporary use in config file
+    real(8) :: mu           ! chemical potential -- only for temporary use in config file
     real(8) :: nelect
 
     ! gap information
@@ -68,8 +69,11 @@ module Mtypes
 
     ! optical elements (because of the double band dependencies)
     ! are loaded for each k-point and each spin
-    real(8), allocatable    :: Mopt(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
-                                                ! 3..9, nband,nband
+    real(8), allocatable    :: Mopt(:,:,:,:)     ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+                                                 ! 3..9, nband,nband, spin
+    ! the diagonal optical elements
+    ! are loaded in one go
+    real(8), allocatable    :: MoptDiag(:,:,:,:) ! 3..9, nband, spin, k-points
   end type
 
   type impurity
