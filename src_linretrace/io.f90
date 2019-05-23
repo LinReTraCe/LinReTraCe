@@ -16,7 +16,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   type(impurity)       :: imp
 
   integer(hid_t)       :: ifile
-  integer              :: i, is, locderivatives, iimp
+  integer              :: i, is, locderivatives, iimp, ik
   integer              :: locgapped
   integer              :: nshape(1)
 
@@ -31,6 +31,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   call hdf5_read_data(ifile, "/.kmesh/nkp",         kmesh%nkp)
   call hdf5_read_data(ifile, "/.kmesh/weightsum",   kmesh%weightsum)
   call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
+  call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
+
+  ! messy way to achieve proper quad precision in weightQ
+  allocate(kmesh%weightQ(kmesh%nkp))
+  do ik=1,kmesh%nkp
+    kmesh%weightQ(ik) = int(kmesh%multiplicity(ik)) * int(kmesh%weightsum) / real(int(sum(kmesh%multiplicity)),16)
+  enddo
 
 
   ! band information + charge

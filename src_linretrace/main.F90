@@ -35,6 +35,8 @@ program main
 
   integer :: is, ig, iT, ik, iband, iimp
   integer :: niitact
+  logical :: igap
+  real(8) :: maxgap
   real(8) :: ndevact
   real(16):: ndevactQ
 
@@ -318,9 +320,23 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
-      ! call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-      ! call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
+      igap = .false.
+      maxgap = 0.d0
+      do is=1,edisp%ispin
+        if (edisp%gapped(is)) then
+          igap = .true.
+          if (edisp%gap(is) > maxgap) then
+            maxgap = edisp%gap(is)
+          endif
+        endif
+      enddo
+
+      ! if (igap .and. info%beta/50.d0 > maxgap) then
+      !   call log_master(stdout, "Using high precision")
+      ! else
+      !   call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+      ! endif
+      call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish

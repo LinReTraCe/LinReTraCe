@@ -17,9 +17,10 @@ module Mparams
   ! numerical parameters
   real(8),     parameter :: ndev    = 5D-13
   real(16),    parameter :: ndevQ   = 5Q-14
-  real(16),    parameter :: ndevVQ  = 5Q-15
+  real(16),    parameter :: ndevVQ  = 5Q-19
+  real(16),    parameter :: ndevVVQ = 1Q-400
   integer,     parameter :: niit    = 100
-  integer,     parameter :: niitQ   = 200
+  integer,     parameter :: niitQ   = 2000
   real(8),     parameter :: small   = 1D-11
   real(16),    parameter :: smallQ  = 1Q-18
 

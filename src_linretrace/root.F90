@@ -239,6 +239,8 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = iit
   endif ! root finding algorithm
 
+
+
   ! if (myid.eq.master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
   !   write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
   !   write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
@@ -266,7 +268,9 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   real(16) mu_qp
   real(16) target_zero1, target_zero2
   real(16) mu1, mu2, dmu
+  real(16) :: target_zero_old
   integer iit, niit0, itest
+  logical :: switchsign
   logical lsecant  ! selects the secant root finding algorithm
   ! linear interpolation method
   real(16), allocatable :: Y(:) !array containig the function to minimise
@@ -410,6 +414,79 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     enddo
     niitact = iit
   endif
+
+
+
+  ! now lets try something fun
+  dmu = 0.05q0
+  mu1 = mu_qp
+  mu2 = mu_qp
+  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
+  ! if (abs(target_zero).lt. ndevVVQ) return
+  if (target_zero1 < 0.q0) then
+    dmu = dmu
+    target_zero2 = target_zero1
+  else
+    dmu = -dmu
+    target_zero2 = target_zero1
+  endif
+  do while ((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
+            (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0))
+    mu2 = mu2 + dmu
+    call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+  enddo
+
+  ! write(*,*) mu1, mu2
+  ! write(*,*) target_zero1, target_zero2
+
+  ! write(*,*)
+  ! write(*,*) mu1, mu2
+  ! write(*,*) target_zero1, target_zero2
+
+! #if TRUE
+  target_zero_old = 0.q0
+  do
+     mu_qp = (mu1+mu2)/2.q0
+     call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, algo, info)
+
+     if (target_zero == target_zero_old) exit
+     target_zero_old = target_zero
+     if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
+          .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
+        mu2=mu_qp
+        target_zero2=target_zero
+     else
+        mu1=mu_qp
+        target_zero1=target_zero
+     endif
+     ! write(*,*) mu1, mu2
+     ! write(*,*) target_zero1, target_zero2
+  enddo
+  ! write(*,*) mu_qp, target_zero
+  niitact = iit
+! #endif
+
+
+
+  ! write(*,*) mu1, mu2
+  ! write(*,*) target_zero1, target_zero2
+
+  ! do iit=1,10000
+  !   mu_qp = mu_qp + dmu
+  !   call occ_fermi_Q_refine(mu_qp, target_zero2, edisp, sct, kmesh, algo, info)
+  !   if (abs(target_zero2).lt. ndevVVQ) exit
+  !   if ((target_zero1 < 0.q0 .and. target_zero2 < 0.q0) &
+  !       .or. (target_zero1 > 0.q0 .and. target_zero2 > 0.q0))
+
+  !   if target_zero < 0.q0 then
+  !   if (target_zero.gt.0.q0) then
+  !      mu1=mu_qp
+  !      target_zero1=target_zero
+  !   else
+  !      mu2=mu_qp
+  !      target_zero2=target_zero
+  !   endif
+  ! enddo
 
   ! if (myid .eq. master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
   !    write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
@@ -639,13 +716,14 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_dp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
       enddo
     enddo
   enddo
 
   occ_loc = sum(occupation)
+  occ_loc = occ_loc + edisp%ispin * (ikend-ikstr+1)*edisp%nband_max * 0.5d0
   deallocate(occupation)
 
 #ifdef MPI
@@ -684,7 +762,7 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_dp((edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = fermi((edisp%band(iband,ik,is)-mu), info%beta)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
 
         t = occ_sum + occupation(iband,ik,is)
@@ -721,35 +799,186 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(kpointmesh) :: kmesh
   type(runinfo)    :: info
   type(algorithm)  :: algo
+
+  logical:: ingap
   !local variables
 
-  real(8) :: occ_loc
+  real(16) :: occ_loc
   integer :: is, ik, iband
+  real(16) :: locecc, lochole
 
+  real(16), allocatable :: electrons(:,:,:)
+  real(16), allocatable :: holes(:,:,:)
   real(16), allocatable :: occupation(:,:,:)
+
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
+
+  ingap = .false.
+
+  if (.not. ingap) then
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          ! directly call the specific fermi function in order to avoid unnecessary many
+          ! vtable look-ups
+          occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weightQ(ik)
+
+          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
+
+          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
+        enddo
+      enddo
+    enddo
+    occ_loc = sum(occupation)
+
+    do iband=1,edisp%nband_max
+      if (abs(2.q0 - sum(electrons(iband,:,:))) /= 2.q0) then! significant digits
+        locecc = 0.q0
+      else
+        locecc = sum(electrons(iband,:,:))
+      endif
+      if (abs(2.q0 - sum(holes(iband,:,:))) /= 2.q0) then! significant digits
+        lochole = 0.q0
+      else
+        lochole = sum(holes(iband,:,:))
+      endif
+      ! write(*,*) iband, sum(electrons(iband,:,:)), sum(holes(iband,:,:))
+    enddo
+  else
+    allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+    allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
+    electrons = 0.q0
+    holes = 0.q0
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
+
+          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
+        enddo
+      enddo
+    enddo
+
+    ! do iband=1,edisp%nband_max
+    !   write(*,*) iband, sum(occupation(iband,:,:))
+    ! enddo
+    occ_loc = sum(electrons) - sum(holes)
+    ! write(*,*) mu, sum(electrons), sum(holes)
+    occ_loc = occ_loc + int(sum(occupation))
+    ! write(*,*) mu, occ_loc
+    deallocate(electrons)
+    deallocate(holes)
+  endif
+
+  deallocate(occupation)
+
+#ifdef MPI
+  call mpi_reduce_quad(occ_loc, occ_tot) ! custom quad reduction
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_fermi_Q
+
+subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
+  implicit none
+
+  real(16), intent(in)  :: mu
+  real(16), intent(out) :: deviation
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(runinfo)    :: info
+  type(algorithm)  :: algo
+
+  logical:: ingap
+  !local variables
+
+  real(16) :: deviation_loc
+  integer :: is, ik, iband
+  real(16) :: locelec, lochole
+  real(16) :: sumelec, sumhole
+
+  real(16), allocatable :: electrons(:,:,:)
+  real(16), allocatable :: holes(:,:,:)
+
+  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
-        occupation(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+        electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
+
+        holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
       enddo
     enddo
   enddo
 
-  occ_loc = sum(occupation)
-  deallocate(occupation)
+  sumelec = 0.q0
+  sumhole = 0.q0
+  do iband=1,edisp%nband_max
+    ! large deviation
+    ! if (abs(sum(electrons(iband,:,:)) - 2.q0) > 1.q-3) then
+    !   lochole = 2.q0 - sum(electrons(iband,:,:)) - sum(holes(iband,:,:))
+    !   locelec = 0.q0
+    !   goto 400
+    ! endif
+
+    locelec = 0.q0
+    lochole = 0.q0
+
+    if (abs(2.q0 - sum(electrons(iband,:,:))) /= 2.q0) then! significant digits
+      locelec = 0.q0
+    else
+      locelec = sum(electrons(iband,:,:))
+      goto 400
+    endif
+
+    if (abs(2.q0 - sum(holes(iband,:,:))) /= 2.q0) then! significant digits
+      lochole = 0.q0
+    else
+      lochole = sum(holes(iband,:,:))
+      goto 400
+    endif
+
+    ! locelec = sum(electrons(iband,:,:))
+    lochole = 0.q0
+    locelec = 2.q0 - sum(holes(iband,:,:)) - sum(electrons(iband,:,:))
+
+
+
+! 400 write(*,*) iband, locelec, lochole
+    ! sumelec = sumelec + locelec
+400 sumelec = sumelec + locelec
+    sumhole = sumhole + lochole
+  enddo
+
+  deallocate(electrons)
+  deallocate(holes)
+
+  deviation_loc = sumelec - sumhole
+
 
 #ifdef MPI
-  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  call mpi_reduce_quad(deviation_loc, deviation) ! custom quad reduction
 #else
-  occ_tot = occ_loc
+  deviation = deviation_loc
 #endif
 
-end subroutine occ_fermi_Q
+end subroutine occ_fermi_Q_refine
 
 subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none

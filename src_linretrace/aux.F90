@@ -24,11 +24,9 @@ subroutine log_master(ounit, string)
   implicit none
   integer, intent(in)          :: ounit
   character(len=*), intent(in) :: string
-#ifdef MPI
   if (myid .eq. master) then
     write(ounit,*) trim(string)
   endif
-#endif
 end subroutine
 
 subroutine stop_with_message(ounit, erstr, er)
