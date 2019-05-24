@@ -265,6 +265,8 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
   ! local variables
+  logical :: skipped
+  logical :: refine
   real(16) mu_qp
   real(16) target_zero1, target_zero2
   real(16) mu1, mu2, dmu
@@ -417,24 +419,37 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
 
-  ! now lets try something fun
-  dmu = 0.05q0
+    ! now lets try something fun
+  dmu = 0.005q0
   mu1 = mu_qp
   mu2 = mu_qp
   call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
-  ! if (abs(target_zero).lt. ndevVVQ) return
+
   if (target_zero1 < 0.q0) then
-    dmu = dmu
-    target_zero2 = target_zero1
+    dmu = +dmu
   else
     dmu = -dmu
-    target_zero2 = target_zero1
   endif
+  target_zero2 = target_zero1
+
   do while ((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
             (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0))
     mu2 = mu2 + dmu
     call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
   enddo
+
+  ! if (myid.eq.master .and. .not. skipped) then
+  !   write(*,*) target_zero1, target_zero2
+  !   write(*,*) mu1, mu2
+  ! endif
+
+
+  ! call occ_fermi_Q_refine(mu1, target_zero1, edisp, sct, kmesh, algo, info)
+  ! call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+  ! if (myid.eq.master) then
+  !   write(*,*) target_zero1, target_zero2
+  !   write(*,*) mu1, mu2
+  ! endif
 
   ! write(*,*) mu1, mu2
   ! write(*,*) target_zero1, target_zero2
@@ -443,7 +458,6 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! write(*,*) mu1, mu2
   ! write(*,*) target_zero1, target_zero2
 
-! #if TRUE
   target_zero_old = 0.q0
   do
      mu_qp = (mu1+mu2)/2.q0
@@ -463,8 +477,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
      ! write(*,*) target_zero1, target_zero2
   enddo
   ! write(*,*) mu_qp, target_zero
-  niitact = iit
-! #endif
+  ! niitact = iit
 
 
 
@@ -900,10 +913,12 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   type(algorithm)  :: algo
 
   logical:: ingap
+  logical :: found
   !local variables
 
   real(16) :: deviation_loc
   integer :: is, ik, iband
+  real(16) :: smallelec, smallhole
   real(16) :: locelec, lochole
   real(16) :: sumelec, sumhole
 
@@ -919,64 +934,69 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
         electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
-
-        holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
+        holes(iband,ik,is)     = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        ! without the weights here
       enddo
     enddo
   enddo
 
   sumelec = 0.q0
   sumhole = 0.q0
+
+  smallelec = 0.q0
+  smallhole = 0.q0
+
+  ! find large deviations first
+  do is = 1,edisp%ispin
+  do ik=ikstr,ikend
   do iband=1,edisp%nband_max
-    ! large deviation
-    ! if (abs(sum(electrons(iband,:,:)) - 2.q0) > 1.q-3) then
-    !   lochole = 2.q0 - sum(electrons(iband,:,:)) - sum(holes(iband,:,:))
-    !   locelec = 0.q0
-    !   goto 400
-    ! endif
 
-    locelec = 0.q0
-    lochole = 0.q0
+      if (holes(iband,ik,is) > 5q-37) then
+        if (electrons(iband,ik,is) > 5q-37) then
+          ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is), &
+          !            (electrons(iband,ik,is) + holes(iband,ik,is))
+          if (electrons(iband,ik,is) < holes(iband,ik,is)) then
+            sumelec = sumelec + electrons(iband,ik,is)
+          else
+            sumhole = sumhole + holes(iband,ik,is)
+          endif
+        endif
+      endif
 
-    if (abs(2.q0 - sum(electrons(iband,:,:))) /= 2.q0) then! significant digits
-      locelec = 0.q0
-    else
-      locelec = sum(electrons(iband,:,:))
-      goto 400
-    endif
+      if (holes(iband,ik,is) <= 5q-37 .or. electrons(iband,ik,is) <= 5q-37) then
+        if (electrons(iband,ik,is) < holes(iband,ik,is)) then
+          smallelec = smallelec + electrons(iband,ik,is)
+        else
+          smallhole = smallhole + holes(iband,ik,is)
+        endif
+      endif
 
-    if (abs(2.q0 - sum(holes(iband,:,:))) /= 2.q0) then! significant digits
-      lochole = 0.q0
-    else
-      lochole = sum(holes(iband,:,:))
-      goto 400
-    endif
-
-    ! locelec = sum(electrons(iband,:,:))
-    lochole = 0.q0
-    locelec = 2.q0 - sum(holes(iband,:,:)) - sum(electrons(iband,:,:))
-
-
-
-! 400 write(*,*) iband, locelec, lochole
-    ! sumelec = sumelec + locelec
-400 sumelec = sumelec + locelec
-    sumhole = sumhole + lochole
+  enddo
+  enddo
   enddo
 
-  deallocate(electrons)
-  deallocate(holes)
-
   deviation_loc = sumelec - sumhole
-
+  deviation = 0.q0
 
 #ifdef MPI
   call mpi_reduce_quad(deviation_loc, deviation) ! custom quad reduction
 #else
   deviation = deviation_loc
 #endif
+
+  if (deviation /= 0.q0) then
+    return
+  endif
+
+  deviation_loc = smallelec - smallhole
+  deviation = 0.q0
+
+#ifdef MPI
+  call mpi_reduce_quad(deviation_loc, deviation) ! custom quad reduction
+#else
+  deviation = deviation_loc
+#endif
+  return
 
 end subroutine occ_fermi_Q_refine
 
