@@ -364,6 +364,7 @@ subroutine output_auxiliary(algo, info, temp, kmesh)
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
+  call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
 
   call hdf5_close_file(ifile)
 
