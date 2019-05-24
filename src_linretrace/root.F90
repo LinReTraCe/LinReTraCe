@@ -420,10 +420,11 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
     ! now lets try something fun
-  dmu = 0.005q0
+  dmu = 0.05q0
   mu1 = mu_qp
   mu2 = mu_qp
   call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
+  niitact = niitact + 1
 
   if (target_zero1 < 0.q0) then
     dmu = +dmu
@@ -436,6 +437,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
             (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0))
     mu2 = mu2 + dmu
     call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+    niitact = niitact + 1
   enddo
 
   ! if (myid.eq.master .and. .not. skipped) then
@@ -458,13 +460,13 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! write(*,*) mu1, mu2
   ! write(*,*) target_zero1, target_zero2
 
-  target_zero_old = 0.q0
+  ! if (myid.eq.master) write(*,*) mu1, mu2
   do
      mu_qp = (mu1+mu2)/2.q0
      call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, algo, info)
+     niitact = niitact + 1
 
-     if (target_zero == target_zero_old) exit
-     target_zero_old = target_zero
+     if ( abs(mu1-mu2) < 1q-12) exit
      if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
           .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
         mu2=mu_qp
@@ -473,10 +475,13 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
         mu1=mu_qp
         target_zero1=target_zero
      endif
-     ! write(*,*) mu1, mu2
-     ! write(*,*) target_zero1, target_zero2
+    ! if (myid.eq.master) then
+    !    write(*,*) mu1, mu2
+    !    write(*,*) target_zero1, target_zero2
+    ! endif
   enddo
-  ! write(*,*) mu_qp, target_zero
+
+  ! if(myid.eq.master) write(*,*) mu_qp, target_zero
   ! niitact = iit
 
 
@@ -916,7 +921,9 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   logical :: found
   !local variables
 
+  real(16) :: diff = 1q-38
   real(16) :: deviation_loc
+  real(16) :: elecmpi, holempi
   integer :: is, ik, iband
   real(16) :: smallelec, smallhole
   real(16) :: locelec, lochole
@@ -951,23 +958,22 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   do ik=ikstr,ikend
   do iband=1,edisp%nband_max
 
-      if (holes(iband,ik,is) > 5q-37) then
-        if (electrons(iband,ik,is) > 5q-37) then
-          ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is), &
-          !            (electrons(iband,ik,is) + holes(iband,ik,is))
+      if (holes(iband,ik,is) > diff) then
+        if (electrons(iband,ik,is) > diff) then
           if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-            sumelec = sumelec + electrons(iband,ik,is)
+            sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
           else
-            sumhole = sumhole + holes(iband,ik,is)
+            sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
           endif
         endif
       endif
 
-      if (holes(iband,ik,is) <= 5q-37 .or. electrons(iband,ik,is) <= 5q-37) then
+      if (holes(iband,ik,is) <= diff .or. electrons(iband,ik,is) <= diff) then
+        ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is)
         if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-          smallelec = smallelec + electrons(iband,ik,is)
+          smallelec = smallelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
         else
-          smallhole = smallhole + holes(iband,ik,is)
+          smallhole = smallhole + holes(iband,ik,is) * kmesh%weightQ(ik)
         endif
       endif
 
@@ -975,27 +981,48 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   enddo
   enddo
 
-  deviation_loc = sumelec - sumhole
-  deviation = 0.q0
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+  ! write(*,*)
+  ! call mpi_barrier(mpi_comm_world, mpierr)
 
 #ifdef MPI
-  call mpi_reduce_quad(deviation_loc, deviation) ! custom quad reduction
+  call mpi_reduce_quad(sumelec, elecmpi) ! custom quad reduction
 #else
-  deviation = deviation_loc
+  elecmpi = sumelec
 #endif
-
-  if (deviation /= 0.q0) then
-    return
-  endif
-
-  deviation_loc = smallelec - smallhole
-  deviation = 0.q0
 
 #ifdef MPI
-  call mpi_reduce_quad(deviation_loc, deviation) ! custom quad reduction
+  call mpi_reduce_quad(sumhole, holempi) ! custom quad reduction
 #else
-  deviation = deviation_loc
+  holempi = sumhole
 #endif
+
+  deviation =  elecmpi - holempi
+
+  ! if (deviation /= 0.q0) then
+  !   return
+  ! endif
+
+  ! deviation = 0.q0
+
+#ifdef MPI
+  call mpi_reduce_quad(smallelec, elecmpi) ! custom quad reduction
+#else
+  elecmpi = smallelec
+#endif
+
+#ifdef MPI
+  call mpi_reduce_quad(smallhole, holempi) ! custom quad reduction
+#else
+  holempi = smallhole
+#endif
+
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+  ! if(myid.eq.master) write(*,*) elecmpi, holempi
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+
+  deviation = deviation + (elecmpi - holempi)
+
   return
 
 end subroutine occ_fermi_Q_refine
