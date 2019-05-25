@@ -428,7 +428,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   dmu = edisp%gap(1)/25.q0
   mu1 = mu_qp
   mu2 = mu_qp
-  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
+  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
   niitact = niitact + 1
 
   if (target_zero1 < 0.q0) then
@@ -441,7 +441,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   do while ((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
             (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0))
     mu2 = mu2 + dmu
-    call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
+    call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
     niitact = niitact + 1
   enddo
 
@@ -468,7 +468,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! if (myid.eq.master) write(*,*) mu1, mu2
   do
      mu_qp = (mu1+mu2)/2.q0
-     call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, algo, info)
+     call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
      niitact = niitact + 1
 
      if ( abs(mu1-mu2) < 1q-12) exit
@@ -611,7 +611,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
       occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -911,7 +911,7 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_fermi_Q
 
-subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
+subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -920,6 +920,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   type(energydisp) :: edisp
   type(scattering) :: sct
   type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
   type(runinfo)    :: info
   type(algorithm)  :: algo
 
@@ -927,6 +928,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   logical :: found
   !local variables
 
+  integer  :: iimp
   real(16) :: diff = 1q-38
   real(16) :: deviation_loc
   real(16) :: elecmpi, holempi
@@ -934,6 +936,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   real(16) :: smallelec, smallhole
   real(16) :: locelec, lochole
   real(16) :: sumelec, sumhole
+  real(16) :: impelec, imphole
 
   real(16), allocatable :: electrons(:,:,:)
   real(16), allocatable :: holes(:,:,:)
@@ -970,24 +973,29 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
         sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
       endif
 
-      ! if (holes(iband,ik,is) > diff) then
-      !   if (electrons(iband,ik,is) > diff) then
-      !     if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-      !       sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
-      !     else
-      !       sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
-      !     endif
-      !   endif
-      ! endif
+      ! nvalence = nsearch - N_D^+ + N_A^-
+      ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
+      ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
+      if (algo%lImpurities) then
+        do iimp = 1,imp%nimp
+          ! so we are strictly between 0 and 1
+          ! for numerical reasons
+          impelec = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
 
-      ! if (holes(iband,ik,is) <= diff .or. electrons(iband,ik,is) <= diff) then
-      !   ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is)
-      !   if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-      !     smallelec = smallelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
-      !   else
-      !     smallhole = smallhole + holes(iband,ik,is) * kmesh%weightQ(ik)
-      !   endif
-      ! endif
+          imphole = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
+
+          ! here we apply the signs and the weights (density)
+          if (imphole > impelec) then
+            sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
+          else
+            sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
+
+          endif
+
+        enddo
+      endif
 
   enddo
   enddo
