@@ -258,7 +258,7 @@ program main
 
   if (myid .eq. master) then
     call hdf5_create_file(algo%output_file)
-    call output_auxiliary(algo, info, temp, kmesh)
+    call output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   endif
 
 

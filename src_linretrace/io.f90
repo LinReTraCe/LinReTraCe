@@ -349,15 +349,18 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_auxiliary(algo, info, temp, kmesh)
+subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
   type(temperature) :: temp
   type(kpointmesh)  :: kmesh
+  type(energydisp)  :: edisp
+  type(impurity)    :: imp
 
   character(len=128) :: string
   integer(hid_t)     :: ifile
+  integer            :: locgapped, iimp
 
   call hdf5_open_file(algo%output_file, ifile)
 
@@ -365,6 +368,47 @@ subroutine output_auxiliary(algo, info, temp, kmesh)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
   call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
+
+  ! output bandgap information to have access to it
+  ! in the general output file
+  if (edisp%ispin == 1) then
+    call hdf5_write_data(ifile, "/.quantities/bandgap/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
+    endif
+  else
+    call hdf5_write_data(ifile, "/.bands/bandgap/up/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
+    endif
+
+    call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapped", edisp%gapped(2))
+    if (edisp%gapped(2)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapsize", edisp%gap(2))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
+    endif
+  endif
+
+  if (algo%lImpurities) then
+    call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
+    do iimp = 1, imp%nimp
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/energy")') iimp
+      call hdf5_write_data(ifile, string, imp%Energy(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/density")') iimp
+      call hdf5_write_data(ifile, string, imp%Density(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/degeneracy")') iimp
+      call hdf5_write_data(ifile, string, imp%Degeneracy(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/dopant")') iimp
+      call hdf5_write_data(ifile, string, imp%Dopant(iimp))
+    enddo
+  endif
+
+
 
   call hdf5_close_file(ifile)
 

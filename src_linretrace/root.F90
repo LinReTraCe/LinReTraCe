@@ -611,7 +611,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
       occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 

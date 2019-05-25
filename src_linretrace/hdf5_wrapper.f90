@@ -7,7 +7,15 @@ module hdf5_wrapper
   integer(hid_t)  :: complex_id_r_dp, complex_id_i_dp, complex_id_r_sp, complex_id_i_sp
 
   interface hdf5_read_data
-    module procedure hdf5_read_data_0d_int4,    &
+    module procedure hdf5_read_data_0d_logical, &
+                     hdf5_read_data_1d_logical, &
+                     hdf5_read_data_2d_logical, &
+                     hdf5_read_data_3d_logical, &
+                     hdf5_read_data_4d_logical, &
+                     hdf5_read_data_5d_logical, &
+                     hdf5_read_data_6d_logical, &
+                     hdf5_read_data_7d_logical, &
+                     hdf5_read_data_0d_int4,    &
                      hdf5_read_data_1d_int4,    &
                      hdf5_read_data_2d_int4,    &
                      hdf5_read_data_3d_int4,    &
@@ -50,7 +58,15 @@ module hdf5_wrapper
   end interface hdf5_read_data
 
   interface hdf5_write_data
-    module procedure hdf5_write_data_0d_int4,    &
+    module procedure hdf5_write_data_0d_logical, &
+                     hdf5_write_data_1d_logical, &
+                     hdf5_write_data_2d_logical, &
+                     hdf5_write_data_3d_logical, &
+                     hdf5_write_data_4d_logical, &
+                     hdf5_write_data_5d_logical, &
+                     hdf5_write_data_6d_logical, &
+                     hdf5_write_data_7d_logical, &
+                     hdf5_write_data_0d_int4,    &
                      hdf5_write_data_1d_int4,    &
                      hdf5_write_data_2d_int4,    &
                      hdf5_write_data_3d_int4,    &
@@ -93,7 +109,8 @@ module hdf5_wrapper
   end interface hdf5_write_data
 
   interface hdf5_write_attribute
-    module procedure hdf5_write_attribute_int4,    &
+    module procedure hdf5_write_attribute_logical, &
+                     hdf5_write_attribute_int4,    &
                      hdf5_write_attribute_real4,   &
                      hdf5_write_attribute_real8,   &
                      hdf5_write_attribute_complex4,&
@@ -102,7 +119,8 @@ module hdf5_wrapper
   end interface hdf5_write_attribute
 
   interface hdf5_read_attribute
-    module procedure hdf5_read_attribute_int4,    &
+    module procedure hdf5_read_attribute_logical, &
+                     hdf5_read_attribute_int4,    &
                      hdf5_read_attribute_real4,   &
                      hdf5_read_attribute_real8,   &
                      hdf5_read_attribute_complex4,&
@@ -332,6 +350,245 @@ module hdf5_wrapper
     dshape = int(dshape5)
     deallocate(dshape5, dmaxshape5)
   end subroutine hdf5_get_shape
+
+  subroutine hdf5_read_data_0d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dset
+    logical                      :: darray
+
+    integer(4)                   :: darrayi
+
+    call hdf5_read_data_0d_int4(ifile, dset, darrayi)
+    if (darrayi == 0) then
+      darray = .false.
+    else
+      darray = .true.
+    endif
+  end subroutine hdf5_read_data_0d_logical
+
+  subroutine hdf5_read_data_1d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)         :: ifile
+    character(len=*), intent(in)       :: dset
+    logical, allocatable, dimension(:) :: darray
+
+    integer(4), allocatable            :: darrayi(:)
+    integer(8), dimension(1)           :: dims
+    integer                            :: a
+
+    call hdf5_read_data_1d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    allocate(darray(dims(1)))
+    do a=1,dims(1)
+      if (darrayi(a) == 0) then
+        darray(a) = .false.
+      else
+        darray(a) = .true.
+      endif
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_1d_logical
+
+  subroutine hdf5_read_data_2d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)           :: ifile
+    character(len=*), intent(in)         :: dset
+    logical, allocatable, dimension(:,:) :: darray
+
+    integer(4), allocatable              :: darrayi(:,:)
+    integer(8), dimension(2)             :: dims
+    integer                              :: a,b
+
+    call hdf5_read_data_2d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    allocate(darray(dims(1),dims(2)))
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b) == 0) then
+        darray(a,b) = .false.
+      else
+        darray(a,b) = .true.
+      endif
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_2d_logical
+
+  subroutine hdf5_read_data_3d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)             :: ifile
+    character(len=*), intent(in)           :: dset
+    logical, allocatable, dimension(:,:,:) :: darray
+
+    integer(4), allocatable                :: darrayi(:,:,:)
+    integer(8), dimension(3)               :: dims
+    integer                                :: a,b,c
+
+    call hdf5_read_data_3d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    dims(3) = size(darrayi,3)
+    allocate(darray(dims(1),dims(2),dims(3)))
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b,c) == 0) then
+        darray(a,b,c) = .false.
+      else
+        darray(a,b,c) = .true.
+      endif
+    enddo
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_3d_logical
+
+  subroutine hdf5_read_data_4d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)               :: ifile
+    character(len=*), intent(in)             :: dset
+    logical, allocatable, dimension(:,:,:,:) :: darray
+
+    integer(4), allocatable                  :: darrayi(:,:,:,:)
+    integer(8), dimension(4)                 :: dims
+    integer                                  :: a,b,c,d
+
+    call hdf5_read_data_4d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    dims(3) = size(darrayi,3)
+    dims(4) = size(darrayi,4)
+    allocate(darray(dims(1),dims(2),dims(3),dims(4)))
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b,c,d) == 0) then
+        darray(a,b,c,d) = .false.
+      else
+        darray(a,b,c,d) = .true.
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_4d_logical
+
+  subroutine hdf5_read_data_5d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)                 :: ifile
+    character(len=*), intent(in)               :: dset
+    logical, allocatable, dimension(:,:,:,:,:) :: darray
+
+    integer(4), allocatable                    :: darrayi(:,:,:,:,:)
+    integer(8), dimension(5)                   :: dims
+    integer                                    :: a,b,c,d,e
+
+    call hdf5_read_data_5d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    dims(3) = size(darrayi,3)
+    dims(4) = size(darrayi,4)
+    dims(5) = size(darrayi,5)
+    allocate(darray(dims(1),dims(2),dims(3),dims(4),dims(5)))
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b,c,d,e) == 0) then
+        darray(a,b,c,d,e) = .false.
+      else
+        darray(a,b,c,d,e) = .true.
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_5d_logical
+
+  subroutine hdf5_read_data_6d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)                   :: ifile
+    character(len=*), intent(in)                 :: dset
+    logical, allocatable, dimension(:,:,:,:,:,:) :: darray
+
+    integer(4), allocatable                      :: darrayi(:,:,:,:,:,:)
+    integer(8), dimension(6)                     :: dims
+    integer                                      :: a,b,c,d,e,f
+
+    call hdf5_read_data_6d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    dims(3) = size(darrayi,3)
+    dims(4) = size(darrayi,4)
+    dims(5) = size(darrayi,5)
+    dims(6) = size(darrayi,6)
+    allocate(darray(dims(1),dims(2),dims(3),dims(4),dims(5),dims(6)))
+    do f=1,dims(6)
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b,c,d,e,f) == 0) then
+        darray(a,b,c,d,e,f) = .false.
+      else
+        darray(a,b,c,d,e,f) = .true.
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_6d_logical
+
+  subroutine hdf5_read_data_7d_logical(ifile, dset, darray)
+    integer(hid_t), intent(in)                     :: ifile
+    character(len=*), intent(in)                   :: dset
+    logical, allocatable, dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(4), allocatable                        :: darrayi(:,:,:,:,:,:,:)
+    integer(8), dimension(7)                       :: dims
+    integer                                        :: a,b,c,d,e,f,g
+
+    call hdf5_read_data_7d_int4(ifile, dset, darrayi)
+
+    dims(1) = size(darrayi,1)
+    dims(2) = size(darrayi,2)
+    dims(3) = size(darrayi,3)
+    dims(4) = size(darrayi,4)
+    dims(5) = size(darrayi,5)
+    dims(6) = size(darrayi,6)
+    dims(7) = size(darrayi,7)
+    allocate(darray(dims(1),dims(2),dims(3),dims(4),dims(5),dims(6),dims(7)))
+    do g=1,dims(7)
+    do f=1,dims(6)
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darrayi(a,b,c,d,e,f,g) == 0) then
+        darray(a,b,c,d,e,f,g) = .false.
+      else
+        darray(a,b,c,d,e,f,g) = .true.
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    deallocate(darrayi)
+  end subroutine hdf5_read_data_7d_logical
 
   subroutine hdf5_read_data_0d_int4(ifile, dset, darray)
     integer(hid_t), intent(in)   :: ifile
@@ -1098,6 +1355,238 @@ module hdf5_wrapper
     darray = tmp_r + ci*tmp_i
     deallocate(tmp_i, tmp_r)
   end subroutine hdf5_read_data_7d_complex8
+
+  subroutine hdf5_write_data_0d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    logical                      :: darray
+
+    integer :: darrayi
+
+    if (darray) then
+      darrayi = 1
+    else
+      darrayi = 0
+    endif
+    call hdf5_write_data_0d_int4(ifile, dsetfull, darrayi)
+  end subroutine hdf5_write_data_0d_logical
+
+  subroutine hdf5_write_data_1d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    logical, dimension(:)        :: darray
+
+    integer(4), allocatable      :: darrayi(:)
+    integer(8), dimension(1)     :: dims
+    integer                      :: a
+
+    dims(1) = size(darray,1)
+    allocate(darrayi(dims(1)))
+    do a=1,dims(1)
+      if (darray(a)) then
+        darrayi(a) = 1
+      else
+        darrayi(a) = 0
+      endif
+    enddo
+    call hdf5_write_data_1d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_1d_logical
+
+  subroutine hdf5_write_data_2d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    logical, dimension(:,:)      :: darray
+
+    integer(4), allocatable      :: darrayi(:,:)
+    integer(8), dimension(2)     :: dims
+    integer                      :: a,b
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    allocate(darrayi(dims(1),dims(2)))
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b)) then
+        darrayi(a,b) = 1
+      else
+        darrayi(a,b) = 0
+      endif
+    enddo
+    enddo
+    call hdf5_write_data_2d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_2d_logical
+
+  subroutine hdf5_write_data_3d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    logical, dimension(:,:,:)    :: darray
+
+    integer(4), allocatable      :: darrayi(:,:,:)
+    integer(8), dimension(3)     :: dims
+    integer                      :: a,b,c
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    allocate(darrayi(dims(1),dims(2),dims(3)))
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b,c)) then
+        darrayi(a,b,c) = 1
+      else
+        darrayi(a,b,c) = 0
+      endif
+    enddo
+    enddo
+    enddo
+    call hdf5_write_data_3d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_3d_logical
+
+  subroutine hdf5_write_data_4d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: dsetfull
+    logical, dimension(:,:,:,:)  :: darray
+
+    integer(4), allocatable      :: darrayi(:,:,:,:)
+    integer(8), dimension(4)     :: dims
+    integer                      :: a,b,c,d
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    allocate(darrayi(dims(1),dims(2),dims(3),dims(4)))
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b,c,d)) then
+        darrayi(a,b,c,d) = 1
+      else
+        darrayi(a,b,c,d) = 0
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    call hdf5_write_data_4d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_4d_logical
+
+  subroutine hdf5_write_data_5d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)    :: ifile
+    character(len=*), intent(in)  :: dsetfull
+    logical, dimension(:,:,:,:,:) :: darray
+
+    integer(4), allocatable       :: darrayi(:,:,:,:,:)
+    integer(8), dimension(5)      :: dims
+    integer                       :: a,b,c,d,e
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    allocate(darrayi(dims(1),dims(2),dims(3),dims(4),dims(5)))
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b,c,d,e)) then
+        darrayi(a,b,c,d,e) = 1
+      else
+        darrayi(a,b,c,d,e) = 0
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    call hdf5_write_data_5d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_5d_logical
+
+  subroutine hdf5_write_data_6d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)      :: ifile
+    character(len=*), intent(in)    :: dsetfull
+    logical, dimension(:,:,:,:,:,:) :: darray
+
+    integer(4), allocatable         :: darrayi(:,:,:,:,:,:)
+    integer(8), dimension(6)        :: dims
+    integer                         :: a,b,c,d,e,f
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    allocate(darrayi(dims(1),dims(2),dims(3),dims(4),dims(5),dims(6)))
+    do f=1,dims(6)
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b,c,d,e,f)) then
+        darrayi(a,b,c,d,e,f) = 1
+      else
+        darrayi(a,b,c,d,e,f) = 0
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    call hdf5_write_data_6d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_6d_logical
+
+  subroutine hdf5_write_data_7d_logical(ifile, dsetfull, darray)
+    integer(hid_t), intent(in)        :: ifile
+    character(len=*), intent(in)      :: dsetfull
+    logical, dimension(:,:,:,:,:,:,:) :: darray
+
+    integer(4), allocatable           :: darrayi(:,:,:,:,:,:,:)
+    integer(8), dimension(7)          :: dims
+    integer                           :: a,b,c,d,e,f,g
+
+    dims(1) = size(darray,1)
+    dims(2) = size(darray,2)
+    dims(3) = size(darray,3)
+    dims(4) = size(darray,4)
+    dims(5) = size(darray,5)
+    dims(6) = size(darray,6)
+    dims(7) = size(darray,7)
+    allocate(darrayi(dims(1),dims(2),dims(3),dims(4),dims(5),dims(6),dims(7)))
+    do g=1,dims(7)
+    do f=1,dims(6)
+    do e=1,dims(5)
+    do d=1,dims(4)
+    do c=1,dims(3)
+    do b=1,dims(2)
+    do a=1,dims(1)
+      if (darray(a,b,c,d,e,f,g)) then
+        darrayi(a,b,c,d,e,f,g) = 1
+      else
+        darrayi(a,b,c,d,e,f,g) = 0
+      endif
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    enddo
+    call hdf5_write_data_7d_int4(ifile, dsetfull, darrayi)
+    deallocate(darrayi)
+  end subroutine hdf5_write_data_7d_logical
 
   subroutine hdf5_write_data_0d_int4(ifile, dsetfull, darray)
     integer(hid_t), intent(in)   :: ifile
@@ -2506,6 +2995,21 @@ module hdf5_wrapper
     endif
   end subroutine hdf5_write_data_7d_complex8
 
+  subroutine hdf5_write_attribute_logical(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    logical                      :: attr
+
+    integer :: attri
+    if (attr) then
+      attri = 1
+    else
+      attri = 0
+    endif
+    call hdf5_write_attribute_int4(ifile, location, attrname, attri)
+  end subroutine
+
   subroutine hdf5_write_attribute_int4(ifile, location, attrname, attr)
     integer(hid_t), intent(in)   :: ifile
     character(len=*), intent(in) :: location
@@ -2627,6 +3131,23 @@ module hdf5_wrapper
     call h5aclose_f(attr_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
+  end subroutine
+
+  subroutine hdf5_read_attribute_logical(ifile, location, attrname, attr)
+    integer(hid_t), intent(in)   :: ifile
+    character(len=*), intent(in) :: location
+    character(len=*), intent(in) :: attrname
+    logical, intent(out)         :: attr
+
+    integer(4) :: attri
+
+    call hdf5_read_attribute_int4(ifile, location, attrname, attri)
+    if (attri == 0) then
+      attr = .false.
+    else
+      attr = .true.
+    endif
+
   end subroutine
 
   subroutine hdf5_read_attribute_int4(ifile, location, attrname, attr)
