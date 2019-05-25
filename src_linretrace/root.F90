@@ -418,9 +418,14 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   endif
 
 
+  ! if (.true.) then
+  if (info%Temp < edisp%gap(1)*1.d3) then
 
     ! now lets try something fun
+  ! this has to be gap dependent
+  ! ~ 1/ 25th of the gap for example
   dmu = 0.05q0
+  dmu = edisp%gap(1)/25.q0
   mu1 = mu_qp
   mu2 = mu_qp
   call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, algo, info)
@@ -480,6 +485,8 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     !    write(*,*) target_zero1, target_zero2
     ! endif
   enddo
+
+  endif
 
   ! if(myid.eq.master) write(*,*) mu_qp, target_zero
   ! niitact = iit
@@ -741,7 +748,6 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   enddo
 
   occ_loc = sum(occupation)
-  occ_loc = occ_loc + edisp%ispin * (ikend-ikstr+1)*edisp%nband_max * 0.5d0
   deallocate(occupation)
 
 #ifdef MPI
@@ -940,8 +946,8 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
       do iband=1,edisp%nband_max
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
-        electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        holes(iband,ik,is)     = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        electrons(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        holes(iband,ik,is)     = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
         ! without the weights here
       enddo
     enddo
@@ -958,24 +964,30 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
   do ik=ikstr,ikend
   do iband=1,edisp%nband_max
 
-      if (holes(iband,ik,is) > diff) then
-        if (electrons(iband,ik,is) > diff) then
-          if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-            sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
-          else
-            sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
-          endif
-        endif
+      if (holes(iband,ik,is) > electrons(iband,ik,is)) then
+        sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
+      else
+        sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
       endif
 
-      if (holes(iband,ik,is) <= diff .or. electrons(iband,ik,is) <= diff) then
-        ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is)
-        if (electrons(iband,ik,is) < holes(iband,ik,is)) then
-          smallelec = smallelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
-        else
-          smallhole = smallhole + holes(iband,ik,is) * kmesh%weightQ(ik)
-        endif
-      endif
+      ! if (holes(iband,ik,is) > diff) then
+      !   if (electrons(iband,ik,is) > diff) then
+      !     if (electrons(iband,ik,is) < holes(iband,ik,is)) then
+      !       sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
+      !     else
+      !       sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
+      !     endif
+      !   endif
+      ! endif
+
+      ! if (holes(iband,ik,is) <= diff .or. electrons(iband,ik,is) <= diff) then
+      !   ! write(*,*) iband, ik, is, electrons(iband,ik,is), holes(iband,ik,is)
+      !   if (electrons(iband,ik,is) < holes(iband,ik,is)) then
+      !     smallelec = smallelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
+      !   else
+      !     smallhole = smallhole + holes(iband,ik,is) * kmesh%weightQ(ik)
+      !   endif
+      ! endif
 
   enddo
   enddo
@@ -998,6 +1010,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, algo, info)
 #endif
 
   deviation =  elecmpi - holempi
+  return
 
   ! if (deviation /= 0.q0) then
   !   return

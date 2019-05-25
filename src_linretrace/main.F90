@@ -334,7 +334,7 @@ program main
       ! if (igap .and. info%beta/50.d0 > maxgap) then
       !   call log_master(stdout, "Using high precision")
       ! else
-      !   call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+        ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
       ! endif
       call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       call cpu_time(tfinish)
