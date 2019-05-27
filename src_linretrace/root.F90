@@ -239,6 +239,8 @@ subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = iit
   endif ! root finding algorithm
 
+
+
   ! if (myid.eq.master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
   !   write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
   !   write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
@@ -263,10 +265,13 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
   ! local variables
+  logical :: skipped
   real(16) mu_qp
   real(16) target_zero1, target_zero2
   real(16) mu1, mu2, dmu
+  real(16) :: target_zero_old
   integer iit, niit0, itest
+  logical :: switchsign
   logical lsecant  ! selects the secant root finding algorithm
   ! linear interpolation method
   real(16), allocatable :: Y(:) !array containig the function to minimise
@@ -411,6 +416,79 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = iit
   endif
 
+  ! quadruple precision for digamma function occupation
+  ! is enough (even when the system is gapped)
+  if (.not. algo%muFermi) then
+    mu = real(mu_qp, 8) ! transform back to dp
+    return
+  endif
+
+
+  ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
+  ! i.e. the fermi function with quadruple precision is not accurate neough
+  if (info%Temp < edisp%gap_min / 1.95q0) then
+    call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+    mu = real(mu_qp, 8) ! transform back to dp
+    return
+  endif
+
+  ! perform the mu_refinement if we have a gap
+  ! and the temperature is not too big
+  ! if the temperature is above the limit normal quadruple precision is enough
+  if (info%Temp < edisp%gap_min*5.d2) then
+    dmu = edisp%gap_min/25.q0
+    mu1 = mu_qp
+    mu2 = mu_qp
+    call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+    iit = 1
+
+    if (target_zero1 < 0.q0) then
+      dmu = +dmu
+    else
+      dmu = -dmu
+    endif
+    target_zero2 = target_zero1
+
+    ! get the working interval
+    do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
+              (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0)) .and. iit < niitQ)
+      mu2 = mu2 + dmu
+      call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
+      iit = iit + 1
+    enddo
+
+    niitact = niitact + iit
+
+    if (iit >= niitQ) then
+      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      mu = real(mu_qp, 8) ! transform back to dp
+      return
+    endif
+
+    ! perform a bisection in the previous working interval
+    do iit = 1,niitQ
+       mu_qp = (mu1+mu2)/2.q0
+       call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
+       niitact = niitact + 1
+
+       if ( abs(mu1-mu2) < 1q-12) exit ! we go all out here
+       if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
+            .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
+          mu2=mu_qp
+          target_zero2=target_zero
+       else
+          mu1=mu_qp
+          target_zero1=target_zero
+       endif
+    enddo
+
+    if (iit >= niitQ) then
+      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      return
+    endif
+    niitact = niitact + iit
+  endif
+
   ! if (myid .eq. master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
   !    write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
   !    write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",T, " with  niitQ=",niitQ, " ndevQ =", real(dev,8)
@@ -509,7 +587,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
       occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     enddo
   endif
 
@@ -639,7 +717,7 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_dp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
       enddo
     enddo
@@ -684,7 +762,7 @@ subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_dp((edisp%band(iband,ik,is)-mu), info%beta)
+        occupation(iband,ik,is) = fermi((edisp%band(iband,ik,is)-mu), info%beta)
         occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
 
         t = occ_sum + occupation(iband,ik,is)
@@ -721,35 +799,230 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(kpointmesh) :: kmesh
   type(runinfo)    :: info
   type(algorithm)  :: algo
+
+  logical:: ingap
   !local variables
 
-  real(8) :: occ_loc
+  real(16) :: occ_loc
   integer :: is, ik, iband
+  real(16) :: locecc, lochole
 
+  real(16), allocatable :: electrons(:,:,:)
+  real(16), allocatable :: holes(:,:,:)
   real(16), allocatable :: occupation(:,:,:)
+
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
+
+  ingap = .false.
+
+  if (.not. ingap) then
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          ! directly call the specific fermi function in order to avoid unnecessary many
+          ! vtable look-ups
+          occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weightQ(ik)
+
+          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
+
+          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
+        enddo
+      enddo
+    enddo
+    occ_loc = sum(occupation)
+
+    do iband=1,edisp%nband_max
+      if (abs(2.q0 - sum(electrons(iband,:,:))) /= 2.q0) then! significant digits
+        locecc = 0.q0
+      else
+        locecc = sum(electrons(iband,:,:))
+      endif
+      if (abs(2.q0 - sum(holes(iband,:,:))) /= 2.q0) then! significant digits
+        lochole = 0.q0
+      else
+        lochole = sum(holes(iband,:,:))
+      endif
+      ! write(*,*) iband, sum(electrons(iband,:,:)), sum(holes(iband,:,:))
+    enddo
+  else
+    allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+    allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
+    electrons = 0.q0
+    holes = 0.q0
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
+
+          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
+        enddo
+      enddo
+    enddo
+
+    ! do iband=1,edisp%nband_max
+    !   write(*,*) iband, sum(occupation(iband,:,:))
+    ! enddo
+    occ_loc = sum(electrons) - sum(holes)
+    ! write(*,*) mu, sum(electrons), sum(holes)
+    occ_loc = occ_loc + int(sum(occupation))
+    ! write(*,*) mu, occ_loc
+    deallocate(electrons)
+    deallocate(holes)
+  endif
+
+  deallocate(occupation)
+
+#ifdef MPI
+  call mpi_reduce_quad(occ_loc, occ_tot) ! custom quad reduction
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_fermi_Q
+
+subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
+  implicit none
+
+  real(16), intent(in)  :: mu
+  real(16), intent(out) :: deviation
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(runinfo)    :: info
+  type(algorithm)  :: algo
+
+  logical:: ingap
+  logical :: found
+  !local variables
+
+  integer  :: iimp
+  real(16) :: diff = 1q-38
+  real(16) :: deviation_loc
+  real(16) :: elecmpi, holempi
+  integer :: is, ik, iband
+  real(16) :: smallelec, smallhole
+  real(16) :: locelec, lochole
+  real(16) :: sumelec, sumhole
+  real(16) :: impelec, imphole
+
+  real(16), allocatable :: electrons(:,:,:)
+  real(16), allocatable :: holes(:,:,:)
+
+  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
-        occupation(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+        electrons(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        holes(iband,ik,is)     = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        ! without the weights here
       enddo
     enddo
   enddo
 
-  occ_loc = sum(occupation)
-  deallocate(occupation)
+  sumelec = 0.q0
+  sumhole = 0.q0
+
+  smallelec = 0.q0
+  smallhole = 0.q0
+
+  ! find large deviations first
+  do is = 1,edisp%ispin
+  do ik=ikstr,ikend
+  do iband=1,edisp%nband_max
+
+      if (holes(iband,ik,is) > electrons(iband,ik,is)) then
+        sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
+      else
+        sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
+      endif
+
+      ! nvalence = nsearch - N_D^+ + N_A^-
+      ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
+      ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
+      if (algo%lImpurities) then
+        do iimp = 1,imp%nimp
+          ! so we are strictly between 0 and 1
+          ! for numerical reasons
+          impelec = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+
+          imphole = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
+
+          ! here we apply the signs and the weights (density)
+          if (imphole > impelec) then
+            sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
+          else
+            sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
+
+          endif
+
+        enddo
+      endif
+
+  enddo
+  enddo
+  enddo
+
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+  ! write(*,*)
+  ! call mpi_barrier(mpi_comm_world, mpierr)
 
 #ifdef MPI
-  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  call mpi_reduce_quad(sumelec, elecmpi) ! custom quad reduction
 #else
-  occ_tot = occ_loc
+  elecmpi = sumelec
 #endif
 
-end subroutine occ_fermi_Q
+#ifdef MPI
+  call mpi_reduce_quad(sumhole, holempi) ! custom quad reduction
+#else
+  holempi = sumhole
+#endif
+
+  deviation =  elecmpi - holempi
+  return
+
+  ! if (deviation /= 0.q0) then
+  !   return
+  ! endif
+
+  ! deviation = 0.q0
+
+#ifdef MPI
+  call mpi_reduce_quad(smallelec, elecmpi) ! custom quad reduction
+#else
+  elecmpi = smallelec
+#endif
+
+#ifdef MPI
+  call mpi_reduce_quad(smallhole, holempi) ! custom quad reduction
+#else
+  holempi = smallhole
+#endif
+
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+  ! if(myid.eq.master) write(*,*) elecmpi, holempi
+  ! call mpi_barrier(mpi_comm_world, mpierr)
+
+  deviation = deviation + (elecmpi - holempi)
+
+  return
+
+end subroutine occ_fermi_Q_refine
 
 subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none

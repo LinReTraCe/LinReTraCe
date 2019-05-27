@@ -16,7 +16,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   type(impurity)       :: imp
 
   integer(hid_t)       :: ifile
-  integer              :: i, is, locderivatives, iimp
+  integer              :: i, is, locderivatives, iimp, ik
   integer              :: locgapped
   integer              :: nshape(1)
 
@@ -31,6 +31,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   call hdf5_read_data(ifile, "/.kmesh/nkp",         kmesh%nkp)
   call hdf5_read_data(ifile, "/.kmesh/weightsum",   kmesh%weightsum)
   call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
+  call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
+
+  ! messy way to achieve proper quad precision in weightQ
+  allocate(kmesh%weightQ(kmesh%nkp))
+  do ik=1,kmesh%nkp
+    kmesh%weightQ(ik) = int(kmesh%multiplicity(ik)) * int(kmesh%weightsum) / real(int(sum(kmesh%multiplicity)),16)
+  enddo
 
 
   ! band information + charge
@@ -47,6 +54,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   allocate(edisp%ene_valenceBand(edisp%ispin))
   allocate(edisp%ene_conductionBand(edisp%ispin))
 
+  edisp%gap_min = 0.d0
   ! read band gap information
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/.bands/bandgap/gapped", locgapped)
@@ -59,6 +67,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
+      edisp%gap(1) = 0.d0
     endif
   else
     call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", locgapped)
@@ -71,6 +80,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
+      edisp%gap(1) = 0.d0
     endif
 
     call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", locgapped)
@@ -83,8 +93,17 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
     else
       edisp%gapped(2) = .false.
+      edisp%gap(2) = 0.d0
     endif
   endif
+
+  ! check if the gap is complete
+  ! i.e. check if we are spin-dependent, that a gap exists in both spins
+  edisp%gapped_complete = .true.
+  do is=1,edisp%ispin
+    if (.not. edisp%gapped(is)) edisp%gapped_complete = .false.
+  enddo
+  edisp%gap_min = minval(edisp%gap)
 
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
@@ -119,7 +138,16 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       ! and therefore the gap
       edisp%gap(is) = edisp%gap(is) + edisp%scissors(is)
       edisp%ene_conductionBand(is) = edisp%ene_conductionBand(is) + edisp%scissors(is)
+
+      ! update the minimum gap and gapped_complete flag
+      ! if the gap vanishes (by negative scissors)
+      if (edisp%gap(is) < 0.d0) then
+        edisp%gapped(is) = .false.
+        edisp%gapped_complete = .false.
+        edisp%gap_min = 0.d0
+      endif
     enddo
+    edisp%gap_min = minval(edisp%gap)
   endif
 
   ! now that we have all the information we can adjust the energies of the impurity levels
@@ -342,21 +370,66 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_auxiliary(algo, info, temp, kmesh)
+subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
   type(temperature) :: temp
   type(kpointmesh)  :: kmesh
+  type(energydisp)  :: edisp
+  type(impurity)    :: imp
 
   character(len=128) :: string
   integer(hid_t)     :: ifile
+  integer            :: locgapped, iimp
 
   call hdf5_open_file(algo%output_file, ifile)
 
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
+  call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
+
+  ! output bandgap information to have access to it
+  ! in the general output file
+  if (edisp%ispin == 1) then
+    call hdf5_write_data(ifile, "/.quantities/bandgap/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
+    endif
+  else
+    call hdf5_write_data(ifile, "/.bands/bandgap/up/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
+    endif
+
+    call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapped", edisp%gapped(2))
+    if (edisp%gapped(2)) then
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapsize", edisp%gap(2))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
+    endif
+  endif
+
+  if (algo%lImpurities) then
+    call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
+    do iimp = 1, imp%nimp
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/energy")') iimp
+      call hdf5_write_data(ifile, string, imp%Energy(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/density")') iimp
+      call hdf5_write_data(ifile, string, imp%Density(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/degeneracy")') iimp
+      call hdf5_write_data(ifile, string, imp%Degeneracy(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/dopant")') iimp
+      call hdf5_write_data(ifile, string, imp%Dopant(iimp))
+    enddo
+  endif
+
+
 
   call hdf5_close_file(ifile)
 

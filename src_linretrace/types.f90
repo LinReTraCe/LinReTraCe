@@ -29,10 +29,12 @@ module Mtypes
   ! information about the k-points which is necessary for us
   ! that is: number of k-points and its weight
   type kpointmesh
-    real(8)              :: weightsum
-    real(8), allocatable :: weight(:)
-    integer              :: nkp
-    real(8)              :: vol
+    real(8)               :: weightsum
+    real(8), allocatable  :: weight(:)
+    real(16), allocatable :: weightQ(:)
+    real(8), allocatable  :: multiplicity(:)
+    integer               :: nkp
+    real(8)               :: vol
   end type
 
   ! energy dispersion and derived quantities
@@ -51,6 +53,8 @@ module Mtypes
     real(8) :: nelect
 
     ! gap information
+    logical              :: gapped_complete       ! is the system completely gapped (false if spin-dependnet gap)
+    real(8)              :: gap_min               ! smallest gap -> important for mu-refinement
     logical, allocatable :: gapped(:)
     real(8), allocatable :: gap(:)
     integer, allocatable :: valenceBand(:)        ! band number

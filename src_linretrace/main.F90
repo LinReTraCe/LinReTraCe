@@ -35,6 +35,8 @@ program main
 
   integer :: is, ig, iT, ik, iband, iimp
   integer :: niitact
+  logical :: igap
+  real(8) :: maxgap
   real(8) :: ndevact
   real(16):: ndevactQ
 
@@ -256,7 +258,7 @@ program main
 
   if (myid .eq. master) then
     call hdf5_create_file(algo%output_file)
-    call output_auxiliary(algo, info, temp, kmesh)
+    call output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   endif
 
 
@@ -318,9 +320,15 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
-      ! call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
-      ! call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, algo, info)
+      ! this needs more testing
+      ! essentially the fermi function needs a shit ton of precision
+      ! while for the digamma function (due to the Gamma-broadening)
+      ! a simple double-precision algorithm is enough
+      if (.not. algo%muFermi) then
+        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+      else
+        call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+      endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
@@ -341,9 +349,6 @@ program main
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
-    ! if (.not. algo%lDebug) then
-    !   call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
-    ! endif
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
     tstart = tfinish
@@ -361,11 +366,6 @@ program main
         call initresp(algo, resp_inter_Boltzmann)
       endif
     endif
-
-    ! if (.not. algo%ldebug) then
-    !    call initresp_qp (algo, qpresp)
-    ! endif
-
 
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend
