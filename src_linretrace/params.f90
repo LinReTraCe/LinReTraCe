@@ -20,7 +20,7 @@ module Mparams
   real(16),    parameter :: ndevVQ  = 5Q-19
   real(16),    parameter :: ndevVVQ = 1Q-400
   integer,     parameter :: niit    = 100
-  integer,     parameter :: niitQ   = 2000
+  integer,     parameter :: niitQ   = 200
   real(8),     parameter :: small   = 1D-11
   real(16),    parameter :: smallQ  = 1Q-18
 

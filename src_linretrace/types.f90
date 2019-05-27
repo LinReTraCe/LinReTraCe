@@ -53,6 +53,8 @@ module Mtypes
     real(8) :: nelect
 
     ! gap information
+    logical              :: gapped_complete       ! is the system completely gapped (false if spin-dependnet gap)
+    real(8)              :: gap_min               ! smallest gap -> important for mu-refinement
     logical, allocatable :: gapped(:)
     real(8), allocatable :: gap(:)
     integer, allocatable :: valenceBand(:)        ! band number

@@ -320,23 +320,15 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      igap = .false.
-      maxgap = 0.d0
-      do is=1,edisp%ispin
-        if (edisp%gapped(is)) then
-          igap = .true.
-          if (edisp%gap(is) > maxgap) then
-            maxgap = edisp%gap(is)
-          endif
-        endif
-      enddo
-
-      ! if (igap .and. info%beta/50.d0 > maxgap) then
-      !   call log_master(stdout, "Using high precision")
-      ! else
-        ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
-      ! endif
-      call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+      ! this needs more testing
+      ! essentially the fermi function needs a shit ton of precision
+      ! while for the digamma function (due to the Gamma-broadening)
+      ! a simple double-precision algorithm is enough
+      if (.not. algo%muFermi) then
+        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+      else
+        call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+      endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
@@ -357,9 +349,6 @@ program main
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
-    ! if (.not. algo%lDebug) then
-    !   call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
-    ! endif
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
     tstart = tfinish
@@ -377,11 +366,6 @@ program main
         call initresp(algo, resp_inter_Boltzmann)
       endif
     endif
-
-    ! if (.not. algo%ldebug) then
-    !    call initresp_qp (algo, qpresp)
-    ! endif
-
 
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend

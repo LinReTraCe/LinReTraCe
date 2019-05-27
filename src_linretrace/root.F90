@@ -266,7 +266,6 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! local variables
   logical :: skipped
-  logical :: refine
   real(16) mu_qp
   real(16) target_zero1, target_zero2
   real(16) mu1, mu2, dmu
@@ -417,101 +416,78 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = iit
   endif
 
-
-  ! if (.true.) then
-  if (info%Temp < edisp%gap(1)*1.d3) then
-
-    ! now lets try something fun
-  ! this has to be gap dependent
-  ! ~ 1/ 25th of the gap for example
-  dmu = 0.05q0
-  dmu = edisp%gap(1)/25.q0
-  mu1 = mu_qp
-  mu2 = mu_qp
-  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
-  niitact = niitact + 1
-
-  if (target_zero1 < 0.q0) then
-    dmu = +dmu
-  else
-    dmu = -dmu
-  endif
-  target_zero2 = target_zero1
-
-  do while ((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
-            (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0))
-    mu2 = mu2 + dmu
-    call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
-    niitact = niitact + 1
-  enddo
-
-  ! if (myid.eq.master .and. .not. skipped) then
-  !   write(*,*) target_zero1, target_zero2
-  !   write(*,*) mu1, mu2
-  ! endif
-
-
-  ! call occ_fermi_Q_refine(mu1, target_zero1, edisp, sct, kmesh, algo, info)
-  ! call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, algo, info)
-  ! if (myid.eq.master) then
-  !   write(*,*) target_zero1, target_zero2
-  !   write(*,*) mu1, mu2
-  ! endif
-
-  ! write(*,*) mu1, mu2
-  ! write(*,*) target_zero1, target_zero2
-
-  ! write(*,*)
-  ! write(*,*) mu1, mu2
-  ! write(*,*) target_zero1, target_zero2
-
-  ! if (myid.eq.master) write(*,*) mu1, mu2
-  do
-     mu_qp = (mu1+mu2)/2.q0
-     call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
-     niitact = niitact + 1
-
-     if ( abs(mu1-mu2) < 1q-12) exit
-     if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
-          .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
-        mu2=mu_qp
-        target_zero2=target_zero
-     else
-        mu1=mu_qp
-        target_zero1=target_zero
-     endif
-    ! if (myid.eq.master) then
-    !    write(*,*) mu1, mu2
-    !    write(*,*) target_zero1, target_zero2
-    ! endif
-  enddo
-
+  ! quadruple precision for digamma function occupation
+  ! is enough (even when the system is gapped)
+  if (.not. algo%muFermi) then
+    mu = real(mu_qp, 8) ! transform back to dp
+    return
   endif
 
-  ! if(myid.eq.master) write(*,*) mu_qp, target_zero
-  ! niitact = iit
 
+  ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
+  ! i.e. the fermi function with quadruple precision is not accurate neough
+  if (info%Temp < edisp%gap_min / 1.95q0) then
+    call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+    mu = real(mu_qp, 8) ! transform back to dp
+    return
+  endif
 
+  ! perform the mu_refinement if we have a gap
+  ! and the temperature is not too big
+  ! if the temperature is above the limit normal quadruple precision is enough
+  if (info%Temp < edisp%gap_min*5.d2) then
+    dmu = edisp%gap_min/25.q0
+    mu1 = mu_qp
+    mu2 = mu_qp
+    call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+    iit = 1
 
-  ! write(*,*) mu1, mu2
-  ! write(*,*) target_zero1, target_zero2
+    if (target_zero1 < 0.q0) then
+      dmu = +dmu
+    else
+      dmu = -dmu
+    endif
+    target_zero2 = target_zero1
 
-  ! do iit=1,10000
-  !   mu_qp = mu_qp + dmu
-  !   call occ_fermi_Q_refine(mu_qp, target_zero2, edisp, sct, kmesh, algo, info)
-  !   if (abs(target_zero2).lt. ndevVVQ) exit
-  !   if ((target_zero1 < 0.q0 .and. target_zero2 < 0.q0) &
-  !       .or. (target_zero1 > 0.q0 .and. target_zero2 > 0.q0))
+    ! get the working interval
+    do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
+              (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0)) .and. iit < niitQ)
+      mu2 = mu2 + dmu
+      call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
+      iit = iit + 1
+    enddo
 
-  !   if target_zero < 0.q0 then
-  !   if (target_zero.gt.0.q0) then
-  !      mu1=mu_qp
-  !      target_zero1=target_zero
-  !   else
-  !      mu2=mu_qp
-  !      target_zero2=target_zero
-  !   endif
-  ! enddo
+    niitact = niitact + iit
+
+    if (iit >= niitQ) then
+      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      mu = real(mu_qp, 8) ! transform back to dp
+      return
+    endif
+
+    ! perform a bisection in the previous working interval
+    do iit = 1,niitQ
+       mu_qp = (mu1+mu2)/2.q0
+       call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
+       niitact = niitact + 1
+
+       if ( abs(mu1-mu2) < 1q-12) exit ! we go all out here
+       if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
+            .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
+          mu2=mu_qp
+          target_zero2=target_zero
+       else
+          mu1=mu_qp
+          target_zero1=target_zero
+       endif
+    enddo
+
+    if (iit >= niitQ) then
+      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      return
+    endif
+    niitact = niitact + iit
+  endif
 
   ! if (myid .eq. master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
   !    write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)

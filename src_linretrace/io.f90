@@ -54,6 +54,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   allocate(edisp%ene_valenceBand(edisp%ispin))
   allocate(edisp%ene_conductionBand(edisp%ispin))
 
+  edisp%gap_min = 0.d0
   ! read band gap information
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/.bands/bandgap/gapped", locgapped)
@@ -66,6 +67,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
+      edisp%gap(1) = 0.d0
     endif
   else
     call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", locgapped)
@@ -78,6 +80,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
     else
       edisp%gapped(1) = .false.
+      edisp%gap(1) = 0.d0
     endif
 
     call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", locgapped)
@@ -90,8 +93,17 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
     else
       edisp%gapped(2) = .false.
+      edisp%gap(2) = 0.d0
     endif
   endif
+
+  ! check if the gap is complete
+  ! i.e. check if we are spin-dependent, that a gap exists in both spins
+  edisp%gapped_complete = .true.
+  do is=1,edisp%ispin
+    if (.not. edisp%gapped(is)) edisp%gapped_complete = .false.
+  enddo
+  edisp%gap_min = minval(edisp%gap)
 
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
@@ -126,7 +138,16 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       ! and therefore the gap
       edisp%gap(is) = edisp%gap(is) + edisp%scissors(is)
       edisp%ene_conductionBand(is) = edisp%ene_conductionBand(is) + edisp%scissors(is)
+
+      ! update the minimum gap and gapped_complete flag
+      ! if the gap vanishes (by negative scissors)
+      if (edisp%gap(is) < 0.d0) then
+        edisp%gapped(is) = .false.
+        edisp%gapped_complete = .false.
+        edisp%gap_min = 0.d0
+      endif
     enddo
+    edisp%gap_min = minval(edisp%gap)
   endif
 
   ! now that we have all the information we can adjust the energies of the impurity levels
