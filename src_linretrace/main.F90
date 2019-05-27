@@ -320,14 +320,20 @@ program main
     niitact = 0
     if (algo%muSearch) then
       call cpu_time(tstart)
-      ! this needs more testing
-      ! essentially the fermi function needs a shit ton of precision
-      ! while for the digamma function (due to the Gamma-broadening)
-      ! a simple double-precision algorithm is enough
-      if (.not. algo%muFermi) then
-        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+
+      if (edisp%gapped_complete) then
+        if (algo%muFermi) then
+          ! use quadruple precision
+          ! internally use refinement method if in the right temperature range
+          call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        else
+          ! also use quadruple precision
+          ! however the root-finding can be aborted earlier
+          call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        endif
       else
-        call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        ! if the system is not gapped, simple double precision is enough
+        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
