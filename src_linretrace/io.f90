@@ -47,6 +47,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   call hdf5_read_data(ifile, "/.bands/opticalBandMax", edisp%nbopt_max)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
+  if (algo%muSearch) then
+    call hdf5_read_data(ifile, "/.bands/mudft",       edisp%mu)
+  endif
+
   allocate(edisp%gapped(edisp%ispin))
   allocate(edisp%gap(edisp%ispin))
   allocate(edisp%valenceBand(edisp%ispin))

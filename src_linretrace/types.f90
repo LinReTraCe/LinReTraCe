@@ -24,6 +24,7 @@ module Mtypes
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
+    character(len=256) :: dbgstr
   end type
 
   ! information about the k-points which is necessary for us

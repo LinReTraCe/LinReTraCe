@@ -35,6 +35,7 @@ program main
 
   integer :: is, ig, iT, ik, iband, iimp
   integer :: niitact
+  integer :: iTstart, iTend, iTstep
   logical :: igap
   real(8) :: maxgap
   real(8) :: ndevact
@@ -109,11 +110,6 @@ program main
   ! endif
 
 
-  ! so every single process runs with this given mu
-  if (.not. algo%muSearch) then
-    edisp%efer = edisp%mu ! we overwrite the calculated fermienergy with the provided chem.pot
-  endif
-
   ! construct temperature grid
   if (algo%lScatteringFile) then
     ! at this point we just extract the temperature ranges
@@ -141,7 +137,8 @@ program main
 
   ! either we start with the LDA mu
   ! or with the fixed mu from above
-  mu     = edisp%efer ! here we either have the fixed mu or the LDA initialized one from above
+  mu     = edisp%mu   ! here we either have the fixed mu
+                      ! or the mu_dft initialized from the preprocessed energy file
   energy = 0.d0
   cv     = 0.d0
 
@@ -149,7 +146,7 @@ program main
   call mpi_genkstep(kmesh%nkp)
 
 #ifdef MPI
-  if (algo%ldebug) then
+  if (algo%ldebug .and. (index(algo%dbgstr,"Mpi") .ne. 0)) then
      write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
      call mpi_barrier(mpi_comm_world, mpierr)
   endif
@@ -250,6 +247,10 @@ program main
     write(stdout,*) '  Boltzmann quantities: ', algo%lBoltzmann
     write(stdout,*) '  B-field   quantities: ', algo%lBfield
     write(stdout,*)
+    if (algo%lDebug) then
+      write(stdout,*) '  DEBUG MODE'
+      write(stdout,*) '  DEBUG STRING: "', trim(adjustl(algo%dbgstr)),'"'
+    endif
     write(stdout,*)
     write(stdout,*) 'Starting calculation...'
     write(stdout,*) '____________________________________________________________________________'
@@ -270,7 +271,17 @@ program main
 #endif
 
   ! MAIN LOOP
-  do iT=1,temp%nT
+  if (algo%lDebug .and. (index(algo%dbgstr,"TempReverse") .ne. 0)) then
+    iTstart = temp%nT
+    iTend   = 1
+    iTstep  = -1
+  else
+    iTstart = 1
+    iTend   = temp%nT
+    iTstep  = 1
+  endif
+
+  do iT=iTstart,iTend,iTstep
     ! run time information
     info%iT = iT
     info%Temp=temp%TT(iT)
@@ -338,6 +349,14 @@ program main
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
+    endif
+
+    if (algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
+        .and. (index(algo%dbgstr,"TempReverse") .ne. 0) .and. info%Temp < edisp%gap_min / 1.95q0 &
+        .and. algo%muFermi) then
+        mu(iT) = mu(iT+1) + (mu(iT+2)-mu(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
+                 (temp%TT(iT)-temp%TT(iT+1))
+        call log_master(stdout, 'Debug: Appling dmu/dT')
     endif
 
     ! calculating total energy according to the occuption above

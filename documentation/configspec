@@ -62,3 +62,13 @@ Percentage = (default = None) # relative position inside the gap
 [[2]]
 ... # as many as there are NImp supplied
 # these shifts are applied AFTER the application of scissors
+
+
+________________________________________________________________________________
+[Debug]
+Debug string here (one oneline)
+
+Debug options:
+  Mpi : Output MPI information
+  TempReverse : Reverse the temperature loop
+  Dmudt : if TempReverse & Fermioccupation & gapped & below certain temperature apply derivative

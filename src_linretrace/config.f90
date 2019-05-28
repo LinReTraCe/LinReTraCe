@@ -115,7 +115,6 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   call string_find('OutputFile', algo%output_file, search_start, search_end, found)
 
   call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
-  call bool_find('DebugMode', algo%lDebug, search_start, search_end, found)
 
   call float_find('ChemicalPotential', edisp%mu, search_start, search_end, found)
   if (found) then
@@ -265,6 +264,14 @@ subroutine read_config(algo, edisp, sct, temp, imp)
 
   ! note here: the adjustment for the energy level
   ! will be after we read in the gap information
+
+  algo%lDebug = .false.
+  algo%dbgstr = ''
+  call group_find('[Debug]', search_start, search_end)
+  if (search_start .ge. 1) then
+     algo%lDebug = .true.
+     algo%dbgstr = file_save(search_start)
+  endif
 
   deallocate(file_save)
 end subroutine read_config
