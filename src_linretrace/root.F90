@@ -465,6 +465,10 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
       return
     endif
 
+    mu1 = mu2 - dmu ! one step before
+                    ! this ensures the smallest possible working range
+                    ! with opposing signs in the root - finding
+
     ! perform a bisection in the previous working interval
     do iit = 1,niitQ
        mu_qp = (mu1+mu2)/2.q0
@@ -472,12 +476,14 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
        niitact = niitact + 1
 
        if ( abs(mu1-mu2) < 1q-12) exit ! we go all out here
+
        if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
             .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
           mu2=mu_qp
-          target_zero2=target_zero
+          target_zero2=target_zero ! here we are on the bisection side of mu2
+                                   ! we set the middle point as new mu2
        else
-          mu1=mu_qp
+          mu1=mu_qp                ! the other way aorund here
           target_zero1=target_zero
        endif
     enddo
