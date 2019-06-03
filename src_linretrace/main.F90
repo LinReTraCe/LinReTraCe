@@ -330,6 +330,13 @@ program main
     ! root finding (mu)
     niitact = 0
     if (algo%muSearch) then
+
+      ! initialize the new chemical potential
+      if (iT /= iTstart) then
+        mu(iT) = mu(iT-iTstep) ! we initialize it to the value from the previous iteration
+                               ! this does nothing if mu is constant
+      endif
+
       call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
