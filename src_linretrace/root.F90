@@ -912,80 +912,37 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 
   integer  :: iimp
   real(16) :: diff = 1q-38
-  real(16) :: deviation_loc
-  real(16) :: elecmpi, holempi
   integer :: is, ik, iband
-  real(16) :: smallelec, smallhole
-  real(16) :: locelec, lochole
+
+  real(16) :: elecmpi, holempi
   real(16) :: sumelec, sumhole
   real(16) :: impelec, imphole
 
-  real(16), allocatable :: electrons(:,:,:)
-  real(16), allocatable :: holes(:,:,:)
+  real(16) :: elec
+  real(16) :: hole
 
-  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  sumelec = 0.q0
+  sumhole = 0.q0
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
         ! directly call the specific fermi function in order to avoid unnecessary many
         ! vtable look-ups
-        electrons(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        holes(iband,ik,is)     = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        ! without the weights here
+        elec = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        hole = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+
+        ! here we take the smaller of the two quantities
+        ! and weigh it with the quadruple precision weight
+        if (hole > elec) then
+          sumelec = sumelec + elec * kmesh%weightQ(ik)
+        else
+          sumhole = sumhole + hole * kmesh%weightQ(ik)
+        endif
+
       enddo
     enddo
   enddo
-
-  sumelec = 0.q0
-  sumhole = 0.q0
-
-  smallelec = 0.q0
-  smallhole = 0.q0
-
-  ! find large deviations first
-  do is = 1,edisp%ispin
-  do ik=ikstr,ikend
-  do iband=1,edisp%nband_max
-
-      if (holes(iband,ik,is) > electrons(iband,ik,is)) then
-        sumelec = sumelec + electrons(iband,ik,is) * kmesh%weightQ(ik)
-      else
-        sumhole = sumhole + holes(iband,ik,is) * kmesh%weightQ(ik)
-      endif
-
-      ! nvalence = nsearch - N_D^+ + N_A^-
-      ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-      ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-      if (algo%lImpurities) then
-        do iimp = 1,imp%nimp
-          ! so we are strictly between 0 and 1
-          ! for numerical reasons
-          impelec = 1.q0 &
-            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-
-          imphole = 1.q0 &
-            / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
-
-          ! here we apply the signs and the weights (density)
-          if (imphole > impelec) then
-            sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
-          else
-            sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
-
-          endif
-
-        enddo
-      endif
-
-  enddo
-  enddo
-  enddo
-
-  ! call mpi_barrier(mpi_comm_world, mpierr)
-  ! write(*,*)
-  ! call mpi_barrier(mpi_comm_world, mpierr)
 
 #ifdef MPI
   call mpi_reduce_quad(sumelec, elecmpi) ! custom quad reduction
@@ -999,33 +956,39 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   holempi = sumhole
 #endif
 
+  ! deviation purely from the band structure
   deviation =  elecmpi - holempi
-  return
 
-  ! if (deviation /= 0.q0) then
-  !   return
-  ! endif
 
-  ! deviation = 0.q0
+  ! now we add the impurity differences
+  ! this has to be done after the MPI communication ....
+  sumelec = 0.q0
+  sumhole = 0.q0
 
-#ifdef MPI
-  call mpi_reduce_quad(smallelec, elecmpi) ! custom quad reduction
-#else
-  elecmpi = smallelec
-#endif
+  ! nvalence = nsearch - N_D^+ + N_A^-
+  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
+  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
+  if (algo%lImpurities) then
+    do iimp = 1,imp%nimp
+      ! so we are strictly between 0 and 1
+      ! for numerical reasons
+      impelec = 1.q0 &
+        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
 
-#ifdef MPI
-  call mpi_reduce_quad(smallhole, holempi) ! custom quad reduction
-#else
-  holempi = smallhole
-#endif
+      imphole = 1.q0 &
+        / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
 
-  ! call mpi_barrier(mpi_comm_world, mpierr)
-  ! if(myid.eq.master) write(*,*) elecmpi, holempi
-  ! call mpi_barrier(mpi_comm_world, mpierr)
+      ! here we apply the signs and the weights (density)
+      if (imphole > impelec) then
+        sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
+      else
+        sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
+      endif
 
-  deviation = deviation + (elecmpi - holempi)
+    enddo
+  endif
 
+  deviation = deviation + sumelec - sumhole
   return
 
 end subroutine occ_fermi_Q_refine
