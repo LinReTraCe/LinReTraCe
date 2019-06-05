@@ -156,11 +156,6 @@ module Mtypes
     complex(8), allocatable :: sB_sum(:,:,:)
     complex(8), allocatable :: a_sum(:,:,:)
     complex(8), allocatable :: aB_sum(:,:,:)
-
-    ! derived quantities
-    complex(8), allocatable :: Seebeck(:)
-    complex(8), allocatable :: Nernst(:)
-    complex(8), allocatable :: RH(:)
   end type
 
   type response_qp
@@ -181,11 +176,6 @@ module Mtypes
     complex(16), allocatable :: sB_sum(:,:,:)
     complex(16), allocatable :: a_sum(:,:,:)
     complex(16), allocatable :: aB_sum(:,:,:)
-
-    ! derived quantities
-    complex(16), allocatable :: Seebeck(:)
-    complex(16), allocatable :: Nernst(:)
-    complex(16), allocatable :: RH(:)
   end type
 
 end module Mtypes

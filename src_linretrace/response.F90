@@ -113,34 +113,46 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
-                                  - info%beta2p*sct%gam(:,info%ik,:)*real(PolyGamma(2,:,info%ik,:))
-  resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) &
-                                  * sct%zqp(:,info%ik,:)**2 * info%beta &
-                                  / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                               - real(PolyGamma(2,:,info%ik,:)) * info%beta2p*sct%gam(:,info%ik,:)
 
-  resp%a_full(1,1,:,:,info%ik) = enrgy * real(PolyGamma(1,:,info%ik,:)) &
-                                    - enrgy * sct%gam(:,info%ik,:) * info%beta2p * real(PolyGamma(2,:,info%ik,:)) &
-                                    - sct%gam(:,info%ik,:)**2 * info%beta2p * aimag(PolyGamma(2,:,info%ik,:))
+  resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) &
+                               * sct%zqp(:,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+
+
+  resp%a_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) * enrgy &
+                               -  real(PolyGamma(2,:,info%ik,:)) * enrgy * sct%gam(:,info%ik,:) * info%beta2p &
+                               - aimag(PolyGamma(2,:,info%ik,:)) * sct%gam(:,info%ik,:)**2 * info%beta2p
 
   resp%a_full(1,1,:,:,info%ik) = resp%a_full(1,1,:,:,info%ik) &
-                                  * sct%zqp(:,info%ik,:)**2 * info%beta**2 &
-                                  / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                               * sct%zqp(:,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,:,:,info%ik) = -sct%zqp(:,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
-                                    * real(PolyGamma(3,:,info%ik,:)) &
-                                    + 3.d0 * sct%gam(:,info%ik,:) * info%beta2p &
-                                    * real(PolyGamma(2,:,info%ik,:)) &
-                                    - 3.d0 * real(PolyGamma(1,:,info%ik,:))
-    resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * &
-                                    (-sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)))
+    resp%sB_full(1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
+                                      * sct%gam(:,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
+                                  - real(PolyGamma(2,:,info%ik,:)) &
+                                    * 3.d0 * sct%gam(:,info%ik,:) * info%beta2p &
+                                  - real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
-    resp%aB_full(1,1,:,:,info%ik) = -3.d0 * enrgy * sct%gam(:,info%ik,:) * info%beta2p &
-                                    * real(PolyGamma(2,:,info%ik,:)) &
-                                    - sct%gam(:,info%ik,:) * info%beta2p &
-                                    * aimag(PolyGamma(2,:,info%ik,:)) &
-                                    + 3.d0 * enrgy * real(PolyGamma(1,:,info%ik,:))
+    resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
+                                  * sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+
+
+    resp%aB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+                                       * enrgy * sct%gam(:,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
+                                  + aimag(PolyGamma(3,:,info%ik,:)) &
+                                       * sct%gam(:,info%ik,:)**3 * info%beta**3 / (4.d0 * pi**2) &
+                                  -  real(PolyGamma(2,:,info%ik,:)) &
+                                       * 3.d0 * enrgy * sct%gam(:,info%ik,:) * info%beta2p &
+                                  - aimag(PolyGamma(2,:,info%ik,:)) &
+                                       * sct%gam(:,info%ik,:)**2 * info%beta2p &
+                                  +  real(PolyGamma(1,:,info%ik,:)) * 3.d0 * enrgy
+
+    resp%aB_full(1,1,:,:,info%ik) = resp%aB_full(1,1,:,:,info%ik) &
+                                  * sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+
   endif
 
   deallocate(enrgy)
@@ -172,8 +184,8 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   real(8), allocatable :: enrgydiff(:)
   real(8), allocatable :: gamdiff(:)
 
-  complex(8) :: calc_cond
-  complex(8) :: calc_seeb
+  complex(8) :: calc_sigma
+  complex(8) :: calc_alpha
 
   integer :: index1(9), index2(9)
   integer :: i,j,idir
@@ -198,84 +210,79 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
       do is = 1,edisp%ispin
 
         if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
-        ! use the intra-band limit .....
-          calc_cond  = real(PolyGamma(1,iband1,info%ik,is)) &
-                      - info%beta2p*sct%gam(iband1,info%ik,is)*real(PolyGamma(2,iband1,info%ik,is))
 
-          calc_cond = calc_cond &
-                      * sct%zqp(iband1,info%ik,is)**2 * info%beta &
-                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
+          ! use the intra-band limit .....
+          calc_sigma  = real(PolyGamma(1,iband1,info%ik,is)) &
+                      - real(PolyGamma(2,iband1,info%ik,is)) * info%beta2p*sct%gam(iband1,info%ik,is)
 
-          calc_seeb = enrgy(iband1,is) * real(PolyGamma(1,iband1,info%ik,is)) &
-                      - enrgy(iband1,is) * sct%gam(iband1,info%ik,is) * info%beta2p * real(PolyGamma(2,iband1,info%ik,is)) &
-                      - sct%gam(iband1,info%ik,is)**2 * info%beta2p * aimag(PolyGamma(2,iband1,info%ik,is))
+          calc_sigma = calc_sigma &
+                     * sct%zqp(iband1,info%ik,is)**2 * info%beta &
+                     / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
-          calc_seeb = calc_seeb &
-                      * sct%zqp(iband1,info%ik,is)**2 * info%beta**2 &
-                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
+          calc_alpha =  real(PolyGamma(1,iband1,info%ik,is)) * enrgy(iband1,is) &
+                     -  real(PolyGamma(2,iband1,info%ik,is)) * enrgy(iband1,is) * sct%gam(iband1,info%ik,is) * info%beta2p &
+                     - aimag(PolyGamma(2,iband1,info%ik,is)) * sct%gam(iband1,info%ik,is)**2 * info%beta2p
+
+          calc_alpha = calc_alpha &
+                     * sct%zqp(iband1,info%ik,is)**2 * info%beta &
+                     / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
         else
-          calc_cond = 0.d0
+          calc_sigma = real(PolyGamma(1,iband1,info%ik,is)) &
+                     * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
+                     / sct%gam(iband1,info%ik,is)
 
-          calc_cond = calc_cond &
-              + real(PolyGamma(1,iband1,info%ik,is)) &
-                * ( enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
-                / sct%gam(iband1,info%ik,is)
+          calc_sigma = calc_sigma &
+                     + aimag(PolyGamma(1,iband1,info%ik,is)) &
+                     * (2.d0* (-enrgydiff(is)))
 
-          calc_cond = calc_cond &
-              + aimag(PolyGamma(1,iband1,info%ik,is)) &
-                * ( 2.d0* (-enrgydiff(is)) )
+          calc_sigma = calc_sigma &
+                     + real(PolyGamma(1,iband2,info%ik,is)) &
+                     * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
+                     / sct%gam(iband2,info%ik,is)
 
-          calc_cond = calc_cond &
-              + real(PolyGamma(1,iband2,info%ik,is)) &
-                * ( enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
-                / sct%gam(iband2,info%ik,is)
+          calc_sigma = calc_sigma &
+                     + aimag(PolyGamma(1,iband2,info%ik,is)) &
+                     * (2.d0* enrgydiff(is))
 
-          calc_cond = calc_cond &
-              + aimag(PolyGamma(1,iband2,info%ik,is)) &
-                * ( 2.d0* enrgydiff(is) )
+          calc_sigma = calc_sigma &
+                     * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+                     * info%beta
 
-          calc_cond = calc_cond &
-              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
-              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
-              * info%beta
-
-          calc_cond = calc_cond &
-              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
-              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+          calc_sigma = calc_sigma &
+                     / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
 
-          calc_seeb = 0.d0
+          calc_alpha = real(PolyGamma(1,iband1,info%ik,is)) &
+                     * (enrgy(iband1,is) * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
+                     / sct%gam(iband1,info%ik,is) + 2.d0*sct%gam(iband1,info%ik,is)*enrgydiff(is))
 
-          calc_seeb = calc_seeb &
-              + real(PolyGamma(1,iband1,info%ik,is)) &
-                * (enrgy(iband1,is) * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
-                / sct%gam(iband1,info%ik,is) + 2.d0*sct%gam(iband1,info%ik,is)*enrgydiff(is))
+          calc_alpha = calc_alpha &
+                     + aimag(PolyGamma(1,iband1,info%ik,is)) &
+                     * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
+                     - 2.d0*enrgy(iband1,is)*enrgydiff(is))
 
-          calc_seeb = calc_seeb &
-              + aimag(PolyGamma(1,iband1,info%ik,is)) &
-                * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                - 2.d0*enrgy(iband1,is)*enrgydiff(is))
+          calc_alpha = calc_alpha &
+                     + real(PolyGamma(1,iband2,info%ik,is)) &
+                     * (enrgy(iband2,is) * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
+                     / sct%gam(iband2,info%ik,is) + 2.d0*sct%gam(iband2,info%ik,is)*enrgydiff(is)*(-1.d0))
 
-          calc_seeb = calc_seeb &
-              + real(PolyGamma(1,iband2,info%ik,is)) &
-                * (enrgy(iband2,is) * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
-                / sct%gam(iband2,info%ik,is) + 2.d0*sct%gam(iband2,info%ik,is)*enrgydiff(is)*(-1.d0))
+          calc_alpha = calc_alpha &
+                     + aimag(PolyGamma(1,iband2,info%ik,is)) &
+                     * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
+                     - 2.d0*enrgy(iband2,is)*enrgydiff(is)*(-1.d0))
 
-          calc_seeb = calc_seeb &
-              + aimag(PolyGamma(1,iband2,info%ik,is)) &
-                * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                - 2.d0*enrgy(iband2,is)*enrgydiff(is)*(-1.d0))
+          calc_alpha = calc_alpha &
+                     * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+                     * info%beta
 
-          calc_seeb = calc_seeb &
-              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
-              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
-              * info%beta
-
-          calc_seeb = calc_seeb &
-              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
-              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+          calc_alpha = calc_alpha &
+                     / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
 
@@ -288,17 +295,17 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
             ! and read them via Fortran -> implicit transposition
             ! we have to use 2 - 1 here
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,is)
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is)
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,is)
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,is) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,is) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is) * ci
           endif
         enddo
       enddo
@@ -335,12 +342,12 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   ! asymptotic term in the Gamma-> 0 limit
+  ! the polygamma2fermi already contains the pi^2 / 2
   resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                   * sct%zqp(:,info%ik,:)**2 * info%beta &
                                   / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
 
-  resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) &
-                                  * info%beta * enrgy
+  resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy
 
   if (algo%lBfield) then
 
@@ -348,8 +355,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
                                     * 3.d0 * sct%zqp(:,info%ik,:)**3 * info%beta &
                                     / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
 
-    resp%a_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
-                                    * info%beta * enrgy
+    resp%aB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy
 
   endif
 
@@ -379,8 +385,8 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   real(8), allocatable :: enrgydiff(:)
   real(8), allocatable :: gamdiff(:)
 
-  complex(8) :: calc_cond
-  complex(8) :: calc_seeb
+  complex(8) :: calc_sigma
+  complex(8) :: calc_alpha
 
   integer :: index1(9), index2(9)
   integer :: i,j,idir
@@ -406,52 +412,46 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
       do is = 1,edisp%ispin
         if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
         ! use the intra-band limit .....
-          calc_cond = polygamma2fermi(enrgy(iband1,is),info%beta) &
-                                          * sct%zqp(iband1,info%ik,is)**2 * info%beta &
-                                          / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
+          calc_sigma = polygamma2fermi(enrgy(iband1,is),info%beta) &
+                     * sct%zqp(iband1,info%ik,is)**2 * info%beta &
+                     / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
-          calc_seeb = calc_cond * info%beta * enrgy(iband1,is)
+          calc_alpha = calc_sigma * enrgy(iband1,is)
 
         else
 
-          calc_cond = 0.d0
+          calc_sigma = polygamma2fermi(enrgy(iband1,is), info%beta) &
+                     * enrgydiff(is)**2 / sct%gam(iband1,info%ik,is)
 
-          calc_cond = calc_cond &
-              + polygamma2fermi(enrgy(iband1,is), info%beta) &
-                *  enrgydiff(is)**2 / sct%gam(iband1,info%ik,is)
+          calc_sigma = calc_sigma &
+                     + polygamma2fermi(enrgy(iband2,is), info%beta) &
+                     * enrgydiff(is)**2 / sct%gam(iband2,info%ik,is)
 
-          calc_cond = calc_cond &
-              + polygamma2fermi(enrgy(iband2,is), info%beta) &
-                * enrgydiff(is)**2 / sct%gam(iband2,info%ik,is)
+          calc_sigma = calc_sigma &
+                     * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+                     * info%beta
 
-          calc_cond = calc_cond &
-              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
-              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
-              * info%beta
-
-          calc_cond = calc_cond &
-              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
-              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+          calc_sigma = calc_sigma &
+                     / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
-          calc_seeb = 0.d0
+          calc_alpha = polygamma2fermi(enrgy(iband1,is), info%beta) &
+                     * enrgy(iband1,is) * enrgydiff(is)**2 / sct%gam(iband1,info%ik,is)
 
-          calc_seeb = calc_seeb &
-              + polygamma2fermi(enrgy(iband1,is), info%beta) &
-                * enrgy(iband1,is) * enrgydiff(is)**2 / sct%gam(iband1,info%ik,is)
+          calc_alpha = calc_alpha &
+                     + polygamma2fermi(enrgy(iband2,is), info%beta) &
+                     * enrgy(iband2,is) * enrgydiff(is)**2 / sct%gam(iband2,info%ik,is)
 
-          calc_seeb = calc_seeb &
-              + polygamma2fermi(enrgy(iband2,is), info%beta) &
-                * enrgy(iband2,is) * enrgydiff(is)**2 / sct%gam(iband2,info%ik,is)
+          calc_alpha = calc_alpha &
+                     * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+                     * info%beta
 
-          calc_seeb = calc_seeb &
-              * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
-              * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
-              * info%beta
-
-          calc_seeb = calc_seeb &
-              / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
-              / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+          calc_alpha = calc_alpha &
+                     / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
 
@@ -464,17 +464,17 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
             ! and read them via Fortran -> implicit transposition
             ! we have to use 2 - 1 here
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:)
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:)
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:)
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_cond * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_seeb * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:) * ci
           endif
         enddo !idir
 
@@ -663,8 +663,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%a_gather = resp%a_full
 #endif
 
-    resp%s_gather = resp%s_gather * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
-    resp%a_gather = resp%a_gather * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 * kB
+    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10             ! -> 1/(Ohm*m) = A / (V * m)
+    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge) ! -> A**2 * s / m
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
@@ -704,8 +704,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 #endif
 
-  resp%s_sum = resp%s_sum * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
-  resp%a_sum = resp%a_sum * 2.d0 * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 * kB
+  resp%s_sum = resp%s_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
+  resp%a_sum = resp%a_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge)
 
   if (myid .eq. master) then
     write(string,'(I6.6)') info%iT
@@ -750,8 +750,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       resp%aB_gather = resp%aB_full
 #endif
 
-      resp%sB_gather = resp%sB_gather * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs)
-      resp%aB_gather = resp%aB_gather * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs) * kB
+      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs) ! -> A**2 * m / V
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
@@ -769,6 +769,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     endif ! full output
 
     ! perform a local summation
+    ! these are already initialized to 0
     do ik = ikstr,ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
         resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weight(ik)
@@ -791,8 +792,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 #endif
 
-    resp%sB_sum = resp%sB_sum * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs)
-    resp%aB_sum = resp%aB_sum * 2.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10/hbarevs) * kB
+    resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs) ! -> A**2 * m / V
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
