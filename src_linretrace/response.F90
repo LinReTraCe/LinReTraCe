@@ -58,14 +58,18 @@ subroutine initresp(algo, dresp)
 
   dresp%s_full = 0.d0
   dresp%a_full = 0.d0
+  dresp%x_full = 0.d0
   dresp%s_sum = 0.d0
   dresp%a_sum = 0.d0
+  dresp%x_sum = 0.d0
 
   if (algo%lBfield) then
      dresp%sB_full = 0.d0
      dresp%aB_full = 0.d0
+     dresp%xB_full = 0.d0
      dresp%sB_sum = 0.d0
      dresp%aB_sum = 0.d0
+     dresp%xB_sum = 0.d0
   endif
 end subroutine initresp
 
@@ -76,14 +80,18 @@ subroutine initresp_qp (algo, qresp)
 
   qresp%s_full = 0.q0
   qresp%a_full = 0.q0
+  qresp%x_full = 0.q0
   qresp%s_sum = 0.q0
   qresp%a_sum = 0.q0
+  qresp%x_sum = 0.q0
 
   if (algo%lBfield) then
      qresp%sB_full = 0.q0
      qresp%aB_full = 0.q0
+     qresp%xB_full = 0.q0
      qresp%sB_sum = 0.q0
      qresp%aB_sum = 0.q0
+     qresp%xB_sum = 0.q0
   endif
 end subroutine initresp_qp
 
@@ -128,6 +136,18 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                * sct%zqp(:,info%ik,:)**2 * info%beta &
                                / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
 
+
+  resp%x_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) &
+                                  * pi * (enrgy**2 + sct%gam(:,info%ik,:)**2) &
+                               +  real(PolyGamma(2,:,info%ik,:)) &
+                                  * info%beta * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
+                               + aimag(PolyGamma(2,:,info%ik,:)) &
+                                  * 2.d0 * info%beta * enrgy * sct%gam(:,info%ik,:)**2
+
+  resp%x_full(1,1,:,:,info%ik) = resp%x_full(1,1,:,:,info%ik) &
+                               * sct%zqp(:,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**4 * sct%gam(:,info%ik,:))
+
   if (algo%lBfield) then
 
     resp%sB_full(1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
@@ -152,6 +172,24 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
     resp%aB_full(1,1,:,:,info%ik) = resp%aB_full(1,1,:,:,info%ik) &
                                   * sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+
+
+    resp%xB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+                                       * info%beta**2 * sct%gam(:,info%ik,:)**2 * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
+                                       / (4.d0 * pi**2) &
+                                  - aimag(PolyGamma(3,:,info%ik,:)) &
+                                       * info%beta**2 * enrgy * sct%gam(:,info%ik,:)**3 / (2.d0 * pi) &
+                                  -  real(PolyGamma(2,:,info%ik,:)) &
+                                       * info%beta * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 + 3.d0*enrgy**2) &
+                                       / (2.d0 * pi) &
+                                  + aimag(PolyGamma(2,:,info%ik,:)) &
+                                       * info%beta * enrgy * sct%gam(:,info%ik,:)**2 / pi &
+                                  -  real(PolyGamma(1,:,info%ik,:)) &
+                                       * (sct%gam(:,info%ik,:)**2 + 3.d0*enrgy**2)
+
+    resp%xB_full(1,1,:,:,info%ik) = resp%xB_full(1,1,:,:,info%ik) &
+                                  * (-1.d0) * sct%zqp(:,info%ik,:)**3 * info%beta &
+                                  / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
 
   endif
 
@@ -349,6 +387,8 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy
 
+  resp%x_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy**2
+
   if (algo%lBfield) then
 
     resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
@@ -356,6 +396,8 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
                                     / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
 
     resp%aB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy
+
+    resp%xB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy**2
 
   endif
 
@@ -518,6 +560,9 @@ subroutine response_intra_optical_weights(resp, edisp, info)
 
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) = &
         resp%a_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik)
+
+        resp%x_full(index1(idir),index2(idir),iband,:,info%ik) = &
+        resp%x_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik)
       else
         ! here we ADD the complex part to the response
         resp%s_full(index1(idir),index2(idir),iband,:,info%ik) = &
@@ -525,6 +570,9 @@ subroutine response_intra_optical_weights(resp, edisp, info)
 
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) = &
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
+
+        resp%x_full(index1(idir),index2(idir),iband,:,info%ik) = &
+        resp%x_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
       endif
     enddo
 
@@ -533,6 +581,9 @@ subroutine response_intra_optical_weights(resp, edisp, info)
 
     resp%a_full(1,1,iband,:,info%ik) = &
     resp%a_full(1,1,iband,:,info%ik) * edisp%MoptDiag(1,iband,:,info%ik)
+
+    resp%x_full(1,1,iband,:,info%ik) = &
+    resp%x_full(1,1,iband,:,info%ik) * edisp%MoptDiag(1,iband,:,info%ik)
   enddo
 
 end subroutine response_intra_optical_weights
@@ -663,22 +714,42 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%a_gather = resp%a_full
 #endif
 
-    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10             ! -> 1/(Ohm*m) = A / (V * m)
-    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge) ! -> A**2 * s / m
+    if (myid .eq. master) then
+      allocate(resp%x_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+    else
+      allocate(resp%x_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    call MPI_gatherv(resp%x_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, resp%x_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                     MPI_COMM_WORLD, mpierr)
+#else
+    resp%x_gather = resp%x_full
+#endif
+
+    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10                ! -> 1/(Ohm*m) = A / (V * m)
+    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge)    ! -> A**2 * s / m
+    resp%x_gather = resp%x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge**2) ! -> V * A**3 * s**2 / m
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/full"
+      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%s_gather)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/full"
+      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/full"
       call hdf5_write_data(ifile, string, resp%a_gather)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/full"
+      call hdf5_write_data(ifile, string, resp%x_gather)
 
     endif
 
     deallocate(resp%s_gather)
     deallocate(resp%a_gather)
+    deallocate(resp%x_gather)
   endif ! full output
 
   ! perform a local summation
@@ -686,6 +757,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     do iband = edisp%nbopt_min,edisp%nbopt_max
       resp%s_sum(:,:,:) = resp%s_sum(:,:,:) + resp%s_full(:,:,iband,:,ik) * kmesh%weight(ik)
       resp%a_sum(:,:,:) = resp%a_sum(:,:,:) + resp%a_full(:,:,iband,:,ik) * kmesh%weight(ik)
+      resp%x_sum(:,:,:) = resp%x_sum(:,:,:) + resp%x_full(:,:,iband,:,ik) * kmesh%weight(ik)
     enddo
   enddo
 
@@ -702,19 +774,29 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   else
     call MPI_REDUCE(resp%a_sum, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
+  if (myid.eq.master) then
+    call MPI_REDUCE(MPI_IN_PLACE, resp%x_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%x_sum, resp%x_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
 #endif
 
   resp%s_sum = resp%s_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
   resp%a_sum = resp%a_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge)
+  resp%x_sum = resp%x_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge**2)
 
   if (myid .eq. master) then
     write(string,'(I6.6)') info%iT
-    string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sum"
+    string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sum"
     call hdf5_write_data(ifile, string, resp%s_sum)
 
     write(string,'(I6.6)') info%iT
-    string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/sum"
+    string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sum"
     call hdf5_write_data(ifile, string, resp%a_sum)
+
+    write(string,'(I6.6)') info%iT
+    string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sum"
+    call hdf5_write_data(ifile, string, resp%x_sum)
 
   endif
 
@@ -750,22 +832,42 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       resp%aB_gather = resp%aB_full
 #endif
 
-      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
-      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs) ! -> A**2 * m / V
+      if (myid .eq. master) then
+        allocate(resp%xB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      else
+        allocate(resp%xB_gather(1,1,1,1,1))
+      endif
+#ifdef MPI
+      call MPI_gatherv(resp%xB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%xB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                       MPI_COMM_WORLD, mpierr)
+#else
+      resp%xB_gather = resp%xB_full
+#endif
+
+      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)              ! -> A * m / (V**2 * s)
+      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)    ! -> A**2 * m / V
+      resp%xB_gather = resp%xB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs) ! -> A**3 * m * s
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%sB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/fullB"
         call hdf5_write_data(ifile, string, resp%aB_gather)
+
+        write(string,'(I6.6)') info%iT
+        string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/fullB"
+        call hdf5_write_data(ifile, string, resp%xB_gather)
 
       endif
 
       deallocate(resp%sB_gather)
       deallocate(resp%aB_gather)
+      deallocate(resp%xB_gather)
     endif ! full output
 
     ! perform a local summation
@@ -774,6 +876,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       do iband = edisp%nbopt_min,edisp%nbopt_max
         resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weight(ik)
         resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_full(:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%xB_sum(:,:,:) = resp%xB_sum(:,:,:) + resp%xB_full(:,:,iband,:,ik) * kmesh%weight(ik)
       enddo
     enddo
 
@@ -790,19 +893,30 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   else
     call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
+
+  if (myid.eq.master) then
+    call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  else
+    call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+  endif
 #endif
 
-    resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
-    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs) ! -> A**2 * m / V
+    resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)
+    resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs)
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/conductivity/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumB"
       call hdf5_write_data(ifile, string, resp%sB_sum)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/peltier/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumB"
       call hdf5_write_data(ifile, string, resp%aB_sum)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumB"
+      call hdf5_write_data(ifile, string, resp%xB_sum)
 
     endif
   endif ! Boutput
@@ -915,14 +1029,18 @@ subroutine dpresp_alloc(algo, edisp, dpresp)
   ! allocate transport variables
   allocate(dpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(dpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+  allocate(dpresp%x_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(dpresp%s_sum(3,3,edisp%iSpin))
   allocate(dpresp%a_sum(3,3,edisp%iSpin))
+  allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
   if (algo%lBfield) then
      allocate(dpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(dpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+     allocate(dpresp%xB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(dpresp%sB_sum(3,3,edisp%iSpin))
      allocate(dpresp%aB_sum(3,3,edisp%iSpin))
+     allocate(dpresp%xB_sum(3,3,edisp%iSpin))
   endif
 
 end subroutine dpresp_alloc
@@ -936,14 +1054,18 @@ subroutine qpresp_alloc(algo, edisp, qpresp)
   ! allocate transport variables
   allocate(qpresp%s_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(qpresp%a_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+  allocate(qpresp%x_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
   allocate(qpresp%s_sum(3,3,edisp%iSpin))
   allocate(qpresp%a_sum(3,3,edisp%iSpin))
+  allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
   if (algo%lBfield) then
      allocate(qpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(qpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+     allocate(qpresp%xB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
      allocate(qpresp%sB_sum(3,3,edisp%iSpin))
      allocate(qpresp%aB_sum(3,3,edisp%iSpin))
+     allocate(qpresp%xB_sum(3,3,edisp%iSpin))
   endif
 end subroutine qpresp_alloc
 

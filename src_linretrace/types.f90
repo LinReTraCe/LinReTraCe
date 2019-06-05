@@ -144,18 +144,24 @@ module Mtypes
     complex(8), allocatable :: sB_full(:,:,:,:,:)
     complex(8), allocatable :: a_full(:,:,:,:,:)
     complex(8), allocatable :: aB_full(:,:,:,:,:)
+    complex(8), allocatable :: x_full(:,:,:,:,:)
+    complex(8), allocatable :: xB_full(:,:,:,:,:)
 
     ! gather arrays for MPI
     complex(8), allocatable :: s_gather(:,:,:,:,:)
     complex(8), allocatable :: sB_gather(:,:,:,:,:)
     complex(8), allocatable :: a_gather(:,:,:,:,:)
     complex(8), allocatable :: aB_gather(:,:,:,:,:)
+    complex(8), allocatable :: x_gather(:,:,:,:,:)
+    complex(8), allocatable :: xB_gather(:,:,:,:,:)
 
     ! total band and k-summation
     complex(8), allocatable :: s_sum(:,:,:)
     complex(8), allocatable :: sB_sum(:,:,:)
     complex(8), allocatable :: a_sum(:,:,:)
     complex(8), allocatable :: aB_sum(:,:,:)
+    complex(8), allocatable :: x_sum(:,:,:)
+    complex(8), allocatable :: xB_sum(:,:,:)
   end type
 
   type response_qp
@@ -164,18 +170,24 @@ module Mtypes
     complex(16), allocatable :: sB_full(:,:,:,:,:)
     complex(16), allocatable :: a_full(:,:,:,:,:)
     complex(16), allocatable :: aB_full(:,:,:,:,:)
+    complex(16), allocatable :: x_full(:,:,:,:,:)
+    complex(16), allocatable :: xB_full(:,:,:,:,:)
 
     ! gather arrays for MPI
     complex(16), allocatable :: s_gather(:,:,:,:,:)
     complex(16), allocatable :: sB_gather(:,:,:,:,:)
     complex(16), allocatable :: a_gather(:,:,:,:,:)
     complex(16), allocatable :: aB_gather(:,:,:,:,:)
+    complex(16), allocatable :: x_gather(:,:,:,:,:)
+    complex(16), allocatable :: xB_gather(:,:,:,:,:)
 
     ! band and k-summation
     complex(16), allocatable :: s_sum(:,:,:)
     complex(16), allocatable :: sB_sum(:,:,:)
     complex(16), allocatable :: a_sum(:,:,:)
     complex(16), allocatable :: aB_sum(:,:,:)
+    complex(16), allocatable :: x_sum(:,:,:)
+    complex(16), allocatable :: xB_sum(:,:,:)
   end type
 
 end module Mtypes
