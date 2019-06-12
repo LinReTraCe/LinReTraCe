@@ -46,9 +46,7 @@ program main
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
-  real(8), allocatable :: drhodT(:) ! resisity derivative
   real(8), allocatable :: energy(:) ! total energy
-  real(8), allocatable :: cv(:)     ! specific heat
   real(8), allocatable :: mu(:)     ! chemical potential (temperature dependent)
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
@@ -133,14 +131,12 @@ program main
 
   allocate(mu(temp%nT))
   allocate(energy(temp%nT))
-  allocate(cv(temp%nT))
 
   ! either we start with the LDA mu
   ! or with the fixed mu from above
   mu     = edisp%mu   ! here we either have the fixed mu
                       ! or the mu_dft initialized from the preprocessed energy file
   energy = 0.d0
-  cv     = 0.d0
 
 
   call mpi_genkstep(kmesh%nkp)
@@ -351,7 +347,9 @@ program main
         endif
       else
         ! if the system is not gapped, simple double precision is enough
-        call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+        ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+        ! fuck it
+        call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)

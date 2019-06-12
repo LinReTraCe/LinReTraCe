@@ -15,7 +15,7 @@ module Mtypes
     logical :: muSearch              ! mu fixed or find mu?
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
     logical :: lScatteringFile       ! do we get the scattering information from another file
-    logical :: lInterbandQuantities  ! calc inter band response
+    logical :: lInterBandQuantities  ! calc inter band response
     logical :: lFullOutput    ! output full response dependency
     logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response

@@ -138,15 +138,15 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 
   resp%x_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) &
-                                  * pi * (enrgy**2 + sct%gam(:,info%ik,:)**2) &
+                                  * (enrgy**2 + sct%gam(:,info%ik,:)**2) &
                                +  real(PolyGamma(2,:,info%ik,:)) &
-                                  * info%beta * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
-                               + aimag(PolyGamma(2,:,info%ik,:)) &
-                                  * 2.d0 * info%beta * enrgy * sct%gam(:,info%ik,:)**2
+                                  * info%beta2p * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
+                               - aimag(PolyGamma(2,:,info%ik,:)) &
+                                  * info%beta / pi * enrgy * sct%gam(:,info%ik,:)**2
 
   resp%x_full(1,1,:,:,info%ik) = resp%x_full(1,1,:,:,info%ik) &
                                * sct%zqp(:,info%ik,:)**2 * info%beta &
-                               / (4.d0 * pi**4 * sct%gam(:,info%ik,:))
+                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
 
   if (algo%lBfield) then
 
@@ -224,13 +224,19 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   complex(8) :: calc_sigma
   complex(8) :: calc_alpha
+  complex(8) :: calc_xi
 
   integer :: index1(9), index2(9)
   integer :: i,j,idir
   integer :: iband1, iband2, iband, is
 
-  index1 = (/1,2,3,1,1,2,1,1,2/)
-  index2 = (/1,2,3,2,3,3,2,3,3/)
+  ! index1 = (/1,2,3,1,1,2,1,1,2/)
+  ! index2 = (/1,2,3,2,3,3,2,3,3/)
+
+  ! NOTE: here we transpose it internally in Fortran
+  ! so the output (hdf5 is in the correct order)
+  index1 = (/1,2,3,2,3,3,2,3,3/)
+  index2 = (/1,2,3,1,1,2,1,1,2/)
 
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
@@ -264,6 +270,17 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
           calc_alpha = calc_alpha &
                      * sct%zqp(iband1,info%ik,is)**2 * info%beta &
                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
+
+          calc_xi    =  real(PolyGamma(1,iband1,info%ik,is)) &
+                        * (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2) &
+                     +  real(PolyGamma(2,iband1,info%ik,is)) &
+                        * info%beta2p * sct%gam(iband1,info%ik,is) * (sct%gam(iband1,info%ik,is)**2 - enrgy(iband1,is)**2) &
+                     - aimag(PolyGamma(2,iband1,info%ik,is)) &
+                        * info%beta / pi * enrgy(iband1,is) * sct%gam(iband1,info%ik,is)**2
+
+          calc_xi    = calc_xi &
+                       * sct%zqp(iband1,info%ik,is)**2 * info%beta &
+                       / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
         else
           calc_sigma = real(PolyGamma(1,iband1,info%ik,is)) &
@@ -321,6 +338,26 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
           calc_alpha = calc_alpha &
                      / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+
+
+          calc_xi    = real(PolyGamma(1,iband1,info%ik,is) &
+                     * (enrgy(iband1,is) - ci*sct%gam(iband1,info%ik,is))**2 &
+                     * (enrgydiff(is) + ci*gamdiff(is)) &
+                     * (enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is)))) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * info%beta / (2.d0 * pi**3)
+
+          calc_xi    = calc_xi &
+                     + real(PolyGamma(1,iband2,info%ik,is) &
+                     * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is))**2 &
+                     * (-enrgydiff(is) - ci*gamdiff(is)) &
+                     * (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is)))) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * sct%gam(iband1,info%ik,is) &
+                     * info%beta / (2.d0 * pi**3)
+
+          calc_xi    = calc_xi &
+                     / ((enrgydiff(is)**2 + gamdiff(is)**2) &
+                      * (enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2))
         endif
 
 
@@ -337,6 +374,9 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is)
+
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,is)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
@@ -344,11 +384,34 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is) * ci
+
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi     * edisp%Mopt(idir,iband2,iband1,is) * ci
           endif
         enddo
       enddo
     enddo
   enddo
+
+  ! TODO: FIX THIS
+  ! i.e. we save all this data to python
+  ! that means an implicit transposition takes place
+  ! i.e. we either hav eto treat all of this the other way around
+  if (edisp%iOptical > 3) then
+    do iband = edisp%nbopt_min, edisp%nbopt_max
+      resp%s_full(2,1,iband,:,info%ik) = conjg(resp%s_full(1,2,iband,:,info%ik))
+      resp%s_full(3,1,iband,:,info%ik) = conjg(resp%s_full(1,3,iband,:,info%ik))
+      resp%s_full(3,2,iband,:,info%ik) = conjg(resp%s_full(2,3,iband,:,info%ik))
+
+      resp%a_full(2,1,iband,:,info%ik) = conjg(resp%a_full(1,2,iband,:,info%ik))
+      resp%a_full(3,1,iband,:,info%ik) = conjg(resp%a_full(1,3,iband,:,info%ik))
+      resp%a_full(3,2,iband,:,info%ik) = conjg(resp%a_full(2,3,iband,:,info%ik))
+
+      resp%x_full(2,1,iband,:,info%ik) = conjg(resp%x_full(1,2,iband,:,info%ik))
+      resp%x_full(3,1,iband,:,info%ik) = conjg(resp%x_full(1,3,iband,:,info%ik))
+      resp%x_full(3,2,iband,:,info%ik) = conjg(resp%x_full(2,3,iband,:,info%ik))
+    enddo
+  endif
 
   deallocate(enrgy)
   deallocate(enrgydiff)
@@ -429,13 +492,16 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   complex(8) :: calc_sigma
   complex(8) :: calc_alpha
+  complex(8) :: calc_xi
 
   integer :: index1(9), index2(9)
   integer :: i,j,idir
   integer :: iband1, iband2, iband, is
 
-  index1 = (/1,2,3,1,1,2,1,1,2/)
-  index2 = (/1,2,3,2,3,3,2,3,3/)
+  ! NOTE: here we transpose it internally in Fortran
+  ! so the output (hdf5 is in the correct order)
+  index1 = (/1,2,3,2,3,3,2,3,3/)
+  index2 = (/1,2,3,1,1,2,1,1,2/)
 
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
@@ -459,6 +525,8 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
                      / (4.d0 * pi**3 * sct%gam(iband1,info%ik,is))
 
           calc_alpha = calc_sigma * enrgy(iband1,is)
+
+          calc_xi    = calc_sigma * enrgy(iband1,is)**2
 
         else
 
@@ -494,6 +562,22 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
           calc_alpha = calc_alpha &
                      / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
+
+          calc_xi    = polygamma2fermi(enrgy(iband1,is), info%beta) &
+                     * enrgy(iband1,is)**2 * enrgydiff(is)**2 / sct%gam(iband1,info%ik,is)
+
+          calc_xi    = calc_xi &
+                     + polygamma2fermi(enrgy(iband2,is), info%beta) &
+                     * enrgy(iband2,is)**2 * enrgydiff(is)**2 / sct%gam(iband2,info%ik,is)
+
+          calc_xi    = calc_xi &
+                     * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
+                     * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) &
+                     * info%beta
+
+          calc_xi    = calc_xi &
+                     / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
 
@@ -510,6 +594,9 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:)
+
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
@@ -517,12 +604,31 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:) * ci
+
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) = &
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:) * ci
           endif
         enddo !idir
 
       enddo !is
     enddo !iband2
   enddo ! iband1
+
+  if (edisp%iOptical > 3) then
+    do iband = edisp%nbopt_min, edisp%nbopt_max
+      resp%s_full(2,1,iband,:,info%ik) = conjg(resp%s_full(1,2,iband,:,info%ik))
+      resp%s_full(3,1,iband,:,info%ik) = conjg(resp%s_full(1,3,iband,:,info%ik))
+      resp%s_full(3,2,iband,:,info%ik) = conjg(resp%s_full(2,3,iband,:,info%ik))
+
+      resp%a_full(2,1,iband,:,info%ik) = conjg(resp%a_full(1,2,iband,:,info%ik))
+      resp%a_full(3,1,iband,:,info%ik) = conjg(resp%a_full(1,3,iband,:,info%ik))
+      resp%a_full(3,2,iband,:,info%ik) = conjg(resp%a_full(2,3,iband,:,info%ik))
+
+      resp%x_full(2,1,iband,:,info%ik) = conjg(resp%x_full(1,2,iband,:,info%ik))
+      resp%x_full(3,1,iband,:,info%ik) = conjg(resp%x_full(1,3,iband,:,info%ik))
+      resp%x_full(3,2,iband,:,info%ik) = conjg(resp%x_full(2,3,iband,:,info%ik))
+    enddo
+  endif
 
   deallocate(enrgy)
   deallocate(enrgydiff)
@@ -547,8 +653,11 @@ subroutine response_intra_optical_weights(resp, edisp, info)
   !( - -    3    )
 
   ! we use these two index lists to move along the described order in the 3x3 matrix
-  index1 = (/1,2,3,1,1,2,1,1,2/)
-  index2 = (/1,2,3,2,3,3,2,3,3/)
+
+  ! NOTE: here we transpose it internally in Fortran
+  ! so the output (hdf5 is in the correct order)
+  index1 = (/1,2,3,2,3,3,2,3,3/)
+  index2 = (/1,2,3,1,1,2,1,1,2/)
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
     ! the kernels are saved in the 1 1 directions
@@ -566,15 +675,33 @@ subroutine response_intra_optical_weights(resp, edisp, info)
       else
         ! here we ADD the complex part to the response
         resp%s_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%s_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
+        resp%s_full(index1(idir),index2(idir),iband,:,info%ik) + &
+        resp%s_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
 
         resp%a_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%a_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
+        resp%a_full(index1(idir),index2(idir),iband,:,info%ik) + &
+        resp%a_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
 
         resp%x_full(index1(idir),index2(idir),iband,:,info%ik) = &
-        resp%x_full(index1(idir),index2(idir),iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
+        resp%x_full(index1(idir),index2(idir),iband,:,info%ik) + &
+        resp%x_full(1,1,iband,:,info%ik) * edisp%MoptDiag(idir,iband,:,info%ik) * ci
       endif
     enddo
+
+    if (edisp%iOptical > 3) then ! 'symmetrize' the whole thing
+      resp%s_full(1,2,iband,:,info%ik) = conjg(resp%s_full(2,1,iband,:,info%ik))
+      resp%s_full(1,3,iband,:,info%ik) = conjg(resp%s_full(3,1,iband,:,info%ik))
+      resp%s_full(2,3,iband,:,info%ik) = conjg(resp%s_full(3,2,iband,:,info%ik))
+
+      resp%a_full(1,2,iband,:,info%ik) = conjg(resp%a_full(2,1,iband,:,info%ik))
+      resp%a_full(1,3,iband,:,info%ik) = conjg(resp%a_full(3,1,iband,:,info%ik))
+      resp%a_full(2,3,iband,:,info%ik) = conjg(resp%a_full(3,2,iband,:,info%ik))
+
+      resp%x_full(1,2,iband,:,info%ik) = conjg(resp%x_full(2,1,iband,:,info%ik))
+      resp%x_full(1,3,iband,:,info%ik) = conjg(resp%x_full(3,1,iband,:,info%ik))
+      resp%x_full(2,3,iband,:,info%ik) = conjg(resp%x_full(3,2,iband,:,info%ik))
+    endif
+
 
     resp%s_full(1,1,iband,:,info%ik) = &
     resp%s_full(1,1,iband,:,info%ik) * edisp%MoptDiag(1,iband,:,info%ik)
@@ -604,6 +731,7 @@ subroutine response_peierls_weights(resp, edisp, info)
   ! for the time being
   ! this is only with Bfield in z-direction
   ! TODO: complete ... arbitrary direction
+  ! TODO: FIX THIS
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
     resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
@@ -728,9 +856,14 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%x_gather = resp%x_full
 #endif
 
-    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10                ! -> 1/(Ohm*m) = A / (V * m)
-    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge)    ! -> A**2 * s / m
-    resp%x_gather = resp%x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge**2) ! -> V * A**3 * s**2 / m
+    ! in order to keep the numerical values in a good range
+    ! we do not apply the final multiplication with e
+    ! this way we essentially get L0, L1/q, L2/q**2
+    ! with which the derived quantities are properly defined
+    ! e.g. peltier = L1/(q*L0)
+    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> 1/(Ohm*m) = A / (V * m)
+    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> A**2 * s / m    (we do not multiply with e here)
+    resp%x_gather = resp%x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> V * A**3 * s**2 / m (we do not multiply with e**2 here)
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
@@ -782,8 +915,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
   resp%s_sum = resp%s_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
-  resp%a_sum = resp%a_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge)
-  resp%x_sum = resp%x_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * (1.d10 * echarge**2)
+  resp%a_sum = resp%a_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
+  resp%x_sum = resp%x_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
 
   if (myid .eq. master) then
     write(string,'(I6.6)') info%iT
@@ -846,21 +979,22 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       resp%xB_gather = resp%xB_full
 #endif
 
-      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)              ! -> A * m / (V**2 * s)
-      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)    ! -> A**2 * m / V
-      resp%xB_gather = resp%xB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs) ! -> A**3 * m * s
+      ! same story here ... do not multiply with e
+      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
+      resp%xB_gather = resp%xB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/fullM"
         call hdf5_write_data(ifile, string, resp%sB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/fullM"
         call hdf5_write_data(ifile, string, resp%aB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/fullB"
+        string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/fullM"
         call hdf5_write_data(ifile, string, resp%xB_gather)
 
       endif
@@ -907,15 +1041,15 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumM"
       call hdf5_write_data(ifile, string, resp%sB_sum)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumM"
       call hdf5_write_data(ifile, string, resp%aB_sum)
 
       write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumB"
+      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumM"
       call hdf5_write_data(ifile, string, resp%xB_sum)
 
     endif

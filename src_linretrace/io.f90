@@ -539,6 +539,8 @@ subroutine read_scattering_data(ifile, edisp, sct, info)
   sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
   sct%gam = sct%gam * sct%zqp    ! convention
 
+  ! sct%gam = sct%gam * sct%zqp + sct%gamimp    ! convention
+
 end subroutine
 
 subroutine read_optical_elements(ifile, edisp, sct, info)
