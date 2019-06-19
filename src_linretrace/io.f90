@@ -17,7 +17,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   integer(hid_t)       :: ifile
   integer              :: i, is, locderivatives, iimp, ik
-  integer              :: locgapped
   integer              :: nshape(1)
 
   integer, allocatable :: irank1arr(:)
@@ -48,7 +47,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
   if (algo%muSearch) then
-    call hdf5_read_data(ifile, "/.bands/mudft",       edisp%mu)
+    call hdf5_read_data(ifile, "/.bands/mu",           edisp%mu)
   endif
 
   allocate(edisp%gapped(edisp%ispin))
@@ -61,42 +60,37 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   edisp%gap_min = 0.d0
   ! read band gap information
   if (edisp%ispin == 1) then
-    call hdf5_read_data(ifile, "/.bands/bandgap/gapped", locgapped)
-    if (locgapped == 1) then
-      edisp%gapped(1) = .true.
+    call hdf5_read_data(ifile, "/.bands/bandgap/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
       call hdf5_read_data(ifile, "/.bands/bandgap/gapsize", edisp%gap(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/vband", edisp%valenceBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/ene_vband", edisp%ene_valenceBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/cband", edisp%conductionBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/ene_cband", edisp%ene_conductionBand(1))
     else
-      edisp%gapped(1) = .false.
       edisp%gap(1) = 0.d0
     endif
+
   else
-    call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", locgapped)
-    if (locgapped == 1) then
-      edisp%gapped(1) = .true.
+    call hdf5_read_data(ifile, "/.bands/bandgap/up/gapped", edisp%gapped(1))
+    if (edisp%gapped(1)) then
       call hdf5_read_data(ifile, "/.bands/bandgap/up/gapsize", edisp%gap(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/up/vband", edisp%valenceBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/up/cband", edisp%conductionBand(1))
       call hdf5_read_data(ifile, "/.bands/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
     else
-      edisp%gapped(1) = .false.
       edisp%gap(1) = 0.d0
     endif
 
-    call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", locgapped)
-    if (locgapped == 1) then
-      edisp%gapped(2) = .true.
+    call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapped", edisp%gapped(2))
+    if (edisp%gapped(2)) then
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/gapsize", edisp%gap(2))
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/vband", edisp%valenceBand(2))
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/cband", edisp%conductionBand(2))
       call hdf5_read_data(ifile, "/.bands/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
     else
-      edisp%gapped(2) = .false.
       edisp%gap(2) = 0.d0
     endif
   endif
@@ -385,7 +379,7 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
 
   character(len=128) :: string
   integer(hid_t)     :: ifile
-  integer            :: locgapped, iimp
+  integer            :: iimp
 
   call hdf5_open_file(algo%output_file, ifile)
 

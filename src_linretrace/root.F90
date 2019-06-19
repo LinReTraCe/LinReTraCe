@@ -426,20 +426,23 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
   ! i.e. the fermi function with quadruple precision is not accurate neough
-  if (info%Temp < edisp%gap_min / 1.95q0) then
-    call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
-    mu = real(mu_qp, 8) ! transform back to dp
-    return
-  endif
+  ! if (info%Temp < edisp%gap_min / 1.95q0) then
+  !   call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+  !   mu = real(mu_qp, 8) ! transform back to dp
+  !   return
+  ! endif
 
   ! perform the mu_refinement if we have a gap
-  ! and the temperature is not too big
-  ! if the temperature is above the limit normal quadruple precision is enough
-  if (info%Temp < edisp%gap_min*5.d2) then
-    dmu = edisp%gap_min/25.q0
+  call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
+  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+
+  ! if (info%Temp < edisp%gap_min*100) then
+  if (abs(target_zero2) > 1d-10) then ! we have a pseudo-theta function
+                                      ! use the refinement
+
+    dmu = edisp%gap_min/100.q0
     mu1 = mu_qp
     mu2 = mu_qp
-    call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
     iit = 1
 
     if (target_zero1 < 0.q0) then

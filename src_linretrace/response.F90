@@ -1255,7 +1255,7 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   to_evaluate = 0.5q0 + info%beta2pQ * &
-                (sct%gam(:,ikstr:ikend,:) + ciQ*(sct%zqp(:,ikstr:ikend,:)*edisp%band(:,ikstr:ikend,:) - mu))
+                (sct%gam(:,ikstr:ikend,:) + ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend

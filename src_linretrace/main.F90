@@ -26,7 +26,10 @@ program main
   type(response_dp) :: resp_inter
   type(response_dp) :: resp_inter_Boltzmann
 
-  ! type(response_qp) :: qpresp  ! response quadruple precision
+  ! type(response_qp) :: qresp_intra
+  ! type(response_qp) :: qresp_intra_Boltzmann
+  ! type(response_qp) :: qresp_inter
+  ! type(response_qp) :: qresp_inter_Boltzmann
 
   integer(hid_t)    :: ifile_scatter
   integer(hid_t)    :: ifile_energy
@@ -164,10 +167,9 @@ program main
   ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
-  ! if (.not. algo%ldebug) then
-  !   call allocate_response(algo, edisp, qpresp)
-  !   allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
-  ! endif
+  if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
+    allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  endif
 
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
   if (algo%lScatteringFile) then
@@ -379,6 +381,11 @@ program main
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
+
+    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+      call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+    endif
+
     call cpu_time(tfinish)
     timings(2) = timings(2) + (tfinish - tstart)
     tstart = tfinish
