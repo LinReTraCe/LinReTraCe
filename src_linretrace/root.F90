@@ -267,7 +267,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! local variables
   logical :: skipped
   real(16) mu_qp
-  real(16) target_zero1, target_zero2
+  real(16) target_zero1, target_zero2, target_test
   real(16) mu1, mu2, dmu
   real(16) :: target_zero_old
   integer iit, niit0, itest
@@ -426,21 +426,22 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
   ! i.e. the fermi function with quadruple precision is not accurate neough
-  ! if (info%Temp < edisp%gap_min / 1.95q0) then
-  !   call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
-  !   mu = real(mu_qp, 8) ! transform back to dp
-  !   return
-  ! endif
+  if (.not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
+    call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+    mu = real(mu_qp, 8) ! transform back to dp
+    return
+  endif
 
   ! perform the mu_refinement if we have a gap
   call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
   call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
-  ! if (info%Temp < edisp%gap_min*100) then
-  if (abs(target_zero2) > 1d-10) then ! we have a pseudo-theta function
-                                      ! use the refinement
+  ! if (myid.eq.master) write(*,*) target_zero1, target_zero2
 
-    dmu = edisp%gap_min/100.q0
+  if ( (info%Temp < edisp%gap_min*200) .and. &  ! hard temperature cutoff
+       (abs(target_zero1) < 1d-15)) then        ! we have a reasonal value from thi sfunction
+
+    dmu = edisp%gap_min/500.q0
     mu1 = mu_qp
     mu2 = mu_qp
     iit = 1
@@ -450,6 +451,15 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     else
       dmu = -dmu
     endif
+
+    ! abort if we have a sudden change ( by crossing an impurity level )
+    call occ_fermi_Q_refine(mu_qp+dmu, target_test, edisp, sct, kmesh, imp, algo, info)
+    ! if(myid.eq.master) write(*,*) target_test
+    if (abs(target_zero) > 1d-15) then
+      mu = real(mu_qp, 8)
+      return
+    endif
+
     target_zero2 = target_zero1
 
     ! get the working interval
