@@ -267,7 +267,8 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! local variables
   logical :: skipped
   real(16) mu_qp
-  real(16) target_zero1, target_zero2, target_test
+  real(16) target_zero1, target_zero2
+  real(16) test_up, test_dn
   real(16) mu1, mu2, dmu
   real(16) :: target_zero_old
   integer iit, niit0, itest
@@ -436,12 +437,28 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
   call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
+  ! write(*,*) 'after qp root finding: ',mu_qp
+  ! write(*,*) 'deviation QP: ',target_zero2
+  ! write(*,*) 'deviation refine: ',target_zero1
+  ! write(*,*)
+
   ! if (myid.eq.master) write(*,*) target_zero1, target_zero2
 
   if ( (info%Temp < edisp%gap_min*200) .and. &  ! hard temperature cutoff
-       (abs(target_zero1) < 1d-15)) then        ! we have a reasonal value from thi sfunction
+       (abs(target_zero1) < 1d-18)) then        ! we have a reasonal value from thisfunction
+                                                ! if this value is too high
+                                                ! we might run off to another root ..
+    ! TODO: more testing here
+    ! essentially whats happening is that the deviation is this large
+    ! when we are really close to an impurity crossing...
+    ! this close around the impurity normal QP is enough
+    ! the same thing that happens when the temperature gets too large
+    ! -> we get too many contributions and run-off to the wrong root (artificial root)
+    ! so this if conditions cuts off the two causes for the same result
+    ! -> avoidance of artifical roots
+    ! -> results in a smooth chemical potential
 
-    dmu = edisp%gap_min/500.q0
+    dmu = edisp%gap_min/25.q0
     mu1 = mu_qp
     mu2 = mu_qp
     iit = 1
@@ -452,15 +469,34 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
       dmu = -dmu
     endif
 
+    ! decrease the step size until we dont cross an impurity level essentially
+    ! thats wrong
+    do
+      call occ_fermi_Q_refine(mu_qp+dmu, test_up, edisp, sct, kmesh, imp, algo, info)
+      call occ_fermi_Q_refine(mu_qp-dmu, test_dn, edisp, sct, kmesh, imp, algo, info)
+      test_up = test_up - target_zero1
+      test_dn = test_dn - target_zero1
+      ! debug
+      ! check if both point in the same direction
+      ! write(*,*) 'test step up: ', mu_qp+dmu, test_up
+      ! write(*,*) 'test step dn: ', mu_qp+dmu, test_dn
+      ! if they do, decrease step size and try again
+      if ( (test_up > 0 .and. test_dn > 0) .or. (test_up < 0 .and. test_dn < 0) ) then
+        dmu = dmu/5.q0
+      else
+        exit
+      endif
+    enddo
+
+
     ! abort if we have a sudden change ( by crossing an impurity level )
-    call occ_fermi_Q_refine(mu_qp+dmu, target_test, edisp, sct, kmesh, imp, algo, info)
     ! if(myid.eq.master) write(*,*) target_test
     if (abs(target_zero) > 1d-15) then
       mu = real(mu_qp, 8)
       return
     endif
 
-    target_zero2 = target_zero1
+    target_zero2 = target_zero1 ! from the top
 
     ! get the working interval
     do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
