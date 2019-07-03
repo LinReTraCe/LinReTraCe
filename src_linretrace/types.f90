@@ -73,8 +73,11 @@ module Mtypes
     real(8), allocatable    :: band_d2k(:,:,:,:)  ! d2/(dk_i dk_j) band(nband,ik,ispin)
 
     ! optical elements (because of the double band dependencies)
-    ! are loaded for each k-point and each spin
-    real(8), allocatable    :: Mopt(:,:,:,:)     ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+    ! for one k-point
+    real(8), allocatable    :: Moptk(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+                                                 ! 3..9, nband,nband, spin
+    ! for the MPI k-range
+    real(8), allocatable    :: Mopt(:,:,:,:,:)     ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
                                                  ! 3..9, nband,nband, spin
     ! the diagonal optical elements
     ! are loaded in one go

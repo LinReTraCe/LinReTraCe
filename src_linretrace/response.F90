@@ -380,23 +380,23 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
             ! and read them via Fortran -> implicit transposition
             ! we have to use 2 - 1 here
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is)
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is,info%ik)
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is)
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik)
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,is)
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,is,info%ik)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi     * edisp%Mopt(idir,iband2,iband1,is) * ci
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi     * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
           endif
         enddo
       enddo
@@ -602,23 +602,23 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
             ! and read them via Fortran -> implicit transposition
             ! we have to use 2 - 1 here
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:)
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:,info%ik)
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:)
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:,info%ik)
 
             resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:)
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:,info%ik)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
 
             resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:) * ci
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
           endif
         enddo !idir
 

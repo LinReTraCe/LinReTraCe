@@ -196,6 +196,19 @@ program main
     endif
   endif
 
+  ! load the optical elements for each processes k-range
+  if (algo%lInterbandQuantities) then
+    allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+    do ik = ikstr,ikend
+      info%ik = ik ! save into the runinformation datatype
+      call read_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
+      edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
+    enddo
+    deallocate(edisp%Moptk)
+  endif
+
+
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*)
@@ -407,12 +420,6 @@ program main
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-
-      ! load the full moments for the current k-point
-      if (algo%lInterbandQuantities) then
-        call read_optical_elements(ifile_energy, edisp, sct, info)
-      endif
-
       ! calculate the response
       call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
                          resp_intra, resp_intra_Boltzmann, &
@@ -453,6 +460,8 @@ program main
     tstart = tfinish
 
   enddo ! end of the outer temperature loop
+
+  if (allocated(edisp%Mopt)) deallocate(edisp%Mopt)
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)

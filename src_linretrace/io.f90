@@ -235,7 +235,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   ! the optical elements get loaded only for one k-point each time
   if (edisp%lFullMoments) then
-    allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+    allocate(edisp%Moptk(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
                                        edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
   endif
 
@@ -551,17 +551,17 @@ subroutine read_optical_elements(ifile, edisp, sct, info)
     if (allocated(darr3)) deallocate(darr3)
     write(string,'("kPoint/",I6.6,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
-    edisp%Mopt(:,:,:,1) = darr3
+    edisp%Moptk(:,:,:,1) = darr3
     deallocate(darr3)
   else
     if (allocated(darr3)) deallocate(darr3)
     write(string,'("up/kPoint/",I6.6,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
-    edisp%Mopt(:,:,:,1) = darr3
+    edisp%Moptk(:,:,:,1) = darr3
     deallocate(darr3)
     write(string,'("dn/kPoint/",I6.6,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
-    edisp%Mopt(:,:,:,2) = darr3
+    edisp%Moptk(:,:,:,2) = darr3
     deallocate(darr3)
   endif
 
