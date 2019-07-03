@@ -1233,7 +1233,9 @@ subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   to_evaluate = 0.5d0 + info%beta2p * &
-                (sct%gam(:,ikstr:ikend,:) + ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+                (sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 + ci*sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - mu))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
@@ -1267,7 +1269,9 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   to_evaluate = 0.5q0 + info%beta2pQ * &
-                (sct%gam(:,ikstr:ikend,:) + ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+                (sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 + ciQ*sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - mu))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
