@@ -447,9 +447,9 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
   real(8), allocatable :: enrgy(:,:,:)
   character(len=128) :: string
 
-  allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,kmesh%nkp,edisp%ispin))
+  allocate(enrgy(edisp%nband_max,kmesh%nkp,edisp%ispin))
 
-  enrgy = sct%zqp(:,:,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,:,:) - mu)
+  enrgy = sct%zqp * (edisp%band - mu)
 
   write(string,'(I6.6,"/energies")') info%iT
   call hdf5_open_file(algo%output_file, ifile)
