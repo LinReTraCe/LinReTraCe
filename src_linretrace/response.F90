@@ -118,78 +118,87 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
-                               - real(PolyGamma(2,:,info%ik,:)) * info%beta2p*sct%gam(:,info%ik,:)
+                               - real(PolyGamma(2,:,info%ik,:)) * info%beta2p*sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
 
   resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) &
-                               * sct%zqp(:,info%ik,:)**2 * info%beta &
-                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                               * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
 
   resp%a_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) * enrgy &
-                               -  real(PolyGamma(2,:,info%ik,:)) * enrgy * sct%gam(:,info%ik,:) * info%beta2p &
-                               - aimag(PolyGamma(2,:,info%ik,:)) * sct%gam(:,info%ik,:)**2 * info%beta2p
+                               -  real(PolyGamma(2,:,info%ik,:)) * enrgy &
+                                  * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
+                               - aimag(PolyGamma(2,:,info%ik,:)) * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
+                                 * info%beta2p
 
   resp%a_full(1,1,:,:,info%ik) = resp%a_full(1,1,:,:,info%ik) &
-                               * sct%zqp(:,info%ik,:)**2 * info%beta &
-                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                               * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
 
   resp%x_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) &
-                                  * (enrgy**2 + sct%gam(:,info%ik,:)**2) &
+                                  * (enrgy**2 + sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2) &
                                +  real(PolyGamma(2,:,info%ik,:)) &
-                                  * info%beta2p * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
+                                  * info%beta2p * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
+                                  * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 - enrgy**2) &
                                - aimag(PolyGamma(2,:,info%ik,:)) &
-                                  * info%beta / pi * enrgy * sct%gam(:,info%ik,:)**2
+                                  * info%beta / pi * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2
 
   resp%x_full(1,1,:,:,info%ik) = resp%x_full(1,1,:,:,info%ik) &
-                               * sct%zqp(:,info%ik,:)**2 * info%beta &
-                               / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                               * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
+                               / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
   if (algo%lBfield) then
 
     resp%sB_full(1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
-                                      * sct%gam(:,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
+                                      * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
-                                    * 3.d0 * sct%gam(:,info%ik,:) * info%beta2p &
+                                    * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
                                   - real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
     resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
-                                  * sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
+                                  / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
     resp%aB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
-                                       * enrgy * sct%gam(:,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
+                                       * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
+                                       * info%beta**2 / (4.d0 * pi**2) &
                                   + aimag(PolyGamma(3,:,info%ik,:)) &
-                                       * sct%gam(:,info%ik,:)**3 * info%beta**3 / (4.d0 * pi**2) &
+                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta**3 / (4.d0 * pi**2) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
-                                       * 3.d0 * enrgy * sct%gam(:,info%ik,:) * info%beta2p &
+                                       * 3.d0 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
                                   - aimag(PolyGamma(2,:,info%ik,:)) &
-                                       * sct%gam(:,info%ik,:)**2 * info%beta2p &
+                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta2p &
                                   +  real(PolyGamma(1,:,info%ik,:)) * 3.d0 * enrgy
 
     resp%aB_full(1,1,:,:,info%ik) = resp%aB_full(1,1,:,:,info%ik) &
-                                  * sct%zqp(:,info%ik,:)**3 * info%beta / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta / (16.d0 * pi**4 &
+                                  * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
     resp%xB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
-                                       * info%beta**2 * sct%gam(:,info%ik,:)**2 * (sct%gam(:,info%ik,:)**2 - enrgy**2) &
+                                       * info%beta**2 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
+                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 - enrgy**2) &
                                        / (4.d0 * pi**2) &
                                   - aimag(PolyGamma(3,:,info%ik,:)) &
-                                       * info%beta**2 * enrgy * sct%gam(:,info%ik,:)**3 / (2.d0 * pi) &
+                                       * info%beta**2 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 &
+                                       / (2.d0 * pi) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
-                                       * info%beta * sct%gam(:,info%ik,:) * (sct%gam(:,info%ik,:)**2 + 3.d0*enrgy**2) &
+                                       * info%beta * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
+                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2) &
                                        / (2.d0 * pi) &
                                   + aimag(PolyGamma(2,:,info%ik,:)) &
-                                       * info%beta * enrgy * sct%gam(:,info%ik,:)**2 / pi &
+                                       * info%beta * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 / pi &
                                   -  real(PolyGamma(1,:,info%ik,:)) &
-                                       * (sct%gam(:,info%ik,:)**2 + 3.d0*enrgy**2)
+                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2)
 
     resp%xB_full(1,1,:,:,info%ik) = resp%xB_full(1,1,:,:,info%ik) &
-                                  * (-1.d0) * sct%zqp(:,info%ik,:)**3 * info%beta &
-                                  / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+                                  * (-1.d0) * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
+                                  / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
   endif
 
@@ -440,13 +449,14 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   ! asymptotic term in the Gamma-> 0 limit
   ! the polygamma2fermi already contains the pi^2 / 2
   resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
-                                  * sct%zqp(:,info%ik,:)**2 * info%beta &
-                                  / (4.d0 * pi**3 * sct%gam(:,info%ik,:))
+                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
+                                  / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
   resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy
 
@@ -455,8 +465,8 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   if (algo%lBfield) then
 
     resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
-                                    * 3.d0 * sct%zqp(:,info%ik,:)**3 * info%beta &
-                                    / (16.d0 * pi**4 * sct%gam(:,info%ik,:)**2)
+                                    * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
+                                    / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
     resp%aB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy
 
