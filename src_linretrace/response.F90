@@ -252,7 +252,8 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   allocate(enrgydiff(edisp%ispin))
 
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
@@ -519,7 +520,8 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   allocate(gamdiff(edisp%ispin))
 
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(:,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
