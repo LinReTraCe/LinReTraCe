@@ -6,6 +6,7 @@ BFieldMode = (default = F)
 DebugMode  = (default = F)
 
 ChemicalPotential = (default = 0)  # if here run with the given mu
+OldOutput = (default = None) # old output file from which we take the mu(T)
 
 Scissors   = (default = None) # increase/decrease of an existing energy gap
 

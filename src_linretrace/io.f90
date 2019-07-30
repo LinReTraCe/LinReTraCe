@@ -567,4 +567,29 @@ subroutine read_optical_elements(ifile, edisp, sct, info)
 
 end subroutine
 
+subroutine read_muT(temp, oldoutput, mu)
+  implicit none
+  type(temperature) :: temp
+  character(len=*)  :: oldoutput
+  real(8)           :: mu(temp%nT)
+
+  integer(hid_t)       :: ifile
+  real(8), allocatable :: mutemp(:)
+  integer              :: shapemu(1)
+
+  call hdf5_open_file(oldoutput, ifile, rdonly=.true.)
+  call hdf5_read_data(ifile, '.quantities/mu', mutemp)
+
+  shapemu = shape(mutemp)
+
+  if (.not. (temp%nT == shapemu(1))) then
+    call stop_with_message(stdout, 'chemical potential array from old file does not match user input')
+  endif
+
+  mu = mutemp
+
+  call hdf5_close_file(ifile)
+
+end subroutine read_muT
+
 end module Mio

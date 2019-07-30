@@ -123,6 +123,14 @@ subroutine read_config(algo, edisp, sct, temp, imp)
     algo%muSearch = .true.
   endif
 
+  call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
+  if (found) then
+    algo%lOldmu   = .true.
+    algo%muSearch = .false. !overwrite the previous option
+  else
+    algo%lOldmu = .false.
+  endif
+
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
   call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
 

@@ -141,6 +141,10 @@ program main
                       ! or the mu_dft initialized from the preprocessed energy file
   energy = 0.d0
 
+  if (algo%lOldmu) then
+    call read_muT(temp, algo%old_output_file, mu)
+  endif
+
 
   call mpi_genkstep(kmesh%nkp)
 
@@ -228,8 +232,10 @@ program main
     if (algo%lScissors) then
       write(stdout,*) '  scissors: ', edisp%scissors
     endif
-    if (.not. algo%muSearch) then
+    if (.not. algo%muSearch .and. .not. algo%lOldmu) then
       write(stdout,*) '  constant chemical potential: ', edisp%efer
+    else if (algo%lOldmu) then
+      write(stdout,*) '  old chemical potentials from file: ', trim(adjustl(algo%old_output_file))
     endif
     write(stdout,*)
     if (algo%lScatteringFile) then
