@@ -302,6 +302,13 @@ subroutine check_config(algo)
     endif
   endif
 
+  if (algo%lOldmu) then
+    inquire (file=trim(adjustl(algo%old_output_file)), exist=there)
+    if (.not. there) then
+      call stop_with_message(stderr, "Can not find the OldOutput file")
+    endif
+  endif
+
 end subroutine check_config
 
 end module Mconfig
