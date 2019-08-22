@@ -169,7 +169,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
-    kmesh%nkp = hdf5_get_number_groups(ifile, "/up/kPoint")
     if (hdf5_group_exists(ifile, "up/derivatives") .and. &
         hdf5_group_exists(ifile, "up/curvatures")) then
       edisp%lDerivatives = .true.
@@ -177,7 +176,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       edisp%lDerivatives = .false.
     endif
   else
-    kmesh%nkp = hdf5_get_number_groups(ifile, "/kPoint")
     if (hdf5_group_exists(ifile, "/kPoint/derivatives") .and. &
         hdf5_group_exists(ifile, "/kPoint/curvatures")) then
       edisp%lDerivatives = .true.
