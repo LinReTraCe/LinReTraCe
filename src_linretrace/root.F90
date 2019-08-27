@@ -589,6 +589,8 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
+  integer :: ii
+  real(8) :: densii, eneii
   integer :: iimp
   real(8) :: occ_tot
 
@@ -605,8 +607,17 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      if (.not. imp%Band(iimp)) then
+        occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+          / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      else
+        densii = imp%Density(iimp) / 1001.d0
+        do ii=-500,500
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          occ_tot = occ_tot - imp%Dopant(iimp)*densii &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+      endif
     enddo
   endif
 
@@ -627,6 +638,8 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   type(algorithm)  :: algo
   type(runinfo)    :: info
 
+  integer  :: ii
+  real(8)  :: eneii, densii
   integer  :: iimp
   real(16) :: occ_tot
 
@@ -641,8 +654,19 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lImpurities) then
     do iimp = 1,imp%nimp
-      occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      if (.not. imp%Band(iimp)) then
+        occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      else
+        ! we split the impurity band into a lot of impurity levels
+        ! where the weight is equal everywhere
+        densii = imp%Density(iimp) / 1001.d0
+        do ii=-500,500
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          occ_tot = occ_tot - imp%Dopant(iimp)*densii &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+      endif
     enddo
   endif
 
@@ -959,9 +983,9 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   logical :: found
   !local variables
 
-  integer  :: iimp
+  integer  :: iimp, ii
   real(16) :: diff = 1q-38
-  integer :: is, ik, iband
+  integer  :: is, ik, iband
 
   real(16) :: elecmpi, holempi
   real(16) :: sumelec, sumhole
@@ -969,6 +993,8 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 
   real(16) :: elec
   real(16) :: hole
+
+  real(16) :: densii, eneii
 
   sumelec = 0.q0
   sumhole = 0.q0
@@ -1021,17 +1047,38 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
     do iimp = 1,imp%nimp
       ! so we are strictly between 0 and 1
       ! for numerical reasons
-      impelec = 1.q0 &
-        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      if (.not. imp%Band(iimp)) then
+        ! for impurity level
+        impelec = 1.q0 &
+          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
 
-      imphole = 1.q0 &
-        / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
+        imphole = 1.q0 &
+          / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
 
-      ! here we apply the signs and the weights (density)
-      if (imphole > impelec) then
-        sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
+        ! here we apply the signs and the weights (density)
+        if (imphole > impelec) then
+          sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
+        else
+          sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
+        endif
       else
-        sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
+        ! for impurity bands
+        densii = imp%Density(iimp) / 1001.d0
+        do ii=-500,500
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          impelec = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+
+          imphole = 1.q0 &
+            / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(eneii-mu)))
+
+          ! here we apply the signs and the weights (density)
+          if (imphole > impelec) then
+            sumelec = sumelec - impelec*imp%Dopant(iimp)*densii
+          else
+            sumhole = sumhole - imphole*imp%Dopant(iimp)*densii
+          endif
+        enddo
       endif
 
     enddo

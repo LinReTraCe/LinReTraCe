@@ -25,6 +25,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   integer :: pst, empty
 
   real(8), allocatable :: impurityinfo(:)
+  character(len=256), allocatable :: impdescription(:)
   integer :: nshape(1)
 
   logical :: found
@@ -156,6 +157,8 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       allocate(imp%Density(imp%nimp))
       allocate(imp%Energy(imp%nimp))
       allocate(imp%Degeneracy(imp%nimp))
+      allocate(imp%Bandwidth(imp%nimp))
+      allocate(imp%Band(imp%nimp))
     else if (imp%nimp == 0) then
       algo%lImpurities = .false.
     else
@@ -208,6 +211,16 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   endif
 
   if (search_start .gt. 0) then ! found
+    allocate(impdescription(0:7))
+    impdescription(0) = 'Absolute'
+    impdescription(1) = 'Valence'
+    impdescription(2) = 'Conduction'
+    impdescription(3) = 'Percentage'
+    impdescription(4) = 'AbsoluteBand'
+    impdescription(5) = 'ValenceBand'
+    impdescription(6) = 'ConductionBand'
+    impdescription(7) = 'PercentageBand'
+
     do iimp=1,imp%nimp
       write(str_imp,'(A2,I1,A2)') '[[',iimp,']]'
       call subgroup_find(str_imp, search_start, search_end, subsearch_start, subsearch_end)
@@ -218,43 +231,69 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         call stop_with_message(stderr,'More Impurity descriptions than provided in NImp')
       endif
 
-      call floatn_find('Absolute', impurityinfo, subsearch_start, subsearch_end, found)
-      if (.not. found) then
-        call floatn_find('Valence', impurityinfo, subsearch_start, subsearch_end, found)
+      ! determine position and type of impurity
+
+      do i=0,7
+        call floatn_find(impdescription(i), impurityinfo, subsearch_start, subsearch_end, found)
         if (.not. found) then
-          call floatn_find('Conduction', impurityinfo, subsearch_start, subsearch_end, found)
-          if (.not. found) then
-            call floatn_find('Percentage', impurityinfo, subsearch_start, subsearch_end, found)
-            if (.not. found) then
-              call stop_with_message(stderr, 'Impurity Description not found')
-            else
-              imp%inputtype(iimp) = 3
-            endif
-          else
-            imp%inputtype(iimp) = 2
-          endif
-        else
-          imp%inputtype(iimp) = 1
+          cycle
         endif
-      else
-        imp%inputtype(iimp) = 0
+        write(stdout,*) i
+        imp%inputtype(iimp) = mod(i,4)
+        if (i >= 4) then
+          imp%Band(iimp) = .true.
+        else
+          imp%Band(iimp) = .false.
+        endif
+        exit
+      enddo
+
+      write(stdout,*) imp%Band(iimp)
+
+      ! if we didn't find an identifier
+      if (.not. found) then
+        call stop_with_message(stderr, 'Impurity Description not found')
       endif
 
+      ! the saved information
       nshape = shape(impurityinfo)
-      if (imp%inputtype(iimp) == 0) then
-        if (nshape(1) /= 4) then
-          call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
+
+      if (.not. imp%Band(iimp)) then
+      ! impurity levels -> bandwidth == 0
+        if (imp%inputtype(iimp) == 0) then
+          if (nshape(1) /= 4) then
+            call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
+          else
+            imp%inputspin(iimp) = 1 ! default to spin up
+            ! we don't really need a spin descprtion because this is an absolute energy level
+          endif
         else
-          imp%inputspin(iimp) = 1 ! default to spin up
-          ! we don't really need a spin descprtion because this is an absolute energy level
+          if (nshape(1) == 4) then
+            imp%inputspin(iimp) = 1 ! default to spin up
+          else if (nshape(1) == 5) then
+            imp%inputspin(iimp) = impurityinfo(5)
+          else
+            call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
+          endif
         endif
+        imp%Bandwidth(iimp) = 0.d0
       else
-        if (nshape(1) == 4) then
-          imp%inputspin(iimp) = 1 ! default to spin up
-        else if (nshape(1) == 5) then
-          imp%inputspin(iimp) = impurityinfo(5)
+      ! impurity bands -> bandwidth finite
+        if (imp%inputtype(iimp) == 0) then
+          if (nshape(1) /= 5) then
+            call stop_with_message(stderr, 'Absolute impurity band description has exactly 5 parameters')
+          else
+            imp%inputspin(iimp) = 1 ! default to spin up
+            ! we don't really need a spin descprtion because this is an absolute energy level
+          endif
         else
-          call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
+          if (nshape(1) == 5) then
+            imp%inputspin(iimp) = 1 ! default to spin up
+          else if (nshape(1) == 6) then
+            imp%inputspin(iimp) = impurityinfo(5)
+          else
+            call stop_with_message(stderr, 'Relative impurity band description have 5 or 6 parameters')
+          endif
         endif
       endif
 
@@ -265,9 +304,17 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       endif
       imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
       imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
-      imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
+
+      if (.not. imp%Band(iimp)) then
+        imp%Bandwidth(iimp)  = 0.d0
+        imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
+      else
+        imp%Bandwidth(iimp)  = impurityinfo(4)
+        imp%Degeneracy(iimp) = impurityinfo(5)
+      endif
       deallocate(impurityinfo)
     enddo
+    deallocate(impdescription)
   endif
 
   ! note here: the adjustment for the energy level

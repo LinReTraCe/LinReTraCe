@@ -10,10 +10,10 @@ module Mlookup
   character(len=256), allocatable :: file_temp(:), file_save(:)
   ! auxiliary variables
   integer :: i,j,pst
-  character(len=256) :: str_temp, str_split
+  character(len=256) :: str_temp, str_split, str_test
 
   public  :: lines, cmnt, separator, multseparator, file_temp, file_save
-  private :: i,j,pst, str_temp, str_split
+  private :: i,j,pst, str_temp, str_split, str_test
 
   contains
 
@@ -25,11 +25,17 @@ module Mlookup
 
     found = .false.
     do i=search_start,search_end
-      if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
+      if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then ! rough scan
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        save_string=trim(adjustl(str_temp(pst+1:)))
-        found = .true.
+        if (pst > 0) then ! found the separator
+          str_test    = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          save_string = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            found = .true.
+            exit
+          endif
+        endif
       endif
     enddo
   end subroutine string_find
@@ -45,38 +51,80 @@ module Mlookup
       if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        read(str_temp,*) save_int
-        found = .true.
+        if (pst > 0) then ! found the separator
+          str_test = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          str_temp = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            read(str_temp,*) save_int
+            found = .true.
+            exit
+          endif
+        endif
       endif
     enddo
   end subroutine int_find
 
-  subroutine int3_find(search_string, save_int1, save_int2, save_int3, search_start, search_end, found)
-    character(*), intent(in)  :: search_string
-    integer, intent(inout) :: save_int1, save_int2, save_int3 ! keep default values
+  subroutine intn_find(search_string, int_array, search_start, search_end, found)
+    character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
+    integer, intent(inout), allocatable :: int_array(:)
     logical, intent(out) :: found
+
+    integer :: cnt
+    character(len=256) :: str_original
+    character(len=256) :: str_2save
 
     found = .false.
     do i=search_start,search_end
       if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        pst=scan(str_temp,multseparator)
-        str_split=trim(adjustl(str_temp(:pst-1)))
-        read(str_split,*) save_int1
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        pst=scan(str_temp,multseparator)
-        str_split=trim(adjustl(str_temp(:pst-1)))
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        read(str_split,*) save_int2
-        read(str_temp,*) save_int3
-        found = .true.
+
+        if (pst > 0) then ! found the separator
+          str_test = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          str_temp = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            str_original = str_temp
+
+            ! we count the number of coefficients
+            ! this behaves quite weirdly because of the empty space scan of an empty string
+            ! definitely works as intended
+            cnt = 0
+            do
+              pst=scan(str_temp,multseparator)
+              if (pst == 1) then ! we find the empty space in an empty string at the first position
+                exit
+              else
+                cnt = cnt + 1
+                str_temp = trim(adjustl(str_temp(pst+1:)))
+              endif
+            enddo
+
+            allocate(int_array(cnt))
+
+            ! now that we know the number of floats we want to find
+            ! we simply reset the string to its original content
+            ! and do the same scan
+            str_temp = str_original ! reset
+            cnt = 1
+            do
+              pst=scan(str_temp,multseparator)
+              if (pst == 1) then
+                exit
+              else
+                str_2save = trim(adjustl(str_temp(:pst-1)))
+                read(str_2save,*) int_array(cnt)
+                str_temp = trim(adjustl(str_temp(pst+1:)))
+                cnt = cnt + 1
+              endif
+            enddo
+
+            found = .true.
+          endif
+        endif
       endif
     enddo
-  end subroutine int3_find
+  end subroutine intn_find
 
   subroutine float_find(search_string, save_float, search_start, search_end, found)
     character(*), intent(in)  :: search_string
@@ -89,38 +137,18 @@ module Mlookup
       if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        read(str_temp,*) save_float
-        found = .true.
+        if (pst > 0) then ! found the separator
+          str_test = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          str_temp = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            read(str_temp,*) save_float
+            found = .true.
+            exit
+          endif
+        endif
       endif
     enddo
   end subroutine float_find
-
-  subroutine float3_find(search_string, float_int1, save_float2, save_float3, search_start, search_end, found)
-    character(*), intent(in)  :: search_string
-    real(8), intent(inout) :: float_int1, save_float2, save_float3 ! keep default values
-    integer, intent(in) :: search_start, search_end
-    logical, intent(out) :: found
-
-    found = .false.
-    do i=search_start,search_end
-      if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
-        str_temp=file_save(i)
-        pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        pst=scan(str_temp,multseparator)
-        str_split=trim(adjustl(str_temp(:pst-1)))
-        read(str_split,*) float_int1
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        pst=scan(str_temp,multseparator)
-        str_split=trim(adjustl(str_temp(:pst-1)))
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        read(str_split,*) save_float2
-        read(str_temp,*) save_float3
-        found = .true.
-      endif
-    enddo
-  end subroutine float3_find
 
   subroutine floatn_find(search_string, float_array, search_start, search_end, found)
     character(*), intent(in) :: search_string
@@ -137,43 +165,49 @@ module Mlookup
       if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        str_original = str_temp
 
-        ! we count the number of coefficients
-        ! this behaves quite weirdly because of the empty space scan of an empty string
-        ! definitely works as intended
-        cnt = 0
-        do
-          pst=scan(str_temp,multseparator)
-          if (pst == 1) then ! we find the empty space in an empty string at the first position
-            exit
-          else
-            cnt = cnt + 1
-            str_temp = trim(adjustl(str_temp(pst+1:)))
+        if (pst > 0) then ! found the separator
+          str_test = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          str_temp = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            str_original = str_temp
+
+            ! we count the number of coefficients
+            ! this behaves quite weirdly because of the empty space scan of an empty string
+            ! definitely works as intended
+            cnt = 0
+            do
+              pst=scan(str_temp,multseparator)
+              if (pst == 1) then ! we find the empty space in an empty string at the first position
+                exit
+              else
+                cnt = cnt + 1
+                str_temp = trim(adjustl(str_temp(pst+1:)))
+              endif
+            enddo
+
+            allocate(float_array(cnt))
+
+            ! now that we know the number of floats we want to find
+            ! we simply reset the string to its original content
+            ! and do the same scan
+            str_temp = str_original ! reset
+            cnt = 1
+            do
+              pst=scan(str_temp,multseparator)
+              if (pst == 1) then
+                exit
+              else
+                str_2save = trim(adjustl(str_temp(:pst-1)))
+                read(str_2save,*) float_array(cnt)
+                str_temp = trim(adjustl(str_temp(pst+1:)))
+                cnt = cnt + 1
+              endif
+            enddo
+
+            found = .true.
           endif
-        enddo
-
-        allocate(float_array(cnt))
-
-        ! now that we know the number of floats we want to find
-        ! we simply reset the string to its original content
-        ! and do the same scan
-        str_temp = str_original ! reset
-        cnt = 1
-        do
-          pst=scan(str_temp,multseparator)
-          if (pst == 1) then
-            exit
-          else
-            str_2save = trim(adjustl(str_temp(:pst-1)))
-            read(str_2save,*) float_array(cnt)
-            str_temp = trim(adjustl(str_temp(pst+1:)))
-            cnt = cnt + 1
-          endif
-        enddo
-
-        found = .true.
+        endif
       endif
     enddo
   end subroutine floatn_find
@@ -189,9 +223,15 @@ module Mlookup
       if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
         str_temp=file_save(i)
         pst=scan(str_temp,separator)
-        str_temp=trim(adjustl(str_temp(pst+1:)))
-        read(str_temp,*) save_bool
-        found = .true.
+        if (pst > 0) then ! found the separator
+          str_test = trim(adjustl(str_temp(:pst-1))) ! left side of separator
+          str_temp = trim(adjustl(str_temp(pst+1:))) ! right side of separator
+          if (trim(str_test) == trim(search_string)) then ! detailed comparison
+            read(str_temp,*) save_bool
+            found = .true.
+            exit
+          endif
+        endif
       endif
     enddo
   end subroutine bool_find
