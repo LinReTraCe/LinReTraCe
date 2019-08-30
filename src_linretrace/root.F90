@@ -458,7 +458,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     ! -> avoidance of artifical roots
     ! -> results in a smooth chemical potential
 
-    dmu = edisp%gap_min/25.q0
+    dmu = edisp%gap_min/100.q0
     mu1 = mu_qp
     mu2 = mu_qp
     iit = 1

@@ -411,8 +411,8 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
     endif
   endif
 
+  call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
   if (algo%lImpurities) then
-    call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
     do iimp = 1, imp%nimp
       write(string,'("/.quantities/impurities/imp-",I3.3,"/energy")') iimp
       call hdf5_write_data(ifile, string, imp%Energy(iimp))
@@ -422,6 +422,8 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
       call hdf5_write_data(ifile, string, imp%Degeneracy(iimp))
       write(string,'("/.quantities/impurities/imp-",I3.3,"/dopant")') iimp
       call hdf5_write_data(ifile, string, imp%Dopant(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/width")') iimp
+      call hdf5_write_data(ifile, string, imp%Bandwidth(iimp))
     enddo
   endif
 
