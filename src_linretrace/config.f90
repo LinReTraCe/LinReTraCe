@@ -248,7 +248,11 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         imp%Bandwidth(iimp) = 0.d0
         imp%Band(iimp) = .false.
       else
-        imp%Band(iimp) = .true.
+        if (imp%Bandwidth(iimp) == 0.d0) then
+          imp%Band(iimp) = .false.
+        else
+          imp%Band(iimp) = .true.
+        endif
       endif
 
       ! the saved information
