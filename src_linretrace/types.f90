@@ -94,6 +94,9 @@ module Mtypes
       ! 1: relative from top of the valence band (+ -> higher)
       ! 2: relative from bottom of conduction band (+ -> lower)
       ! 3: percentage of gap -> added to the top of the valence band
+    logical, allocatable :: Band(:) ! True if band - False if Level
+    real(8), allocatable :: Bandwidth(:)
+
     real(8), allocatable :: Dopant(:)
     real(8), allocatable :: Density(:)
     real(8), allocatable :: Energy(:)

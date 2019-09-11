@@ -25,6 +25,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   integer :: pst, empty
 
   real(8), allocatable :: impurityinfo(:)
+  character(len=256), allocatable :: impdescription(:)
   integer :: nshape(1)
 
   logical :: found
@@ -156,6 +157,8 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       allocate(imp%Density(imp%nimp))
       allocate(imp%Energy(imp%nimp))
       allocate(imp%Degeneracy(imp%nimp))
+      allocate(imp%Bandwidth(imp%nimp))
+      allocate(imp%Band(imp%nimp))
     else if (imp%nimp == 0) then
       algo%lImpurities = .false.
     else
@@ -208,6 +211,12 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   endif
 
   if (search_start .gt. 0) then ! found
+    allocate(impdescription(0:3))
+    impdescription(0) = 'Absolute'
+    impdescription(1) = 'Valence'
+    impdescription(2) = 'Conduction'
+    impdescription(3) = 'Percentage'
+
     do iimp=1,imp%nimp
       write(str_imp,'(A2,I1,A2)') '[[',iimp,']]'
       call subgroup_find(str_imp, search_start, search_end, subsearch_start, subsearch_end)
@@ -218,29 +227,33 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         call stop_with_message(stderr,'More Impurity descriptions than provided in NImp')
       endif
 
-      call floatn_find('Absolute', impurityinfo, subsearch_start, subsearch_end, found)
-      if (.not. found) then
-        call floatn_find('Valence', impurityinfo, subsearch_start, subsearch_end, found)
+      ! determine position and type of impurity
+
+      do i=0,3
+        call floatn_find(impdescription(i), impurityinfo, subsearch_start, subsearch_end, found)
         if (.not. found) then
-          call floatn_find('Conduction', impurityinfo, subsearch_start, subsearch_end, found)
-          if (.not. found) then
-            call floatn_find('Percentage', impurityinfo, subsearch_start, subsearch_end, found)
-            if (.not. found) then
-              call stop_with_message(stderr, 'Impurity Description not found')
-            else
-              imp%inputtype(iimp) = 3
-            endif
-          else
-            imp%inputtype(iimp) = 2
-          endif
-        else
-          imp%inputtype(iimp) = 1
+          cycle
         endif
-      else
-        imp%inputtype(iimp) = 0
+        imp%inputtype(iimp) = i
+        exit
+      enddo
+
+      ! if we didn't find an identifier
+      if (.not. found) then
+        call stop_with_message(stderr, 'Impurity Description not found')
       endif
 
+      call float_find('Bandwidth', imp%Bandwidth(iimp), subsearch_start, subsearch_end, found)
+      if (.not. found) then
+        imp%Bandwidth(iimp) = 0.d0
+        imp%Band(iimp) = .false.
+      else
+        imp%Band(iimp) = .true.
+      endif
+
+      ! the saved information
       nshape = shape(impurityinfo)
+
       if (imp%inputtype(iimp) == 0) then
         if (nshape(1) /= 4) then
           call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
@@ -268,6 +281,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
       deallocate(impurityinfo)
     enddo
+    deallocate(impdescription)
   endif
 
   ! note here: the adjustment for the energy level
@@ -299,6 +313,13 @@ subroutine check_config(algo)
     inquire (file=trim(adjustl(algo%input_scattering)), exist=there)
     if (.not. there) then
       call stop_with_message(stderr, "Can not find the ScatteringFile")
+    endif
+  endif
+
+  if (algo%lOldmu) then
+    inquire (file=trim(adjustl(algo%old_output_file)), exist=there)
+    if (.not. there) then
+      call stop_with_message(stderr, "Can not find the OldOutput file")
     endif
   endif
 

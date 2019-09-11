@@ -169,7 +169,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
-    kmesh%nkp = hdf5_get_number_groups(ifile, "/up/kPoint")
     if (hdf5_group_exists(ifile, "up/derivatives") .and. &
         hdf5_group_exists(ifile, "up/curvatures")) then
       edisp%lDerivatives = .true.
@@ -177,7 +176,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
       edisp%lDerivatives = .false.
     endif
   else
-    kmesh%nkp = hdf5_get_number_groups(ifile, "/kPoint")
     if (hdf5_group_exists(ifile, "/kPoint/derivatives") .and. &
         hdf5_group_exists(ifile, "/kPoint/curvatures")) then
       edisp%lDerivatives = .true.
@@ -413,8 +411,8 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
     endif
   endif
 
+  call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
   if (algo%lImpurities) then
-    call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
     do iimp = 1, imp%nimp
       write(string,'("/.quantities/impurities/imp-",I3.3,"/energy")') iimp
       call hdf5_write_data(ifile, string, imp%Energy(iimp))
@@ -424,6 +422,8 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
       call hdf5_write_data(ifile, string, imp%Degeneracy(iimp))
       write(string,'("/.quantities/impurities/imp-",I3.3,"/dopant")') iimp
       call hdf5_write_data(ifile, string, imp%Dopant(iimp))
+      write(string,'("/.quantities/impurities/imp-",I3.3,"/width")') iimp
+      call hdf5_write_data(ifile, string, imp%Bandwidth(iimp))
     enddo
   endif
 

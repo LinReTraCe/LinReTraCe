@@ -249,9 +249,10 @@ program main
     if (algo%lImpurities) then
       write(stdout,*) '  impurity levels: ', imp%nimp
       write(stdout,*) '    ______________________________________________'
-      write(stdout,*) '    iimp, dopant, density, energy [eV], degeneracy'
+      write(stdout,*) '    iimp, dopant, density, energy [eV], width [eV], degeneracy'
       do iimp = 1,imp%nimp
-        write(stdout,'(2X,I5,I5,3F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), imp%Energy(iimp), imp%Degeneracy(iimp)
+        write(stdout,'(2X,I5,I5,4F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), &
+                                           imp%Energy(iimp), imp%Bandwidth(iimp), imp%Degeneracy(iimp)
       enddo
     endif
     write(stdout,*)
