@@ -26,7 +26,7 @@ program main
   type(response_dp) :: resp_inter
   type(response_dp) :: resp_inter_Boltzmann
 
-  ! type(response_qp) :: qresp_intra
+  type(response_qp) :: qresp_intra
   ! type(response_qp) :: qresp_intra_Boltzmann
   ! type(response_qp) :: qresp_inter
   ! type(response_qp) :: qresp_inter_Boltzmann
@@ -168,10 +168,12 @@ program main
     endif
   endif
 
+
   ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
+    call allocate_response(algo, edisp, qresp_intra)
     allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   endif
 
@@ -404,6 +406,7 @@ program main
 
     if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
       call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+      call initresp_qp(algo, qresp_intra)
     endif
 
     call cpu_time(tfinish)
@@ -431,6 +434,12 @@ program main
       call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
                          resp_intra, resp_intra_Boltzmann, &
                          resp_inter, resp_inter_Boltzmann)
+
+      ! quad precision for intra-band contribution
+      ! test
+      if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+        call response_intra_km_Q(qresp_intra, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+      endif
     enddo
 
     call cpu_time(tfinish)
@@ -454,6 +463,10 @@ program main
       if (algo%lBoltzmann) then
         call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
       endif
+    endif
+
+    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+      call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
     endif
 
     ! output the renormalized energies defined by Z*(ek - mu)
