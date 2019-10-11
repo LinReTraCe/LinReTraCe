@@ -69,7 +69,10 @@ program main
 
   call mpi_initialize()
   if (myid.eq.master) call main_greeting(stdout)
+
+#ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
+#endif
 
   call read_config(algo, edisp, sct, temp, imp)
   call check_config(algo)
@@ -157,14 +160,14 @@ program main
 
 
   ! allocate the arrays once outside of the main (temperature) loop
-  call allocate_response(algo, edisp, resp_intra)
+  call allocate_response(algo, edisp, temp, resp_intra)
   if (algo%lBoltzmann) then
-    call allocate_response(algo, edisp, resp_intra_Boltzmann)
+    call allocate_response(algo, edisp, temp, resp_intra_Boltzmann)
   endif
   if (algo%lInterbandquantities) then
-    call allocate_response(algo, edisp, resp_inter)
+    call allocate_response(algo, edisp, temp, resp_inter)
     if (algo%lBoltzmann) then
-      call allocate_response(algo, edisp, resp_inter_Boltzmann)
+      call allocate_response(algo, edisp, temp, resp_inter_Boltzmann)
     endif
   endif
 
@@ -173,7 +176,7 @@ program main
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
   if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
-    call allocate_response(algo, edisp, qresp_intra)
+    call allocate_response(algo, edisp, temp, qresp_intra)
     allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   endif
 
@@ -300,6 +303,8 @@ program main
     iTend   = temp%nT
     iTstep  = 1
   endif
+
+  temp%Tstep = iTstep
 
   do iT=iTstart,iTend,iTstep
     ! run time information

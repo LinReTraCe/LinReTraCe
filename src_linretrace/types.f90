@@ -117,6 +117,7 @@ module Mtypes
 
   type temperature
     integer :: nT                  ! number of points in the temperature window
+    integer :: Tstep               ! +1 or -1
     real(8) :: Tmin                ! bottom of the temperature window
     real(8) :: Tmax                ! top of the temperature window
     real(8) :: dT                  ! temperature spacing
@@ -170,6 +171,14 @@ module Mtypes
     complex(8), allocatable :: aB_sum(:,:,:)
     complex(8), allocatable :: x_sum(:,:,:)
     complex(8), allocatable :: xB_sum(:,:,:)
+
+    ! gather arrays for all T-points of the band and k-summed quantities
+    complex(8), allocatable :: s_sum_temp(:,:,:,:)
+    complex(8), allocatable :: sB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: a_sum_temp(:,:,:,:)
+    complex(8), allocatable :: aB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: x_sum_temp(:,:,:,:)
+    complex(8), allocatable :: xB_sum_temp(:,:,:,:)
   end type
 
   type response_qp
@@ -196,6 +205,14 @@ module Mtypes
     complex(16), allocatable :: aB_sum(:,:,:)
     complex(16), allocatable :: x_sum(:,:,:)
     complex(16), allocatable :: xB_sum(:,:,:)
+
+    ! gather arrays for all T-points of the band and k-summed quantities
+    complex(16), allocatable :: s_sum_temp(:,:,:,:)
+    complex(16), allocatable :: sB_sum_temp(:,:,:,:)
+    complex(16), allocatable :: a_sum_temp(:,:,:,:)
+    complex(16), allocatable :: aB_sum_temp(:,:,:,:)
+    complex(16), allocatable :: x_sum_temp(:,:,:,:)
+    complex(16), allocatable :: xB_sum_temp(:,:,:,:)
   end type
 
 end module Mtypes
