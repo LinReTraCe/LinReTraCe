@@ -1723,6 +1723,7 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   integer(hid_t)     :: ifile
 
   ! this sucks
+  ! quadruple response s/a/x array
   real(16), allocatable :: qrsarr(:,:,:) ! to collect the data
   real(16), allocatable :: qraarr(:,:,:)
   real(16), allocatable :: qrxarr(:,:,:)
@@ -1730,6 +1731,7 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   real(16), allocatable :: qiaarr(:,:,:)
   real(16), allocatable :: qixarr(:,:,:)
 
+  ! double complex (z) array
   complex(8),  allocatable :: zdarr(:,:,:) ! for output
 
   integer :: iband, ik, is
@@ -1815,20 +1817,41 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
 
   ! should work=?
   if (myid .eq. master) then
-    write(string,'(I6.6)') info%iT
-    string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sum"
-    zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-    call hdf5_write_data(ifile, string, zdarr)
+    if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+      ! gather the data in the arrays
+      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+      resp%s_sum_temp(:,:,:,info%iT) = zdarr
+      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+      resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
+      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+      resp%x_sum_temp(:,:,:,info%iT) = zdarr
 
-    write(string,'(I6.6)') info%iT
-    string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sum"
-    zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-    call hdf5_write_data(ifile, string, zdarr)
+      ! output at the last temperature step
+      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+        string = "/L0/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%s_sum_temp)
+        string = "/L1/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%a_sum_temp)
+        string = "/L2/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%x_sum_temp)
+      endif
 
-    write(string,'(I6.6)') info%iT
-    string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sum"
-    zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-    call hdf5_write_data(ifile, string, zdarr)
+    else
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sum"
+      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+      call hdf5_write_data(ifile, string, zdarr)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sum"
+      zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
+      call hdf5_write_data(ifile, string, zdarr)
+
+      write(string,'(I6.6)') info%iT
+      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sum"
+      zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
+      call hdf5_write_data(ifile, string, zdarr)
+    endif
   endif
 
   ! if (lBoutput) then

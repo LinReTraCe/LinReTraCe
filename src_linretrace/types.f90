@@ -207,12 +207,13 @@ module Mtypes
     complex(16), allocatable :: xB_sum(:,:,:)
 
     ! gather arrays for all T-points of the band and k-summed quantities
-    complex(16), allocatable :: s_sum_temp(:,:,:,:)
-    complex(16), allocatable :: sB_sum_temp(:,:,:,:)
-    complex(16), allocatable :: a_sum_temp(:,:,:,:)
-    complex(16), allocatable :: aB_sum_temp(:,:,:,:)
-    complex(16), allocatable :: x_sum_temp(:,:,:,:)
-    complex(16), allocatable :: xB_sum_temp(:,:,:,:)
+    ! these have to be double precision not quadruple ( they are for output only)
+    complex(8), allocatable :: s_sum_temp(:,:,:,:)
+    complex(8), allocatable :: sB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: a_sum_temp(:,:,:,:)
+    complex(8), allocatable :: aB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: x_sum_temp(:,:,:,:)
+    complex(8), allocatable :: xB_sum_temp(:,:,:,:)
   end type
 
 end module Mtypes
