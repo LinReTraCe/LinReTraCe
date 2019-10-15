@@ -1211,7 +1211,7 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   allocate(dpresp%a_sum(3,3,edisp%iSpin))
   allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
-  if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+  if (myid.eq.master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
     allocate(dpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(dpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(dpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
@@ -1226,7 +1226,7 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
     allocate(dpresp%aB_sum(3,3,edisp%iSpin))
     allocate(dpresp%xB_sum(3,3,edisp%iSpin))
 
-    if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+    if (myid.eq.master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
       allocate(dpresp%sB_sum_temp(3,3,edisp%iSpin,temp%nT))
       allocate(dpresp%aB_sum_temp(3,3,edisp%iSpin,temp%nT))
       allocate(dpresp%xB_sum_temp(3,3,edisp%iSpin,temp%nT))
@@ -1250,7 +1250,7 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   allocate(qpresp%a_sum(3,3,edisp%iSpin))
   allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
-  if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+  if (myid .eq. master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
     allocate(qpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(qpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(qpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
@@ -1264,7 +1264,7 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
     allocate(qpresp%aB_sum(3,3,edisp%iSpin))
     allocate(qpresp%xB_sum(3,3,edisp%iSpin))
 
-    if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+    if (myid .eq. master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
       allocate(qpresp%sB_sum_temp(3,3,edisp%iSpin,temp%nT))
       allocate(qpresp%aB_sum_temp(3,3,edisp%iSpin,temp%nT))
       allocate(qpresp%xB_sum_temp(3,3,edisp%iSpin,temp%nT))
