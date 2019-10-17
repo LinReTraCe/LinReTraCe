@@ -27,8 +27,8 @@ program main
   type(response_dp) :: resp_inter_Boltzmann
 
   type(response_qp) :: qresp_intra
+  type(response_qp) :: qresp_inter
   ! type(response_qp) :: qresp_intra_Boltzmann
-  ! type(response_qp) :: qresp_inter
   ! type(response_qp) :: qresp_inter_Boltzmann
 
   integer(hid_t)    :: ifile_scatter
@@ -177,6 +177,7 @@ program main
 
   if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
     call allocate_response(algo, edisp, temp, qresp_intra)
+    call allocate_response(algo, edisp, temp, qresp_inter)
     allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   endif
 
@@ -412,6 +413,7 @@ program main
     if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
       call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
       call initresp_qp(algo, qresp_intra)
+      call initresp_qp(algo, qresp_inter)
     endif
 
     call cpu_time(tfinish)
@@ -444,6 +446,7 @@ program main
       ! test
       if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
         call response_intra_km_Q(qresp_intra, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+        call response_inter_km_Q(qresp_inter, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
       endif
     enddo
 
@@ -472,6 +475,7 @@ program main
 
     if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
       call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
+      call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh)
     endif
 
     ! output the renormalized energies defined by Z*(ek - mu)
