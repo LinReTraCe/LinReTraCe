@@ -73,3 +73,5 @@ Debug options:
   Mpi : Output MPI information
   TempReverse : Reverse the temperature loop
   Dmudt : if TempReverse & Fermioccupation & gapped & below certain temperature apply derivative
+  ReduceIO: Buffer the sum output into an array of all temperature steps, output at the end
+  QuadResponse: Calculate the Intra and Interband quantities also in quad precision.
