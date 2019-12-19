@@ -2,7 +2,7 @@ FC = gfortran
 FCDG = gfortran
 
 # FFLAGS = -O3 -funroll-loops -ffast-math #-march=native -flto -fstack-arrays  # gfortran production run
-FFLAGS = -O3 # -funroll-loops -ffast-math # -fbacktrace -fcheck=all
+FFLAGS = -O3 # -funroll-loops -ffast-math -fbacktrace -fcheck=all
 FPPFLAGS = # -DMPI
 
 LAPACK= -L/home/mpickem/lib/lapack/lapack-3.7.1/ -llapack

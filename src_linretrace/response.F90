@@ -776,6 +776,24 @@ subroutine response_peierls_weights(resp, edisp, info)
                  *edisp%band_d2k(4,iband,info%ik,:) &
                  -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
                  *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(2,iband,info%ik,:))
+
+    resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
   enddo
 end subroutine
 
