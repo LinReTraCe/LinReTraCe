@@ -2055,9 +2055,9 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
       ! gather the data in the arrays
       zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
       resp%s_sum_temp(:,:,:,info%iT) = zdarr
-      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-      resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
-      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+      zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
+      resp%a_sum_temp(:,:,:,info%iT) = zdarr
+      zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
       resp%x_sum_temp(:,:,:,info%iT) = zdarr
 
       ! output at the last temperature step
