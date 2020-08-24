@@ -96,6 +96,10 @@ module Mtypes
       ! 3: percentage of gap -> added to the top of the valence band
     logical, allocatable :: Band(:) ! True if band - False if Level
     real(8), allocatable :: Bandwidth(:)
+    integer, allocatable :: Bandtype(:)
+      ! 0: Box
+      ! 1: Lorentzian
+      ! 2: Gaussian
 
     real(8), allocatable :: Dopant(:)
     real(8), allocatable :: Density(:)

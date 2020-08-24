@@ -28,8 +28,8 @@ program main
 
   type(response_qp) :: qresp_intra
   type(response_qp) :: qresp_inter
-  ! type(response_qp) :: qresp_intra_Boltzmann
-  ! type(response_qp) :: qresp_inter_Boltzmann
+  type(response_qp) :: qresp_intra_Boltzmann
+  type(response_qp) :: qresp_inter_Boltzmann
 
   integer(hid_t)    :: ifile_scatter
   integer(hid_t)    :: ifile_energy
@@ -177,7 +177,16 @@ program main
 
   if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
     call allocate_response(algo, edisp, temp, qresp_intra)
-    call allocate_response(algo, edisp, temp, qresp_inter)
+    if (algo%lInterbandquantities) then
+      call allocate_response(algo, edisp, temp, qresp_inter)
+    endif
+
+    if (algo%lBoltzmann) then
+      call allocate_response(algo, edisp, temp, qresp_intra_Boltzmann)
+      if (algo%lInterbandquantities) then
+        call allocate_response(algo, edisp, temp, qresp_inter_Boltzmann)
+      endif
+    endif
     allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
   endif
 
@@ -239,7 +248,7 @@ program main
       write(stdout,*) '  scissors: ', edisp%scissors
     endif
     if (.not. algo%muSearch .and. .not. algo%lOldmu) then
-      write(stdout,*) '  constant chemical potential: ', edisp%efer
+      write(stdout,*) '  constant chemical potential: ', edisp%mu
     else if (algo%lOldmu) then
       write(stdout,*) '  old chemical potentials from file: ', trim(adjustl(algo%old_output_file))
     endif
@@ -413,7 +422,15 @@ program main
     if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
       call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
       call initresp_qp(algo, qresp_intra)
-      call initresp_qp(algo, qresp_inter)
+      if (algo%lInterBandQuantities) then
+        call initresp_qp(algo, qresp_inter)
+      endif
+      if (algo%lBoltzmann) then
+        call initresp_qp(algo, qresp_intra_Boltzmann)
+        if (algo%lInterBandQuantities) then
+          call initresp_qp(algo, qresp_inter_Boltzmann)
+        endif
+      endif
     endif
 
     call cpu_time(tfinish)
@@ -446,7 +463,15 @@ program main
       ! test
       if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
         call response_intra_km_Q(qresp_intra, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
-        call response_inter_km_Q(qresp_inter, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+        if (algo%lBoltzmann) then
+          call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, mu(iT), edisp, sct, kmesh, algo, info)
+        endif
+        if (algo%lInterBandQuantities) then
+          call response_inter_km_Q(qresp_inter, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+          if (algo%lBoltzmann) then
+            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, mu(iT), edisp, sct, kmesh, algo, info)
+          endif
+        endif
       endif
     enddo
 
@@ -475,7 +500,16 @@ program main
 
     if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
       call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
-      call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh)
+      if (algo%lBoltzmann) then
+        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+      endif
+
+      if (algo%lInterbandQuantities) then
+        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh)
+        if (algo%lBoltzmann) then
+          call response_h5_output_Q(qresp_inter_Boltzmann, "interQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+        endif
+      endif
     endif
 
     ! output the renormalized energies defined by Z*(ek - mu)

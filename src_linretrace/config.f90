@@ -26,6 +26,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
 
   real(8), allocatable :: impurityinfo(:)
   character(len=256), allocatable :: impdescription(:)
+  character(len=256), allocatable :: imptype(:)
   integer :: nshape(1)
 
   logical :: found
@@ -158,6 +159,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       allocate(imp%Energy(imp%nimp))
       allocate(imp%Degeneracy(imp%nimp))
       allocate(imp%Bandwidth(imp%nimp))
+      allocate(imp%Bandtype(imp%nimp))
       allocate(imp%Band(imp%nimp))
     else if (imp%nimp == 0) then
       algo%lImpurities = .false.
@@ -216,6 +218,10 @@ subroutine read_config(algo, edisp, sct, temp, imp)
     impdescription(1) = 'Valence'
     impdescription(2) = 'Conduction'
     impdescription(3) = 'Percentage'
+    allocate(imptype(0:2))
+    imptype(0) = 'Box'
+    imptype(1) = 'Lorentzian'
+    imptype(2) = 'Gaussian'
 
     do iimp=1,imp%nimp
       write(str_imp,'(A2,I1,A2)') '[[',iimp,']]'
@@ -256,6 +262,21 @@ subroutine read_config(algo, edisp, sct, temp, imp)
         endif
       endif
 
+      call string_find('Bandtype', str_temp, subsearch_start, subsearch_end, found)
+      if (.not. found) then
+        imp%Bandtype(iimp) = 0 ! box
+      else
+        imp%Bandtype(iimp) = -1
+        do i=0,2
+          if (index(trim(imptype(i)),trim(str_temp)) .ne. 0) then
+            imp%Bandtype(iimp) = i
+          endif
+        enddo
+        if (imp%Bandtype(iimp) == -1) then
+          call stop_with_message(stderr, 'Bandtype Description not available')
+        endif
+      endif
+
       ! the saved information
       nshape = shape(impurityinfo)
 
@@ -287,6 +308,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
       deallocate(impurityinfo)
     enddo
     deallocate(impdescription)
+    deallocate(imptype)
   endif
 
   ! note here: the adjustment for the energy level

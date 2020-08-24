@@ -144,7 +144,7 @@ module Mfermi
     implicit none
     real(16), intent(in) :: eps,beta
     real(16) :: polygamma2fermi_qp
-    polygamma2fermi_qp = piQ**2 / (2.d0 * cosh(beta*eps/2.d0)**2)
+    polygamma2fermi_qp = piQ**2 / (2.q0 * cosh(beta*eps/2.q0)**2)
   end function polygamma2fermi_qp
 
 end module Mfermi
