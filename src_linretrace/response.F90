@@ -1244,15 +1244,15 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/fullM"
+        string = trim(string) // "/L0M/" // trim(adjustl(gname)) // "/full"
         call hdf5_write_data(ifile, string, resp%sB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/fullM"
+        string = trim(string) // "/L1M/" // trim(adjustl(gname)) // "/full"
         call hdf5_write_data(ifile, string, resp%aB_gather)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/fullM"
+        string = trim(string) // "/L2M/" // trim(adjustl(gname)) // "/full"
         call hdf5_write_data(ifile, string, resp%xB_gather)
 
       endif
@@ -1294,8 +1294,8 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
     resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)
-    resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs)
+    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
 
     if (myid .eq. master) then
 
@@ -1307,24 +1307,24 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
         ! output at the last temperature step
         if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
-          string = "/L0/" // trim(adjustl(gname)) // "/sumM"
+          string = "/L0M/" // trim(adjustl(gname)) // "/sum"
           call hdf5_write_data(ifile, string, resp%sB_sum_temp)
-          string = "/L1/" // trim(adjustl(gname)) // "/sumM"
+          string = "/L1M/" // trim(adjustl(gname)) // "/sum"
           call hdf5_write_data(ifile, string, resp%aB_sum_temp)
-          string = "/L2/" // trim(adjustl(gname)) // "/sumM"
+          string = "/L2M/" // trim(adjustl(gname)) // "/sum"
           call hdf5_write_data(ifile, string, resp%xB_sum_temp)
         endif
       else
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumM"
+        string = trim(string) // "/L0M/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%sB_sum)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumM"
+        string = trim(string) // "/L1M/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%aB_sum)
 
         write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumM"
+        string = trim(string) // "/L2M/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%xB_sum)
       endif
     endif
