@@ -151,7 +151,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
                                     * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
-                                  - real(PolyGamma(1,:,info%ik,:)) * 3.d0
+                                  + real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
     resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
