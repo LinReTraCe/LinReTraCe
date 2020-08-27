@@ -1804,7 +1804,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ**2 / (4.d0 * piQ**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
                                     * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
-                                  - real(PolyGamma(1,:,info%ik,:)) * 3.d0
+                                  + real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
     resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
@@ -2257,12 +2257,12 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   qixarr = aimag(resp%x_sum)
 #endif
 
-  qrsarr = qrsarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
-  qisarr = qisarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
-  qraarr = qraarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
-  qiaarr = qiaarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
-  qrxarr = qrxarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
-  qixarr = qixarr * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qrsarr = qrsarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qisarr = qisarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qraarr = qraarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qiaarr = qiaarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qrxarr = qrxarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+  qixarr = qixarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
 
   ! should work=?
   if (myid .eq. master) then
