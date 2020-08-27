@@ -953,6 +953,9 @@ subroutine response_peierls_weights(resp, edisp, info)
   ! this is only with Bfield in z-direction
   ! TODO: complete ... arbitrary direction
   ! TODO: FIX THIS
+  ! its sigma_alpha beta gamma
+  ! alpha beta gamma must be different -- gamma is direction of B-field [3]
+  ! at the moment only 1,2 and 2,1 makes sense here
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
     resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
@@ -967,11 +970,11 @@ subroutine response_peierls_weights(resp, edisp, info)
                  -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
                  *edisp%band_d2k(1,iband,info%ik,:))
 
-    resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
 
 
     resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
