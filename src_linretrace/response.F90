@@ -525,9 +525,9 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
   deallocate(enrgy)
 
   call response_intra_optical_weights_Q(resp, edisp, info)
-  ! if (algo%lBfield) then
-  !   call response_peierls_weights(resp, edisp, info)
-  ! endif
+  if (algo%lBfield) then
+    call response_peierls_weights_Q(resp, edisp, info)
+  endif
 
 end subroutine response_intra_Boltzmann_km_Q
 
@@ -939,6 +939,82 @@ end subroutine response_intra_optical_weights
 subroutine response_peierls_weights(resp, edisp, info)
   implicit none
   type (response_dp) :: resp
+
+  type(energydisp)   :: edisp
+  type(runinfo)      :: info
+
+  integer :: index1(9), index2(9)
+  integer :: iband, idir
+
+  index1 = (/1,2,3,1,1,2,1,1,2/)
+  index2 = (/1,2,3,2,3,3,2,3,3/)
+
+  ! for the time being
+  ! this is only with Bfield in z-direction
+  ! TODO: complete ... arbitrary direction
+  ! TODO: FIX THIS
+
+  do iband = edisp%nbopt_min, edisp%nbopt_max
+    resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(2,iband,info%ik,:))
+
+    resp%sB_full(2,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+
+    resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(2,iband,info%ik,:))
+
+    resp%aB_full(2,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%aB_full(1,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(2,iband,info%ik,:))
+
+    resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+
+    resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:))
+  enddo
+end subroutine
+
+subroutine response_peierls_weights_Q(resp, edisp, info)
+  implicit none
+  type (response_qp) :: resp
 
   type(energydisp)   :: edisp
   type(runinfo)      :: info
@@ -1852,10 +1928,9 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
   deallocate(enrgy)
 
   call response_intra_optical_weights_Q(resp, edisp, info)
-  ! if (algo%lBfield) then
-  !   call response_peierls_weights(resp, edisp, info)
-  ! endif
-
+  if (algo%lBfield) then
+    call response_peierls_weights_Q(resp, edisp, info)
+  endif
 
 end subroutine response_intra_km_Q
 
