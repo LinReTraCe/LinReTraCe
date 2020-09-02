@@ -147,18 +147,18 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
+    resp%sB_full(1,1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta**2 / (4.d0 * pi**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
                                     * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
                                   + real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
-    resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
+    resp%sB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
                                   / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
-    resp%aB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+    resp%aB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * info%beta**2 / (4.d0 * pi**2) &
                                   + aimag(PolyGamma(3,:,info%ik,:)) &
@@ -169,12 +169,12 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                        * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta2p &
                                   +  real(PolyGamma(1,:,info%ik,:)) * 3.d0 * enrgy
 
-    resp%aB_full(1,1,:,:,info%ik) = resp%aB_full(1,1,:,:,info%ik) &
+    resp%aB_full(1,1,1,:,:,info%ik) = resp%aB_full(1,1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta / (16.d0 * pi**4 &
                                   * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
-    resp%xB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+    resp%xB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * info%beta**2 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 - enrgy**2) &
                                        / (4.d0 * pi**2) &
@@ -190,7 +190,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                   -  real(PolyGamma(1,:,info%ik,:)) &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2)
 
-    resp%xB_full(1,1,:,:,info%ik) = resp%xB_full(1,1,:,:,info%ik) &
+    resp%xB_full(1,1,1,:,:,info%ik) = resp%xB_full(1,1,1,:,:,info%ik) &
                                   * (-1.d0) * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
                                   / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
@@ -459,13 +459,13 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
+    resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
                                     * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
                                     / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
-    resp%aB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy
+    resp%aB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy
 
-    resp%xB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy**2
+    resp%xB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy**2
 
   endif
 
@@ -512,13 +512,13 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
+    resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
                                     * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
                                     / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
-    resp%aB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy
+    resp%aB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy
 
-    resp%xB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) * enrgy**2
+    resp%xB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy**2
 
   endif
 
@@ -949,38 +949,57 @@ subroutine response_peierls_weights(resp, edisp, info)
   index1 = (/1,2,3,1,1,2,1,1,2/)
   index2 = (/1,2,3,2,3,3,2,3,3/)
 
-  ! for the time being
-  ! this is only with Bfield in z-direction
-  ! TODO: complete ... arbitrary direction
-  ! TODO: FIX THIS
-  ! its sigma_alpha beta gamma
-  ! alpha beta gamma must be different -- gamma is direction of B-field [3]
-  ! at the moment only 1,2 and 2,1 makes sense here
-
   do iband = edisp%nbopt_min, edisp%nbopt_max
-    ! resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:))
 
-    ! resp%sB_full(2,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+    ! ATTENTION: 2 1 -> x y since we push this to the hdf5 file where it is transposed
 
-    resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    ! implement this via levi civita, otherwise ...
+
+    ! xyz -> vx * vy * M^-1 yx - vx * vx * M^-1 yy
+    resp%sB_full(3,2,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
               * (edisp%band_dk(4,iband,info%ik,:) &
                  *edisp%band_d2k(4,iband,info%ik,:) &
                  -edisp%band_dk(1,iband,info%ik,:) &
                  *edisp%band_d2k(2,iband,info%ik,:))
 
-    resp%sB_full(2,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    ! yxz -> vy * vy * M^-1 xx - vy * vx * M^-1 xy
+    resp%sB_full(3,1,2,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
               * (edisp%band_dk(2,iband,info%ik,:) &
                  *edisp%band_d2k(1,iband,info%ik,:) &
                  -edisp%band_dk(4,iband,info%ik,:) &
                  *edisp%band_d2k(4,iband,info%ik,:))
+
+    ! ! xzy -> vx * vx * M^-1 zz - vx * vz * M^-1 zx
+    ! resp%sB_full(3,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(3,iband,info%ik,:) &
+    !              -edisp%band_dk(4,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:))
+
+    ! ! zxy -> vz * vx * M^-1 xz - vz * vz * M^-1 xx
+    ! resp%sB_full(1,3,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(4,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(3,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
+
+    ! ! yzx -> vy * vz * M^-1 zy - vy * vy * M^-1 zz
+    ! resp%sB_full(3,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(5,iband,info%ik,:) &
+    !              *edisp%band_d2k(5,iband,info%ik,:) &
+    !              -edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(3,iband,info%ik,:))
+
+
+    ! ! zyx -> vz * vz * M^-1 yy - vz * vy * M^-1 yz
+    ! resp%sB_full(2,3,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(3,iband,info%ik,:) &
+    !              *edisp%band_d2k(2,iband,info%ik,:) &
+    !              -edisp%band_dk(5,iband,info%ik,:) &
+    !              *edisp%band_d2k(5,iband,info%ik,:))
+
+    ! xxz
+
 
     ! resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
     !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
@@ -1046,60 +1065,62 @@ subroutine response_peierls_weights_Q(resp, edisp, info)
   ! TODO: FIX THIS
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
-    resp%sB_full(1,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    ! xyz -> vx * vy * M^-1 yx - vx * vx * M^-1 yy
+    resp%sB_full(3,2,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+              * (edisp%band_dk(4,iband,info%ik,:) &
                  *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+                 -edisp%band_dk(1,iband,info%ik,:) &
                  *edisp%band_d2k(2,iband,info%ik,:))
 
-    resp%sB_full(2,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! yxz -> vy * vy * M^-1 xx - vy * vx * M^-1 xy
+    resp%sB_full(3,1,2,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+              * (edisp%band_dk(2,iband,info%ik,:) &
+                 *edisp%band_d2k(1,iband,info%ik,:) &
+                 -edisp%band_dk(4,iband,info%ik,:) &
+                 *edisp%band_d2k(4,iband,info%ik,:))
 
-    resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
 
 
-    resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(2,iband,info%ik,:))
+    ! resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(2,iband,info%ik,:))
 
-    resp%aB_full(2,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%aB_full(2,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
 
-    resp%aB_full(1,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%aB_full(1,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
 
-    resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(2,iband,info%ik,:))
+    ! resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(2,iband,info%ik,:))
 
-    resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
 
-    resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-              * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:))
+    ! resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
+    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
+    !              *edisp%band_d2k(4,iband,info%ik,:) &
+    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
+    !              *edisp%band_d2k(1,iband,info%ik,:))
   enddo
 end subroutine
 
@@ -1290,13 +1311,13 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     ! conductivity and seebeck coefficient without B-field
     if (algo%lFullOutput) then
       if (myid .eq. master) then
-        allocate(resp%sB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(resp%sB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%sB_gather(1,1,1,1,1))
+        allocate(resp%sB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
-      call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+      call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
@@ -1304,13 +1325,13 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
       if (myid .eq. master) then
-        allocate(resp%aB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(resp%aB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%aB_gather(1,1,1,1,1))
+        allocate(resp%aB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
-      call MPI_gatherv(resp%aB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%aB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+      call MPI_gatherv(resp%aB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%aB_gather, rcounts*29*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
@@ -1318,13 +1339,13 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
       if (myid .eq. master) then
-        allocate(resp%xB_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(resp%xB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%xB_gather(1,1,1,1,1))
+        allocate(resp%xB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
-      call MPI_gatherv(resp%xB_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%xB_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+      call MPI_gatherv(resp%xB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, resp%xB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
@@ -1360,30 +1381,30 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     ! these are already initialized to 0
     do ik = ikstr,ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
-        resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weight(ik)
-        resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_full(:,:,iband,:,ik) * kmesh%weight(ik)
-        resp%xB_sum(:,:,:) = resp%xB_sum(:,:,:) + resp%xB_full(:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%sB_sum(:,:,:,:) = resp%sB_sum(:,:,:,:) + resp%sB_full(:,:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%aB_sum(:,:,:,:) = resp%aB_sum(:,:,:,:) + resp%aB_full(:,:,:,iband,:,ik) * kmesh%weight(ik)
+        resp%xB_sum(:,:,:,:) = resp%xB_sum(:,:,:,:) + resp%xB_full(:,:,:,iband,:,ik) * kmesh%weight(ik)
       enddo
     enddo
 
   ! perform MPI summation
 #ifdef MPI
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 #endif
 
@@ -1395,9 +1416,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
       if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
         ! gather the data in the arrays
-        resp%sB_sum_temp(:,:,:,info%iT) = resp%sB_sum
-        resp%aB_sum_temp(:,:,:,info%iT) = resp%aB_sum
-        resp%xB_sum_temp(:,:,:,info%iT) = resp%xB_sum
+        resp%sB_sum_temp(:,:,:,:,info%iT) = resp%sB_sum
+        resp%aB_sum_temp(:,:,:,:,info%iT) = resp%aB_sum
+        resp%xB_sum_temp(:,:,:,:,info%iT) = resp%xB_sum
 
         ! output at the last temperature step
         if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
@@ -1546,17 +1567,17 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
 
 
   if (algo%lBfield) then
-    allocate(dpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(dpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(dpresp%xB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(dpresp%sB_sum(3,3,edisp%iSpin))
-    allocate(dpresp%aB_sum(3,3,edisp%iSpin))
-    allocate(dpresp%xB_sum(3,3,edisp%iSpin))
+    allocate(dpresp%sB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(dpresp%aB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(dpresp%xB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(dpresp%sB_sum(3,3,3,edisp%iSpin))
+    allocate(dpresp%aB_sum(3,3,3,edisp%iSpin))
+    allocate(dpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid.eq.master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
-      allocate(dpresp%sB_sum_temp(3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%aB_sum_temp(3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%xB_sum_temp(3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 
@@ -1584,17 +1605,17 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   endif
 
   if (algo%lBfield) then
-    allocate(qpresp%sB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(qpresp%aB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(qpresp%xB_full(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
-    allocate(qpresp%sB_sum(3,3,edisp%iSpin))
-    allocate(qpresp%aB_sum(3,3,edisp%iSpin))
-    allocate(qpresp%xB_sum(3,3,edisp%iSpin))
+    allocate(qpresp%sB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(qpresp%aB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(qpresp%xB_full(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,ikstr:ikend))
+    allocate(qpresp%sB_sum(3,3,3,edisp%iSpin))
+    allocate(qpresp%aB_sum(3,3,3,edisp%iSpin))
+    allocate(qpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid .eq. master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
-      allocate(qpresp%sB_sum_temp(3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%aB_sum_temp(3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%xB_sum_temp(3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 end subroutine qpresp_alloc
@@ -1894,18 +1915,18 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
+    resp%sB_full(1,1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ**2 / (4.d0 * piQ**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
                                     * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
                                   + real(PolyGamma(1,:,info%ik,:)) * 3.d0
 
-    resp%sB_full(1,1,:,:,info%ik) = resp%sB_full(1,1,:,:,info%ik) &
+    resp%sB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
                                   / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
-    resp%aB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+    resp%aB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * info%betaQ**2 / (4.d0 * piQ**2) &
                                   + aimag(PolyGamma(3,:,info%ik,:)) &
@@ -1916,12 +1937,12 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                                        * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta2pQ &
                                   +  real(PolyGamma(1,:,info%ik,:)) * 3.d0 * enrgy
 
-    resp%aB_full(1,1,:,:,info%ik) = resp%aB_full(1,1,:,:,info%ik) &
+    resp%aB_full(1,1,1,:,:,info%ik) = resp%aB_full(1,1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ / (16.d0 * piQ**4 &
                                   * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
-    resp%xB_full(1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
+    resp%xB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * info%betaQ**2 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 - enrgy**2) &
                                        / (4.d0 * piQ**2) &
@@ -1937,7 +1958,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                                   -  real(PolyGamma(1,:,info%ik,:)) &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2)
 
-    resp%xB_full(1,1,:,:,info%ik) = resp%xB_full(1,1,:,:,info%ik) &
+    resp%xB_full(1,1,1,:,:,info%ik) = resp%xB_full(1,1,1,:,:,info%ik) &
                                   * (-1.d0) * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
                                   / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 

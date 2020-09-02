@@ -156,70 +156,70 @@ module Mtypes
   type response_dp
     ! band-resolved response functions
     complex(8), allocatable :: s_full(:,:,:,:,:)
-    complex(8), allocatable :: sB_full(:,:,:,:,:)
+    complex(8), allocatable :: sB_full(:,:,:,:,:,:)
     complex(8), allocatable :: a_full(:,:,:,:,:)
-    complex(8), allocatable :: aB_full(:,:,:,:,:)
+    complex(8), allocatable :: aB_full(:,:,:,:,:,:)
     complex(8), allocatable :: x_full(:,:,:,:,:)
-    complex(8), allocatable :: xB_full(:,:,:,:,:)
+    complex(8), allocatable :: xB_full(:,:,:,:,:,:)
 
     ! gather arrays for MPI
     complex(8), allocatable :: s_gather(:,:,:,:,:)
-    complex(8), allocatable :: sB_gather(:,:,:,:,:)
+    complex(8), allocatable :: sB_gather(:,:,:,:,:,:)
     complex(8), allocatable :: a_gather(:,:,:,:,:)
-    complex(8), allocatable :: aB_gather(:,:,:,:,:)
+    complex(8), allocatable :: aB_gather(:,:,:,:,:,:)
     complex(8), allocatable :: x_gather(:,:,:,:,:)
-    complex(8), allocatable :: xB_gather(:,:,:,:,:)
+    complex(8), allocatable :: xB_gather(:,:,:,:,:,:)
 
     ! total band and k-summation
     complex(8), allocatable :: s_sum(:,:,:)
-    complex(8), allocatable :: sB_sum(:,:,:)
+    complex(8), allocatable :: sB_sum(:,:,:,:)
     complex(8), allocatable :: a_sum(:,:,:)
-    complex(8), allocatable :: aB_sum(:,:,:)
+    complex(8), allocatable :: aB_sum(:,:,:,:)
     complex(8), allocatable :: x_sum(:,:,:)
-    complex(8), allocatable :: xB_sum(:,:,:)
+    complex(8), allocatable :: xB_sum(:,:,:,:)
 
     ! gather arrays for all T-points of the band and k-summed quantities
     complex(8), allocatable :: s_sum_temp(:,:,:,:)
-    complex(8), allocatable :: sB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: sB_sum_temp(:,:,:,:,:)
     complex(8), allocatable :: a_sum_temp(:,:,:,:)
-    complex(8), allocatable :: aB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: aB_sum_temp(:,:,:,:,:)
     complex(8), allocatable :: x_sum_temp(:,:,:,:)
-    complex(8), allocatable :: xB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: xB_sum_temp(:,:,:,:,:)
   end type
 
   type response_qp
     ! band-resolved response functions
     complex(16), allocatable :: s_full(:,:,:,:,:)
-    complex(16), allocatable :: sB_full(:,:,:,:,:)
+    complex(16), allocatable :: sB_full(:,:,:,:,:,:)
     complex(16), allocatable :: a_full(:,:,:,:,:)
-    complex(16), allocatable :: aB_full(:,:,:,:,:)
+    complex(16), allocatable :: aB_full(:,:,:,:,:,:)
     complex(16), allocatable :: x_full(:,:,:,:,:)
-    complex(16), allocatable :: xB_full(:,:,:,:,:)
+    complex(16), allocatable :: xB_full(:,:,:,:,:,:)
 
     ! gather arrays for MPI
     complex(16), allocatable :: s_gather(:,:,:,:,:)
-    complex(16), allocatable :: sB_gather(:,:,:,:,:)
+    complex(16), allocatable :: sB_gather(:,:,:,:,:,:)
     complex(16), allocatable :: a_gather(:,:,:,:,:)
-    complex(16), allocatable :: aB_gather(:,:,:,:,:)
+    complex(16), allocatable :: aB_gather(:,:,:,:,:,:)
     complex(16), allocatable :: x_gather(:,:,:,:,:)
-    complex(16), allocatable :: xB_gather(:,:,:,:,:)
+    complex(16), allocatable :: xB_gather(:,:,:,:,:,:)
 
     ! band and k-summation
     complex(16), allocatable :: s_sum(:,:,:)
-    complex(16), allocatable :: sB_sum(:,:,:)
+    complex(16), allocatable :: sB_sum(:,:,:,:)
     complex(16), allocatable :: a_sum(:,:,:)
-    complex(16), allocatable :: aB_sum(:,:,:)
+    complex(16), allocatable :: aB_sum(:,:,:,:)
     complex(16), allocatable :: x_sum(:,:,:)
-    complex(16), allocatable :: xB_sum(:,:,:)
+    complex(16), allocatable :: xB_sum(:,:,:,:)
 
     ! gather arrays for all T-points of the band and k-summed quantities
     ! these have to be double precision not quadruple ( they are for output only)
     complex(8), allocatable :: s_sum_temp(:,:,:,:)
-    complex(8), allocatable :: sB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: sB_sum_temp(:,:,:,:,:)
     complex(8), allocatable :: a_sum_temp(:,:,:,:)
-    complex(8), allocatable :: aB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: aB_sum_temp(:,:,:,:,:)
     complex(8), allocatable :: x_sum_temp(:,:,:,:)
-    complex(8), allocatable :: xB_sum_temp(:,:,:,:)
+    complex(8), allocatable :: xB_sum_temp(:,:,:,:,:)
   end type
 
 end module Mtypes
