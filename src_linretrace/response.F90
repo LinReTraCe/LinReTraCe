@@ -1275,34 +1275,19 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   resp%x_sum = resp%x_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
 
   if (myid .eq. master) then
-    if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
-      ! gather the data in the arrays
-      resp%s_sum_temp(:,:,:,info%iT) = resp%s_sum
-      resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
-      resp%x_sum_temp(:,:,:,info%iT) = resp%x_sum
+    ! gather the data in the arrays
+    resp%s_sum_temp(:,:,:,info%iT) = resp%s_sum
+    resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
+    resp%x_sum_temp(:,:,:,info%iT) = resp%x_sum
 
-      ! output at the last temperature step
-      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
-        string = "/L0/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%s_sum_temp)
-        string = "/L1/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%a_sum_temp)
-        string = "/L2/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%x_sum_temp)
-      endif
-    else
-        ! output it for each temperature point
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%s_sum)
-
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%a_sum)
-
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%x_sum)
+    ! output at the last temperature step
+    if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+      string = "/L0/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      string = "/L1/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      string = "/L2/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%x_sum_temp)
     endif
   endif
 
@@ -1413,34 +1398,19 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
 
     if (myid .eq. master) then
+      ! gather the data in the arrays
+      resp%sB_sum_temp(:,:,:,:,info%iT) = resp%sB_sum
+      resp%aB_sum_temp(:,:,:,:,info%iT) = resp%aB_sum
+      resp%xB_sum_temp(:,:,:,:,info%iT) = resp%xB_sum
 
-      if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
-        ! gather the data in the arrays
-        resp%sB_sum_temp(:,:,:,:,info%iT) = resp%sB_sum
-        resp%aB_sum_temp(:,:,:,:,info%iT) = resp%aB_sum
-        resp%xB_sum_temp(:,:,:,:,info%iT) = resp%xB_sum
-
-        ! output at the last temperature step
-        if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
-          string = "/L0M/" // trim(adjustl(gname)) // "/sum"
-          call hdf5_write_data(ifile, string, resp%sB_sum_temp)
-          string = "/L1M/" // trim(adjustl(gname)) // "/sum"
-          call hdf5_write_data(ifile, string, resp%aB_sum_temp)
-          string = "/L2M/" // trim(adjustl(gname)) // "/sum"
-          call hdf5_write_data(ifile, string, resp%xB_sum_temp)
-        endif
-      else
-        write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L0M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%sB_sum)
-
-        write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L1M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%aB_sum)
-
-        write(string,'(I6.6)') info%iT
-        string = trim(string) // "/L2M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%xB_sum)
+      ! output at the last temperature step
+      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+        string = "/L0M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%sB_sum_temp)
+        string = "/L1M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%aB_sum_temp)
+        string = "/L2M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%xB_sum_temp)
       endif
     endif
   endif ! Boutput
@@ -1559,7 +1529,7 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   allocate(dpresp%a_sum(3,3,edisp%iSpin))
   allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
-  if (myid.eq.master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+  if (myid.eq.master) then
     allocate(dpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(dpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(dpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
@@ -1574,7 +1544,7 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
     allocate(dpresp%aB_sum(3,3,3,edisp%iSpin))
     allocate(dpresp%xB_sum(3,3,3,edisp%iSpin))
 
-    if (myid.eq.master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+    if (myid.eq.master) then
       allocate(dpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
       allocate(dpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
       allocate(dpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
@@ -1598,7 +1568,7 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   allocate(qpresp%a_sum(3,3,edisp%iSpin))
   allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
-  if (myid .eq. master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+  if (myid .eq. master) then
     allocate(qpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(qpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
     allocate(qpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
@@ -1612,7 +1582,7 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
     allocate(qpresp%aB_sum(3,3,3,edisp%iSpin))
     allocate(qpresp%xB_sum(3,3,3,edisp%iSpin))
 
-    if (myid .eq. master .and. algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
+    if (myid .eq. master) then
       allocate(qpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
       allocate(qpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
       allocate(qpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
@@ -2380,40 +2350,22 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
 
   ! should work=?
   if (myid .eq. master) then
-    if (algo%lDebug .and. (index(algo%dbgstr,"ReduceIO") .ne. 0)) then
-      ! gather the data in the arrays
-      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-      resp%s_sum_temp(:,:,:,info%iT) = zdarr
-      zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-      resp%a_sum_temp(:,:,:,info%iT) = zdarr
-      zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-      resp%x_sum_temp(:,:,:,info%iT) = zdarr
+    ! gather the data in the arrays
+    zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
+    resp%s_sum_temp(:,:,:,info%iT) = zdarr
+    zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
+    resp%a_sum_temp(:,:,:,info%iT) = zdarr
+    zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
+    resp%x_sum_temp(:,:,:,info%iT) = zdarr
 
-      ! output at the last temperature step
-      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
-        string = "/L0/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%s_sum_temp)
-        string = "/L1/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%a_sum_temp)
-        string = "/L2/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%x_sum_temp)
-      endif
-
-    else
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sum"
-      zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-      call hdf5_write_data(ifile, string, zdarr)
-
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sum"
-      zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-      call hdf5_write_data(ifile, string, zdarr)
-
-      write(string,'(I6.6)') info%iT
-      string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sum"
-      zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-      call hdf5_write_data(ifile, string, zdarr)
+    ! output at the last temperature step
+    if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+      string = "/L0/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      string = "/L1/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      string = "/L2/" // trim(adjustl(gname)) // "/sum"
+      call hdf5_write_data(ifile, string, resp%x_sum_temp)
     endif
   endif
 
