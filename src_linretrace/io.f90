@@ -243,7 +243,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
   if (edisp%lDerivatives) then
-    allocate(edisp%band_dk(3, edisp%nband_max, kmesh%nkp, edisp%ispin))
+    allocate(edisp%band_dk(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(edisp%band_d2k(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
   endif
 
@@ -252,10 +252,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
     edisp%band_original(:,:,1)     = drank2arr
     deallocate(drank2arr)
     if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/derivatives",   drank3arr)
+      call hdf5_read_data(ifile, "/derivatives_sym",   drank3arr)
       edisp%band_dk(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/curvatures",  drank3arr)
+      call hdf5_read_data(ifile, "/curvatures_sym",  drank3arr)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
     endif
@@ -268,16 +268,16 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
     deallocate(drank2arr)
 
     if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/up/derivatives",  drank3arr)
+      call hdf5_read_data(ifile, "/up/derivatives_sym",  drank3arr)
       edisp%band_dk(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/up/curvatures",    drank3arr)
+      call hdf5_read_data(ifile, "/up/curvatures_sym",    drank3arr)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/derivatives", drank3arr)
+      call hdf5_read_data(ifile, "/dn/derivatives_sym", drank3arr)
       edisp%band_dk(:,:,:,2) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/curvatures",   drank3arr)
+      call hdf5_read_data(ifile, "/dn/curvatures_sym",   drank3arr)
       edisp%band_d2k(:,:,:,2) = drank3arr
       deallocate(drank3arr)
     endif

@@ -12,7 +12,7 @@ module Mtypes
     logical :: lBfield        ! calculations in the presence of a magnetic field
                               ! this requires the existance of the band derivatives
     integer :: rootMethod     ! numerical method to find the chemical potential
-    logical :: muSearch              ! mu fixed or find mu?
+    logical :: muSearch       ! mu fixed or find mu?
     logical :: lOldmu         ! mus from old run?
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
     logical :: lScatteringFile       ! do we get the scattering information from another file
@@ -30,7 +30,7 @@ module Mtypes
   end type
 
   ! information about the k-points which is necessary for us
-  ! that is: number of k-points and its weight
+  ! that is: number of k-points and their weights
   type kpointmesh
     real(8)               :: weightsum
     real(8), allocatable  :: weight(:)
@@ -130,6 +130,8 @@ module Mtypes
   end type
 
   type runinfo
+    ! information about the current status of the run
+    ! i.e. current temperature, and k-point
     integer  :: iT
     real(8)  :: Temp
     real(8)  :: beta
