@@ -243,9 +243,12 @@ program main
     write(stdout,*) '  electrons: ', edisp%nelect
     write(stdout,*)
     write(stdout,*) '  energy-file: ', trim(algo%input_energies)
-    write(stdout,*) '  gap: ', edisp%gap
     if (algo%lScissors) then
+      write(stdout,*) '  old gap: ', edisp%gap - edisp%scissors
+      write(stdout,*) '  new gap: ', edisp%gap
       write(stdout,*) '  scissors: ', edisp%scissors
+    else
+      write(stdout,*) '  gap: ', edisp%gap
     endif
     if (.not. algo%muSearch .and. .not. algo%lOldmu) then
       write(stdout,*) '  constant chemical potential: ', edisp%mu

@@ -141,7 +141,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
 
-  call floatn_find('Scissors', edisp%scissors, search_start, search_end, found)
+  call floatn_find('Bandgap', edisp%scissors, search_start, search_end, found)
   if (found) then
     algo%lScissors = .true.
   else

@@ -125,6 +125,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
     endif
 
     do is=1,edisp%ispin
+      edisp%scissors(is) = edisp%scissors(is) - edisp%gap(is) ! transform bandgap input to scissors
       if (.not. edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
         call stop_with_message(stdout, 'Error: Cannot apply scissors to gapless band structure')
       endif
