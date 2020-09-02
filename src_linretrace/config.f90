@@ -16,6 +16,9 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   type(temperature) :: temp
   type(impurity)    :: imp
 
+  character(20)        :: date, time, zone
+  integer,dimension(8) :: time_date_values
+
   character(len=256) :: config_file, output
   character(len=256) :: str_temp, str_imp
   integer :: i,j,k,l,stat,iimp
@@ -89,7 +92,7 @@ subroutine read_config(algo, edisp, sct, temp, imp)
 
 
   ! setting up defaults
-  algo%output_file    = 'linretrace-output.hdf5'
+  algo%output_file    = ''
   algo%input_energies = ''
   algo%lBField        = .false.
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
@@ -115,6 +118,11 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   !--------------------------------------------------------------------------------
   call string_find('EnergyFile', algo%input_energies, search_start, search_end, found)
   call string_find('OutputFile', algo%output_file, search_start, search_end, found)
+
+  if (.not. found) then
+    call date_and_time(date,time,zone,time_date_values)
+    algo%output_file = 'lrtc-'//trim(date)//'-'//trim(time)//'-output.hdf5'
+  endif
 
   call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
 
