@@ -943,107 +943,54 @@ subroutine response_peierls_weights(resp, edisp, info)
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
-  integer :: index1(9), index2(9)
-  integer :: iband, idir
+  integer :: iband
 
-  index1 = (/1,2,3,1,1,2,1,1,2/)
-  index2 = (/1,2,3,2,3,3,2,3,3/)
+  integer :: i,j,k
+  integer :: sign1, vdir1, mdir1
+  integer :: sign2, vdir2, mdir2
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
 
-    ! ATTENTION: 2 1 -> x y since we push this to the hdf5 file where it is transposed
+    do i=1,3
+      do j=1,3
+        do k=1,3
+          if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
 
-    ! implement this via levi civita, otherwise ...
+          ! determine the sign and the element numbers
+          call levicivita_peierls(i,j,k, sign1,vdir1,mdir1,sign2,vdir2,mdir2)
 
-    ! xyz -> vx * vy * M^-1 yx - vx * vx * M^-1 yy
-    resp%sB_full(3,2,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-              * (edisp%band_dk(4,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(2,iband,info%ik,:))
+          ! transpose the index because of the hdf5 file output
+          resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! yxz -> vy * vy * M^-1 xx - vy * vx * M^-1 xy
-    resp%sB_full(3,1,2,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-              * (edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:) &
-                 -edisp%band_dk(4,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:))
+          resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! ! xzy -> vx * vx * M^-1 zz - vx * vz * M^-1 zx
-    ! resp%sB_full(3,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(3,iband,info%ik,:) &
-    !              -edisp%band_dk(4,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:))
+          resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! ! zxy -> vz * vx * M^-1 xz - vz * vz * M^-1 xx
-    ! resp%sB_full(1,3,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(4,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(3,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+        enddo
+      enddo
+    enddo
 
-    ! ! yzx -> vy * vz * M^-1 zy - vy * vy * M^-1 zz
-    ! resp%sB_full(3,2,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(5,iband,info%ik,:) &
-    !              *edisp%band_d2k(5,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(3,iband,info%ik,:))
+    call levicivita_peierls(1,1,1,sign1,vdir1,mdir1,sign2,vdir2,mdir2)
+    resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
+    resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! ! zyx -> vz * vz * M^-1 yy - vz * vy * M^-1 yz
-    ! resp%sB_full(2,3,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(3,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:) &
-    !              -edisp%band_dk(5,iband,info%ik,:) &
-    !              *edisp%band_d2k(5,iband,info%ik,:))
+    resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! xxz
-
-
-    ! resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
-
-
-    ! resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:))
-
-    ! resp%aB_full(2,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
-
-    ! resp%aB_full(1,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
-
-    ! resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:))
-
-    ! resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
-
-    ! resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
   enddo
+
 end subroutine
 
 subroutine response_peierls_weights_Q(resp, edisp, info)
@@ -1053,75 +1000,52 @@ subroutine response_peierls_weights_Q(resp, edisp, info)
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
-  integer :: index1(9), index2(9)
-  integer :: iband, idir
+  integer :: iband
 
-  index1 = (/1,2,3,1,1,2,1,1,2/)
-  index2 = (/1,2,3,2,3,3,2,3,3/)
-
-  ! for the time being
-  ! this is only with Bfield in z-direction
-  ! TODO: complete ... arbitrary direction
-  ! TODO: FIX THIS
+  integer :: i,j,k
+  integer :: sign1, vdir1, mdir1
+  integer :: sign2, vdir2, mdir2
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
-    ! xyz -> vx * vy * M^-1 yx - vx * vx * M^-1 yy
-    resp%sB_full(3,2,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-              * (edisp%band_dk(4,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:) &
-                 -edisp%band_dk(1,iband,info%ik,:) &
-                 *edisp%band_d2k(2,iband,info%ik,:))
 
-    ! yxz -> vy * vy * M^-1 xx - vy * vx * M^-1 xy
-    resp%sB_full(3,1,2,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-              * (edisp%band_dk(2,iband,info%ik,:) &
-                 *edisp%band_d2k(1,iband,info%ik,:) &
-                 -edisp%band_dk(4,iband,info%ik,:) &
-                 *edisp%band_d2k(4,iband,info%ik,:))
+    do i=1,3
+      do j=1,3
+        do k=1,3
+          if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
+          call levicivita_peierls(i,j,k, sign1,vdir1,mdir1,sign2,vdir2,mdir2)
 
-    ! resp%sB_full(1,1,iband,:,info%ik) = resp%sB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+          ! transpose the index because of the hdf5 file output
+          resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
+          resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! resp%aB_full(1,2,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:))
+          resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+          * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+            + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! resp%aB_full(2,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+        enddo
+      enddo
+    enddo
 
-    ! resp%aB_full(1,1,iband,:,info%ik) = resp%aB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+    call levicivita_peierls(1,1,1,sign1,vdir1,mdir1,sign2,vdir2,mdir2)
+    resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! resp%xB_full(1,2,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(2,iband,info%ik,:))
+    resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! resp%xB_full(2,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(2,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
+    resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+    * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
+      + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
 
-    ! resp%xB_full(1,1,iband,:,info%ik) = resp%xB_full(1,1,iband,:,info%ik) &
-    !           * (edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(1,iband,info%ik,:) &
-    !              *edisp%band_d2k(4,iband,info%ik,:) &
-    !              -edisp%band_dk(1,iband,info%ik,:)*edisp%band_dk(2,iband,info%ik,:) &
-    !              *edisp%band_d2k(1,iband,info%ik,:))
   enddo
+
 end subroutine
 
 subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
@@ -2436,5 +2360,102 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
 
 end subroutine
 
+subroutine levicivita_peierls(dir1,dir2,dir3, sign1,vdir1,mdir1,sign2,vdir2,mdir2)
+  ! for a given B-field quantities identified by
+  ! dir1 dir2 dir
+  ! return the required directions for the band derivatives / curvatures
+
+  implicit none
+  integer, intent(in)  :: dir1,dir2,dir3
+  integer, intent(out) :: sign1,vdir1,mdir1, sign2,vdir2,mdir2
+
+  integer :: i,j,eps
+
+  sign1 = 0
+  sign2 = 0
+
+  ! sigma _abc = epsilon cij * va * vj * M^-1 bi
+
+  do i=1,3
+    do j=1,3
+      eps = levicivita(dir3,i,j)
+      if (eps == 0) then
+        continue
+      else
+        if (sign1 == 0) then
+          sign1 = eps
+          vdir1 = index2compound(dir1,j)
+          mdir1 = index2compound(dir2,i)
+        else
+          sign2 = eps
+          vdir2 = index2compound(dir1,j)
+          mdir2 = index2compound(dir2,i)
+
+          goto 100 ! completely break out of all loops
+        endif
+      endif
+    enddo
+  enddo
+
+100 return
+
+end subroutine levicivita_peierls
+
+integer function levicivita(dir1,dir2,dir3)
+  implicit none
+  integer, intent(in) :: dir1, dir2, dir3
+  ! dir1 dir2 dir3 in the range [0,2]
+  if ((dir1==dir2) .or. (dir2==dir3) .or. (dir1==dir3)) then
+    levicivita =  0
+    return
+  else
+    if (dir1 == 1) then
+      if (dir2 == 2) then
+        levicivita =  1
+        return
+      else
+        levicivita =  -1
+        return
+      endif
+    else if (dir1 == 2) then
+      if (dir2 == 3) then
+        levicivita =  1
+        return
+      else
+        levicivita =  -1
+        return
+      endif
+    else if (dir1 == 3) then
+      if (dir2 == 1) then
+        levicivita =  1
+        return
+      else
+        levicivita =  -1
+        return
+      endif
+    endif
+  endif
+end function levicivita
+
+integer function index2compound(dir1,dir2)
+  implicit none
+  integer, intent(in) :: dir1,dir2
+
+  ! maps out
+  ! | 1 4 5 |
+  ! | 4 2 6 |
+  ! | 5 6 3 |
+
+  if (dir1==dir2) then
+    index2compound = dir1
+  else if ((dir1 == 1 .and. dir2 == 2) .or. (dir1 == 2 .and. dir2 == 1)) then
+    index2compound = 4
+  else if ((dir1 == 1 .and. dir2 == 3) .or. (dir1 == 3 .and. dir2 == 1)) then
+    index2compound = 5
+  else if ((dir1 == 2 .and. dir2 == 3) .or. (dir1 == 3 .and. dir2 == 2)) then
+    index2compound = 6
+  endif
+
+end function index2compound
 
 end module Mresponse
