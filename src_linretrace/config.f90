@@ -7,13 +7,14 @@ module Mconfig
 
 contains
 
-subroutine read_config(algo, edisp, sct, temp, imp)
+subroutine read_config(algo, edisp, sct, temp, pot, imp)
   implicit none
   type(algorithm)   :: algo
   type(kpointmesh)  :: kmesh
   type(energydisp)  :: edisp
   type(scattering)  :: sct
   type(temperature) :: temp
+  type(potential)   :: pot
   type(impurity)    :: imp
 
   character(20)        :: date, time, zone
@@ -25,12 +26,14 @@ subroutine read_config(algo, edisp, sct, temp, imp)
 
   integer :: search_start, search_end
   integer :: subsearch_start, subsearch_end
+  integer :: subsubsearch_start, subsubsearch_end
   integer :: pst, empty
 
   real(8), allocatable :: impurityinfo(:)
   character(len=256), allocatable :: impdescription(:)
   character(len=256), allocatable :: imptype(:)
   integer :: nshape(1)
+  real(8) :: floattemp
 
   logical :: found
 
@@ -92,17 +95,25 @@ subroutine read_config(algo, edisp, sct, temp, imp)
 
 
   ! setting up defaults
+  algo%lTMODE         = .false.
+  algo%lMUMODE        = .false.
+
   algo%output_file    = ''
   algo%input_energies = ''
   algo%lBField        = .false.
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
   algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
+
   algo%lInterbandQuantities = .true.
-  algo%lEnergyOutput  = .true.
+  algo%lIntrabandQuantities = .true.
+
+  algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
   algo%lFullOutput    = .false.
   sct%gamimp          = 0.d0
   imp%nimp            = 0
+
+  pot%nMu             = 100
 
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
@@ -117,6 +128,14 @@ subroutine read_config(algo, edisp, sct, temp, imp)
   endif
   !--------------------------------------------------------------------------------
   call string_find('EnergyFile', algo%input_energies, search_start, search_end, found)
+  call bool_find('MuMode', algo%lMUMODE, search_start, search_end, found)
+  call bool_find('TempMode', algo%lTMODE, search_start, search_end, found)
+
+  if ((algo%lMUMODE .and. algo%lTMODE) .or. (.not. (algo%lMUMODE .or. algo%lTMODE)))then
+    call stop_with_message(stderr, 'Program has to be executed with either MuMode or TMode.')
+  endif
+
+  call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
   call string_find('OutputFile', algo%output_file, search_start, search_end, found)
 
   if (.not. found) then
@@ -124,30 +143,13 @@ subroutine read_config(algo, edisp, sct, temp, imp)
     algo%output_file = 'lrtc-'//trim(date)//'-'//trim(time)//'-output.hdf5'
   endif
 
-  call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
-
-  call float_find('ChemicalPotential', edisp%mu, search_start, search_end, found)
-  if (found) then
-    algo%muSearch = .false.
-  else
-    algo%muSearch = .true.
-  endif
-
-  call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
-  if (found) then
-    algo%lOldmu   = .true.
-    algo%muSearch = .false. !overwrite the previous option
-  else
-    algo%lOldmu = .false.
-  endif
-
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
-  call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
 
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
+  call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)
 
   call floatn_find('Bandgap', edisp%scissors, search_start, search_end, found)
   if (found) then
@@ -156,168 +158,203 @@ subroutine read_config(algo, edisp, sct, temp, imp)
     algo%lScissors = .false.
   endif
 
-  call int_find('NImp', imp%nimp, search_start, search_end, found)
-  if (found) then
-    if (imp%nimp > 0) then
-      algo%lImpurities = .true.
-      allocate(imp%inputspin(imp%nimp))
-      allocate(imp%inputtype(imp%nimp))
-      allocate(imp%Dopant(imp%nimp))
-      allocate(imp%Density(imp%nimp))
-      allocate(imp%Energy(imp%nimp))
-      allocate(imp%Degeneracy(imp%nimp))
-      allocate(imp%Bandwidth(imp%nimp))
-      allocate(imp%Bandtype(imp%nimp))
-      allocate(imp%Band(imp%nimp))
-    else if (imp%nimp == 0) then
-      algo%lImpurities = .false.
-    else
-      call stop_with_message(stderr, 'Error: Negative number of impurities')
+  call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
+
+
+  if (algo%lMUMODE) then
+
+    call subgroup_find('[MuMode]', search_start, search_end, subsearch_start, subsearch_end)
+    if (subsearch_start .le. 0) then
+      call stop_with_message(stderr, 'MuMode sub group not found')
     endif
-  else
-    algo%lImpurities = .false.
-  endif
-  !--------------------------------------------------------------------------------
-  !--------------------------------------------------------------------------------
-  !--------------------------------------------------------------------------------
 
-  call group_find('[Scattering]', search_start, search_end)
-  if (search_start .eq. 0) then
-    call stop_with_message(stderr, 'Scattering Group not found')
-  else if (search_start .eq. -1) then
-    call stop_with_message(stderr, 'Scattering Group empty')
-  endif
-  !--------------------------------------------------------------------------------
-  call string_find('ScatteringFile', algo%input_scattering, search_start, search_end, found)
-  if (found) then
-    algo%lScatteringFile = .true.
-  else
-    algo%lScatteringFile = .false.
-  endif
-  call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+    call int_find('MuPoints', pot%nMu, subsearch_start, subsearch_end, found)
+    call float_find('Temperature', temp%temp, subsearch_start, subsearch_end, found)
 
-  if (.not. algo%lScatteringFile) then
-    call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
-    if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
-    call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
-    if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
-    call int_find('TPoints', temp%nT, search_start, search_end, found)
-    if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
-    call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
-    if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
-    call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
-    if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
+    call float_find('MuMinimum', pot%MuMin, subsearch_start, subsearch_end, found)
+    call float_find('MuMaximum', pot%MuMax, subsearch_start, subsearch_end, found)
+    ! with respect to Fermi level at given Temperature
+    ! shift afterwards
 
-    edisp%lBandShift = .false. ! only with scattering File
+    call float_find('ScatteringRate', floattemp, subsearch_start, subsearch_end, found)
+    allocate(sct%gamcoeff(1))
+    sct%gamcoeff(1) = floattemp
+    call float_find('QuasiParticleWeights', floattemp, subsearch_start, subsearch_end, found)
+    allocate(sct%zqpcoeff(1))
+    sct%zqpcoeff(1) = floattemp
   endif
 
-  call group_find('[Impurities]', search_start, search_end)
-  if (algo%lImpurities .and. search_start .eq. 0) then
-    call stop_with_message(stderr, 'Impurities group not found')
-  else if (algo%lImpurities .and. search_start .eq. -1) then
-    call stop_with_message(stderr, 'Impurities group empty')
-  else if (imp%nimp == 0 .and. search_start .gt. 0) then
-    call stop_with_message(stderr, 'Impurities found but no NImp supplied')
-  endif
+  if (algo%lTMODE) then
 
-  if (search_start .gt. 0) then ! found
-    allocate(impdescription(0:3))
-    impdescription(0) = 'Absolute'
-    impdescription(1) = 'Valence'
-    impdescription(2) = 'Conduction'
-    impdescription(3) = 'Percentage'
-    allocate(imptype(0:2))
-    imptype(0) = 'Box'
-    imptype(1) = 'Lorentzian'
-    imptype(2) = 'Gaussian'
+    call group_find('[TempMode]', search_start, search_end)
+    if (subsearch_start .le. 0) then
+      call stop_with_message(stderr, 'TempMode sub group not found')
+    endif
 
-    do iimp=1,imp%nimp
-      write(str_imp,'(A2,I1,A2)') '[[',iimp,']]'
-      call subgroup_find(str_imp, search_start, search_end, subsearch_start, subsearch_end)
-      if (subsearch_start .le. 0) then
-        call stop_with_message(stderr, 'Impurity sub group not found')
-      endif
-      if ((iimp .eq. imp%nimp) .and. (subsearch_end .ne. search_end)) then
-        call stop_with_message(stderr,'More Impurity descriptions than provided in NImp')
-      endif
+    call float_find('ChemicalPotential', pot%mu, search_start, search_end, found)
+    if (found) then
+      algo%muSearch = .false.
+    else
+      algo%muSearch = .true.
+    endif
 
-      ! determine position and type of impurity
+    call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
+    if (found) then
+      algo%lOldmu   = .true.
+      algo%muSearch = .false. !overwrite the previous option
+    else
+      algo%lOldmu = .false.
+    endif
 
-      do i=0,3
-        call floatn_find(impdescription(i), impurityinfo, subsearch_start, subsearch_end, found)
-        if (.not. found) then
-          cycle
-        endif
-        imp%inputtype(iimp) = i
-        exit
-      enddo
+    call subgroup_find('[[Scattering]]', search_start, search_end, subsearch_start, subsearch_end)
+    if (subsearch_start .le. 0) then
+      call stop_with_message(stderr, 'Scattering group not found')
+    endif
+    !--------------------------------------------------------------------------------
+    call string_find('ScatteringFile', algo%input_scattering, subsearch_start, subsearch_end, found)
+    if (found) then
+      algo%lScatteringFile = .true.
+    else
+      algo%lScatteringFile = .false.
+    endif
+    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
 
-      ! if we didn't find an identifier
-      if (.not. found) then
-        call stop_with_message(stderr, 'Impurity Description not found')
-      endif
+    if (.not. algo%lScatteringFile) then
+      call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
+      if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
+      call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
+      if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
+      call int_find('TPoints', temp%nT, search_start, search_end, found)
+      if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
+      call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
+      if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
+      call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
+      if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
 
-      call float_find('Bandwidth', imp%Bandwidth(iimp), subsearch_start, subsearch_end, found)
-      if (.not. found) then
-        imp%Bandwidth(iimp) = 0.d0
-        imp%Band(iimp) = .false.
+      edisp%lBandShift = .false. ! only with scattering File
+    endif
+
+    call subgroup_find('[[Impurities]]', search_start, search_end, subsearch_start, subsearch_end)
+    if (subsearch_start .gt. 0) then
+      call stop_with_message(stderr, 'Scattering group not found')
+    endif
+
+    call int_find('NImp', imp%nimp, subsearch_start, subsearch_end, found)
+    if (found) then
+      if (imp%nimp > 0) then
+        algo%lImpurities = .true.
+        allocate(imp%inputspin(imp%nimp))
+        allocate(imp%inputtype(imp%nimp))
+        allocate(imp%Dopant(imp%nimp))
+        allocate(imp%Density(imp%nimp))
+        allocate(imp%Energy(imp%nimp))
+        allocate(imp%Degeneracy(imp%nimp))
+        allocate(imp%Bandwidth(imp%nimp))
+        allocate(imp%Bandtype(imp%nimp))
+        allocate(imp%Band(imp%nimp))
+      else if (imp%nimp == 0) then
+        algo%lImpurities = .false.
       else
-        if (imp%Bandwidth(iimp) <= 0.d0) then
+        call stop_with_message(stderr, 'Error: Negative number of impurities')
+      endif
+    else
+      algo%lImpurities = .false.
+    endif
+
+    if (algo%lImpurities) then
+      allocate(impdescription(0:3))
+      impdescription(0) = 'Absolute'
+      impdescription(1) = 'Valence'
+      impdescription(2) = 'Conduction'
+      impdescription(3) = 'Percentage'
+      allocate(imptype(0:2))
+      imptype(0) = 'Box'
+      imptype(1) = 'Lorentzian'
+      imptype(2) = 'Gaussian'
+
+      do iimp=1,imp%nimp
+        write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
+        call subgroup_find(str_imp, subsearch_start, subsearch_end, subsubsearch_start, subsubsearch_end)
+        if (subsubsearch_start .le. 0) then
+          call stop_with_message(stderr, 'Impurity sub group not found')
+        endif
+
+        do i=0,3
+          call floatn_find(impdescription(i), impurityinfo, subsubsearch_start, subsubsearch_end, found)
+          if (.not. found) then
+            cycle
+          endif
+          imp%inputtype(iimp) = i
+          exit
+        enddo
+
+        ! if we didn't find an identifier
+        if (.not. found) then
+          call stop_with_message(stderr, 'Impurity Description not found')
+        endif
+
+        call float_find('Bandwidth', imp%Bandwidth(iimp), subsubsearch_start, subsubsearch_end, found)
+        if (.not. found) then
           imp%Bandwidth(iimp) = 0.d0
           imp%Band(iimp) = .false.
         else
-          imp%Band(iimp) = .true.
-        endif
-      endif
-
-      call string_find('Bandtype', str_temp, subsearch_start, subsearch_end, found)
-      if (.not. found) then
-        imp%Bandtype(iimp) = 0 ! box
-      else
-        imp%Bandtype(iimp) = -1
-        do i=0,2
-          if (index(trim(imptype(i)),trim(str_temp)) .ne. 0) then
-            imp%Bandtype(iimp) = i
+          if (imp%Bandwidth(iimp) <= 0.d0) then
+            imp%Bandwidth(iimp) = 0.d0
+            imp%Band(iimp) = .false.
+          else
+            imp%Band(iimp) = .true.
           endif
-        enddo
-        if (imp%Bandtype(iimp) == -1) then
-          call stop_with_message(stderr, 'Bandtype Description not available')
         endif
-      endif
 
-      ! the saved information
-      nshape = shape(impurityinfo)
-
-      if (imp%inputtype(iimp) == 0) then
-        if (nshape(1) /= 4) then
-          call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
+        call string_find('Bandtype', str_temp, subsubsearch_start, subsubsearch_end, found)
+        if (.not. found) then
+          imp%Bandtype(iimp) = 0 ! box
         else
-          imp%inputspin(iimp) = 1 ! default to spin up
-          ! we don't really need a spin descprtion because this is an absolute energy level
+          imp%Bandtype(iimp) = -1
+          do i=0,2
+            if (index(trim(imptype(i)),trim(str_temp)) .ne. 0) then
+              imp%Bandtype(iimp) = i
+            endif
+          enddo
+          if (imp%Bandtype(iimp) == -1) then
+            call stop_with_message(stderr, 'Bandtype Description not available')
+          endif
         endif
-      else
-        if (nshape(1) == 4) then
-          imp%inputspin(iimp) = 1 ! default to spin up
-        else if (nshape(1) == 5) then
-          imp%inputspin(iimp) = impurityinfo(5)
-        else
-          call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
-        endif
-      endif
 
-      if (abs(impurityinfo(1)) == 1.d0) then
-        imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
-      else
-        call stop_with_message(stderr, 'Dopant description is either +1 or -1')
-      endif
-      imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
-      imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
-      imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
-      deallocate(impurityinfo)
-    enddo
-    deallocate(impdescription)
-    deallocate(imptype)
-  endif
+        ! the saved information
+        nshape = shape(impurityinfo)
+
+        if (imp%inputtype(iimp) == 0) then
+          if (nshape(1) /= 4) then
+            call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
+          else
+            imp%inputspin(iimp) = 1 ! default to spin up
+            ! we don't really need a spin descprtion because this is an absolute energy level
+          endif
+        else
+          if (nshape(1) == 4) then
+            imp%inputspin(iimp) = 1 ! default to spin up
+          else if (nshape(1) == 5) then
+            imp%inputspin(iimp) = impurityinfo(5)
+          else
+            call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
+          endif
+        endif
+
+        if (abs(impurityinfo(1)) == 1.d0) then
+          imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
+        else
+          call stop_with_message(stderr, 'Dopant description is either +1 or -1')
+        endif
+        imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
+        imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
+        imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
+        deallocate(impurityinfo)
+      enddo
+      deallocate(impdescription)
+      deallocate(imptype)
+    endif !algo %lImpurities
+  endif ! algo%TMODE
 
   ! note here: the adjustment for the energy level
   ! will be after we read in the gap information

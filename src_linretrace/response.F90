@@ -1200,18 +1200,18 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
   if (myid .eq. master) then
     ! gather the data in the arrays
-    resp%s_sum_temp(:,:,:,info%iT) = resp%s_sum
-    resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
-    resp%x_sum_temp(:,:,:,info%iT) = resp%x_sum
+    resp%s_sum_range(:,:,:,info%iT) = resp%s_sum
+    resp%a_sum_range(:,:,:,info%iT) = resp%a_sum
+    resp%x_sum_range(:,:,:,info%iT) = resp%x_sum
 
     ! output at the last temperature step
     if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
       string = "/L0/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L1/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      call hdf5_write_data(ifile, string, resp%a_sum_range)
       string = "/L2/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%x_sum_temp)
+      call hdf5_write_data(ifile, string, resp%x_sum_range)
     endif
   endif
 
@@ -1323,18 +1323,18 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       ! gather the data in the arrays
-      resp%sB_sum_temp(:,:,:,:,info%iT) = resp%sB_sum
-      resp%aB_sum_temp(:,:,:,:,info%iT) = resp%aB_sum
-      resp%xB_sum_temp(:,:,:,:,info%iT) = resp%xB_sum
+      resp%sB_sum_range(:,:,:,:,info%iT) = resp%sB_sum
+      resp%aB_sum_range(:,:,:,:,info%iT) = resp%aB_sum
+      resp%xB_sum_range(:,:,:,:,info%iT) = resp%xB_sum
 
       ! output at the last temperature step
       if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
         string = "/L0M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%sB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%sB_sum_range)
         string = "/L1M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%aB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%aB_sum_range)
         string = "/L2M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%xB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%xB_sum_range)
       endif
     endif
   endif ! Boutput
@@ -1454,9 +1454,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid.eq.master) then
-    allocate(dpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
   endif
 
 
@@ -1469,9 +1469,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
     allocate(dpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid.eq.master) then
-      allocate(dpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 
@@ -1493,9 +1493,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid .eq. master) then
-    allocate(qpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
   endif
 
   if (algo%lBfield) then
@@ -1507,9 +1507,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
     allocate(qpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid .eq. master) then
-      allocate(qpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 end subroutine qpresp_alloc
@@ -2276,20 +2276,20 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   if (myid .eq. master) then
     ! gather the data in the arrays
     zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-    resp%s_sum_temp(:,:,:,info%iT) = zdarr
+    resp%s_sum_range(:,:,:,info%iT) = zdarr
     zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-    resp%a_sum_temp(:,:,:,info%iT) = zdarr
+    resp%a_sum_range(:,:,:,info%iT) = zdarr
     zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-    resp%x_sum_temp(:,:,:,info%iT) = zdarr
+    resp%x_sum_range(:,:,:,info%iT) = zdarr
 
     ! output at the last temperature step
     if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
       string = "/L0/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L1/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      call hdf5_write_data(ifile, string, resp%a_sum_range)
       string = "/L2/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%x_sum_temp)
+      call hdf5_write_data(ifile, string, resp%x_sum_range)
     endif
   endif
 

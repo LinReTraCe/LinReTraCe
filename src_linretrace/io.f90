@@ -8,11 +8,12 @@ module Mio
 
 contains
 
-subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
+subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   implicit none
   type(algorithm)      :: algo
   type(kpointmesh)     :: kmesh
   type(energydisp)     :: edisp
+  type(potential)      :: pot
   type(impurity)       :: imp
 
   integer(hid_t)       :: ifile
@@ -47,7 +48,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, imp)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
   if (algo%muSearch) then
-    call hdf5_read_data(ifile, "/.bands/mu",           edisp%mu)
+    call hdf5_read_data(ifile, "/.bands/mu",           pot%mu)
   endif
 
   allocate(edisp%gapped(edisp%ispin))
@@ -333,7 +334,7 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   call hdf5_read_data(ifile, "/.quantities/nT",   temp%nT)
 
   call hdf5_read_data(ifile, "/.quantities/tempAxis", temp%TT)
-  call hdf5_read_data(ifile, "/.quantities/betaAxis", temp%beta)
+  call hdf5_read_data(ifile, "/.quantities/betaAxis", temp%BB)
 
   ! scattering rates
   ! and quasi particle renormalizations
@@ -383,7 +384,7 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   call hdf5_open_file(algo%output_file, ifile)
 
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
-  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%beta)
+  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
   call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
 

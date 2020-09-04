@@ -1,31 +1,39 @@
 ________________________________________________________________________________
 [General]
-EnergyFile = (default '')
-OutputFile = (default='linretrace-output.hdf5')
+EnergyFile = (default='')
+MuMode     = (default = F)
+TempMode   = (default = F)
+
+Bandgap   = (default = None) # new size of bandgap
+
 BFieldMode = (default = F)
-DebugMode  = (default = F)
 
-ChemicalPotential = (default = 0)  # if here run with the given mu
-OldOutput = (default = None) # old output file from which we take the mu(T)
+FullOutput        = (default = F)  # output band- and k-resolved response quantities
+EnergyOutput      = (default = F)  # output renormalized bands
 
-Scissors   = (default = None) # increase/decrease of an existing energy gap
+Interband         = (default = T)  # calculate Interband quantities
+Intraband         = (default = T)  # calculate Intraband quantities
+Boltzmann         = (default = T)  # calculate Boltzmann regime
 
 FermiOccupation   = (default = F)  # use fermi functions to determine occupation
-
-NImp = (default = 0) # number of additional impurity levels
 
 RootMethod        = (default = 2)  # 0 secant
                                    # 1 linint
                                    # 2 riddler
                                    # 3 bisection
 
-FullOutput        = (default = F)  # output band- and k-resolved quantities
-EnergyOutput      = (default = T)  # output renormalized bands
-Boltzmann         = (default = T)  # calculate Boltzmann regime
-Interband         = (default = T)  # calculate Interband quantities
+OutputFile = (default='linretrace-output.hdf5')
 
 ________________________________________________________________________________
-[Scattering]
+[TempMode] # if TMode activated
+
+ChemicalPotential = (default = 0)  # if here run with the given mu
+OldOutput = (default = None) # old output file from which we take the mu(T)
+
+
+
+
+[[Scattering]]
 ScatteringFile    = (default = '') # if existent use all the quantities from this file only
 ScatteringImpurity = (default = 0) # in combination with Scattering File
                                    # adds an additional constant scattering rate
@@ -41,8 +49,11 @@ ScatteringCoefficients    = (default = None)
 QuasiParticleCoefficients = (default = None)
 
 ________________________________________________________________________________
-[Impurities]
-[[1]]
+[[Impurities]]
+
+NImp = (default = 0) # number of additional impurity levels
+
+[[[1]]]
 # one of these 4 input types
 Absolute   = (default = None) # energy is absolute in [eV]
 Valence    = (default = None) # relative upwards shift from top of valence band [eV]
@@ -60,10 +71,20 @@ Percentage = (default = None) # relative position inside the gap
 
 # Rest :     5 numbers -- donor(+1)/acceptor(-1) density(per unit cell) energy degenracy spin
 # e.g.: +1 1e-4 8.2514 2 1
-[[2]]
+[[[2]]]
 ... # as many as there are NImp supplied
 # these shifts are applied AFTER the application of scissors
 
+
+
+[MuMode] # if MuMode activated
+Temperature = (default = 300)
+MuMinimum = (default = mu_fermi - 15 eV)
+MuMaximum = (default = mu_fermi + 15 eV)
+MuPoints   = (default = 100)
+
+ScatteringRate = (default = None)
+QuasiParticleWeight = (defualt = 1)
 
 ________________________________________________________________________________
 [Debug]
