@@ -163,23 +163,28 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   if (algo%lMUMODE) then
 
-    call subgroup_find('[MuMode]', search_start, search_end, subsearch_start, subsearch_end)
-    if (subsearch_start .le. 0) then
-      call stop_with_message(stderr, 'MuMode sub group not found')
+    call group_find('[MuMode]', search_start, search_end)
+    if (search_start .eq. 0) then
+      call stop_with_message(stderr, 'MuMode Group not found')
+    else if (search_start .eq. -1) then
+      call stop_with_message(stderr, 'MuMode Group empty')
     endif
 
-    call int_find('MuPoints', pot%nMu, subsearch_start, subsearch_end, found)
-    call float_find('Temperature', temp%temp, subsearch_start, subsearch_end, found)
+    call int_find('MuPoints', pot%nMu, search_start, search_end, found)
+    call float_find('Temperature', temp%temp, search_start, search_end, found)
+    call float_find('MuMinimum', pot%MuMin, search_start, search_end, found)
+    call float_find('MuMaximum', pot%MuMax, search_start, search_end, found)
 
-    call float_find('MuMinimum', pot%MuMin, subsearch_start, subsearch_end, found)
-    call float_find('MuMaximum', pot%MuMax, subsearch_start, subsearch_end, found)
+    if (pot%MuMin > pot%MuMax) then
+      call stop_with_message(stderr, 'MuMinimum must be smaller than MuMaximum')
+    endif
     ! with respect to Fermi level at given Temperature
     ! shift afterwards
 
-    call float_find('ScatteringRate', floattemp, subsearch_start, subsearch_end, found)
+    call float_find('ScatteringRate', floattemp, search_start, search_end, found)
     allocate(sct%gamcoeff(1))
     sct%gamcoeff(1) = floattemp
-    call float_find('QuasiParticleWeights', floattemp, subsearch_start, subsearch_end, found)
+    call float_find('QuasiParticleWeight', floattemp, search_start, search_end, found)
     allocate(sct%zqpcoeff(1))
     sct%zqpcoeff(1) = floattemp
   endif
@@ -371,7 +376,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 end subroutine read_config
 
 
-subroutine check_config(algo)
+subroutine check_files(algo)
   implicit none
   type(algorithm) :: algo
   logical         :: there
@@ -395,6 +400,6 @@ subroutine check_config(algo)
     endif
   endif
 
-end subroutine check_config
+end subroutine check_files
 
 end module Mconfig

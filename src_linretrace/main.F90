@@ -74,7 +74,7 @@ program main
 #endif
 
   call read_config(algo, edisp, sct, temp, pot, imp)
-  call check_config(algo)
+  call check_files(algo)
 
   call hdf5_init()
   ! read the energies, derivatives, diagonal optical elements
@@ -141,8 +141,9 @@ program main
     ! define Chemical potential grid
     pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
     do imu=1,pot%nMu
-       pot%MM(imu)=real(iT-1,8)*pot%dMu+pot%MuMin
+       pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
     enddo
+
   endif
 
   call mpi_genkstep(kmesh%nkp)
@@ -224,16 +225,47 @@ program main
     deallocate(edisp%Moptk)
   endif
 
+  ! final preparation step for chemical potential mode
+  if (algo%lMUMODE) then
+    ! info%iT = 1
+    ! info%Temp=temp%TT(info%iT)
+    ! info%beta=1.d0/(kB*info%Temp)
+    ! info%beta2p=info%beta/(2.d0*pi)
+
+    ! info%TempQ=real(info%Temp,16)
+    ! info%betaQ=1.q0/(kB*info%TempQ)
+    ! info%beta2pQ=info%betaQ/(2.q0*piQ)
+
+    ! ! find the equilibrium chemical potential
+    ! call find_mu(pot%mu,ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+
+    ! shift the chemical potential ranges by the calculated chemical potential
+    ! for the given temperature
+
+    pot%MuMin = pot%MuMin + pot%mu
+    pot%MuMax = pot%MuMax + pot%mu
+    pot%MM    = pot%MM + pot%mu
+  endif
+
 
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*)
     write(stdout,*) 'Option summary:'
     write(stdout,*)
+    if (algo%lTMODE) then
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
     write(stdout,*) '  Temperature points:   ', temp%nT
+    else if (algo%lMUMODE) then
+    write(stdout,*) '  Chemical Potential DFT: ', pot%mu
+    write(stdout,*) '  Chemical Potential range:'
+    write(stdout,*) '  Mumin: ', pot%Mumin
+    write(stdout,*) '  Mumax: ', pot%Mumax
+    write(stdout,*) '  Chemical Potential points:   ', pot%nMu
+    write(stdout,*) '  Temperature: ', temp%TT(1)
+    endif
     write(stdout,*)
     write(stdout,*) '  k-Points: ', kmesh%nkp
     write(stdout,*) '  spins: ', edisp%ispin
@@ -247,7 +279,7 @@ program main
     else
       write(stdout,*) '  gap: ', edisp%gap
     endif
-    if (.not. algo%muSearch .and. .not. algo%lOldmu) then
+    if (algo%lTMODE .and. .not. algo%muSearch .and. .not. algo%lOldmu) then
       write(stdout,*) '  constant chemical potential: ', pot%MM(1)
     else if (algo%lOldmu) then
       write(stdout,*) '  old chemical potentials from file: ', trim(adjustl(algo%old_output_file))
@@ -287,7 +319,7 @@ program main
     write(stdout,*)
     write(stdout,*) 'Starting calculation...'
     write(stdout,*) '____________________________________________________________________________'
-    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV], totalEnergy[eV]'
+    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV]'
   endif
 
   if (myid .eq. master) then
@@ -303,40 +335,6 @@ program main
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
 
-  ! final preparation step for chemical potential mode
-  if (algo%lMUMODE) then
-    info%iT = 1
-    info%Temp=temp%TT(iT)
-    info%beta=1.d0/(kB*info%Temp)
-    info%beta2p=info%beta/(2.d0*pi)
-
-    info%TempQ=real(info%Temp,16)
-    info%betaQ=1.q0/(kB*info%TempQ)
-    info%beta2pQ=info%betaQ/(2.q0*piQ)
-
-    if (edisp%gapped_complete) then
-      if (algo%muFermi) then
-        ! use quadruple precision
-        ! internally use refinement method if in the right temperature range
-        call find_mu(pot%mu,ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-      else
-        ! also use quadruple precision
-        ! however the root-finding can be aborted earlier
-        call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-      endif
-    else
-      ! if the system is not gapped, simple double precision is enough
-      ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
-      ! fuck it
-      call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-    endif
-
-    ! shift the chemical potential ranges by the calculated chemical potential
-    ! for the given temperature
-    pot%MuMin = pot%MuMin + pot%mu
-    pot%MuMax = pot%MuMax + pot%mu
-    pot%MM    = pot%MM + pot%mu
-  endif
 
 
   ! MAIN LOOP
@@ -447,7 +445,7 @@ program main
     endif
 
     if (myid.eq.master) then
-      write(stdout,*)info%Temp, info%beta, pot%MM(iT), energy(iT), niitact
+      write(stdout,'(3X,3F15.7,I7)') info%Temp, info%beta, pot%MM(iT), niitact
     endif
 
     ! calculate the polygamma function (1...3)

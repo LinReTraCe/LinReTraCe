@@ -427,7 +427,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
   ! i.e. the fermi function with quadruple precision is not accurate neough
-  if (.not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
+  if (algo%lTMODE .and. .not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
     call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
     mu = real(mu_qp, 8) ! transform back to dp
     return
@@ -606,7 +606,7 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   ! nvalence = nsearch - N_D^+ + N_A^-
   ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
+  if (algo%lTMODE .and. algo%lImpurities) then
     do iimp = 1,imp%nimp
       if (.not. imp%Band(iimp)) then
         occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
@@ -677,7 +677,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   ! nvalence = nsearch - N_D^+ + N_A^-
   ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
+  if (algo%lTMODE .and. algo%lImpurities) then
     do iimp = 1,imp%nimp
       if (.not. imp%Band(iimp)) then
         occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
@@ -1089,7 +1089,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   ! nvalence = nsearch - N_D^+ + N_A^-
   ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
-  if (algo%lImpurities) then
+  if (algo%lTMODE .and. algo%lImpurities) then
     do iimp = 1,imp%nimp
       ! so we are strictly between 0 and 1
       ! for numerical reasons

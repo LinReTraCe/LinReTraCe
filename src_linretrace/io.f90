@@ -47,7 +47,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   call hdf5_read_data(ifile, "/.bands/opticalBandMax", edisp%nbopt_max)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
-  if (algo%muSearch) then
+  if ((algo%lTMODE .and. algo%muSearch) .or. algo%lMUMODE) then  ! in order to not overwrite variable
     call hdf5_read_data(ifile, "/.bands/mu",           pot%mu)
   endif
 
