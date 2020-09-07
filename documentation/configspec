@@ -29,6 +29,7 @@ ________________________________________________________________________________
 
 ChemicalPotential = (default = 0)  # if here run with the given mu
 OldOutput = (default = None) # old output file from which we take the mu(T)
+NImp = (default = 0) # number of additional impurity levels
 
 
 
@@ -50,9 +51,6 @@ QuasiParticleCoefficients = (default = None)
 
 ________________________________________________________________________________
 [[Impurities]]
-
-NImp = (default = 0) # number of additional impurity levels
-
 [[[1]]]
 # one of these 4 input types
 Absolute   = (default = None) # energy is absolute in [eV]
@@ -94,5 +92,4 @@ Debug options:
   Mpi : Output MPI information
   TempReverse : Reverse the temperature loop
   Dmudt : if TempReverse & Fermioccupation & gapped & below certain temperature apply derivative
-  ReduceIO: Buffer the sum output into an array of all temperature steps, output at the end
-  QuadResponse: Calculate the Intra and Interband quantities also in quad precision.
+  Quad: Calculate the Intra and Interband quantities also in quad precision.

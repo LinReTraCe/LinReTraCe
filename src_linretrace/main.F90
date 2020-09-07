@@ -172,7 +172,7 @@ program main
   ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
+  if (algo%lDebug .and. (index(algo%dbgstr,"Quad") .ne. 0)) then
     call allocate_response(algo, edisp, temp, qresp_intra)
     if (algo%lInterbandquantities) then
       call allocate_response(algo, edisp, temp, qresp_inter)
@@ -453,7 +453,7 @@ program main
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
       call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
       call initresp_qp(algo, qresp_intra)
       if (algo%lInterBandQuantities) then
@@ -495,7 +495,7 @@ program main
 
       ! quad precision for intra-band contribution
       ! test
-      if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+      if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
         call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
         if (algo%lBoltzmann) then
           call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
@@ -532,7 +532,7 @@ program main
       endif
     endif
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
       call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
       if (algo%lBoltzmann) then
         call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
