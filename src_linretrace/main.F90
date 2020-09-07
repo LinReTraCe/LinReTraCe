@@ -432,9 +432,13 @@ program main
     if (algo%lTMODE .and. algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
         .and. (index(algo%dbgstr,"TempReverse") .ne. 0) .and. info%Temp < edisp%gap_min / 1.95q0 &
         .and. algo%muFermi) then
-        pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
-                 (temp%TT(iT)-temp%TT(iT+1))
-        call log_master(stdout, 'Debug: Appling dmu/dT')
+        if (iT+2 <= temp%nT) then
+          pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
+                   (temp%TT(iT)-temp%TT(iT+1))
+          call log_master(stdout, 'Debug: Applying dmu/dT')
+        else
+          call stop_with_message(stderr, 'Debug: Cannot apply dmu/dT')
+        endif
     endif
 
     ! calculating total energy according to the occuption above

@@ -192,8 +192,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   if (algo%lTMODE) then
 
     call group_find('[TempMode]', search_start, search_end)
-    if (subsearch_start .le. 0) then
-      call stop_with_message(stderr, 'TempMode sub group not found')
+    if (search_start .le. 0) then
+      call stop_with_message(stderr, 'TempMode group not found')
     endif
 
     call float_find('ChemicalPotential', pot%mu, search_start, search_end, found)
