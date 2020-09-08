@@ -2380,11 +2380,11 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
       ! output at the last temperature step
       if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
         string = "/L0M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%s_sum_range)
+        call hdf5_write_data(ifile, string, resp%sB_sum_range)
         string = "/L1M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%a_sum_range)
+        call hdf5_write_data(ifile, string, resp%aB_sum_range)
         string = "/L2M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%x_sum_range)
+        call hdf5_write_data(ifile, string, resp%xB_sum_range)
       endif
     endif
 

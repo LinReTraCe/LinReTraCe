@@ -539,11 +539,11 @@ program main
     if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
       call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
       if (algo%lBoltzmann) then
-        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh)
       endif
 
       if (algo%lInterbandQuantities) then
-        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh)
+        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh, .false.)
         if (algo%lBoltzmann) then
           call response_h5_output_Q(qresp_inter_Boltzmann, "interQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
         endif
