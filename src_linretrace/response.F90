@@ -2188,8 +2188,17 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   real(16), allocatable :: qiaarr(:,:,:)
   real(16), allocatable :: qixarr(:,:,:)
 
+  ! magnetic quadruple response s/a/x array
+  real(16), allocatable :: qrsarrB(:,:,:,:) ! to collect the data
+  real(16), allocatable :: qraarrB(:,:,:,:)
+  real(16), allocatable :: qrxarrB(:,:,:,:)
+  real(16), allocatable :: qisarrB(:,:,:,:)
+  real(16), allocatable :: qiaarrB(:,:,:,:)
+  real(16), allocatable :: qixarrB(:,:,:,:)
+
   ! double complex (z) array
   complex(8),  allocatable :: zdarr(:,:,:) ! for output
+  complex(8),  allocatable :: zdarrB(:,:,:,:) ! for output
 
   integer :: iband, ik, is
   integer :: ii, ij
@@ -2203,6 +2212,8 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
 
   allocate(zdarr(3,3,edisp%ispin))
 
+  ! we need these switches since the interband quantities
+  ! do not have these arrays
   if (algo%lBfield) then
     if(present(lBfield)) then
       if (lBfield) then
@@ -2215,6 +2226,17 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
     endif
   else
     lBoutput = .false.
+  endif
+
+  if (lBoutput) then
+    allocate(qrsarrB(3,3,3,edisp%ispin))
+    allocate(qraarrB(3,3,3,edisp%ispin))
+    allocate(qrxarrB(3,3,3,edisp%ispin))
+    allocate(qisarrB(3,3,3,edisp%ispin))
+    allocate(qiaarrB(3,3,3,edisp%ispin))
+    allocate(qixarrB(3,3,3,edisp%ispin))
+
+    allocate(zdarrB(3,3,3,edisp%ispin))
   endif
 
   if (myid.eq.master) then
@@ -2293,57 +2315,88 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
     endif
   endif
 
-  ! if (lBoutput) then
-  !   ! perform a local summation
-  !   ! these are already initialized to 0
-  !   do ik = ikstr,ikend
-  !     do iband = edisp%nbopt_min,edisp%nbopt_max
-  !       resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !       resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !       resp%xB_sum(:,:,:) = resp%xB_sum(:,:,:) + resp%xB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !     enddo
-  !   enddo
+  if (lBoutput) then
+    do ik = ikstr,ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        resp%sB_sum(:,:,:,:) = resp%sB_sum(:,:,:,:) + resp%sB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+        resp%aB_sum(:,:,:,:) = resp%aB_sum(:,:,:,:) + resp%aB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+        resp%xB_sum(:,:,:,:) = resp%xB_sum(:,:,:,:) + resp%xB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+      enddo
+    enddo
 
-  ! ! perform MPI summation
-! #ifdef MPI
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
+    ! perform MPI summation
+    qrsarrB = 0.q0
+    qraarrB = 0.q0
+    qrxarrB = 0.q0
+    qisarrB = 0.q0
+    qiaarrB = 0.q0
+    qixarrB = 0.q0
+    zdarrB = 0.d0
+#ifdef MPI
+    do ii=1,3
+      do ij=1,3
+        do ik=1,3
+          do is=1,edisp%ispin
+            call mpi_reduce_quad(real(resp%sB_sum(ii,ij,ik,is)),qrsarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%sB_sum(ii,ij,ik,is)),qisarrB(ii,ij,ik,is))
 
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
+            call mpi_reduce_quad(real(resp%aB_sum(ii,ij,ik,is)),qraarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%aB_sum(ii,ij,ik,is)),qiaarrB(ii,ij,ik,is))
 
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
-! #endif
+            call mpi_reduce_quad(real(resp%xB_sum(ii,ij,ik,is)),qrxarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%xB_sum(ii,ij,ik,is)),qixarrB(ii,ij,ik,is))
+          enddo
+        enddo
+      enddo
+    enddo
+#else
+    qrsarrB = real(resp%sB_sum)
+    qisarrB = aimag(resp%sB_sum)
 
-  !   resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-  !   resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)
-  !   resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs)
+    qraarrB = real(resp%aB_sum)
+    qiaarrB = aimag(resp%aB_sum)
 
-  !   if (myid .eq. master) then
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%sB_sum)
+    qrxarrB = real(resp%xB_sum)
+    qixarrB = aimag(resp%xB_sum)
+#endif
 
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%aB_sum)
+    qrsarrB = qrsarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+    qisarrB = qisarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+    qraarrB = qraarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+    qiaarrB = qiaarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+    qrxarrB = qrxarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
+    qixarrB = qixarrB * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
 
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%xB_sum)
+    ! should work=?
+    if (myid .eq. master) then
+      ! gather the data in the arrays
+      zdarrB = cmplx(real(qrsarrB,8),real(qisarrB,8))
+      resp%sB_sum_range(:,:,:,:,info%iT) = zdarrB
+      zdarrB = cmplx(real(qraarrB,8),real(qiaarrB,8))
+      resp%aB_sum_range(:,:,:,:,info%iT) = zdarrB
+      zdarrB = cmplx(real(qrxarrB,8),real(qixarrB,8))
+      resp%xB_sum_range(:,:,:,:,info%iT) = zdarrB
 
-  !   endif
-  ! endif ! Boutput
+      ! output at the last temperature step
+      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+        string = "/L0M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%s_sum_range)
+        string = "/L1M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%a_sum_range)
+        string = "/L2M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%x_sum_range)
+      endif
+    endif
+
+    deallocate(qrsarrB)
+    deallocate(qraarrB)
+    deallocate(qrxarrB)
+    deallocate(qisarrB)
+    deallocate(qiaarrB)
+    deallocate(qixarrB)
+
+    deallocate(zdarrB)
+  endif ! Boutput
 
   if (myid.eq.master) then
     call hdf5_close_file(ifile)
@@ -2355,7 +2408,6 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   deallocate(qisarr)
   deallocate(qiaarr)
   deallocate(qixarr)
-
   deallocate(zdarr)
 
 end subroutine
