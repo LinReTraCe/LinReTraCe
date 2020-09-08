@@ -104,7 +104,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
   algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
 
-  algo%lInterbandQuantities = .true.
+  algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
 
   algo%lEnergyOutput  = .false.
@@ -171,9 +171,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     call int_find('MuPoints', pot%nMu, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'MuPoints in MuMode group not found')
     call float_find('Temperature', temp%temp, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'Temperature in MuMode group not found')
     call float_find('MuMinimum', pot%MuMin, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'MuMinimum in MuMode group not found')
     call float_find('MuMaximum', pot%MuMax, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'MuMaximum in MuMode group not found')
 
     if (pot%MuMin > pot%MuMax) then
       call stop_with_message(stderr, 'MuMinimum must be smaller than MuMaximum')
@@ -182,9 +186,11 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     ! shift afterwards
 
     call float_find('ScatteringRate', floattemp, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'ScatteringRate in MuMode group not found')
     allocate(sct%gamcoeff(1))
     sct%gamcoeff(1) = floattemp
     call float_find('QuasiParticleWeight', floattemp, search_start, search_end, found)
+    if (.not. found) call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group not found')
     allocate(sct%zqpcoeff(1))
     sct%zqpcoeff(1) = floattemp
   endif
