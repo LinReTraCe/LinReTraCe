@@ -1,7 +1,6 @@
 program main
   use Mparams
   use Maux
-  use Mdos
   use Mroot
   use Mtypes
   use Mmpi_org
@@ -18,6 +17,7 @@ program main
   type(dosgrid)     :: dos     ! DOS, integrated DOS, Fermi level
   type(scattering)  :: sct     ! scattering rates and quasi particle weights
   type(temperature) :: temp    ! temperature quantities
+  type(potential)   :: pot     ! chemical potential quantities
   type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
   type(impurity)    :: imp
 
@@ -27,8 +27,8 @@ program main
   type(response_dp) :: resp_inter_Boltzmann
 
   type(response_qp) :: qresp_intra
-  type(response_qp) :: qresp_inter
   type(response_qp) :: qresp_intra_Boltzmann
+  type(response_qp) :: qresp_inter
   type(response_qp) :: qresp_inter_Boltzmann
 
   integer(hid_t)    :: ifile_scatter
@@ -36,7 +36,7 @@ program main
   integer(hid_t)    :: ifile_output
 
 
-  integer :: is, ig, iT, ik, iband, iimp
+  integer :: is, ig, iT, ik, iband, iimp, imu
   integer :: niitact
   integer :: iTstart, iTend, iTstep
   logical :: igap
@@ -50,7 +50,6 @@ program main
   ! quantities saved on the Temperature grid
   ! and derived quantities
   real(8), allocatable :: energy(:) ! total energy
-  real(8), allocatable :: mu(:)     ! chemical potential (temperature dependent)
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -74,12 +73,12 @@ program main
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
 
-  call read_config(algo, edisp, sct, temp, imp)
-  call check_config(algo)
+  call read_config(algo, edisp, sct, temp, pot, imp)
+  call check_files(algo)
 
   call hdf5_init()
   ! read the energies, derivatives, diagonal optical elements
-  call read_preproc_energy_data(algo, kmesh, edisp, imp)
+  call read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   ! quick checks if run-options are in agreement with provided data
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
@@ -90,64 +89,62 @@ program main
     call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
   endif
 
-  ! calculate a purely DFT density of states with Laurentzian broadening
-  ! call gendosel (kmesh, edisp, dos) ! normalization already taken care of
-  ! call findef(dos, edisp)   ! finds the (non-interacting) Fermi level
 
-  ! if (myid.eq.master) then
-  !   do is = 1,edisp%ispin
-  !     if (dos%gap(is) == 0.d0) then
-  !       write(stdout,*) 'Detected no band gap in spin ', is, ' / ', edisp%ispin
-  !     else
-  !       write(stdout,*) 'Detected band gap of size: ', dos%gap(is), 'in spin ', is, ' / ', edisp%ispin
-  !     endif
-  !   enddo
-  ! endif
+  if (algo%lTMODE) then
+    ! construct temperature grid
+    if (algo%lScatteringFile) then
+      ! at this point we just extract the temperature ranges
+      ! and check wether bandshifts exist
+      ! the scattering rates then gets loaded for each temperature-point
+      call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
+    else
+      temp%dT= (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
+      allocate(temp%TT(temp%nT))
+      allocate(temp%BB(temp%nT))
+      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
-  ! starting point for the chemical potential
-  ! if (myid.eq.master) then
-  !    if (algo%muSearch) then
-  !       write(stdout,*) 'initialized LDA mu = ', edisp%efer
-  !    else
-  !       write(stdout,*) 'Running with fixed mu read from file = ',  edisp%mu
-  !    endif
-  ! endif
+      ! define Temperature grid
+      do iT=1,temp%nT
+         temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
+      enddo
+      temp%BB = 1.d0/(temp%TT * kB)
+    endif
+    pot%nMu = temp%nT
 
 
-  ! construct temperature grid
-  if (algo%lScatteringFile) then
-    ! at this point we just extract the temperature ranges
-    ! and check wether bandshifts exist
-    ! the scattering rates then gets loaded for each temperature-point
-    call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
-  else
-    temp%dT= (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
-    allocate(temp%TT(temp%nT))
-    allocate(temp%beta(temp%nT))
+    allocate(energy(temp%nT))
+    energy = 0.d0
+    allocate(pot%MM(pot%nMu))
+    pot%MM = pot%mu ! here we either have the fixed mu
+                    ! or the mu_dft initialized from the preprocessed energy file
+
+    if (algo%lOldmu) then
+      call read_muT(temp, algo%old_output_file, pot%MM)
+    endif
+  endif
+
+  if (algo%lMUMODE) then
+    temp%nT = pot%nMu
+    allocate(temp%TT(pot%nMu))
+    allocate(temp%BB(pot%nMu))
     allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
-    ! define Temperature grid
-    do iT=1,temp%nT
-       temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
+    allocate(energy(pot%nMu))
+    energy = 0.d0
+    allocate(pot%MM(pot%nMu))
+
+    temp%TT = temp%temp
+    temp%BB = 1.d0/(temp%temp * kB)
+
+    ! define Chemical potential grid
+    pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
+    do imu=1,pot%nMu
+       pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
     enddo
-    temp%beta = 1.d0/(temp%TT * kB)
+
   endif
-
-
-  allocate(mu(temp%nT))
-  allocate(energy(temp%nT))
-
-  ! either we start with the LDA mu
-  ! or with the fixed mu from above
-  mu     = edisp%mu   ! here we either have the fixed mu
-                      ! or the mu_dft initialized from the preprocessed energy file
-  energy = 0.d0
-
-  if (algo%lOldmu) then
-    call read_muT(temp, algo%old_output_file, mu)
-  endif
-
 
   call mpi_genkstep(kmesh%nkp)
 
@@ -175,7 +172,7 @@ program main
   ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lDebug .and. (index(algo%dbgstr,"QuadResponse") .ne. 0)) then
+  if (algo%lDebug .and. (index(algo%dbgstr,"Quad") .ne. 0)) then
     call allocate_response(algo, edisp, temp, qresp_intra)
     if (algo%lInterbandquantities) then
       call allocate_response(algo, edisp, temp, qresp_inter)
@@ -191,7 +188,8 @@ program main
   endif
 
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
-  if (algo%lScatteringFile) then
+
+  if (algo%lTMODE .and. algo%lScatteringFile) then
     call hdf5_open_file(algo%input_scattering, ifile_scatter, rdonly=.true.)
   endif
 
@@ -227,16 +225,47 @@ program main
     deallocate(edisp%Moptk)
   endif
 
+  ! final preparation step for chemical potential mode
+  if (algo%lMUMODE) then
+    ! info%iT = 1
+    ! info%Temp=temp%TT(info%iT)
+    ! info%beta=1.d0/(kB*info%Temp)
+    ! info%beta2p=info%beta/(2.d0*pi)
+
+    ! info%TempQ=real(info%Temp,16)
+    ! info%betaQ=1.q0/(kB*info%TempQ)
+    ! info%beta2pQ=info%betaQ/(2.q0*piQ)
+
+    ! ! find the equilibrium chemical potential
+    ! call find_mu(pot%mu,ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+
+    ! shift the chemical potential ranges by the calculated chemical potential
+    ! for the given temperature
+
+    pot%MuMin = pot%MuMin + pot%mu
+    pot%MuMax = pot%MuMax + pot%mu
+    pot%MM    = pot%MM + pot%mu
+  endif
+
 
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*)
     write(stdout,*) 'Option summary:'
     write(stdout,*)
+    if (algo%lTMODE) then
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
     write(stdout,*) '  Temperature points:   ', temp%nT
+    else if (algo%lMUMODE) then
+    write(stdout,*) '  Chemical Potential DFT: ', pot%mu
+    write(stdout,*) '  Chemical Potential range:'
+    write(stdout,*) '  Mumin: ', pot%Mumin
+    write(stdout,*) '  Mumax: ', pot%Mumax
+    write(stdout,*) '  Chemical Potential points:   ', pot%nMu
+    write(stdout,*) '  Temperature: ', temp%TT(1)
+    endif
     write(stdout,*)
     write(stdout,*) '  k-Points: ', kmesh%nkp
     write(stdout,*) '  spins: ', edisp%ispin
@@ -250,8 +279,8 @@ program main
     else
       write(stdout,*) '  gap: ', edisp%gap
     endif
-    if (.not. algo%muSearch .and. .not. algo%lOldmu) then
-      write(stdout,*) '  constant chemical potential: ', edisp%mu
+    if (algo%lTMODE .and. .not. algo%muSearch .and. .not. algo%lOldmu) then
+      write(stdout,*) '  constant chemical potential: ', pot%MM(1)
     else if (algo%lOldmu) then
       write(stdout,*) '  old chemical potentials from file: ', trim(adjustl(algo%old_output_file))
     endif
@@ -290,7 +319,7 @@ program main
     write(stdout,*)
     write(stdout,*) 'Starting calculation...'
     write(stdout,*) '____________________________________________________________________________'
-    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV], totalEnergy[eV]'
+    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV]'
   endif
 
   if (myid .eq. master) then
@@ -305,6 +334,8 @@ program main
 #ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
+
+
 
   ! MAIN LOOP
   if (algo%lDebug .and. (index(algo%dbgstr,"TempReverse") .ne. 0)) then
@@ -332,7 +363,7 @@ program main
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature
-    if (algo%lScatteringFile) then
+    if (algo%lTMODE .and. algo%lScatteringFile) then
       ! as mentioned above
       ! apply the scissors:
       if (algo%lScissors) then
@@ -367,11 +398,11 @@ program main
 
     ! root finding (mu)
     niitact = 0
-    if (algo%muSearch) then
+    if (algo%lTMODE .and. algo%muSearch) then
 
       ! initialize the new chemical potential
       if (iT /= iTstart) then
-        mu(iT) = mu(iT-iTstep) ! we initialize it to the value from the previous iteration
+        pot%MM(iT) = pot%MM(iT-iTstep) ! we initialize it to the value from the previous iteration
                                ! this does nothing if mu is constant
       endif
 
@@ -381,49 +412,53 @@ program main
         if (algo%muFermi) then
           ! use quadruple precision
           ! internally use refinement method if in the right temperature range
-          call find_mu(mu(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+          call find_mu(pot%MM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
         else
           ! also use quadruple precision
           ! however the root-finding can be aborted earlier
-          call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+          call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
         endif
       else
         ! if the system is not gapped, simple double precision is enough
         ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
         ! fuck it
-        call find_mu(mu(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
       call cpu_time(tfinish)
       timings(1) = timings(1) + (tfinish - tstart)
       tstart = tfinish
     endif
 
-    if (algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
+    if (algo%lTMODE .and. algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
         .and. (index(algo%dbgstr,"TempReverse") .ne. 0) .and. info%Temp < edisp%gap_min / 1.95q0 &
         .and. algo%muFermi) then
-        mu(iT) = mu(iT+1) + (mu(iT+2)-mu(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
-                 (temp%TT(iT)-temp%TT(iT+1))
-        call log_master(stdout, 'Debug: Appling dmu/dT')
+        if (iT+2 <= temp%nT) then
+          pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
+                   (temp%TT(iT)-temp%TT(iT+1))
+          call log_master(stdout, 'Debug: Applying dmu/dT')
+        else
+          call stop_with_message(stderr, 'Debug: Cannot apply dmu/dT')
+        endif
     endif
 
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
-      call calc_total_energy_fermi(mu(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_fermi(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
     else
-      call calc_total_energy_digamma(mu(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_digamma(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (myid.eq.master) then
-      write(stdout,*)info%Temp, info%beta, mu(iT), energy(iT), niitact
+      write(stdout,'(3X,3F15.7,I7)') info%Temp, info%beta, pot%MM(iT), niitact
     endif
 
     ! calculate the polygamma function (1...3)
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
-    call calc_polygamma(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info)
+    call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
-      call calc_polygamma(PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+      call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
       call initresp_qp(algo, qresp_intra)
       if (algo%lInterBandQuantities) then
         call initresp_qp(algo, qresp_inter)
@@ -458,21 +493,21 @@ program main
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
       ! calculate the response
-      call calc_response(PolyGamma, mu(iT), edisp, sct, kmesh, algo, info, &
+      call calc_response(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info, &
                          resp_intra, resp_intra_Boltzmann, &
                          resp_inter, resp_inter_Boltzmann)
 
       ! quad precision for intra-band contribution
       ! test
-      if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
-        call response_intra_km_Q(qresp_intra, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+      if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+        call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
         if (algo%lBoltzmann) then
-          call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, mu(iT), edisp, sct, kmesh, algo, info)
+          call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
         endif
         if (algo%lInterBandQuantities) then
-          call response_inter_km_Q(qresp_inter, PolyGammaQ, mu(iT), edisp, sct, kmesh, algo, info)
+          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, mu(iT), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
           endif
         endif
       endif
@@ -501,14 +536,14 @@ program main
       endif
     endif
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "QuadResponse") .ne. 0)) then
+    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
       call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
       if (algo%lBoltzmann) then
-        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh)
       endif
 
       if (algo%lInterbandQuantities) then
-        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh)
+        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh, .false.)
         if (algo%lBoltzmann) then
           call response_h5_output_Q(qresp_inter_Boltzmann, "interQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
         endif
@@ -518,7 +553,7 @@ program main
     ! output the renormalized energies defined by Z*(ek - mu)
     ! for each temperature point
     if (myid.eq.master .and. algo%lEnergyOutput) then
-      call output_energies(mu(iT), algo, edisp,kmesh,sct,info)
+      call output_energies(pot%MM(iT), algo, edisp,kmesh,sct,info)
     endif
 
     call cpu_time(tfinish)
@@ -531,7 +566,7 @@ program main
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
-    call hdf5_write_data(ifile_output, '.quantities/mu', mu)
+    call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
     call hdf5_close_file(ifile_output)
   endif

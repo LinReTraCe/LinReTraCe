@@ -5,7 +5,7 @@ PROG = linretrace
 INSTALL_DIR = ../bin
 
 DIGAMMA = ./digamma/cern_digamma.a
-OBJECTS = types.o params.o mpi_org.o dos.o\
+OBJECTS = types.o params.o mpi_org.o \
 				main.o hdf5_wrapper.o io.o fermi.o \
 				aux.o lookup.o config.o response.o root.o
 
@@ -40,12 +40,12 @@ $(INSTALL_DIR)/$(PROG): $(OBJECTS)
 %.o: %.F90
 	$(FC) $(FFLAGS) $(FPPFLAGS) $(LIBS) $(HDF5) -c $< -o $@
 
-main.o: params.o mpi_org.o types.o io.o aux.o dos.o config.o response.o root.o hdf5_wrapper.o
+main.o: params.o mpi_org.o types.o io.o aux.o config.o response.o root.o hdf5_wrapper.o
 aux.o: mpi_org.o
 response.o: mpi_org.o types.o params.o hdf5_wrapper.o fermi.o
 root.o: mpi_org.o params.o types.o fermi.o aux.o
 io.o: params.o types.o hdf5_wrapper.o aux.o
-dos.o: params.o types.o aux.o
+# dos.o: params.o types.o aux.o
 config.o: params.o lookup.o aux.o types.o
 fermi.o: params.o
 

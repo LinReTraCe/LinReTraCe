@@ -8,20 +8,26 @@ module Mtypes
   ! the way we treat the chemical potential
   ! also contains the file names of the input files
   type algorithm
+    logical :: lTMODE         ! temperature mode
+    logical :: lMUMODE        ! mu mode
+
     logical :: lDebug         ! debug mode --> evaluate quad precision data?
     logical :: lBfield        ! calculations in the presence of a magnetic field
                               ! this requires the existance of the band derivatives
+
     integer :: rootMethod     ! numerical method to find the chemical potential
     logical :: muSearch       ! mu fixed or find mu?
     logical :: lOldmu         ! mus from old run?
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
     logical :: lScatteringFile       ! do we get the scattering information from another file
     logical :: lInterBandQuantities  ! calc inter band response
+    logical :: lIntraBandQuantities  ! calc intra band response
     logical :: lFullOutput    ! output full response dependency
     logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response
     logical :: lScissors      ! apply gap widening
     logical :: lImpurities    ! include impurity levels
+
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
     character(len=256) :: output_file
@@ -51,8 +57,6 @@ module Mtypes
     logical :: lBandShift   ! do we get band_shifts from the scattering file?
     logical :: lFullMoments ! do we have the full optical elements (n n' dependence)
     integer :: iOptical     ! number of optical elements 3 6 or 9
-    real(8) :: efer         ! Fermi energy       -- only for temporary use in config file
-    real(8) :: mu           ! chemical potential -- only for temporary use in config file
     real(8) :: nelect
 
     ! gap information
@@ -126,7 +130,20 @@ module Mtypes
     real(8) :: Tmax                ! top of the temperature window
     real(8) :: dT                  ! temperature spacing
     real(8), allocatable :: TT(:)  ! temperature grid [K]
-    real(8), allocatable :: beta(:)! inverse temperature grid [eV]
+    real(8), allocatable :: BB(:)  ! inverse temperature grid [eV]
+
+    real(8) :: temp                ! temporary variable
+  end type
+
+  type potential
+    integer :: nMu
+    integer :: Mustep
+    real(8) :: MuMin
+    real(8) :: MuMax
+    real(8) :: dMu
+    real(8), allocatable :: MM(:)
+
+    real(8) :: mu                ! temporary variable
   end type
 
   type runinfo
@@ -140,6 +157,9 @@ module Mtypes
     real(16) :: TempQ
     real(16) :: betaQ
     real(16) :: beta2pQ
+
+    real(8)  :: mu
+    real(16) :: muQ
 
     integer  :: ik
   end type
@@ -179,12 +199,12 @@ module Mtypes
     complex(8), allocatable :: xB_sum(:,:,:,:)
 
     ! gather arrays for all T-points of the band and k-summed quantities
-    complex(8), allocatable :: s_sum_temp(:,:,:,:)
-    complex(8), allocatable :: sB_sum_temp(:,:,:,:,:)
-    complex(8), allocatable :: a_sum_temp(:,:,:,:)
-    complex(8), allocatable :: aB_sum_temp(:,:,:,:,:)
-    complex(8), allocatable :: x_sum_temp(:,:,:,:)
-    complex(8), allocatable :: xB_sum_temp(:,:,:,:,:)
+    complex(8), allocatable :: s_sum_range(:,:,:,:)
+    complex(8), allocatable :: sB_sum_range(:,:,:,:,:)
+    complex(8), allocatable :: a_sum_range(:,:,:,:)
+    complex(8), allocatable :: aB_sum_range(:,:,:,:,:)
+    complex(8), allocatable :: x_sum_range(:,:,:,:)
+    complex(8), allocatable :: xB_sum_range(:,:,:,:,:)
   end type
 
   type response_qp
@@ -214,12 +234,12 @@ module Mtypes
 
     ! gather arrays for all T-points of the band and k-summed quantities
     ! these have to be double precision not quadruple ( they are for output only)
-    complex(8), allocatable :: s_sum_temp(:,:,:,:)
-    complex(8), allocatable :: sB_sum_temp(:,:,:,:,:)
-    complex(8), allocatable :: a_sum_temp(:,:,:,:)
-    complex(8), allocatable :: aB_sum_temp(:,:,:,:,:)
-    complex(8), allocatable :: x_sum_temp(:,:,:,:)
-    complex(8), allocatable :: xB_sum_temp(:,:,:,:,:)
+    complex(8), allocatable :: s_sum_range(:,:,:,:)
+    complex(8), allocatable :: sB_sum_range(:,:,:,:,:)
+    complex(8), allocatable :: a_sum_range(:,:,:,:)
+    complex(8), allocatable :: aB_sum_range(:,:,:,:,:)
+    complex(8), allocatable :: x_sum_range(:,:,:,:)
+    complex(8), allocatable :: xB_sum_range(:,:,:,:,:)
   end type
 
 end module Mtypes

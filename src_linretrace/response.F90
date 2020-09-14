@@ -1200,18 +1200,18 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
   if (myid .eq. master) then
     ! gather the data in the arrays
-    resp%s_sum_temp(:,:,:,info%iT) = resp%s_sum
-    resp%a_sum_temp(:,:,:,info%iT) = resp%a_sum
-    resp%x_sum_temp(:,:,:,info%iT) = resp%x_sum
+    resp%s_sum_range(:,:,:,info%iT) = resp%s_sum
+    resp%a_sum_range(:,:,:,info%iT) = resp%a_sum
+    resp%x_sum_range(:,:,:,info%iT) = resp%x_sum
 
     ! output at the last temperature step
     if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
       string = "/L0/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L1/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      call hdf5_write_data(ifile, string, resp%a_sum_range)
       string = "/L2/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%x_sum_temp)
+      call hdf5_write_data(ifile, string, resp%x_sum_range)
     endif
   endif
 
@@ -1323,18 +1323,18 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       ! gather the data in the arrays
-      resp%sB_sum_temp(:,:,:,:,info%iT) = resp%sB_sum
-      resp%aB_sum_temp(:,:,:,:,info%iT) = resp%aB_sum
-      resp%xB_sum_temp(:,:,:,:,info%iT) = resp%xB_sum
+      resp%sB_sum_range(:,:,:,:,info%iT) = resp%sB_sum
+      resp%aB_sum_range(:,:,:,:,info%iT) = resp%aB_sum
+      resp%xB_sum_range(:,:,:,:,info%iT) = resp%xB_sum
 
       ! output at the last temperature step
       if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
         string = "/L0M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%sB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%sB_sum_range)
         string = "/L1M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%aB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%aB_sum_range)
         string = "/L2M/" // trim(adjustl(gname)) // "/sum"
-        call hdf5_write_data(ifile, string, resp%xB_sum_temp)
+        call hdf5_write_data(ifile, string, resp%xB_sum_range)
       endif
     endif
   endif ! Boutput
@@ -1454,9 +1454,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid.eq.master) then
-    allocate(dpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
   endif
 
 
@@ -1469,9 +1469,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
     allocate(dpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid.eq.master) then
-      allocate(dpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 
@@ -1493,9 +1493,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid .eq. master) then
-    allocate(qpresp%s_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%a_sum_temp(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%x_sum_temp(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
   endif
 
   if (algo%lBfield) then
@@ -1507,9 +1507,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
     allocate(qpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid .eq. master) then
-      allocate(qpresp%sB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%aB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%xB_sum_temp(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
     endif
   endif
 end subroutine qpresp_alloc
@@ -1781,7 +1781,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) &
                                * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ &
-                               / (4.d0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+                               / (4.q0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
 
   resp%a_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) * enrgy &
@@ -1792,7 +1792,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   resp%a_full(1,1,:,:,info%ik) = resp%a_full(1,1,:,:,info%ik) &
                                * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ &
-                               / (4.d0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+                               / (4.q0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
 
   resp%x_full(1,1,:,:,info%ik) =  real(PolyGamma(1,:,info%ik,:)) &
@@ -1805,56 +1805,56 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   resp%x_full(1,1,:,:,info%ik) = resp%x_full(1,1,:,:,info%ik) &
                                * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ &
-                               / (4.d0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+                               / (4.q0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
 
   if (algo%lBfield) then
 
     resp%sB_full(1,1,1,:,:,info%ik) = real(PolyGamma(3,:,info%ik,:)) &
-                                      * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ**2 / (4.d0 * piQ**2) &
+                                      * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ**2 / (4.q0 * piQ**2) &
                                   - real(PolyGamma(2,:,info%ik,:)) &
-                                    * 3.d0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
-                                  + real(PolyGamma(1,:,info%ik,:)) * 3.d0
+                                    * 3.q0 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
+                                  + real(PolyGamma(1,:,info%ik,:)) * 3.q0
 
     resp%sB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) &
                                   * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
-                                  / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+                                  / (16.q0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
     resp%aB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
-                                       * info%betaQ**2 / (4.d0 * piQ**2) &
+                                       * info%betaQ**2 / (4.q0 * piQ**2) &
                                   + aimag(PolyGamma(3,:,info%ik,:)) &
-                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ**3 / (4.d0 * piQ**2) &
+                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ**3 / (4.q0 * piQ**2) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
-                                       * 3.d0 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
+                                       * 3.q0 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2pQ &
                                   - aimag(PolyGamma(2,:,info%ik,:)) &
                                        * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta2pQ &
-                                  +  real(PolyGamma(1,:,info%ik,:)) * 3.d0 * enrgy
+                                  +  real(PolyGamma(1,:,info%ik,:)) * 3.q0 * enrgy
 
     resp%aB_full(1,1,1,:,:,info%ik) = resp%aB_full(1,1,1,:,:,info%ik) &
-                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ / (16.d0 * piQ**4 &
+                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ / (16.q0 * piQ**4 &
                                   * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
 
     resp%xB_full(1,1,1,:,:,info%ik) =  real(PolyGamma(3,:,info%ik,:)) &
                                        * info%betaQ**2 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 - enrgy**2) &
-                                       / (4.d0 * piQ**2) &
+                                       / (4.q0 * piQ**2) &
                                   - aimag(PolyGamma(3,:,info%ik,:)) &
                                        * info%betaQ**2 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 &
-                                       / (2.d0 * piQ) &
+                                       / (2.q0 * piQ) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
                                        * info%betaQ * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2) &
-                                       / (2.d0 * piQ) &
+                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.q0*enrgy**2) &
+                                       / (2.q0 * piQ) &
                                   + aimag(PolyGamma(2,:,info%ik,:)) &
                                        * info%betaQ * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 / piQ &
                                   -  real(PolyGamma(1,:,info%ik,:)) &
-                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2)
+                                       * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.q0*enrgy**2)
 
     resp%xB_full(1,1,1,:,:,info%ik) = resp%xB_full(1,1,1,:,:,info%ik) &
-                                  * (-1.d0) * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
-                                  / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+                                  * (-1.q0) * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
+                                  / (16.q0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
 
   endif
 
@@ -1925,7 +1925,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
           calc_sigma = calc_sigma &
                      * sct%zqp(iband1,info%ik,is)**2 * info%betaQ &
-                     / (4.d0 * piQ**3 * sct%gam(iband1,info%ik,is))
+                     / (4.q0 * piQ**3 * sct%gam(iband1,info%ik,is))
 
           calc_alpha =  real(PolyGamma(1,iband1,info%ik,is)) * enrgy(iband1,is) &
                      -  real(PolyGamma(2,iband1,info%ik,is)) * enrgy(iband1,is) * sct%gam(iband1,info%ik,is) * info%beta2pQ &
@@ -1933,7 +1933,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
           calc_alpha = calc_alpha &
                      * sct%zqp(iband1,info%ik,is)**2 * info%betaQ &
-                     / (4.d0 * piQ**3 * sct%gam(iband1,info%ik,is))
+                     / (4.q0 * piQ**3 * sct%gam(iband1,info%ik,is))
 
           calc_xi    =  real(PolyGamma(1,iband1,info%ik,is)) &
                         * (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2) &
@@ -1944,7 +1944,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
           calc_xi    = calc_xi &
                        * sct%zqp(iband1,info%ik,is)**2 * info%betaQ &
-                       / (4.d0 * piQ**3 * sct%gam(iband1,info%ik,is))
+                       / (4.q0 * piQ**3 * sct%gam(iband1,info%ik,is))
 
         else
           calc_sigma = real(PolyGamma(1,iband1,info%ik,is)) &
@@ -1953,7 +1953,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
           calc_sigma = calc_sigma &
                      + aimag(PolyGamma(1,iband1,info%ik,is)) &
-                     * (2.d0* (-enrgydiff(is)))
+                     * (2.q0* (-enrgydiff(is)))
 
           calc_sigma = calc_sigma &
                      + real(PolyGamma(1,iband2,info%ik,is)) &
@@ -1962,7 +1962,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
           calc_sigma = calc_sigma &
                      + aimag(PolyGamma(1,iband2,info%ik,is)) &
-                     * (2.d0* enrgydiff(is))
+                     * (2.q0* enrgydiff(is))
 
           calc_sigma = calc_sigma &
                      * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
@@ -1970,29 +1970,29 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                      * info%betaQ
 
           calc_sigma = calc_sigma &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
 
           calc_alpha = real(PolyGamma(1,iband1,info%ik,is)) &
                      * (enrgy(iband1,is) * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
-                     / sct%gam(iband1,info%ik,is) + 2.d0*sct%gam(iband1,info%ik,is)*enrgydiff(is))
+                     / sct%gam(iband1,info%ik,is) + 2.q0*sct%gam(iband1,info%ik,is)*enrgydiff(is))
 
           calc_alpha = calc_alpha &
                      + aimag(PolyGamma(1,iband1,info%ik,is)) &
                      * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                     - 2.d0*enrgy(iband1,is)*enrgydiff(is))
+                     - 2.q0*enrgy(iband1,is)*enrgydiff(is))
 
           calc_alpha = calc_alpha &
                      + real(PolyGamma(1,iband2,info%ik,is)) &
                      * (enrgy(iband2,is) * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
-                     / sct%gam(iband2,info%ik,is) + 2.d0*sct%gam(iband2,info%ik,is)*enrgydiff(is)*(-1.d0))
+                     / sct%gam(iband2,info%ik,is) + 2.q0*sct%gam(iband2,info%ik,is)*enrgydiff(is)*(-1.q0))
 
           calc_alpha = calc_alpha &
                      + aimag(PolyGamma(1,iband2,info%ik,is)) &
                      * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                     - 2.d0*enrgy(iband2,is)*enrgydiff(is)*(-1.d0))
+                     - 2.q0*enrgy(iband2,is)*enrgydiff(is)*(-1.q0))
 
           calc_alpha = calc_alpha &
                      * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is) &
@@ -2000,7 +2000,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                      * info%betaQ
 
           calc_alpha = calc_alpha &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
@@ -2009,7 +2009,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                      * (enrgydiff(is) + ciQ*gamdiff(is)) &
                      * (enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is)))) &
                      * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * sct%gam(iband2,info%ik,is) &
-                     * info%betaQ / (2.d0 * piQ**3)
+                     * info%betaQ / (2.q0 * piQ**3)
 
           calc_xi    = calc_xi &
                      + real(PolyGamma(1,iband2,info%ik,is) &
@@ -2017,7 +2017,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
                      * (-enrgydiff(is) - ciQ*gamdiff(is)) &
                      * (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is)))) &
                      * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * sct%gam(iband1,info%ik,is) &
-                     * info%betaQ / (2.d0 * piQ**3)
+                     * info%betaQ / (2.q0 * piQ**3)
 
           calc_xi    = calc_xi &
                      / ((enrgydiff(is)**2 + gamdiff(is)**2) &
@@ -2188,8 +2188,17 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   real(16), allocatable :: qiaarr(:,:,:)
   real(16), allocatable :: qixarr(:,:,:)
 
+  ! magnetic quadruple response s/a/x array
+  real(16), allocatable :: qrsarrB(:,:,:,:) ! to collect the data
+  real(16), allocatable :: qraarrB(:,:,:,:)
+  real(16), allocatable :: qrxarrB(:,:,:,:)
+  real(16), allocatable :: qisarrB(:,:,:,:)
+  real(16), allocatable :: qiaarrB(:,:,:,:)
+  real(16), allocatable :: qixarrB(:,:,:,:)
+
   ! double complex (z) array
   complex(8),  allocatable :: zdarr(:,:,:) ! for output
+  complex(8),  allocatable :: zdarrB(:,:,:,:) ! for output
 
   integer :: iband, ik, is
   integer :: ii, ij
@@ -2203,6 +2212,8 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
 
   allocate(zdarr(3,3,edisp%ispin))
 
+  ! we need these switches since the interband quantities
+  ! do not have these arrays
   if (algo%lBfield) then
     if(present(lBfield)) then
       if (lBfield) then
@@ -2215,6 +2226,17 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
     endif
   else
     lBoutput = .false.
+  endif
+
+  if (lBoutput) then
+    allocate(qrsarrB(3,3,3,edisp%ispin))
+    allocate(qraarrB(3,3,3,edisp%ispin))
+    allocate(qrxarrB(3,3,3,edisp%ispin))
+    allocate(qisarrB(3,3,3,edisp%ispin))
+    allocate(qiaarrB(3,3,3,edisp%ispin))
+    allocate(qixarrB(3,3,3,edisp%ispin))
+
+    allocate(zdarrB(3,3,3,edisp%ispin))
   endif
 
   if (myid.eq.master) then
@@ -2276,74 +2298,105 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   if (myid .eq. master) then
     ! gather the data in the arrays
     zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-    resp%s_sum_temp(:,:,:,info%iT) = zdarr
+    resp%s_sum_range(:,:,:,info%iT) = zdarr
     zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-    resp%a_sum_temp(:,:,:,info%iT) = zdarr
+    resp%a_sum_range(:,:,:,info%iT) = zdarr
     zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-    resp%x_sum_temp(:,:,:,info%iT) = zdarr
+    resp%x_sum_range(:,:,:,info%iT) = zdarr
 
     ! output at the last temperature step
     if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
       string = "/L0/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%s_sum_temp)
+      call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L1/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%a_sum_temp)
+      call hdf5_write_data(ifile, string, resp%a_sum_range)
       string = "/L2/" // trim(adjustl(gname)) // "/sum"
-      call hdf5_write_data(ifile, string, resp%x_sum_temp)
+      call hdf5_write_data(ifile, string, resp%x_sum_range)
     endif
   endif
 
-  ! if (lBoutput) then
-  !   ! perform a local summation
-  !   ! these are already initialized to 0
-  !   do ik = ikstr,ikend
-  !     do iband = edisp%nbopt_min,edisp%nbopt_max
-  !       resp%sB_sum(:,:,:) = resp%sB_sum(:,:,:) + resp%sB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !       resp%aB_sum(:,:,:) = resp%aB_sum(:,:,:) + resp%aB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !       resp%xB_sum(:,:,:) = resp%xB_sum(:,:,:) + resp%xB_full(:,:,iband,:,ik) * kmesh%weightQ(ik)
-  !     enddo
-  !   enddo
+  if (lBoutput) then
+    do ik = ikstr,ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        resp%sB_sum(:,:,:,:) = resp%sB_sum(:,:,:,:) + resp%sB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+        resp%aB_sum(:,:,:,:) = resp%aB_sum(:,:,:,:) + resp%aB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+        resp%xB_sum(:,:,:,:) = resp%xB_sum(:,:,:,:) + resp%xB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
+      enddo
+    enddo
 
-  ! ! perform MPI summation
-! #ifdef MPI
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
+    ! perform MPI summation
+    qrsarrB = 0.q0
+    qraarrB = 0.q0
+    qrxarrB = 0.q0
+    qisarrB = 0.q0
+    qiaarrB = 0.q0
+    qixarrB = 0.q0
+    zdarrB = 0.d0
+#ifdef MPI
+    do ii=1,3
+      do ij=1,3
+        do ik=1,3
+          do is=1,edisp%ispin
+            call mpi_reduce_quad(real(resp%sB_sum(ii,ij,ik,is)),qrsarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%sB_sum(ii,ij,ik,is)),qisarrB(ii,ij,ik,is))
 
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
+            call mpi_reduce_quad(real(resp%aB_sum(ii,ij,ik,is)),qraarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%aB_sum(ii,ij,ik,is)),qiaarrB(ii,ij,ik,is))
 
-  ! if (myid.eq.master) then
-  !   call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! else
-  !   call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
-  ! endif
-! #endif
+            call mpi_reduce_quad(real(resp%xB_sum(ii,ij,ik,is)),qrxarrB(ii,ij,ik,is))
+            call mpi_reduce_quad(aimag(resp%xB_sum(ii,ij,ik,is)),qixarrB(ii,ij,ik,is))
+          enddo
+        enddo
+      enddo
+    enddo
+#else
+    qrsarrB = real(resp%sB_sum)
+    qisarrB = aimag(resp%sB_sum)
 
-  !   resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-  !   resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge / hbarevs)
-  !   resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 * echarge**2 / hbarevs)
+    qraarrB = real(resp%aB_sum)
+    qiaarrB = aimag(resp%aB_sum)
 
-  !   if (myid .eq. master) then
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L0/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%sB_sum)
+    qrxarrB = real(resp%xB_sum)
+    qixarrB = aimag(resp%xB_sum)
+#endif
 
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L1/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%aB_sum)
+    qrsarrB = qrsarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qisarrB = qisarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qraarrB = qraarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qiaarrB = qiaarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qrxarrB = qrxarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qixarrB = qixarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
 
-  !     write(string,'(I6.6)') info%iT
-  !     string = trim(string) // "/L2/" // trim(adjustl(gname)) // "/sumM"
-  !     call hdf5_write_data(ifile, string, resp%xB_sum)
+    ! should work=?
+    if (myid .eq. master) then
+      ! gather the data in the arrays
+      zdarrB = cmplx(real(qrsarrB,8),real(qisarrB,8))
+      resp%sB_sum_range(:,:,:,:,info%iT) = zdarrB
+      zdarrB = cmplx(real(qraarrB,8),real(qiaarrB,8))
+      resp%aB_sum_range(:,:,:,:,info%iT) = zdarrB
+      zdarrB = cmplx(real(qrxarrB,8),real(qixarrB,8))
+      resp%xB_sum_range(:,:,:,:,info%iT) = zdarrB
 
-  !   endif
-  ! endif ! Boutput
+      ! output at the last temperature step
+      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+        string = "/L0M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%sB_sum_range)
+        string = "/L1M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%aB_sum_range)
+        string = "/L2M/" // trim(adjustl(gname)) // "/sum"
+        call hdf5_write_data(ifile, string, resp%xB_sum_range)
+      endif
+    endif
+
+    deallocate(qrsarrB)
+    deallocate(qraarrB)
+    deallocate(qrxarrB)
+    deallocate(qisarrB)
+    deallocate(qiaarrB)
+    deallocate(qixarrB)
+
+    deallocate(zdarrB)
+  endif ! Boutput
 
   if (myid.eq.master) then
     call hdf5_close_file(ifile)
@@ -2355,7 +2408,6 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   deallocate(qisarr)
   deallocate(qiaarr)
   deallocate(qixarr)
-
   deallocate(zdarr)
 
 end subroutine
