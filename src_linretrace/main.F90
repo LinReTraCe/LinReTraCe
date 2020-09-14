@@ -89,6 +89,11 @@ program main
     call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
   endif
 
+  if (.not. algo%lIntrabandQuantities .and. .not. algo%lInterbandQuantities) then
+    ! I will keep this running here
+    ! One may just want to look at the chemical potential // total energy
+    call log_master(stdout, 'Warning: Neither Intra nor Interband responses will be calculated')
+  endif
 
   if (algo%lTMODE) then
     ! construct temperature grid
@@ -492,17 +497,29 @@ program main
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-      ! calculate the response
-      call calc_response(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info, &
-                         resp_intra, resp_intra_Boltzmann, &
-                         resp_inter, resp_inter_Boltzmann)
 
-      ! quad precision for intra-band contribution
-      ! test
-      if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
-        call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+      ! double precision routines
+      if (algo%lIntrabandQuantities) then
+        call response_intra_km(resp_intra,  PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
         if (algo%lBoltzmann) then
-          call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        endif
+      endif
+
+      if (algo%lInterbandquantities) then
+        call response_inter_km(resp_inter, PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        if (algo%lBoltzmann) then
+          call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        endif
+      endif
+
+      ! quad precision routines
+      if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+        if (algo%lIntrabandQuantities) then
+          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          if (algo%lBoltzmann) then
+            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          endif
         endif
         if (algo%lInterBandQuantities) then
           call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
@@ -524,12 +541,14 @@ program main
 
     ! output the response
     ! this subroutines include the summations necessary
-    call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
-    if (algo%lBoltzmann) then
-      call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+    if (algo%lIntrabandQuantities) then
+      call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
+      if (algo%lBoltzmann) then
+        call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+      endif
     endif
     if (algo%lInterbandQuantities) then
-      ! here we don't have the Bfield quantities
+      ! here we don't have the Bfield quantities ... no optical elements yet
       call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
       if (algo%lBoltzmann) then
         call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
@@ -537,9 +556,11 @@ program main
     endif
 
     if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
-      call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
-      if (algo%lBoltzmann) then
-        call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh)
+      if (algo%lIntrabandQuantities) then
+        call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
+        if (algo%lBoltzmann) then
+          call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh)
+        endif
       endif
 
       if (algo%lInterbandQuantities) then

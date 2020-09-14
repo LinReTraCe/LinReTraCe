@@ -18,39 +18,6 @@ module Mresponse
 
   contains
 
-subroutine calc_response(PolyGamma, mu, edisp, sct, kmesh, algo, info, &
-           resp_intra, resp_intra_Boltzmann, &
-           resp_inter, resp_inter_Boltzmann)
-  implicit none
-  real(8), intent(in) :: mu
-
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
-
-  type(response_dp) :: resp_intra
-  type(response_dp) :: resp_intra_Boltzmann
-  type(response_dp) :: resp_inter
-  type(response_dp) :: resp_inter_Boltzmann
-
-  complex(8), intent(in) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
-
-  call response_intra_km(resp_intra,  PolyGamma, mu, edisp, sct, kmesh, algo, info)
-  if (algo%lBoltzmann) then
-    call response_intra_Boltzmann_km(resp_intra_Boltzmann, mu, edisp, sct, kmesh, algo, info)
-  endif
-
-  if (algo%lInterbandquantities) then
-    call response_inter_km(resp_inter, PolyGamma, mu, edisp, sct, kmesh, algo, info)
-    if (algo%lBoltzmann) then
-      call response_inter_Boltzmann_km(resp_inter_Boltzmann, mu, edisp, sct, kmesh, algo, info)
-    endif
-  endif
-
-end subroutine calc_response
-
 subroutine initresp(algo, dresp)
   implicit none
   type(algorithm)   :: algo
