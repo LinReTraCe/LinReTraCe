@@ -217,17 +217,17 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   ! FULL ELEMENTS -> if they are here we detect it and are able to calculate inter band contributions
   if (edisp%ispin == 2) then
-    if (hdf5_dataset_exists(ifile, "up/kPoint/000001/moments") .and. &
-        hdf5_dataset_exists(ifile, "dn/kPoint/000001/moments")) then
+    if (hdf5_dataset_exists(ifile, "up/kPoint/0000000001/moments") .and. &
+        hdf5_dataset_exists(ifile, "dn/kPoint/0000000001/moments")) then
       edisp%lFullMoments = .true.
-      call hdf5_get_shape(ifile, "up/kPoint/000001/moments", irank1arr)
+      call hdf5_get_shape(ifile, "up/kPoint/0000000001/moments", irank1arr)
     else
       edisp%lFullMoments = .false.
     endif
   else
-    if (hdf5_dataset_exists(ifile, "kPoint/000001/moments")) then
+    if (hdf5_dataset_exists(ifile, "kPoint/0000000001/moments")) then
       edisp%lFullMoments = .true.
-      call hdf5_get_shape(ifile, "/kPoint/000001/moments", irank1arr)
+      call hdf5_get_shape(ifile, "/kPoint/0000000001/moments", irank1arr)
     else
       edisp%lFullMoments = .false.
     endif
@@ -551,17 +551,17 @@ subroutine read_optical_elements(ifile, edisp, sct, info)
 
   if (edisp%ispin == 1) then
     if (allocated(darr3)) deallocate(darr3)
-    write(string,'("kPoint/",I6.6,"/moments")') info%ik
+    write(string,'("kPoint/",I10.10,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
     edisp%Moptk(:,:,:,1) = darr3
     deallocate(darr3)
   else
     if (allocated(darr3)) deallocate(darr3)
-    write(string,'("up/kPoint/",I6.6,"/moments")') info%ik
+    write(string,'("up/kPoint/",I10.10,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
     edisp%Moptk(:,:,:,1) = darr3
     deallocate(darr3)
-    write(string,'("dn/kPoint/",I6.6,"/moments")') info%ik
+    write(string,'("dn/kPoint/",I10.10,"/moments")') info%ik
     call hdf5_read_data(ifile, string, darr3)
     edisp%Moptk(:,:,:,2) = darr3
     deallocate(darr3)
