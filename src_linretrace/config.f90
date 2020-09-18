@@ -128,11 +128,19 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
   !--------------------------------------------------------------------------------
   call string_find('EnergyFile', algo%input_energies, search_start, search_end, found)
-  call bool_find('MuMode', algo%lMUMODE, search_start, search_end, found)
-  call bool_find('TempMode', algo%lTMODE, search_start, search_end, found)
+  call string_find('RunMode', str_temp, search_start, search_end, found)
+  if (.not. found) then
+    call stop_with_message(stderr, 'RunMode was not provided in [General]')
+  else
+    if (index('mu',to_lower(trim(str_temp))) .ne. 0) then
+      algo%lMUMODE = .true.
+    else if (index('temp',to_lower(trim(str_temp))) .ne. 0) then
+      algo%lTMODE = .true.
+    endif
+  endif
 
   if ((algo%lMUMODE .and. algo%lTMODE) .or. (.not. (algo%lMUMODE .or. algo%lTMODE)))then
-    call stop_with_message(stderr, 'Program has to be executed with either MuMode or TMode.')
+    call stop_with_message(stderr, 'Program has to be executed with RunMode = mu or temp.')
   endif
 
   call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
@@ -280,9 +288,9 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       impdescription(2) = 'Conduction'
       impdescription(3) = 'Percentage'
       allocate(imptype(0:2))
-      imptype(0) = 'Box'
-      imptype(1) = 'Lorentzian'
-      imptype(2) = 'Gaussian'
+      imptype(0) = 'box'
+      imptype(1) = 'lorentzian'
+      imptype(2) = 'gaussian'
 
       do iimp=1,imp%nimp
         write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
@@ -324,7 +332,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         else
           imp%Bandtype(iimp) = -1
           do i=0,2
-            if (index(trim(imptype(i)),trim(str_temp)) .ne. 0) then
+            if (index(trim(imptype(i)),to_lower(trim(str_temp))) .ne. 0) then
               imp%Bandtype(iimp) = i
             endif
           enddo

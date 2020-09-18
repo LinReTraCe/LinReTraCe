@@ -103,7 +103,11 @@ program main
       ! the scattering rates then gets loaded for each temperature-point
       call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
     else
-      temp%dT= (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
+      if (temp%nT .gt. 1) then
+        temp%dT = (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
+      else
+        temp%dT = 0 ! 0/0 ...
+      endif
       allocate(temp%TT(temp%nT))
       allocate(temp%BB(temp%nT))
       allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
@@ -162,9 +166,11 @@ program main
 
 
   ! allocate the arrays once outside of the main (temperature) loop
-  call allocate_response(algo, edisp, temp, resp_intra)
-  if (algo%lBoltzmann) then
-    call allocate_response(algo, edisp, temp, resp_intra_Boltzmann)
+  if (algo%lIntrabandQuantities) then
+    call allocate_response(algo, edisp, temp, resp_intra)
+    if (algo%lBoltzmann) then
+      call allocate_response(algo, edisp, temp, resp_intra_Boltzmann)
+    endif
   endif
   if (algo%lInterbandquantities) then
     call allocate_response(algo, edisp, temp, resp_inter)
@@ -313,6 +319,7 @@ program main
     write(stdout,*) '  full-output: ', algo%lFullOutput
     write(stdout,*)
     write(stdout,*) '  run-options:'
+    write(stdout,*) '  interband quantities: ', algo%lIntrabandQuantities
     write(stdout,*) '  interband quantities: ', algo%lInterbandQuantities
     write(stdout,*) '  Boltzmann quantities: ', algo%lBoltzmann
     write(stdout,*) '  B-field   quantities: ', algo%lBfield
