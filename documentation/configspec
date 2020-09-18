@@ -1,8 +1,8 @@
 ________________________________________________________________________________
 [General]
 EnergyFile = (default='')
-MuMode     = (default = F)
-TempMode   = (default = F)
+RunMode    = (default='')
+           # temp or mu
 
 Bandgap   = (default = None) # new size of bandgap
 
@@ -82,7 +82,7 @@ MuMaximum = (default = mu_fermi + 15 eV)
 MuPoints   = (default = 100)
 
 ScatteringRate = (default = None)
-QuasiParticleWeight = (defualt = 1)
+QuasiParticleWeight = (default = 1)
 
 ________________________________________________________________________________
 [Debug]
@@ -90,6 +90,8 @@ Debug string here (one oneline)
 
 Debug options:
   Mpi : Output MPI information
+  Quad: Calculate the Intra and Interband quantities also in quad precision.
+
+  # this should be the standard at release ... fully automatic detection & co.
   TempReverse : Reverse the temperature loop
   Dmudt : if TempReverse & Fermioccupation & gapped & below certain temperature apply derivative
-  Quad: Calculate the Intra and Interband quantities also in quad precision.
