@@ -58,6 +58,7 @@ module Mtypes
     logical :: lFullMoments ! do we have the full optical elements (n n' dependence)
     integer :: iOptical     ! number of optical elements 3 6 or 9
     real(8) :: nelect
+    real(8) :: config_nelect ! number of electrons given by config file # overwrites input file
 
     ! gap information
     logical              :: gapped_complete       ! is the system completely gapped (false if spin-dependnet gap)

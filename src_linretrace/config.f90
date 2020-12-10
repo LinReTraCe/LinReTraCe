@@ -217,6 +217,16 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .true.
     endif
 
+    call float_find('ElectronOccupation', edisp%config_nelect, search_start, search_end, found)
+    if (.not. found) then ! set to -1 if not found or wrong value
+      edisp%config_nelect = -1.d0
+    else
+      if (edisp%config_nelect <= 0.d0) then
+        edisp%config_nelect = -1.d0
+        call stop_with_message(stderr, 'Error: Negative number of electrons provided')
+      endif
+    endif
+
     call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
     if (found) then
       algo%lOldmu   = .true.

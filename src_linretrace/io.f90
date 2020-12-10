@@ -47,6 +47,16 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   call hdf5_read_data(ifile, "/.bands/opticalBandMax", edisp%nbopt_max)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
+  ! reset electron occupation from config file if it is invalid ... earlierst point to check is here
+  if (edisp%config_nelect >= kmesh%weightsum * edisp%nband_max) then ! too many electrons
+    edisp%config_nelect = -1.d0
+    call stop_with_message(stderr, 'Error: Number of electrons provided is above maximum')
+  endif
+
+  if ((edisp%config_nelect > 0.d0)) then
+    edisp%nelect = edisp%config_nelect
+  endif
+
   if ((algo%lTMODE .and. algo%muSearch) .or. algo%lMUMODE) then  ! in order to not overwrite variable
     call hdf5_read_data(ifile, "/.bands/mu",           pot%mu)
   endif
