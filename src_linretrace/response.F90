@@ -129,7 +129,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                        * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 &
                                        * info%beta**2 / (4.d0 * pi**2) &
                                   + aimag(PolyGamma(3,:,info%ik,:)) &
-                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta**3 / (4.d0 * pi**2) &
+                                       * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta**2 / (4.d0 * pi**2) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
                                        * 3.d0 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * info%beta2p &
                                   - aimag(PolyGamma(2,:,info%ik,:)) &
@@ -147,7 +147,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
                                        / (4.d0 * pi**2) &
                                   - aimag(PolyGamma(3,:,info%ik,:)) &
                                        * info%beta**2 * enrgy * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 &
-                                       / (2.d0 * pi) &
+                                       / (2.d0 * pi**2) &
                                   -  real(PolyGamma(2,:,info%ik,:)) &
                                        * info%beta * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
                                        * (sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 + 3.d0*enrgy**2) &
