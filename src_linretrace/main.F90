@@ -261,15 +261,14 @@ program main
 
   if (myid .eq. master) then
     write(stdout,*)
-    write(stdout,*)
-    write(stdout,*) 'Option summary:'
-    write(stdout,*)
     if (algo%lTMODE) then
+    write(stdout,*) 'TEMPERATURE MODE'
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
     write(stdout,*) '  Temperature points:   ', temp%nT
     else if (algo%lMUMODE) then
+    write(stdout,*) 'MU MODE'
     write(stdout,*) '  Chemical Potential DFT: ', pot%mu
     write(stdout,*) '  Chemical Potential range:'
     write(stdout,*) '  Mumin: ', pot%Mumin
@@ -278,6 +277,7 @@ program main
     write(stdout,*) '  Temperature: ', temp%TT(1)
     endif
     write(stdout,*)
+    write(stdout,*) 'INPUT'
     write(stdout,*) '  k-Points: ', kmesh%nkp
     write(stdout,*) '  spins: ', edisp%ispin
     write(stdout,*) '  electrons: ', edisp%nelect
@@ -290,10 +290,21 @@ program main
     else
       write(stdout,*) '  gap: ', edisp%gap
     endif
-    if (algo%lTMODE .and. .not. algo%muSearch .and. .not. algo%lOldmu) then
-      write(stdout,*) '  constant chemical potential: ', pot%MM(1)
-    else if (algo%lOldmu) then
-      write(stdout,*) '  old chemical potentials from file: ', trim(adjustl(algo%old_output_file))
+    if (algo%lTMODE) then
+      write(stdout,*)
+      if (algo%muSearch) then
+        if (algo%muFermi) then
+          write(stdout,*) '  chemical potential: determined via Fermi function'
+        else
+          write(stdout,*) '  chemical potential: determined via Digamma function'
+        endif
+      else
+        if (algo%lOldmu) then
+          write(stdout,*) '  chemical potential: from file: ', trim(adjustl(algo%old_output_file))
+        else
+          write(stdout,*) '  chemical potential: constant: ', pot%MM(1)
+        endif
+      endif
     endif
     write(stdout,*)
     if (algo%lScatteringFile) then
@@ -314,7 +325,7 @@ program main
       enddo
     endif
     write(stdout,*)
-    write(stdout,*) '  output-options:'
+    write(stdout,*) 'OUTPUT'
     write(stdout,*) '  output-file: ', trim(algo%output_file)
     write(stdout,*) '  full-output: ', algo%lFullOutput
     write(stdout,*)
@@ -325,10 +336,10 @@ program main
     write(stdout,*) '  B-field   quantities: ', algo%lBfield
     write(stdout,*)
     if (algo%lDebug) then
-      write(stdout,*) '  DEBUG MODE'
+      write(stdout,*) 'DEBUG MODE'
       write(stdout,*) '  DEBUG STRING: "', trim(adjustl(algo%dbgstr)),'"'
+      write(stdout,*)
     endif
-    write(stdout,*)
     write(stdout,*) 'Starting calculation...'
     write(stdout,*) '____________________________________________________________________________'
     write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV]'

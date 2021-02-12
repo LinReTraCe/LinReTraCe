@@ -2425,26 +2425,26 @@ integer function levicivita(dir1,dir2,dir3)
   else
     if (dir1 == 1) then
       if (dir2 == 2) then
-        levicivita =  1
+        levicivita =  1  ! 123
         return
       else
-        levicivita =  -1
+        levicivita =  -1 ! 132
         return
       endif
     else if (dir1 == 2) then
       if (dir2 == 3) then
-        levicivita =  1
+        levicivita =  1  ! 231
         return
       else
-        levicivita =  -1
+        levicivita =  -1 ! 213
         return
       endif
     else if (dir1 == 3) then
       if (dir2 == 1) then
-        levicivita =  1
+        levicivita =  1  ! 312
         return
       else
-        levicivita =  -1
+        levicivita =  -1 ! 321
         return
       endif
     endif
