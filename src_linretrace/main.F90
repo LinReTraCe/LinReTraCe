@@ -45,7 +45,8 @@ program main
   real(16):: ndevactQ
 
   character(len=128) :: string
-  real(8) :: tstart, tfinish, timings(4)
+  real(8) :: tstart, tfinish, timings(5)
+  real(8) :: time, maxtime
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -75,6 +76,9 @@ program main
 
   call read_config(algo, edisp, sct, temp, pot, imp)
   call check_files(algo)
+
+  timings = 0.d0        ! reset timings
+  call cpu_time(tstart) ! start timer
 
   call hdf5_init()
   ! read the energies, derivatives, diagonal optical elements
@@ -125,6 +129,7 @@ program main
     allocate(energy(temp%nT))
     energy = 0.d0
     allocate(pot%MM(pot%nMu))
+    allocate(pot%occ(pot%nMu))
     pot%MM = pot%mu ! here we either have the fixed mu
                     ! or the mu_dft initialized from the preprocessed energy file
 
@@ -134,6 +139,7 @@ program main
   endif
 
   if (algo%lMUMODE) then
+    ! construct mu grid
     temp%nT = pot%nMu
     allocate(temp%TT(pot%nMu))
     allocate(temp%BB(pot%nMu))
@@ -143,6 +149,7 @@ program main
     allocate(energy(pot%nMu))
     energy = 0.d0
     allocate(pot%MM(pot%nMu))
+    allocate(pot%occ(pot%nMu))
 
     temp%TT = temp%temp
     temp%BB = 1.d0/(temp%temp * kB)
@@ -351,8 +358,9 @@ program main
   endif
 
 
-  timings = 0.d0        ! reset timings
-  call cpu_time(tstart) ! start timer
+  call cpu_time(tfinish)
+  timings(1) = timings(1) + (tfinish - tstart)
+  tstart = tfinish
 
 #ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
@@ -448,7 +456,7 @@ program main
         call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
       call cpu_time(tfinish)
-      timings(1) = timings(1) + (tfinish - tstart)
+      timings(2) = timings(2) + (tfinish - tstart)
       tstart = tfinish
     endif
 
@@ -495,7 +503,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(2) = timings(2) + (tfinish - tstart)
+    timings(3) = timings(3) + (tfinish - tstart)
     tstart = tfinish
 
 
@@ -549,7 +557,7 @@ program main
     enddo
 
     call cpu_time(tfinish)
-    timings(3) = timings(3) + (tfinish - tstart)
+    timings(4) = timings(4) + (tfinish - tstart)
     tstart = tfinish
 
     ! if (myid.eq. master) then
@@ -596,7 +604,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(4) = timings(4) + (tfinish - tstart)
+    timings(5) = timings(5) + (tfinish - tstart)
     tstart = tfinish
 
   enddo ! end of the outer temperature loop
@@ -613,18 +621,21 @@ program main
 
    ! gather the timings
 #ifdef MPI
-   call MPI_allreduce(MPI_IN_PLACE, timings,size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
-   timings(:4) = timings(:4) / dble(nproc)
+   time = sum(timings)
+   call MPI_allreduce(MPI_IN_PLACE, timings, size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr) ! total CPU time
+   call MPI_allreduce(MPI_IN_PLACE, time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)      ! total real time
+   timings = timings / dble(nproc)
 #endif
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*) '  Timings (average) [s]:'
-    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(1)
-    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(2)
-    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(3)
-    write(stdout,'(A21,F19.6)') '    mpi + summation: ', timings(4)
+    write(stdout,'(A21,F19.6)') '    readin + alloc:  ', timings(1)
+    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(2)
+    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(3)
+    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(4)
+    write(stdout,'(A21,F19.6)') '    mpi + summation: ', timings(5)
     write(stdout,*)
-    write(stdout,'(A23,F17.6)') 'Total real time [s]:', sum(timings)
+    write(stdout,'(A23,F17.6)') 'Total real time [s]:', time
     write(stdout,'(A23,F17.6)') 'Total CPU  time [s]:', sum(timings) * dble(nproc)
     write(stdout,*)
   endif

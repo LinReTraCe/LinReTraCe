@@ -396,6 +396,11 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
+  if (algo%lTMODE) then
+    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'temp')
+  else if (algo%lMUMODE) then
+    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'mu')
+  endif
   call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
 
   ! output bandgap information to have access to it

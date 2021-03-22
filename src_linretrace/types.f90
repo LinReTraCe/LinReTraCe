@@ -142,9 +142,11 @@ module Mtypes
     real(8) :: MuMin
     real(8) :: MuMax
     real(8) :: dMu
-    real(8), allocatable :: MM(:)
+    real(8), allocatable  :: MM(:)  ! mu array
+    real(16), allocatable :: QMM(:) ! same mu array in quad precision
+    real(8), allocatable  :: occ(:) ! corresponding occupation
 
-    real(8) :: mu                ! temporary variable
+    real(8)  :: mu                ! temporary variable
   end type
 
   type runinfo

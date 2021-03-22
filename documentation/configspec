@@ -30,6 +30,7 @@ ________________________________________________________________________________
 ChemicalPotential = (default = 0)  # if here run with the given mu
 OldOutput = (default = None) # old output file from which we take the mu(T)
 NImp = (default = 0) # number of additional impurity levels
+ElectronOccupation = (default = -1) # number of electrons ... if not provided use the energyfile input
 
 
 

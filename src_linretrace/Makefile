@@ -51,9 +51,11 @@ fermi.o: params.o
 
 .PHONY: clean
 clean :
+	cd digamma; make clean
 	rm -f *.o *.mod
 
 .PHONY: pristine
 pristine:
+	cd digamma; make pristine
 	rm -f *.o *.mod
 	rm -f $(INSTALL_DIR)/$(PROG)
