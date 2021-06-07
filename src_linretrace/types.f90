@@ -27,6 +27,7 @@ module Mtypes
     logical :: lBoltzmann     ! calc boltzmann response
     logical :: lScissors      ! apply gap widening
     logical :: lImpurities    ! include impurity levels
+    logical :: lBfieldnew     ! new style elements
 
     character(len=256) :: input_energies
     character(len=256) :: input_scattering
@@ -89,6 +90,9 @@ module Mtypes
     ! the diagonal optical elements
     ! are loaded in one go
     real(8), allocatable    :: MoptDiag(:,:,:,:) ! 3..9, nband, spin, k-points
+
+    ! diagonal magnetic optical elements
+    real(8), allocatable    :: MBoptDiag(:,:,:,:,:,:) ! 3, 3, 3, nband, spin, k-points
   end type
 
   type impurity
@@ -125,6 +129,7 @@ module Mtypes
   end type
 
   type temperature
+    logical :: tlogarithmic        ! logarithmic steps
     integer :: nT                  ! number of points in the temperature window
     integer :: Tstep               ! +1 or -1
     real(8) :: Tmin                ! bottom of the temperature window

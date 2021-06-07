@@ -24,6 +24,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   real(8), allocatable :: drank1arr(:)
   real(8), allocatable :: drank2arr(:,:)
   real(8), allocatable :: drank3arr(:,:,:)
+  real(8), allocatable :: drank5arr(:,:,:,:,:)
 
   call hdf5_open_file(trim(adjustl(algo%input_energies)), ifile, rdonly=.true.)
 
@@ -257,6 +258,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   if (edisp%lDerivatives) then
     allocate(edisp%band_dk(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(edisp%band_d2k(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
+    allocate(edisp%MBoptdiag(3, 3, 3, edisp%nband_max, kmesh%nkp, edisp%ispin))
   endif
 
   if (edisp%ispin == 1) then
@@ -271,6 +273,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
     endif
+
+    if (algo%lBfieldnew) then
+      call hdf5_read_data(ifile, "/momentsDiagonalBfield",   drank5arr)
+      edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
+      deallocate(drank5arr)
+    endif
+
   else if (edisp%ispin == 2) then
     call hdf5_read_data(ifile, "/up/energies", drank2arr)
     edisp%band_original(:,:,1)     = drank2arr
@@ -292,6 +301,15 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
       call hdf5_read_data(ifile, "/dn/curvatures_sym",   drank3arr)
       edisp%band_d2k(:,:,:,2) = drank3arr
       deallocate(drank3arr)
+    endif
+
+    if (algo%lBfieldnew) then
+      call hdf5_read_data(ifile, "/up/momentsDiagonalBfield",   drank5arr)
+      edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
+      deallocate(drank5arr)
+      call hdf5_read_data(ifile, "/dn/momentsDiagonalBfield",   drank5arr)
+      edisp%MBoptDiag(:,:,:,:,:,2) = drank5arr
+      deallocate(drank5arr)
     endif
   endif
 

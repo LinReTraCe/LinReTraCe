@@ -167,7 +167,11 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights(resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(resp, edisp, info)
+    if (algo%lBfieldnew) then
+      call response_peierls_weights_new(resp, edisp, info)
+    else
+      call response_peierls_weights(resp, edisp, info)
+    endif
   endif
 
 
@@ -440,7 +444,11 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights(resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(resp, edisp, info)
+    if (algo%lBfieldnew) then
+      call response_peierls_weights_new(resp, edisp, info)
+    else
+      call response_peierls_weights(resp, edisp, info)
+    endif
   endif
 
 end subroutine response_intra_Boltzmann_km
@@ -493,7 +501,11 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   call response_intra_optical_weights_Q(resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(resp, edisp, info)
+    if (algo%lBfieldnew) then
+      call response_peierls_weights_new_Q(resp, edisp, info)
+    else
+      call response_peierls_weights_Q(resp, edisp, info)
+    endif
   endif
 
 end subroutine response_intra_Boltzmann_km_Q
@@ -1010,6 +1022,90 @@ subroutine response_peierls_weights_Q(resp, edisp, info)
     resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
     * ( sign1 * edisp%band_dk(vdir1,iband,info%ik,:) * edisp%band_d2k(mdir1,iband,info%ik,:) &
       + sign2 * edisp%band_dk(vdir2,iband,info%ik,:) * edisp%band_d2k(mdir2,iband,info%ik,:))
+
+  enddo
+
+end subroutine
+
+subroutine response_peierls_weights_new(resp, edisp, info)
+  implicit none
+  type (response_dp) :: resp
+
+  type(energydisp)   :: edisp
+  type(runinfo)      :: info
+
+  integer :: iband
+  integer :: i,j,k
+
+  do iband = edisp%nbopt_min, edisp%nbopt_max
+    do i=1,3
+      do j=1,3
+        do k=1,3
+          if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
+
+          resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+          resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+          resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+        enddo
+      enddo
+    enddo
+
+    resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+
+    resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+
+    resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+
+  enddo
+
+end subroutine
+
+subroutine response_peierls_weights_new_Q(resp, edisp, info)
+  implicit none
+  type (response_qp) :: resp
+
+  type(energydisp)   :: edisp
+  type(runinfo)      :: info
+
+  integer :: iband
+  integer :: i,j,k
+
+  do iband = edisp%nbopt_min, edisp%nbopt_max
+    do i=1,3
+      do j=1,3
+        do k=1,3
+          if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
+
+          resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+          resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+          resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+
+        enddo
+      enddo
+    enddo
+
+    resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+
+    resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+
+    resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
+    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
 
   enddo
 
@@ -1824,7 +1920,11 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   call response_intra_optical_weights_Q(resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(resp, edisp, info)
+    if (algo%lBfieldnew) then
+      call response_peierls_weights_new_Q(resp, edisp, info)
+    else
+      call response_peierls_weights_Q(resp, edisp, info)
+    endif
   endif
 
 end subroutine response_intra_km_Q

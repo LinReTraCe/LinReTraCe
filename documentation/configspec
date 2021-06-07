@@ -6,7 +6,9 @@ RunMode    = (default='')
 
 Bandgap   = (default = None) # new size of bandgap
 
-BFieldMode = (default = F)
+BFieldMode = (default = F)   # calculate B-field kernels
+BFieldNew  = (default = T)   # use properly symmetrized B-field optical elements
+                             # does not affect reducible calculations
 
 FullOutput        = (default = F)  # output band- and k-resolved response quantities
 EnergyOutput      = (default = F)  # output renormalized bands
@@ -21,6 +23,8 @@ RootMethod        = (default = 2)  # 0 secant
                                    # 1 linint
                                    # 2 riddler
                                    # 3 bisection
+                                   # riddler might lead to problems with irreducible k-points in low-T regime ..
+                                   # dont ask me why
 
 OutputFile = (default='linretrace-output.hdf5')
 
@@ -47,6 +51,7 @@ ScatteringImpurity = (default = 0) # in combination with Scattering File
 TMinimum                  = (default = None)
 TMaximum                  = (default = None)
 TPoints                   = (default = None)
+TLogarithmic              = (default = F)
 ScatteringCoefficients    = (default = None)
 QuasiParticleCoefficients = (default = None)
 

@@ -108,7 +108,11 @@ program main
       call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
     else
       if (temp%nT .gt. 1) then
-        temp%dT = (temp%Tmax-temp%Tmin)/dble(temp%nT-1)
+        if (temp%tlogarithmic) then
+          temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(temp%nT-1)) ! logarithmic step
+        else
+          temp%dT = (temp%Tmax-temp%Tmin)/dble(temp%nT-1) ! linear step
+        endif
       else
         temp%dT = 0 ! 0/0 ...
       endif
@@ -118,9 +122,15 @@ program main
       allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
       ! define Temperature grid
-      do iT=1,temp%nT
-         temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
-      enddo
+      if (temp%tlogarithmic) then
+        do iT=1,temp%nT
+           temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
+        enddo
+      else
+        do iT=1,temp%nT
+           temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
+        enddo
+      endif
       temp%BB = 1.d0/(temp%TT * kB)
     endif
     pot%nMu = temp%nT

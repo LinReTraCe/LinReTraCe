@@ -101,6 +101,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%output_file    = ''
   algo%input_energies = ''
   algo%lBField        = .false.
+  algo%lBfieldnew     = .true.
   algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
   algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
 
@@ -114,6 +115,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   imp%nimp            = 0
 
   pot%nMu             = 100
+
+  temp%tlogarithmic   = .false.
 
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
@@ -144,6 +147,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
+  call bool_find('BFieldNew', algo%lBfieldnew, search_start, search_end, found)
   call string_find('OutputFile', algo%output_file, search_start, search_end, found)
 
   if (.not. found) then
@@ -277,6 +281,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
       call int_find('TPoints', temp%nT, search_start, search_end, found)
       if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
+      call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
       call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
       if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
       call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
