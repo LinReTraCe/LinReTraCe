@@ -289,6 +289,9 @@ module Mlookup
     if (save_start .ge. 1) then ! subgroup found
       do i=save_start, search_end
         if (index(trim(file_save(i)),'[') .eq. 1) then
+          if (index(trim(file_save(i)),'[[[') .eq. 1) then ! skip subsubgroups
+            cycle
+          endif
           save_end=i-1 ! one above the next session
           exit
         endif

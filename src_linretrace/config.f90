@@ -239,7 +239,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%lOldmu = .false.
     endif
 
-    call int_find('NImp', imp%nimp, subsearch_start, subsearch_end, found)
+    call int_find('NImp', imp%nimp, search_start, search_end, found)
     if (found) then
       if (imp%nimp > 0) then
         algo%lImpurities = .true.
@@ -290,13 +290,14 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       edisp%lBandShift = .false. ! only with scattering File
     endif
 
-    call subgroup_find('[[Impurities]]', search_start, search_end, subsearch_start, subsearch_end)
-    if (subsearch_start .gt. 0) then
-      call stop_with_message(stderr, 'Scattering group not found')
-    endif
 
 
     if (algo%lImpurities) then
+      call subgroup_find('[[Impurities]]', search_start, search_end, subsearch_start, subsearch_end)
+      if (subsearch_start .le. 0) then
+        call stop_with_message(stderr, 'Impurities group not found')
+      endif
+
       allocate(impdescription(0:3))
       impdescription(0) = 'Absolute'
       impdescription(1) = 'Valence'
