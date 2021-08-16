@@ -1762,6 +1762,133 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
 
 end subroutine
 
+subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: electrons_total
+  real(8), intent(out) :: holes_total
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: energy_loc
+  integer :: is, ik, iband, iimp
+
+
+  real(16) :: elecs
+  real(16) :: holes
+  real(16) :: elecssum
+  real(16) :: holessum
+  real(16) :: elecsmpi
+  real(16) :: holesmpi
+
+  !external variables
+  complex(8), external :: wpsipg
+  complex(16), external :: wpsipghp
+
+  ! evaluate the function
+  elecssum = 0.q0
+  holessum = 0.q0
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu))))/piQ ! this is the occupation
+        holes = 1.q0 - elecs ! should be enough accuracy
+        if (elecs <= holes) then
+          elecssum = elecssum + elecs * kmesh%weightQ(ik) ! we only count the thermally activated electrons
+        else
+          holessum = holessum + holes * kmesh%weightQ(ik)
+        endif
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call mpi_reduce_quad(elecssum, elecsmpi) ! custom quad reduction
+#else
+  elecsmpi = elecssum
+#endif
+
+#ifdef MPI
+  call mpi_reduce_quad(holessum, holesmpi) ! custom quad reduction
+#else
+  holesmpi = holessum
+#endif
+
+  ! backtransform to double precision
+  electrons_total = real(elecsmpi,8)
+  holes_total = real(holesmpi,8)
+
+end subroutine
+
+subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: electrons_total
+  real(8), intent(out) :: holes_total
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: energy_loc
+  integer :: is, ik, iband, iimp
+
+
+  real(16) :: elecs
+  real(16) :: holes
+  real(16) :: elecssum
+  real(16) :: holessum
+  real(16) :: elecsmpi
+  real(16) :: holesmpi
+
+  !external variables
+  complex(8), external :: wpsipg
+
+  ! evaluate the function
+  elecssum = 0.q0
+  holessum = 0.q0
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        elecs = fermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        holes = omfermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        if (elecs <= holes) then
+          elecssum = elecssum + elecs * kmesh%weightQ(ik) ! we only count the thermally activated electrons
+        else
+          holessum = holessum + holes * kmesh%weightQ(ik)
+        endif
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call mpi_reduce_quad(elecssum, elecsmpi) ! custom quad reduction
+#else
+  elecsmpi = elecssum
+#endif
+
+#ifdef MPI
+  call mpi_reduce_quad(holessum, holesmpi) ! custom quad reduction
+#else
+  holesmpi = holessum
+#endif
+
+  ! backtransform to double precision
+  electrons_total = real(elecsmpi,8)
+  holes_total = real(holesmpi,8)
+
+end subroutine
+
 subroutine intldos(mu, dos, edisp, sct, kmesh, algo, info)
   !passed variables
   real(8), intent(in) :: mu

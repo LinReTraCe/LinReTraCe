@@ -51,6 +51,8 @@ program main
   ! quantities saved on the Temperature grid
   ! and derived quantities
   real(8), allocatable :: energy(:) ! total energy
+  real(8), allocatable :: electrons(:) ! thermally activated electrons
+  real(8), allocatable :: holes(:) ! thermally activated holes
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -73,6 +75,8 @@ program main
 #ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
+
+  call log_master(stdout, 'WARNING: FIX THE 4/3 prefactor of L11M and other possible prefactor in L12M / L22M')
 
   call read_config(algo, edisp, sct, temp, pot, imp)
   call check_files(algo)
@@ -137,7 +141,11 @@ program main
 
 
     allocate(energy(temp%nT))
+    allocate(electrons(temp%nT))
+    allocate(holes(temp%nT))
     energy = 0.d0
+    electrons = 0.d0
+    holes = 0.d0
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
     pot%MM = pot%mu ! here we either have the fixed mu
@@ -157,7 +165,11 @@ program main
     allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
     allocate(energy(pot%nMu))
+    allocate(electrons(pot%nMu))
+    allocate(holes(pot%nMu))
     energy = 0.d0
+    electrons = 0.d0
+    holes = 0.d0
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
 
@@ -485,8 +497,10 @@ program main
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
       call calc_total_energy_fermi(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_fermi(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     else
       call calc_total_energy_digamma(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_digamma(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (myid.eq.master) then
@@ -625,6 +639,8 @@ program main
     call hdf5_open_file(algo%output_file, ifile_output)
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
+    call hdf5_write_data(ifile_output, '.quantities/electrons', electrons)
+    call hdf5_write_data(ifile_output, '.quantities/holes', holes)
     call hdf5_close_file(ifile_output)
   endif
 
