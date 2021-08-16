@@ -98,12 +98,17 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lTMODE         = .false.
   algo%lMUMODE        = .false.
 
-  algo%output_file    = ''
-  algo%input_energies = ''
-  algo%lBField        = .false.
-  algo%lBfieldnew     = .true.
-  algo%rootMethod     = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
-  algo%muFermi        = .false. ! we evaluate the occupation with the digamma function
+  algo%output_file           = ''
+  algo%input_energies        = ''
+  algo%input_scattering_hdf5 = ''
+  algo%input_scattering_text = ''
+  algo%lBField               = .false.
+  algo%lBfieldnew            = .true.
+  algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
+  algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
+
+  algo%lScatteringFile = .false.
+  algo%lScatteringText = .false.
 
   algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
@@ -266,28 +271,37 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       call stop_with_message(stderr, 'Scattering group not found')
     endif
     !--------------------------------------------------------------------------------
-    call string_find('ScatteringFile', algo%input_scattering, subsearch_start, subsearch_end, found)
+    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+    call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
     if (found) then
       algo%lScatteringFile = .true.
     else
       algo%lScatteringFile = .false.
     endif
-    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
 
     if (.not. algo%lScatteringFile) then
-      call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
-      if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
-      call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
-      if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
-      call int_find('TPoints', temp%nT, search_start, search_end, found)
-      if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
-      call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
-      call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
-      if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
-      call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
-      if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
+      call string_find('ScatteringText', algo%input_scattering_text, subsearch_start, subsearch_end, found)
+      if (found) then
+        algo%lScatteringText = .true.
+      else
+        algo%lScatteringText = .false.
+      endif
 
-      edisp%lBandShift = .false. ! only with scattering File
+      if (.not. algo%lScatteringText) then
+        call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
+        if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
+        call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
+        if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
+        call int_find('TPoints', temp%nT, search_start, search_end, found)
+        if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
+        call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
+        call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
+        if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
+        call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
+        if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
+      endif
+
+      edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
 
 
@@ -418,9 +432,16 @@ subroutine check_files(algo)
   endif
 
   if (algo%lScatteringFile) then
-    inquire (file=trim(adjustl(algo%input_scattering)), exist=there)
+    inquire (file=trim(adjustl(algo%input_scattering_hdf5)), exist=there)
     if (.not. there) then
       call stop_with_message(stderr, "Can not find the ScatteringFile")
+    endif
+  endif
+
+  if (algo%lScatteringText) then
+    inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
+    if (.not. there) then
+      call stop_with_message(stderr, "Can not find the ScatteringText")
     endif
   endif
 

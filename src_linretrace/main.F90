@@ -31,7 +31,7 @@ program main
   type(response_qp) :: qresp_inter
   type(response_qp) :: qresp_inter_Boltzmann
 
-  integer(hid_t)    :: ifile_scatter
+  integer(hid_t)    :: ifile_scatter_hdf5
   integer(hid_t)    :: ifile_energy
   integer(hid_t)    :: ifile_output
 
@@ -109,7 +109,9 @@ program main
       ! at this point we just extract the temperature ranges
       ! and check wether bandshifts exist
       ! the scattering rates then gets loaded for each temperature-point
-      call read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
+      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
+    else if (algo%lScatteringText) then
+      call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
     else
       if (temp%nT .gt. 1) then
         if (temp%tlogarithmic) then
@@ -230,7 +232,7 @@ program main
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
 
   if (algo%lTMODE .and. algo%lScatteringFile) then
-    call hdf5_open_file(algo%input_scattering, ifile_scatter, rdonly=.true.)
+    call hdf5_open_file(algo%input_scattering_hdf5, ifile_scatter_hdf5, rdonly=.true.)
   endif
 
   ! for this option we can do the shifts once
@@ -293,8 +295,10 @@ program main
     if (algo%lTMODE) then
     write(stdout,*) 'TEMPERATURE MODE'
     write(stdout,*) '  Temperature range:'
+    if (.not. algo%lScatteringFile .and. .not. algo%lScatteringText) then
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
+    endif
     write(stdout,*) '  Temperature points:   ', temp%nT
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
@@ -337,7 +341,10 @@ program main
     endif
     write(stdout,*)
     if (algo%lScatteringFile) then
-      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering)
+      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
+      write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    else if (algo%lScatteringText) then
+      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
     else
       write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
@@ -429,7 +436,15 @@ program main
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
       ! this are in ADDITION to the scissors
-      call read_scattering_data(ifile_scatter, edisp, sct, info)
+      call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, sct, info)
+    else if (algo%lTMODE .and. algo%lScatteringText) then
+      sct%gam = sct%gamtext(iT)
+      sct%zqp = sct%zqptext(iT)
+      if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
+        call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
+        sct%zqp = 1.d0
+      endif
+      sct%gam = sct%zqp * sct%gam
     else
       ! here we are wasting memory however
       ! otherwise we would have to write every single response twice
@@ -669,7 +684,7 @@ program main
 
   call hdf5_close_file(ifile_energy)
   if (algo%lScatteringFile) then
-    call hdf5_close_file(ifile_scatter)
+    call hdf5_close_file(ifile_scatter_hdf5)
   endif
 
   call mpi_close()

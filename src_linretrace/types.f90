@@ -19,7 +19,8 @@ module Mtypes
     logical :: muSearch       ! mu fixed or find mu?
     logical :: lOldmu         ! mus from old run?
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
-    logical :: lScatteringFile       ! do we get the scattering information from another file
+    logical :: lScatteringFile       ! do we get the scattering information from another file (hdf5)
+    logical :: lScatteringText       ! do we get the scattering information from a text file
     logical :: lInterBandQuantities  ! calc inter band response
     logical :: lIntraBandQuantities  ! calc intra band response
     logical :: lFullOutput    ! output full response dependency
@@ -30,7 +31,8 @@ module Mtypes
     logical :: lBfieldnew     ! new style elements
 
     character(len=256) :: input_energies
-    character(len=256) :: input_scattering
+    character(len=256) :: input_scattering_hdf5
+    character(len=256) :: input_scattering_text
     character(len=256) :: output_file
     character(len=256) :: old_output_file
     character(len=256) :: dbgstr
@@ -176,6 +178,8 @@ module Mtypes
     ! scattering rates and quasiparticle weights
     real(8), allocatable :: gamcoeff(:)
     real(8), allocatable :: zqpcoeff(:)
+    real(8), allocatable :: gamtext(:)
+    real(8), allocatable :: zqptext(:)
     real(8), allocatable :: gam(:,:,:) ! same as band
     real(8), allocatable :: zqp(:,:,:) ! same as band
     real(8)              :: gamimp   ! additional additivie impurity term

@@ -317,7 +317,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
 end subroutine
 
-subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
+subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
@@ -335,7 +335,7 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   integer :: iT, ik
 
   call hdf5_init()
-  call hdf5_open_file(trim(adjustl(algo%input_scattering)), ifile, rdonly=.true.)
+  call hdf5_open_file(trim(adjustl(algo%input_scattering_hdf5)), ifile, rdonly=.true.)
 
   ! sanity check
   call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
@@ -393,6 +393,96 @@ subroutine read_preproc_scattering_data(algo, kmesh, edisp, sct, temp)
   endif
 
   call hdf5_close_file(ifile)
+
+end subroutine
+
+subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
+  implicit none
+  type(algorithm)              :: algo
+  type(kpointmesh)             :: kmesh
+  type(energydisp)             :: edisp
+  type(scattering)             :: sct
+  type(temperature)            :: temp
+
+  character(len=256) :: str_temp
+  integer            :: kpoints
+  integer            :: nbands
+  integer            :: iT, ik, i,j
+  integer            :: lines
+  integer            :: stat
+  integer            :: empty, pst
+  character(len=256), allocatable :: file_temp(:), file_save(:)
+  character(len=1) :: cmnt = '#'
+  real(8) :: fdum1, fdum2
+
+
+  open(unit=10,file=trim(algo%input_scattering_text),action='read',iostat=stat)
+  if (stat .ne. 0) then
+    call stop_with_message(stderr, 'ScatteringText Input file cannot be opened') ! send to stderr
+  endif
+
+  ! line counting
+  lines=0
+  read_count: do
+    read(10,'(A)',END=200) str_temp ! read whole line as string, doesnt skip empty lines
+    lines=lines+1
+  enddo read_count
+
+
+  200 continue
+  rewind 10
+
+  allocate(file_temp(lines))
+
+  ! remove empty lines and comment strings
+  empty=0
+  read_temp: do i=1,lines
+    read(10,'(A)') str_temp
+      str_temp = trim(adjustl(str_temp))
+      pst=scan(str_temp,cmnt) ! find out possible comment symbol
+      if (pst .eq. 1) then ! whole line is commented
+        file_temp(i) = ''
+      elseif (pst .eq. 0) then ! no comment symbol found
+        file_temp(i) = str_temp
+      else  ! getting left side of comment
+        file_temp(i) = trim(str_temp(1:pst-1))
+      endif
+
+      if (len_trim(file_temp(i)) .eq. 0) then ! filter out empty lines
+        empty=empty+1
+      endif
+  enddo read_temp
+
+  ! rewrite everything to a new clean string array
+  allocate(file_save(lines-empty))
+  j=1
+  read_save: do i=1,lines
+    if(len_trim(file_temp(i)) .ne. 0) then
+      file_save(j)=file_temp(i)
+      j=j+1
+    endif
+  enddo read_save
+  deallocate(file_temp)
+
+  lines=lines-empty
+  close(unit=10)
+
+  ! now we read this string array into the according data arrays
+
+  temp%nT = lines
+  allocate(temp%TT(temp%nT))
+  allocate(temp%BB(temp%nT))
+  allocate(sct%gamtext(temp%nT))
+  allocate(sct%zqptext(temp%nT))
+  allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+
+  do i=1,temp%nT
+    read(file_save(i),'(3F)') temp%TT(i), sct%gamtext(i), sct%zqptext(i)
+  enddo
+  sct%gamtext = sct%gamtext + sct%gamimp
+
+  temp%BB = 1.d0/(temp%TT * kB)
 
 end subroutine
 
@@ -500,7 +590,7 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
 end subroutine
 
-subroutine read_scattering_data(ifile, edisp, sct, info)
+subroutine read_scattering_data_hdf5(ifile, edisp, sct, info)
   implicit none
   integer(hid_t)   :: ifile
   type(energydisp) :: edisp
