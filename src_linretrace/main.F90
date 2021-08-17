@@ -150,6 +150,7 @@ program main
     holes = 0.d0
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
+    pot%occ = 0.d0
     pot%MM = pot%mu ! here we either have the fixed mu
                     ! or the mu_dft initialized from the preprocessed energy file
 
@@ -177,6 +178,7 @@ program main
 
     temp%TT = temp%temp
     temp%BB = 1.d0/(temp%temp * kB)
+    pot%occ = 0.d0
 
     ! define Chemical potential grid
     pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
@@ -269,17 +271,21 @@ program main
 
   ! final preparation step for chemical potential mode
   if (algo%lMUMODE) then
-    ! info%iT = 1
-    ! info%Temp=temp%TT(info%iT)
-    ! info%beta=1.d0/(kB*info%Temp)
-    ! info%beta2p=info%beta/(2.d0*pi)
+    info%iT = 1
+    info%Temp=temp%TT(info%iT)
+    info%beta=1.d0/(kB*info%Temp)
+    info%beta2p=info%beta/(2.d0*pi)
 
-    ! info%TempQ=real(info%Temp,16)
-    ! info%betaQ=1.q0/(kB*info%TempQ)
-    ! info%beta2pQ=info%betaQ/(2.q0*piQ)
+    info%TempQ=real(info%Temp,16)
+    info%betaQ=1.q0/(kB*info%TempQ)
+    info%beta2pQ=info%betaQ/(2.q0*piQ)
 
-    ! ! find the equilibrium chemical potential
-    ! call find_mu(pot%mu,ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
+    sct%gam = sct%gamcoeff(1)
+    sct%zqp = sct%zqpcoeff(1)
+    sct%gam = sct%gam * sct%zqp
+
+    ! find the equilibrium chemical potential
+    call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
 
     ! shift the chemical potential ranges by the calculated chemical potential
     ! for the given temperature
@@ -302,12 +308,12 @@ program main
     write(stdout,*) '  Temperature points:   ', temp%nT
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
-    write(stdout,*) '  Chemical Potential DFT: ', pot%mu
+    write(stdout,*) '  Temperature: ', temp%TT(1)
+    write(stdout,*) '  Chemical Potential for given Temp: ', pot%mu
     write(stdout,*) '  Chemical Potential range:'
     write(stdout,*) '  Mumin: ', pot%Mumin
     write(stdout,*) '  Mumax: ', pot%Mumax
     write(stdout,*) '  Chemical Potential points:   ', pot%nMu
-    write(stdout,*) '  Temperature: ', temp%TT(1)
     endif
     write(stdout,*)
     write(stdout,*) 'INPUT'
@@ -445,7 +451,7 @@ program main
         sct%zqp = 1.d0
       endif
       sct%gam = sct%zqp * sct%gam
-    else
+    else ! this is entered for both the MuMode and the TempMode
       ! here we are wasting memory however
       ! otherwise we would have to write every single response twice
       sct%gam = 0.d0
@@ -497,6 +503,7 @@ program main
       tstart = tfinish
     endif
 
+
     if (algo%lTMODE .and. algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
         .and. (index(algo%dbgstr,"TempReverse") .ne. 0) .and. info%Temp < edisp%gap_min / 1.95q0 &
         .and. algo%muFermi) then
@@ -517,6 +524,10 @@ program main
       call calc_total_energy_digamma(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
       call calc_elecholes_digamma(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     endif
+
+    ! calculates the difference to the demanded electron number
+    call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
+    pot%occ(iT) = edisp%nelect - pot%occ(iT)
 
     if (myid.eq.master) then
       write(stdout,'(3X,3F15.7,I7)') info%Temp, info%beta, pot%MM(iT), niitact
@@ -653,6 +664,7 @@ program main
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
+    call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
     call hdf5_write_data(ifile_output, '.quantities/electrons', electrons)
     call hdf5_write_data(ifile_output, '.quantities/holes', holes)
