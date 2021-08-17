@@ -663,6 +663,10 @@ program main
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
+    ! FIXME ... keep this or not ?
+    if (algo%lMuMode) then
+      pot%MM = pot%MM - pot%mu ! for output reasons
+    endif
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
