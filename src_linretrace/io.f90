@@ -342,19 +342,20 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
   call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
   call hdf5_read_data(ifile, "/.quantities/iSpin",  iSpin)
 
-  if ( kpoints /= kmesh%nkp ) then
+  ! allow identical k-meshes / bands
+  ! or kpoints == 1 or nbands == 1 ... this way we are able to save storage
+  if ( (kpoints /= kmesh%nkp) .and. .not. (kpoints == 1)) then
      call stop_with_message(stderr, "Number of k-points in preprocessed scattering data &
      do not match")
   endif
-  if ( nbands /= edisp%nband_max ) then
+  if ( (nbands /= edisp%nband_max) .and. .not. (nbands == 1)) then
      call stop_with_message(stderr, "Number of bands in preprocessed scattering data &
      do not match")
   endif
-  if ( iSpin /= edisp%iSpin ) then
+  if ( iSpin /= edisp%iSpin .and. .not. (iSpin ==1)) then
      call stop_with_message(stderr, "Number of spins in preprocessed scattering data &
      do not match")
   endif
-
 
   ! temperature grid ... already pre-computated
   call hdf5_read_data(ifile, "/.quantities/Tmin", temp%Tmin)
@@ -590,71 +591,184 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
 end subroutine
 
-subroutine read_scattering_data_hdf5(ifile, edisp, sct, info)
+subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
   implicit none
   integer(hid_t)   :: ifile
   type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
   type(scattering) :: sct
   type(runinfo)    :: info
 
-  real(8), allocatable :: darr2(:,:)
+  real(8), allocatable :: darr2_1(:,:), darr2_2(:,:), darr2_3(:,:)
   character(len=128)   :: string
+
+  integer :: iband, ik
+  integer :: kpoints, nbands
+
+  logical :: k_dependence
+  logical :: band_dependence
+
+  ! sanity check
+  call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
+  call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
+
+  if (kpoints == 1) then
+    k_dependence = .false.
+  else
+    k_dependence = .true.
+  endif
+
+  if (nbands == 1) then
+    band_dependence = .false.
+  else
+    band_dependence = .true.
+  endif
+
 
   if (edisp%ispin == 1) then
     write(string,'("tPoint/",I6.6,"/scatrate")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%gam(:,:,1) = darr2
-    deallocate(darr2)
+    call hdf5_read_data(ifile, string, darr2_1)
 
     write(string,'("tPoint/",I6.6,"/qpweight")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%zqp(:,:,1) = darr2
-    deallocate(darr2)
+    call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
       write(string,'("tPoint/",I6.6,"/bandshift")') info%iT
-      call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2 ! there might be scissors applied before hand
-      deallocate(darr2)
+      call hdf5_read_data(ifile, string, darr2_3)
+    endif
 
+    if (k_dependence .and. band_dependence) then
+      sct%gam(:,:,1) = darr2_1
+      sct%zqp(:,:,1) = darr2_2
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3 ! there might be scissors applied before hand
+      endif
+    else if (k_dependence .and. .not. band_dependence) then
+      do iband=1,edisp%nband_max
+        sct%gam(iband,:,1) = darr2_1(1,:)
+        sct%zqp(iband,:,1) = darr2_2(1,:)
+        if (edisp%lBandShift) then
+          edisp%band_shift(iband,:,1) = darr2_3(1,:)
+        endif
+      enddo
+    else if (.not. k_dependence .and. .not. band_dependence) then
+      do ik=1,kmesh%nkp
+        sct%gam(:,ik,1) = darr2_1(:,1)
+        sct%zqp(:,ik,1) = darr2_2(:,1)
+        if (edisp%lBandShift) then
+          edisp%band_shift(:,ik,1) = darr2_3(:,1)
+        endif
+      enddo
+    else
+      sct%gam(:,:,1) = darr2_1(1,1)
+      sct%zqp(:,:,1) = darr2_2(1,1)
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,1) = darr2_3(1,1)
+      endif
+    endif
+
+    if (edisp%lBandShift) then
       edisp%band = edisp%band_original + edisp%band_shift
     endif
-  else
-    write(string,'("up/tPoint/",I6.6,"/scatrate")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%gam(:,:,1) = darr2
-    deallocate(darr2)
 
-    write(string,'("dn/tPoint/",I6.6,"/scatrate")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%gam(:,:,2) = darr2
-    deallocate(darr2)
+    if (allocated(darr2_1)) deallocate(darr2_1)
+    if (allocated(darr2_2)) deallocate(darr2_2)
+    if (allocated(darr2_3)) deallocate(darr2_3)
+
+  else
+
+    write(string,'("up/tPoint/",I6.6,"/scatrate")') info%iT
+    call hdf5_read_data(ifile, string, darr2_1)
 
     write(string,'("up/tPoint/",I6.6,"/qpweight")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%zqp(:,:,1) = darr2
-    deallocate(darr2)
-
-    write(string,'("dn/tPoint/",I6.6,"/qpweight")') info%iT
-    call hdf5_read_data(ifile, string, darr2)
-    sct%zqp(:,:,2) = darr2
-    deallocate(darr2)
-
+    call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
       write(string,'("up/tPoint/",I6.6,"/bandshift")') info%iT
-      call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2
-      deallocate(darr2)
+      call hdf5_read_data(ifile, string, darr2_3)
+    endif
 
+    if (k_dependence .and. band_dependence) then
+      sct%gam(:,:,1) = darr2_1
+      sct%zqp(:,:,1) = darr2_2
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3 ! there might be scissors applied before hand
+      endif
+    else if (k_dependence .and. .not. band_dependence) then
+      do iband=1,edisp%nband_max
+        sct%gam(iband,:,1) = darr2_1(1,:)
+        sct%zqp(iband,:,1) = darr2_2(1,:)
+        if (edisp%lBandShift) then
+          edisp%band_shift(iband,:,1) = darr2_3(1,:)
+        endif
+      enddo
+    else if (.not. k_dependence .and. .not. band_dependence) then
+      do ik=1,kmesh%nkp
+        sct%gam(:,ik,1) = darr2_1(:,1)
+        sct%zqp(:,ik,1) = darr2_2(:,1)
+        if (edisp%lBandShift) then
+          edisp%band_shift(:,ik,1) = darr2_3(:,1)
+        endif
+      enddo
+    else
+      sct%gam(:,:,1) = darr2_1(1,1)
+      sct%zqp(:,:,1) = darr2_2(1,1)
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,1) = darr2_3(1,1)
+      endif
+    endif
+
+    write(string,'("dn/tPoint/",I6.6,"/scatrate")') info%iT
+    call hdf5_read_data(ifile, string, darr2_1)
+
+    write(string,'("dn/tPoint/",I6.6,"/qpweight")') info%iT
+    call hdf5_read_data(ifile, string, darr2_2)
+
+    if (edisp%lBandShift) then
       write(string,'("dn/tPoint/",I6.6,"/bandshift")') info%iT
-      call hdf5_read_data(ifile, string, darr2)
-      edisp%band_shift(:,:,2) = edisp%band_shift(:,:,2) + darr2
-      deallocate(darr2)
+      call hdf5_read_data(ifile, string, darr2_3)
+    endif
 
+    if (k_dependence .and. band_dependence) then
+      sct%gam(:,:,2) = darr2_1
+      sct%zqp(:,:,2) = darr2_2
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,2) = edisp%band_shift(:,:,2) + darr2_3 ! there might be scissors applied before hand
+      endif
+    else if (k_dependence .and. .not. band_dependence) then
+      do iband=1,edisp%nband_max
+        sct%gam(iband,:,2) = darr2_1(1,:)
+        sct%zqp(iband,:,2) = darr2_2(1,:)
+        if (edisp%lBandShift) then
+          edisp%band_shift(iband,:,2) = darr2_3(1,:)
+        endif
+      enddo
+    else if (.not. k_dependence .and. .not. band_dependence) then
+      do ik=1,kmesh%nkp
+        sct%gam(:,ik,2) = darr2_1(:,1)
+        sct%zqp(:,ik,2) = darr2_2(:,1)
+        if (edisp%lBandShift) then
+          edisp%band_shift(:,ik,2) = darr2_3(:,1)
+        endif
+      enddo
+    else
+      sct%gam(:,:,2) = darr2_1(1,1)
+      sct%zqp(:,:,2) = darr2_2(1,1)
+      if (edisp%lBandShift) then
+        edisp%band_shift(:,:,2) = darr2_3(1,1)
+      endif
+    endif
+
+    if (allocated(darr2_1)) deallocate(darr2_1)
+    if (allocated(darr2_2)) deallocate(darr2_2)
+    if (allocated(darr2_3)) deallocate(darr2_3)
+
+    if (edisp%lBandShift) then
       edisp%band = edisp%band_original + edisp%band_shift
     endif
+
   endif
+
   sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
   sct%gam = sct%gam * sct%zqp    ! convention
 

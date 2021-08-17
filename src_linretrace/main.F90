@@ -436,7 +436,7 @@ program main
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
       ! this are in ADDITION to the scissors
-      call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, sct, info)
+      call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
     else if (algo%lTMODE .and. algo%lScatteringText) then
       sct%gam = sct%gamtext(iT)
       sct%zqp = sct%zqptext(iT)
