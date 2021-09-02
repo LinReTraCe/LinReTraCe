@@ -432,7 +432,7 @@ program main
     if (algo%lTMODE .and. algo%lScatteringFile) then
       ! as mentioned above
       ! apply the scissors:
-      if (algo%lScissors) then
+      if (algo%lScissors .and. edisp%lBandShift) then
         edisp%band_shift = 0.d0
         do is=1,edisp%ispin
           edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
