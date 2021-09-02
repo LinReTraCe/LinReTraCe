@@ -487,20 +487,78 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
+subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
   type(temperature) :: temp
   type(kpointmesh)  :: kmesh
   type(energydisp)  :: edisp
+  type(scattering)  :: sct
   type(impurity)    :: imp
 
-  character(len=128) :: string
+  character(len=256) :: string
   integer(hid_t)     :: ifile
   integer            :: iimp
 
   call hdf5_open_file(algo%output_file, ifile)
+
+  call hdf5_create_group(ifile, '.config')
+  call hdf5_write_attribute(ifile, '.config', 'tmode', algo%lTMODE)
+  call hdf5_write_attribute(ifile, '.config', 'mumode',algo%lMUMODE)
+  call hdf5_write_attribute(ifile, '.config', 'debug', algo%lDebug)
+  call hdf5_write_attribute(ifile, '.config', 'bfield', algo%lBfield)
+  call hdf5_write_attribute(ifile, '.config', 'bfieldnew', algo%lBfieldnew)
+  call hdf5_write_attribute(ifile, '.config', 'rootmethod', algo%rootMethod)
+  call hdf5_write_attribute(ifile, '.config', 'musearch', algo%muSearch)
+  call hdf5_write_attribute(ifile, '.config', 'mufermi', algo%muFermi)
+  call hdf5_write_attribute(ifile, '.config', 'scatteringfile', algo%lScatteringFile)
+  call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
+  call hdf5_write_attribute(ifile, '.config', 'interbandquantities', algo%lInterBandQuantities)
+  call hdf5_write_attribute(ifile, '.config', 'intrabandquantities', algo%lIntraBandQuantities)
+  call hdf5_write_attribute(ifile, '.config', 'fulloutput', algo%lFullOutput)
+  call hdf5_write_attribute(ifile, '.config', 'energyOutput', algo%lEnergyOutput)
+  call hdf5_write_attribute(ifile, '.config', 'boltzmann', algo%lBoltzmann)
+  call hdf5_write_attribute(ifile, '.config', 'scissors', algo%lScissors)
+  call hdf5_write_attribute(ifile, '.config', 'impurities', algo%lImpurities)
+  call hdf5_write_attribute(ifile, '.config', 'input_energies', trim(algo%input_energies))
+  if (len(trim(algo%input_scattering_hdf5)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'input_scattering_hdf5', "-")
+  else
+    call hdf5_write_attribute(ifile, '.config', 'input_scattering_hdf5', trim(algo%input_scattering_hdf5))
+  endif
+  if (len(trim(algo%input_scattering_text)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', "-")
+  else
+    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', trim(algo%input_scattering_text))
+  endif
+  if (len(trim(algo%old_output_file)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'old_output_file', "-")
+  else
+    call hdf5_write_attribute(ifile, '.config', 'old_output_file', trim(algo%old_output_file))
+  endif
+  if (len(trim(algo%dbgstr)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'dbgstr', "-")
+  else
+    call hdf5_write_attribute(ifile, '.config', 'dbgstr', trim(algo%dbgstr))
+  endif
+
+  call hdf5_create_group(ifile, '.scattering')
+  if (allocated(sct%gamcoeff)) then
+    call hdf5_write_data(ifile, '.scattering/gamcoeff', sct%gamcoeff)
+  endif
+  if (allocated(sct%zqpcoeff)) then
+    call hdf5_write_data(ifile, '.scattering/zqpcoeff', sct%zqpcoeff)
+  endif
+  if (allocated(sct%gamtext)) then
+    call hdf5_write_data(ifile, '.scattering/gamtext', sct%gamtext)
+  endif
+  if (allocated(sct%zqptext)) then
+    call hdf5_write_data(ifile, '.scattering/zqptext', sct%zqptext)
+  endif
+  if (algo%lScatteringFile .or. algo%lScatteringText) then
+    call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
+  endif
 
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
@@ -522,7 +580,7 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, imp)
       call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
     endif
   else
-    call hdf5_write_data(ifile, "/.bands/bandgap/up/gapped", edisp%gapped(1))
+    call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapped", edisp%gapped(1))
     if (edisp%gapped(1)) then
       call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
       call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))

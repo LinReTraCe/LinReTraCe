@@ -45,7 +45,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   open(unit=10,file=trim(config_file),action='read',iostat=stat)
   if (stat .ne. 0) then
-    call stop_with_message(stderr, 'Input file cannot be opened') ! send to stderr
+    call stop_with_message(stderr, 'Config file could not be opened') ! send to stderr
   endif
 
   ! line counting
@@ -102,6 +102,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_energies        = ''
   algo%input_scattering_hdf5 = ''
   algo%input_scattering_text = ''
+  algo%old_output_file       = ''
   algo%lBField               = .false.
   algo%lBfieldnew            = .true.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection

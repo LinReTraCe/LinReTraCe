@@ -51,8 +51,8 @@ program main
   ! quantities saved on the Temperature grid
   ! and derived quantities
   real(8), allocatable :: energy(:) ! total energy
-  real(8), allocatable :: electrons(:) ! thermally activated electrons
-  real(8), allocatable :: holes(:) ! thermally activated holes
+  real(8), allocatable :: electrons(:) ! thermally activated electrons w.r.t chemical potential
+  real(8), allocatable :: holes(:) ! thermally activated holes w.r.t chemical potential
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -389,7 +389,7 @@ program main
 
   if (myid .eq. master) then
     call hdf5_create_file(algo%output_file)
-    call output_auxiliary(algo, info, temp, kmesh, edisp, imp)
+    call output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
   endif
 
 
