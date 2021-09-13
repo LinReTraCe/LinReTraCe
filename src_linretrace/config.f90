@@ -102,6 +102,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_energies        = ''
   algo%input_scattering_hdf5 = ''
   algo%input_scattering_text = ''
+  algo%input_mu_text = ''
   algo%old_output_file       = ''
   algo%lBField               = .false.
   algo%lBfieldnew            = .true.
@@ -243,6 +244,16 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .false. !overwrite the previous option
     else
       algo%lOldmu = .false.
+    endif
+
+    if (.not. algo%lOldmu) then
+      call string_find('OldOutputText', algo%input_mu_text, search_start, search_end, found)
+      if (found) then
+        algo%lOldmuText   = .true.
+        algo%muSearch = .false. !overwrite the previous option
+      else
+        algo%lOldmuText = .false.
+      endif
     endif
 
     call int_find('NImp', imp%nimp, search_start, search_end, found)

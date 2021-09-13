@@ -155,7 +155,11 @@ program main
                     ! or the mu_dft initialized from the preprocessed energy file
 
     if (algo%lOldmu) then
-      call read_muT(temp, algo%old_output_file, pot%MM)
+      call read_muT_hdf5(temp, algo%old_output_file, pot%MM)
+    endif
+
+    if (algo%lOldmuText) then
+      call read_muT_text(temp, algo%input_mu_text, pot%MM)
     endif
   endif
 

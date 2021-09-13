@@ -512,6 +512,8 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'rootmethod', algo%rootMethod)
   call hdf5_write_attribute(ifile, '.config', 'musearch', algo%muSearch)
   call hdf5_write_attribute(ifile, '.config', 'mufermi', algo%muFermi)
+  call hdf5_write_attribute(ifile, '.config', 'oldmu', algo%lOldmu)
+  call hdf5_write_attribute(ifile, '.config', 'oldmutext', algo%lOldmuText)
   call hdf5_write_attribute(ifile, '.config', 'scatteringfile', algo%lScatteringFile)
   call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
   call hdf5_write_attribute(ifile, '.config', 'interbandquantities', algo%lInterBandQuantities)
@@ -536,6 +538,11 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
     call hdf5_write_attribute(ifile, '.config', 'old_output_file', "-")
   else
     call hdf5_write_attribute(ifile, '.config', 'old_output_file', trim(algo%old_output_file))
+  endif
+  if (len(trim(algo%input_mu_text)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'input_mu_text', "-")
+  else
+    call hdf5_write_attribute(ifile, '.config', 'input_mu_text', trim(algo%input_mu_text))
   endif
   if (len(trim(algo%dbgstr)) == 0) then
     call hdf5_write_attribute(ifile, '.config', 'dbgstr', "-")
@@ -864,7 +871,7 @@ subroutine read_optical_elements(ifile, edisp, sct, info)
 
 end subroutine
 
-subroutine read_muT(temp, oldoutput, mu)
+subroutine read_muT_hdf5(temp, oldoutput, mu)
   implicit none
   type(temperature) :: temp
   character(len=*)  :: oldoutput
@@ -887,6 +894,84 @@ subroutine read_muT(temp, oldoutput, mu)
 
   call hdf5_close_file(ifile)
 
-end subroutine read_muT
+end subroutine read_muT_hdf5
+
+subroutine read_muT_text(temp, inputmu, mu)
+  implicit none
+  type(temperature) :: temp
+  character(len=*)  :: inputmu
+  real(8)           :: mu(temp%nT)
+
+  character(len=256) :: str_temp
+  integer            :: i,j
+  integer            :: lines
+  integer            :: stat
+  integer            :: empty, pst
+  character(len=256), allocatable :: file_temp(:), file_save(:)
+  character(len=1) :: cmnt = '#'
+  real(8) :: fdum1, fdum2
+
+
+  open(unit=10,file=trim(inputmu),action='read',iostat=stat)
+  if (stat .ne. 0) then
+    call stop_with_message(stderr, 'ScatteringText Input file cannot be opened') ! send to stderr
+  endif
+
+  ! line counting
+  lines=0
+  read_count: do
+    read(10,'(A)',END=200) str_temp ! read whole line as string, doesnt skip empty lines
+    lines=lines+1
+  enddo read_count
+
+
+  200 continue
+  rewind 10
+
+  allocate(file_temp(lines))
+
+  ! remove empty lines and comment strings
+  empty=0
+  read_temp: do i=1,lines
+    read(10,'(A)') str_temp
+      str_temp = trim(adjustl(str_temp))
+      pst=scan(str_temp,cmnt) ! find out possible comment symbol
+      if (pst .eq. 1) then ! whole line is commented
+        file_temp(i) = ''
+      elseif (pst .eq. 0) then ! no comment symbol found
+        file_temp(i) = str_temp
+      else  ! getting left side of comment
+        file_temp(i) = trim(str_temp(1:pst-1))
+      endif
+
+      if (len_trim(file_temp(i)) .eq. 0) then ! filter out empty lines
+        empty=empty+1
+      endif
+  enddo read_temp
+
+  ! rewrite everything to a new clean string array
+  allocate(file_save(lines-empty))
+  j=1
+  read_save: do i=1,lines
+    if(len_trim(file_temp(i)) .ne. 0) then
+      file_save(j)=file_temp(i)
+      j=j+1
+    endif
+  enddo read_save
+  deallocate(file_temp)
+
+  lines=lines-empty
+  close(unit=10)
+
+  if (lines /= temp%nT) then
+    call stop_with_message(stderr, 'Error: Number of provided mu values does not coincide with temp grid')
+  endif
+  ! now we read this string array into the according data arrays
+
+  do i=1,temp%nT
+    read(file_save(i),'(1F)') mu(i)
+  enddo
+
+end subroutine
 
 end module Mio
