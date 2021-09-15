@@ -53,6 +53,7 @@ program main
   real(8), allocatable :: energy(:) ! total energy
   real(8), allocatable :: electrons(:) ! thermally activated electrons w.r.t chemical potential
   real(8), allocatable :: holes(:) ! thermally activated holes w.r.t chemical potential
+  real(8), allocatable :: imp_contribution(:)
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -145,8 +146,10 @@ program main
     allocate(energy(temp%nT))
     allocate(electrons(temp%nT))
     allocate(holes(temp%nT))
+    allocate(imp_contribution(temp%nT))
     energy = 0.d0
     electrons = 0.d0
+    imp_contribution = 0.d0
     holes = 0.d0
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
@@ -174,9 +177,11 @@ program main
     allocate(energy(pot%nMu))
     allocate(electrons(pot%nMu))
     allocate(holes(pot%nMu))
+    allocate(imp_contribution(pot%nMu))
     energy = 0.d0
     electrons = 0.d0
     holes = 0.d0
+    imp_contribution = 0.d0
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
 
@@ -529,6 +534,10 @@ program main
       call calc_elecholes_digamma(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     endif
 
+    if (algo%lTMODE) then
+      call occ_impurity(imp_contribution(iT), pot%MM(iT), imp, info)
+    endif
+
     ! calculates the difference to the demanded electron number
     call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
     pot%occ(iT) = edisp%nelect - pot%occ(iT)
@@ -676,6 +685,9 @@ program main
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
     call hdf5_write_data(ifile_output, '.quantities/electrons', electrons)
     call hdf5_write_data(ifile_output, '.quantities/holes', holes)
+    if (algo%lImpurities) then
+      call hdf5_write_data(ifile_output, '.quantities/imp_contribution', imp_contribution)
+    endif
     call hdf5_close_file(ifile_output)
   endif
 

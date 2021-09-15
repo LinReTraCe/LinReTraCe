@@ -21,6 +21,10 @@ module Mroot
     module procedure occ_fermi_D, occ_fermi_Q
   end interface occ_fermi
 
+  interface occ_impurity
+    module procedure occ_impurity_D, occ_impurity_Q
+  end interface occ_impurity
+
   contains
 
 subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
@@ -594,6 +598,7 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   real(8) :: dist
   integer :: iimp
   real(8) :: occ_tot
+  real(8) :: occimp
 
   if (algo%muFermi) then
     call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
@@ -603,46 +608,9 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
     ! call occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lTMODE .and. algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      if (.not. imp%Band(iimp)) then
-        occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-          / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-      else
-        if (imp%Bandtype(iimp) == 0) then ! box
-          densii = imp%Density(iimp) / 1001.d0
-          do ii=-500,500
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii &
-              / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-        else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
-                                               ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-          densii = imp%Density(iimp) / 5001.d0
-          do ii=-2500,2500 ! we go to +- 2.5 * Gamma
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            dist   = 1.d0/pi * 0.5d0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5d0 * imp%Bandwidth(iimp))**2 )
-
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii*dist &
-              / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-
-        else if (imp%Bandtype(iimp) == 2) then ! Gaussian
-
-          densii = imp%Density(iimp) / 10001.d0
-          do ii=-5000,5000 ! we go to +- 2.5 * sigma
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            dist   = 1.d0/(imp%Bandwidth(iimp) * sqrt(2.d0 * pi)) * exp(-0.5d0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii*dist &
-              / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-
-        endif
-      endif
-    enddo
+    call occ_impurity(occimp, mu, imp, info)
+    occ_tot = occ_tot - occimp
   endif
 
   target_zero = edisp%nelect - occ_tot
@@ -667,6 +635,7 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   integer  :: iimp
   real(16) :: occ_tot
   real(16) :: dist
+  real(16) :: occimp
 
   if (algo%muFermi) then
     call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
@@ -674,46 +643,9 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
     call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
 
-  ! nvalence = nsearch - N_D^+ + N_A^-
-  ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
-  ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lTMODE .and. algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      if (.not. imp%Band(iimp)) then
-        occ_tot = occ_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-          / (1.q0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-      else
-        if (imp%Bandtype(iimp) == 0) then ! box
-          densii = imp%Density(iimp) / 1001.q0
-          do ii=-500,500
-            eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-        else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
-                                               ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-          densii = imp%Density(iimp) / 5001.q0
-          do ii=-2500,2500 ! we go to +- 2.5 * Gamma
-            eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-            dist   = 1.q0/piQ * 0.5q0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5q0 * imp%Bandwidth(iimp))**2 )
-
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii*dist &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-
-        else if (imp%Bandtype(iimp) == 2) then ! Gaussian
-
-          densii = imp%Density(iimp) / 10001.q0
-          do ii=-5000,5000 ! we go to +- 2.5 * sigma
-            eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-            dist   = 1.q0/(imp%Bandwidth(iimp) * sqrt(2.q0 * piQ)) * exp(-0.5q0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
-            occ_tot = occ_tot - imp%Dopant(iimp)*densii*dist &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-          enddo
-
-        endif
-      endif
-    enddo
+    call occ_impurity(occimp, mu, imp, info)
+    occ_tot = occ_tot - occimp
   endif
 
   target_zero=real(edisp%nelect,16) - occ_tot
@@ -1237,5 +1169,115 @@ subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 
 end subroutine occ_digamma_comp_D
+
+subroutine occ_impurity_D(occimp, mu, imp, info)
+  real(8), intent(in)   :: mu
+  real(8), intent(inout) :: occimp
+  type(impurity)        :: imp
+  type(runinfo)         :: info
+
+  integer :: ii, iimp
+  real(8) :: densii, eneii
+  real(8) :: dist
+
+  occimp = 0.d0
+
+  ! impurity occupation
+  ! = N_D^+ - N_A^-
+  ! nvalence = nsearch - impurity occupation
+
+  do iimp = 1,imp%nimp
+    if (.not. imp%Band(iimp)) then
+      occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    else
+      if (imp%Bandtype(iimp) == 0) then ! box
+        densii = imp%Density(iimp) / 1001.d0
+        do ii=-500,500
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+      else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
+                                             ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
+        densii = imp%Density(iimp) / 5001.d0
+        do ii=-2500,2500 ! we go to +- 2.5 * Gamma
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          dist   = 1.d0/pi * 0.5d0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5d0 * imp%Bandwidth(iimp))**2 )
+
+          occimp = occimp + imp%Dopant(iimp)*densii*dist &
+            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+
+      else if (imp%Bandtype(iimp) == 2) then ! Gaussian
+
+        densii = imp%Density(iimp) / 10001.d0
+        do ii=-5000,5000 ! we go to +- 2.5 * sigma
+          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
+          dist   = 1.d0/(imp%Bandwidth(iimp) * sqrt(2.d0 * pi)) * exp(-0.5d0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
+          occimp = occimp + imp%Dopant(iimp)*densii*dist &
+            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+
+      endif
+    endif
+  enddo
+
+end subroutine occ_impurity_D
+
+subroutine occ_impurity_Q(occimp, mu, imp, info)
+  real(16), intent(in)   :: mu
+  real(16), intent(inout) :: occimp
+  type(impurity)        :: imp
+  type(runinfo)         :: info
+
+  integer :: ii, iimp
+  real(16) :: densii, eneii
+  real(16) :: dist
+
+  occimp = 0.q0
+
+  ! impurity occupation
+  ! = N_D^+ - N_A^-
+  ! nvalence = nsearch - impurity occupation
+
+  do iimp = 1,imp%nimp
+    if (.not. imp%Band(iimp)) then
+      occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+    else
+      if (imp%Bandtype(iimp) == 0) then ! box
+        densii = imp%Density(iimp) / 1001.q0
+        do ii=-500,500
+          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+      else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
+                                             ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
+        densii = imp%Density(iimp) / 5001.q0
+        do ii=-2500,2500 ! we go to +- 2.5 * Gamma
+          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
+          dist   = 1.q0/piQ * 0.5q0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5q0 * imp%Bandwidth(iimp))**2 )
+
+          occimp = occimp + imp%Dopant(iimp)*densii*dist &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+
+      else if (imp%Bandtype(iimp) == 2) then ! Gaussian
+
+        densii = imp%Density(iimp) / 10001.q0
+        do ii=-5000,5000 ! we go to +- 2.5 * sigma
+          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
+          dist   = 1.q0/(imp%Bandwidth(iimp) * sqrt(2.q0 * piQ)) * exp(-0.5q0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
+          occimp = occimp + imp%Dopant(iimp)*densii*dist &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        enddo
+
+      endif
+    endif
+  enddo
+
+end subroutine occ_impurity_Q
 
 end module Mroot
