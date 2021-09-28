@@ -412,8 +412,11 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
   integer            :: lines
   integer            :: stat
   integer            :: empty, pst
+  integer            :: cnt
+  real(8), allocatable            :: float_array(:)
   character(len=256), allocatable :: file_temp(:), file_save(:)
-  character(len=1) :: cmnt = '#'
+  character(len=1)                :: cmnt = '#'
+  character(len=1)                :: sprt = ' '
   real(8) :: fdum1, fdum2
 
 
@@ -468,8 +471,25 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
   lines=lines-empty
   close(unit=10)
 
-  ! now we read this string array into the according data arrays
 
+  ! check if data has right amount of columns via first row
+  cnt = 0
+  str_temp = file_save(1)
+  do
+    pst=scan(str_temp,sprt)
+    if (pst == 1) then ! we find the empty space in an empty string at the first position
+      exit
+    else
+      cnt = cnt + 1
+      str_temp = trim(adjustl(str_temp(pst+1:)))
+    endif
+  enddo
+
+  if (cnt /= 3) then
+    call stop_with_message(stderr, 'Error: ScatteringText file does not have correct number of columns')
+  endif
+
+  ! now we read this string array into the according data arrays
   temp%nT = lines
   allocate(temp%TT(temp%nT))
   allocate(temp%BB(temp%nT))
