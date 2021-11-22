@@ -448,7 +448,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! if (myid.eq.master) write(*,*) target_zero1, target_zero2
 
-  if ( (info%Temp < edisp%gap_min*200) .and. &  ! hard temperature cutoff
+  if ( (info%Temp < edisp%gap_min*300) .and. &  ! hard temperature cutoff
        (abs(target_zero1) < 1d-18)) then        ! we have a reasonal value from thisfunction
                                                 ! if this value is too high
                                                 ! we might run off to another root ..
@@ -973,6 +973,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   real(16) :: hole
 
   real(16) :: densii, eneii, dist
+  real(16) :: occimp
 
   sumelec = 0.q0
   sumhole = 0.q0
@@ -1012,98 +1013,15 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   ! deviation purely from the band structure
   deviation =  elecmpi - holempi
 
-
-  ! now we add the impurity differences
-  ! this has to be done after the MPI communication ....
-  sumelec = 0.q0
-  sumhole = 0.q0
-
   ! nvalence = nsearch - N_D^+ + N_A^-
   ! N_D^+ = N_D/(1 + g * exp(beta * (mu - E_D)))
   ! N_A^+ = N_D/(1 + g * exp(-beta * (mu - E_A)))
   if (algo%lTMODE .and. algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      ! so we are strictly between 0 and 1
-      ! for numerical reasons
-      if (.not. imp%Band(iimp)) then
-        ! for impurity level
-        impelec = 1.q0 &
-          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
-
-        imphole = 1.q0 &
-          / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(imp%Energy(iimp)-mu)))
-
-        ! here we apply the signs and the weights (density)
-        if (imphole > impelec) then
-          sumelec = sumelec - impelec*imp%Dopant(iimp)*imp%Density(iimp)
-        else
-          sumhole = sumhole - imphole*imp%Dopant(iimp)*imp%Density(iimp)
-        endif
-      else
-        ! for impurity bands
-        if (imp%Bandtype(iimp) == 0) then ! box
-          densii = imp%Density(iimp) / 1001.d0
-          do ii=-500,500
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            impelec = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-
-            imphole = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(eneii-mu)))
-
-            ! here we apply the signs and the weights (density)
-            if (imphole > impelec) then
-              sumelec = sumelec - impelec*imp%Dopant(iimp)*densii
-            else
-              sumhole = sumhole - imphole*imp%Dopant(iimp)*densii
-            endif
-          enddo
-        else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
-          densii = imp%Density(iimp) / 5001.d0
-          do ii=-2500,2500 ! we go to +- 2.5 * Gamma
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            dist   = 1.d0/pi * 0.5d0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5d0 * imp%Bandwidth(iimp))**2 )
-
-            impelec = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-
-            imphole = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(eneii-mu)))
-
-            ! here we apply the signs and the weights (density)
-            if (imphole > impelec) then
-              sumelec = sumelec - impelec*imp%Dopant(iimp)*densii*dist
-            else
-              sumhole = sumhole - imphole*imp%Dopant(iimp)*densii*dist
-            endif
-          enddo
-        else if (imp%Bandtype(iimp) == 2) then ! Gaussian
-          densii = imp%Density(iimp) / 10001.d0
-          do ii=-5000,5000 ! we go to +- 2.5 * sigma
-            eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-            dist   = 1.d0/(imp%Bandwidth(iimp) * sqrt(2.d0 * pi)) * exp(-0.5d0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
-
-            impelec = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-
-            imphole = 1.q0 &
-              / (1.q0 + imp%Degeneracy(iimp)**(-1.q0) * exp(info%betaQ*imp%Dopant(iimp)*(eneii-mu)))
-
-            if (imphole > impelec) then
-              sumelec = sumelec - impelec*imp%Dopant(iimp)*densii*dist
-            else
-              sumhole = sumhole - imphole*imp%Dopant(iimp)*densii*dist
-            endif
-          enddo
-        endif
-      endif
-
-    enddo
+    call occ_impurity_Q(occimp, mu, imp, info)
+    deviation = deviation - occimp
   endif
 
-  deviation = deviation + sumelec - sumhole
   return
-
 end subroutine occ_fermi_Q_refine
 
 subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
@@ -1177,6 +1095,7 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
   type(runinfo)         :: info
 
   integer :: ii, iimp
+  integer :: ibound
   real(8) :: densii, eneii
   real(8) :: dist
 
@@ -1200,8 +1119,9 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
         enddo
       else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
                                              ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-        densii = imp%Density(iimp) / 5001.d0
-        do ii=-2500,2500 ! we go to +- 2.5 * Gamma
+        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.d0 + 1) !5001.d0
+        ibound = int(imp%Bandcutoff(iimp) * 500.d0)
+        do ii=-ibound,ibound ! 2500,2500 ! we go to +- 2.5 * Gamma
           eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
           dist   = 1.d0/pi * 0.5d0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5d0 * imp%Bandwidth(iimp))**2 )
 
@@ -1211,8 +1131,9 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
 
       else if (imp%Bandtype(iimp) == 2) then ! Gaussian
 
-        densii = imp%Density(iimp) / 10001.d0
-        do ii=-5000,5000 ! we go to +- 2.5 * sigma
+        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.d0 + 1) !10001.d0
+        ibound = int(imp%Bandcutoff(iimp) * 500.d0)
+        do ii=-ibound,ibound ! 5000,5000 ! we go to +- 2.5 * sigma
           eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
           dist   = 1.d0/(imp%Bandwidth(iimp) * sqrt(2.d0 * pi)) * exp(-0.5d0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
           occimp = occimp + imp%Dopant(iimp)*densii*dist &
@@ -1232,6 +1153,7 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
   type(runinfo)         :: info
 
   integer :: ii, iimp
+  integer :: ibound
   real(16) :: densii, eneii
   real(16) :: dist
 
@@ -1255,8 +1177,9 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
         enddo
       else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
                                              ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-        densii = imp%Density(iimp) / 5001.q0
-        do ii=-2500,2500 ! we go to +- 2.5 * Gamma
+        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.q0 + 1) !5001.d0
+        ibound = int(imp%Bandcutoff(iimp) * 500.q0)
+        do ii=-ibound, ibound ! -2500,2500 ! we go to +- 2.5 * Gamma
           eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
           dist   = 1.q0/piQ * 0.5q0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5q0 * imp%Bandwidth(iimp))**2 )
 
@@ -1266,8 +1189,9 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
 
       else if (imp%Bandtype(iimp) == 2) then ! Gaussian
 
-        densii = imp%Density(iimp) / 10001.q0
-        do ii=-5000,5000 ! we go to +- 2.5 * sigma
+        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.q0 + 1) !10001.d0
+        ibound = int(imp%Bandcutoff(iimp) * 500.q0)
+        do ii=-ibound,ibound ! 5000,5000 ! we go to +- 2.5 * sigma
           eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
           dist   = 1.q0/(imp%Bandwidth(iimp) * sqrt(2.q0 * piQ)) * exp(-0.5q0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
           occimp = occimp + imp%Dopant(iimp)*densii*dist &

@@ -369,10 +369,11 @@ program main
     if (algo%lImpurities) then
       write(stdout,*) '  impurity levels: ', imp%nimp
       write(stdout,*) '    ______________________________________________'
-      write(stdout,*) '    iimp, dopant, density, energy [eV], width [eV], degeneracy'
+      write(stdout,*) '    iimp, dopant, density, energy [eV], degeneracy, width [eV], cutoff [sigma]'
       do iimp = 1,imp%nimp
-        write(stdout,'(2X,I5,I5,4F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), &
-                                           imp%Energy(iimp), imp%Bandwidth(iimp), imp%Degeneracy(iimp)
+        write(stdout,'(2X,I5,I5,5F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), &
+                                           imp%Energy(iimp), imp%Degeneracy(iimp), imp%Bandwidth(iimp), &
+                                           imp%Bandcutoff(iimp)
       enddo
     endif
     write(stdout,*)
@@ -384,6 +385,7 @@ program main
     write(stdout,*) '  interband quantities: ', algo%lIntrabandQuantities
     write(stdout,*) '  interband quantities: ', algo%lInterbandQuantities
     write(stdout,*) '  Boltzmann quantities: ', algo%lBoltzmann
+    write(stdout,*) '    Boltzmann with Fermi approximation: ', algo%lBoltzmannFermi
     write(stdout,*) '  B-field   quantities: ', algo%lBfield
     write(stdout,*)
     if (algo%lDebug) then

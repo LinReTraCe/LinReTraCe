@@ -27,6 +27,7 @@ module Mtypes
     logical :: lFullOutput    ! output full response dependency
     logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response
+    logical :: lBoltzmannFermi! calc boltzmann response with Fermi function or PolyGamma
     logical :: lScissors      ! apply gap widening
     logical :: lImpurities    ! include impurity levels
     logical :: lBfieldnew     ! new style elements
@@ -113,6 +114,7 @@ module Mtypes
       ! 0: Box
       ! 1: Lorentzian
       ! 2: Gaussian
+    real(8), allocatable :: Bandcutoff(:) ! in multiples of bandwidth, i.e. sigma or gamma
 
     real(8), allocatable :: Dopant(:)
     real(8), allocatable :: Density(:)

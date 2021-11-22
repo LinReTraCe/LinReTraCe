@@ -310,6 +310,41 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine subgroup_find
 
+  subroutine subsubgroup_find(search_string, search_start, search_end, save_start, save_end)
+    character(*), intent(in) :: search_string
+    integer, intent(in) :: search_start, search_end
+    integer, intent(out) :: save_start, save_end
+    save_start=0
+    save_end=0
+
+    do i=search_start, search_end
+      if (index(trim(file_save(i)),trim(search_string)) .ne. 0) then
+        save_start=i+1
+        exit
+      endif
+    enddo
+
+    if (save_start .ge. 1) then ! subgroup found
+      do i=save_start, search_end
+        if (index(trim(file_save(i)),'[') .eq. 1) then
+          save_end=i-1 ! one above the next session
+          exit
+        endif
+      enddo
+
+      if(save_end .eq. 0) then
+        save_end = search_end ! if nothing else is found, until the end of the group
+                              ! whose size was already determined by group_find
+      endif
+
+      if (save_start .gt. save_end) then ! subgroup found, but no content
+        save_start = -1
+      endif
+    endif
+    return
+    ! save_start -> 0: not found; -1: found, but empty
+  end subroutine subsubgroup_find
+
   subroutine spell_check(search_start, search_end, grname, dictionary, er, erstr)
     character(*), intent(in) :: grname
     character(*), intent(in) :: dictionary(:)

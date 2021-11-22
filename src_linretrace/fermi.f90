@@ -21,6 +21,10 @@ module Mfermi
     module procedure polygamma2fermi_dp, polygamma2fermi_qp
   end interface polygamma2fermi
 
+  interface polygamma2fermi_poly
+    module procedure polygamma2fermi_poly_dp, polygamma2fermi_poly_qp
+  end interface polygamma2fermi_poly
+
   contains
 
 !________________________________________________________
@@ -146,5 +150,22 @@ module Mfermi
     real(16) :: polygamma2fermi_qp
     polygamma2fermi_qp = piQ**2 / (2.q0 * cosh(beta*eps/2.q0)**2)
   end function polygamma2fermi_qp
+
+  function polygamma2fermi_poly_dp(gamma,eps,beta)
+    implicit none
+    real(8), intent(in) :: gamma,eps,beta
+    complex(8), external :: wpsipg
+    real(8) :: polygamma2fermi_poly_dp
+    polygamma2fermi_poly_dp = real(wpsipg(0.5d0 + beta/2.d0/pi * (gamma + ci*eps),1))
+  end function polygamma2fermi_poly_dp
+
+  function polygamma2fermi_poly_qp(gamma,eps,beta)
+    implicit none
+    real(16), intent(in) :: eps,beta
+    real(8), intent(in)  :: gamma
+    complex(16), external :: wpsipghp
+    real(16) :: polygamma2fermi_poly_qp
+    polygamma2fermi_poly_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
+  end function polygamma2fermi_poly_qp
 
 end module Mfermi

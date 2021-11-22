@@ -16,6 +16,8 @@ EnergyOutput      = (default = F)  # output renormalized bands
 Interband         = (default = T)  # calculate Interband quantities
 Intraband         = (default = T)  # calculate Intraband quantities
 Boltzmann         = (default = T)  # calculate Boltzmann regime
+BoltzFermi        = (default = T)  # calculate the Boltzmann regime with the Gamma to 0 expression
+                                   # if False use the actual real part of the polygamma function (psi_1)
 
 FermiOccupation   = (default = F)  # use fermi functions to determine occupation
 
@@ -40,7 +42,9 @@ ElectronOccupation = (default = -1) # number of electrons ... if not provided us
 
 
 [[Scattering]]
-ScatteringFile    = (default = '') # if existent use all the quantities from this file only
+ScatteringFile    = (default = '') # if existent use all the quantities from this HDF5 file only
+ScatteringText    = (default = '') # if existent use all the quantities from this TEXT file only
+
 ScatteringImpurity = (default = 0) # in combination with Scattering File
                                    # adds an additional constant scattering rate
 
@@ -63,6 +67,10 @@ Absolute   = (default = None) # energy is absolute in [eV]
 Valence    = (default = None) # relative upwards shift from top of valence band [eV]
 Conduction = (default = None) # relative downwards shift from bottom of conduction band [eV]
 Percentage = (default = None) # relative position inside the gap
+
+Bandwidth  = (default = 0) #
+Bandtype   = (default = '')  # 'Box', 'Lorentzian', 'Gaussian'
+Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth, i.e. sigma / gamma
 
 
 # INPUT DATA

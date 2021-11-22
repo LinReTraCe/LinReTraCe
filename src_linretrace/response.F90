@@ -409,7 +409,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   real(8) :: gam
   real(8), allocatable :: enrgy(:,:)
 
-  integer :: i,j
+  integer :: i,j,is
   integer :: iband
 
 
@@ -420,9 +420,19 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   ! asymptotic term in the Gamma-> 0 limit
   ! the polygamma2fermi already contains the pi^2 / 2
-  resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
-                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
-                                  / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+  if (algo%lBoltzmannFermi) then
+    resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
+                                    * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
+                                    / (4.d0 * pi**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+  else
+    do is=1,edisp%ispin
+      do iband=edisp%nbopt_min,edisp%nbopt_max
+        resp%s_full(1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
+                                        * sct%zqp(iband,info%ik,is)**2 * info%beta &
+                                        / (4.d0 * pi**3 * sct%gam(iband,info%ik,is))
+      enddo
+    enddo
+  endif
 
   resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy
 
@@ -430,9 +440,19 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
-                                    * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
-                                    / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+    if (algo%lBoltzmannFermi) then
+      resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%beta) &
+                                      * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
+                                      / (16.d0 * pi**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+    else
+      do is=1,edisp%ispin
+        do iband=edisp%nbopt_min,edisp%nbopt_max
+          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
+                                          * 3.d0 * sct%zqp(iband,info%ik,is)**3 * info%beta &
+                                          / (16.d0 * pi**4 * sct%gam(iband,info%ik,is)**2)
+        enddo
+      enddo
+    endif
 
     resp%aB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy
 
@@ -466,7 +486,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   real(16), allocatable :: enrgy(:,:)
 
-  integer :: i,j
+  integer :: i,j,is
   integer :: iband
 
 
@@ -477,9 +497,19 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   ! asymptotic term in the Gamma-> 0 limit
   ! the polygamma2fermi already contains the pi^2 / 2
-  resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
-                                  * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%beta &
-                                  / (4.d0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+  if (algo%lBoltzmannFermi) then
+    resp%s_full(1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
+                                    * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * info%betaQ &
+                                    / (4.q0 * piQ**3 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:))
+  else
+    do is=1,edisp%ispin
+      do iband=edisp%nbopt_min,edisp%nbopt_max
+        resp%s_full(1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
+                                        * sct%zqp(iband,info%ik,is)**2 * info%beta &
+                                        / (4.q0 * piQ**3 * sct%gam(iband,info%ik,is))
+      enddo
+    enddo
+  endif
 
   resp%a_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik) * enrgy
 
@@ -487,9 +517,19 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   if (algo%lBfield) then
 
-    resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
-                                    * 3.d0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%beta &
-                                    / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+    if (algo%lBoltzmannFermi) then
+      resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
+                                      * 3.q0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
+                                      / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+    else
+      do is=1,edisp%ispin
+        do iband=edisp%nbopt_min,edisp%nbopt_max
+          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
+                                          * 3.q0 * sct%zqp(iband,info%ik,is)**3 * info%betaQ &
+                                          / (16.q0 * piQ**4 * sct%gam(iband,info%ik,is)**2)
+        enddo
+      enddo
+    endif
 
     resp%aB_full(1,1,1,:,:,info%ik) = resp%sB_full(1,1,1,:,:,info%ik) * enrgy
 
@@ -1252,7 +1292,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 #endif
 
-  resp%s_sum = resp%s_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
+  resp%s_sum = resp%s_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! e**2 / hbar[Js] -> e / hbar[eVs]
   resp%a_sum = resp%a_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
   resp%x_sum = resp%x_sum * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10
 

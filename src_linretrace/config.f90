@@ -117,6 +117,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
+  algo%lBoltzmannFermi= .true.
   algo%lFullOutput    = .false.
   sct%gamimp          = 0.d0
   imp%nimp            = 0
@@ -167,6 +168,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
+  call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
   call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)
 
@@ -268,6 +270,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         allocate(imp%Degeneracy(imp%nimp))
         allocate(imp%Bandwidth(imp%nimp))
         allocate(imp%Bandtype(imp%nimp))
+        allocate(imp%Bandcutoff(imp%nimp))
         allocate(imp%Band(imp%nimp))
       else if (imp%nimp == 0) then
         algo%lImpurities = .false.
@@ -336,7 +339,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
       do iimp=1,imp%nimp
         write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
-        call subgroup_find(str_imp, subsearch_start, subsearch_end, subsubsearch_start, subsubsearch_end)
+        call subsubgroup_find(str_imp, subsearch_start, subsearch_end, subsubsearch_start, subsubsearch_end)
         if (subsubsearch_start .le. 0) then
           call stop_with_message(stderr, 'Impurity sub group not found')
         endif
@@ -380,6 +383,15 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           enddo
           if (imp%Bandtype(iimp) == -1) then
             call stop_with_message(stderr, 'Bandtype Description not available')
+          endif
+        endif
+
+        call float_find('Bandcutoff', imp%Bandcutoff(iimp), subsubsearch_start, subsubsearch_end, found)
+        if (.not. found) then
+          imp%Bandcutoff(iimp) = 1.d0 ! one standard deviation
+        else
+          if (imp%Bandcutoff(iimp) <= 0.d0) then
+            imp%Bandcutoff(iimp) = 1.d0
           endif
         endif
 
