@@ -1839,11 +1839,23 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
       do iband=1,edisp%nband_max
         elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ ! this is the occupation
         holes = 1.q0 - elecs ! should be enough accuracy
-        if (elecs <= holes) then
-          elecssum = elecssum + elecs * kmesh%weightQ(ik) ! we only count the thermally activated electrons
+
+        if (algo%lTMODE) then
+          if (edisp%gapped(is)) then
+            if (iband <= edisp%valenceBand(is)) then
+              holessum = holessum + holes * kmesh%weightQ(ik)
+            else if (iband >= edisp%conductionBand(is)) then
+              elecssum = elecssum + elecs * kmesh%weightQ(ik)
+            endif
+          endif
         else
-          holessum = holessum + holes * kmesh%weightQ(ik)
+          if (elecs < holes) then
+            elecssum = elecssum + elecs * kmesh%weightQ(ik)
+          else
+            holessum = holessum + holes * kmesh%weightQ(ik)
+          endif
         endif
+
       enddo
     enddo
   enddo
@@ -1902,10 +1914,21 @@ subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, km
       do iband=1,edisp%nband_max
         elecs = fermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
         holes = omfermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        if (elecs <= holes) then
-          elecssum = elecssum + elecs * kmesh%weightQ(ik) ! we only count the thermally activated electrons
+
+        if (algo%lTMODE) then
+          if (edisp%gapped(is)) then
+            if (iband <= edisp%valenceBand(is)) then
+              holessum = holessum + holes * kmesh%weightQ(ik)
+            else if (iband >= edisp%conductionBand(is)) then
+              elecssum = elecssum + elecs * kmesh%weightQ(ik)
+            endif
+          endif
         else
-          holessum = holessum + holes * kmesh%weightQ(ik)
+          if (elecs < holes) then
+            elecssum = elecssum + elecs * kmesh%weightQ(ik)
+          else
+            holessum = holessum + holes * kmesh%weightQ(ik)
+          endif
         endif
       enddo
     enddo
