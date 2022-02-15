@@ -1360,9 +1360,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 #endif
 
       ! same story here ... do not multiply with e
-      resp%sB_gather = resp%sB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
-      resp%aB_gather = resp%aB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
-      resp%xB_gather = resp%xB_gather * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
+      resp%sB_gather = resp%sB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+      resp%aB_gather = resp%aB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
+      resp%xB_gather = resp%xB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
@@ -1415,9 +1415,9 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 #endif
 
-    resp%sB_sum = resp%sB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-    resp%aB_sum = resp%aB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-    resp%xB_sum = resp%xB_sum * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%sB_sum = resp%sB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%aB_sum = resp%aB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%xB_sum = resp%xB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
 
     if (myid .eq. master) then
       ! gather the data in the arrays
@@ -2612,12 +2612,12 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
     qixarrB = aimag(resp%xB_sum)
 #endif
 
-    qrsarrB = qrsarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qisarrB = qisarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qraarrB = qraarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qiaarrB = qiaarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qrxarrB = qrxarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qixarrB = qixarrB * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qrsarrB = qrsarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qisarrB = qisarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qraarrB = qraarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qiaarrB = qiaarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qrxarrB = qrxarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qixarrB = qixarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
 
     ! should work=?
     if (myid .eq. master) then

@@ -77,8 +77,6 @@ program main
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
 
-  call log_master(stdout, 'WARNING: FIX THE 4/3 prefactor of L11M and other possible prefactor in L12M / L22M')
-
   call read_config(algo, edisp, sct, temp, pot, imp)
   call check_files(algo)
 
