@@ -99,7 +99,9 @@ program main
   if (.not. algo%lIntrabandQuantities .and. .not. algo%lInterbandQuantities) then
     ! I will keep this running here
     ! One may just want to look at the chemical potential // total energy
-    call log_master(stdout, 'Warning: Neither Intra nor Interband responses will be calculated')
+    if (index(algo%dbgstr,"Verbose") .ne.0) then
+      call log_master(stdout, 'Warning: Neither Intra nor Interband responses will be calculated')
+    endif
   endif
 
   if (algo%lTMODE) then
@@ -456,7 +458,7 @@ program main
       sct%gam = sct%gamtext(iT)
       sct%zqp = sct%zqptext(iT)
       if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
-        call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
+        call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
         sct%zqp = 1.d0
       endif
       sct%gam = sct%zqp * sct%gam
@@ -472,7 +474,7 @@ program main
          sct%zqp = sct%zqp + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
       enddo
       if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
-        call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
+        call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
         sct%zqp = 1.d0
       endif
       sct%gam = sct%zqp * sct%gam  ! convention we use

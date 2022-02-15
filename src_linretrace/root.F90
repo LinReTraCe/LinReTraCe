@@ -515,7 +515,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = niitact + iit
 
     if (iit >= niitQ) then
-      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      call log_master(stdout, 'ERROR: mu-refinement did not converge!')
       mu = real(mu_qp, 8) ! transform back to dp
       return
     endif
@@ -544,7 +544,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     enddo
 
     if (iit >= niitQ) then
-      call log_master(stdout, 'Warning: mu-refinement did not converge!')
+      call log_master(stdout, 'ERROR: mu-refinement did not converge!')
       return
     endif
     niitact = niitact + iit
