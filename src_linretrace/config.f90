@@ -165,6 +165,12 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
 
+  if (algo%muFermi) then
+    ! change standard root method from ridder to bisection
+    ! to avoid ridder problems for this systems
+    algo%rootMethod = 3
+  endif
+
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)

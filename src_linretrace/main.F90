@@ -416,13 +416,13 @@ program main
 
   ! MAIN LOOP
   if (algo%lDebug .and. (index(algo%dbgstr,"TempReverse") .ne. 0)) then
-    iTstart = temp%nT
-    iTend   = 1
-    iTstep  = -1
-  else
     iTstart = 1
     iTend   = temp%nT
     iTstep  = 1
+  else
+    iTstart = temp%nT
+    iTend   = 1
+    iTstep  = -1
   endif
 
   temp%Tstep = iTstep
@@ -515,13 +515,12 @@ program main
     endif
 
 
-    if (algo%lTMODE .and. algo%lDebug .and. (index(algo%dbgstr,"Dmudt") .ne. 0) &
-        .and. (index(algo%dbgstr,"TempReverse") .ne. 0) .and. info%Temp < edisp%gap_min / 1.95q0 &
+    if (algo%lTMODE .and. (.not. (index(algo%dbgstr,"TempReverse") .ne. 0)) .and. info%Temp < edisp%gap_min / 1.95q0 &
         .and. algo%muFermi) then
         if (iT+2 <= temp%nT) then
           pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
                    (temp%TT(iT)-temp%TT(iT+1))
-          call log_master(stdout, 'Debug: Applying dmu/dT')
+          if (index(algo%dbgstr,"Verbose") .ne.0) call log_master(stdout, 'Debug: Applying dmu/dT')
         else
           call stop_with_message(stderr, 'Debug: Cannot apply dmu/dT')
         endif

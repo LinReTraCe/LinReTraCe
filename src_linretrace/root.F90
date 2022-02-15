@@ -432,7 +432,9 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
   ! i.e. the fermi function with quadruple precision is not accurate neough
   if (algo%lTMODE .and. .not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
-    call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+    if (index(algo%dbgstr,"Verbose") .ne.0) then
+      call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+    endif
     mu = real(mu_qp, 8) ! transform back to dp
     return
   endif

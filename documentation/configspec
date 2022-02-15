@@ -104,8 +104,6 @@ Debug string here (one oneline)
 
 Debug options:
   Mpi : Output MPI information
-  Quad: Calculate the Intra and Interband quantities also in quad precision.
-
-  # this should be the standard at release ... fully automatic detection & co.
-  TempReverse : Reverse the temperature loop
-  Dmudt : if TempReverse & Fermioccupation & gapped & below certain temperature apply derivative
+  Quad : Calculate the Intra and Interband quantities also in quad precision.
+  TempReverse : Reverse the temperature loop such that we start at the Minimum
+  Verbose : Output various warnings otherwise suppressed
