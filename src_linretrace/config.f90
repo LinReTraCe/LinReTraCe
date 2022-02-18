@@ -105,7 +105,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_mu_text = ''
   algo%old_output_file       = ''
   algo%lBField               = .false.
-  algo%lBfieldnew            = .true.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
 
@@ -155,7 +154,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   call bool_find('BFieldMode', algo%lBfield, search_start, search_end, found)
-  call bool_find('BFieldNew', algo%lBfieldnew, search_start, search_end, found)
   call string_find('OutputFile', algo%output_file, search_start, search_end, found)
 
   if (.not. found) then

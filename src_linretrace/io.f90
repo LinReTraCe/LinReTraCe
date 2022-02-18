@@ -182,15 +182,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
-    if (hdf5_dataset_exists(ifile, "up/derivatives") .and. &
-        hdf5_dataset_exists(ifile, "up/curvatures")) then
+    if (hdf5_dataset_exists(ifile, "up/momentsDiagonalBfield")) then
       edisp%lDerivatives = .true.
     else
       edisp%lDerivatives = .false.
     endif
   else
-    if (hdf5_dataset_exists(ifile, "derivatives") .and. &
-        hdf5_dataset_exists(ifile, "curvatures")) then
+    if (hdf5_dataset_exists(ifile, "momentsDiagonalBfield")) then
       edisp%lDerivatives = .true.
     else
       edisp%lDerivatives = .false.
@@ -272,9 +270,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
       call hdf5_read_data(ifile, "/curvatures_sym",  drank3arr)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-    endif
 
-    if (algo%lBfieldnew) then
       call hdf5_read_data(ifile, "/momentsDiagonalBfield",   drank5arr)
       edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
       deallocate(drank5arr)
@@ -301,9 +297,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
       call hdf5_read_data(ifile, "/dn/curvatures_sym",   drank3arr)
       edisp%band_d2k(:,:,:,2) = drank3arr
       deallocate(drank3arr)
-    endif
 
-    if (algo%lBfieldnew) then
       call hdf5_read_data(ifile, "/up/momentsDiagonalBfield",   drank5arr)
       edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
       deallocate(drank5arr)

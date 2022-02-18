@@ -167,11 +167,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights(resp, edisp, info)
   if (algo%lBfield) then
-    if (algo%lBfieldnew) then
-      call response_peierls_weights_new(resp, edisp, info)
-    else
-      call response_peierls_weights(resp, edisp, info)
-    endif
+    call response_peierls_weights_new(resp, edisp, info)
   endif
 
 
@@ -464,11 +460,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights(resp, edisp, info)
   if (algo%lBfield) then
-    if (algo%lBfieldnew) then
-      call response_peierls_weights_new(resp, edisp, info)
-    else
-      call response_peierls_weights(resp, edisp, info)
-    endif
+    call response_peierls_weights_new(resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km
@@ -541,11 +533,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   call response_intra_optical_weights_Q(resp, edisp, info)
   if (algo%lBfield) then
-    if (algo%lBfieldnew) then
-      call response_peierls_weights_new_Q(resp, edisp, info)
-    else
-      call response_peierls_weights_Q(resp, edisp, info)
-    endif
+    call response_peierls_weights_new_Q(resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km_Q
@@ -2110,11 +2098,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   call response_intra_optical_weights_Q(resp, edisp, info)
   if (algo%lBfield) then
-    if (algo%lBfieldnew) then
-      call response_peierls_weights_new_Q(resp, edisp, info)
-    else
-      call response_peierls_weights_Q(resp, edisp, info)
-    endif
+    call response_peierls_weights_new_Q(resp, edisp, info)
   endif
 
 end subroutine response_intra_km_Q

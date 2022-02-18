@@ -7,8 +7,6 @@ RunMode    = (default='')
 Bandgap   = (default = None) # new size of bandgap
 
 BFieldMode = (default = F)   # calculate B-field kernels
-BFieldNew  = (default = T)   # use properly symmetrized B-field optical elements
-                             # does not affect reducible calculations
 
 FullOutput        = (default = F)  # output band- and k-resolved response quantities
 EnergyOutput      = (default = F)  # output renormalized bands
