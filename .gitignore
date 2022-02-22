@@ -17,6 +17,7 @@ bkp*/**
 
 # vim remainders
 *.swp
+*.swo
 
 # input files
 inp.*
