@@ -50,6 +50,7 @@ module Mtypes
     real(8), allocatable  :: multiplicity(:)
     integer               :: nkp
     real(8)               :: vol
+    integer               :: ndim
   end type
 
   ! energy dispersion and derived quantities

@@ -714,6 +714,12 @@ program main
     write(stdout,*)
   endif
 
+  if (kmesh%ndim /= 3) then
+    call log_master(stdout, 'Warning: Reduced dimensions detected')
+    call log_master(stdout, 'Warning: Onsager coefficient units may change')
+  endif
+
+
 
   call hdf5_close_file(ifile_energy)
   if (algo%lScatteringFile) then

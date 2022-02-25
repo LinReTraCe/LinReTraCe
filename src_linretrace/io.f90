@@ -179,6 +179,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   ! unit cell information
   call hdf5_read_data(ifile, "/.unitcell/volume", kmesh%vol)
+  call hdf5_read_data(ifile, "/.unitcell/ndim",   kmesh%ndim)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
