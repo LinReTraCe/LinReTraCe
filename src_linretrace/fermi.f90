@@ -151,6 +151,8 @@ module Mfermi
     polygamma2fermi_qp = piQ**2 / (2.q0 * cosh(beta*eps/2.q0)**2)
   end function polygamma2fermi_qp
 
+  ! these functions represent the psi_1 approximation
+  ! i.e. all higher order psi_i i>1 are thrown out
   function polygamma2fermi_poly_dp(gamma,eps,beta)
     implicit none
     real(8), intent(in) :: gamma,eps,beta

@@ -285,7 +285,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
     deallocate(drank2arr)
 
     if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/up/derivative",  drank3arr)
+      call hdf5_read_data(ifile, "/up/derivatives",  drank3arr)
       edisp%band_dk(:,:,:,1) = drank3arr
       deallocate(drank3arr)
       call hdf5_read_data(ifile, "/up/curvatures",    drank3arr)
