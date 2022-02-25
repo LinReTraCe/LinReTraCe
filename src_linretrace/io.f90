@@ -264,10 +264,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
     edisp%band_original(:,:,1)     = drank2arr
     deallocate(drank2arr)
     if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/derivatives_sym",   drank3arr)
+      call hdf5_read_data(ifile, "/derivatives",   drank3arr)
       edisp%band_dk(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/curvatures_sym",  drank3arr)
+      call hdf5_read_data(ifile, "/curvatures",  drank3arr)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
 
@@ -285,16 +285,16 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
     deallocate(drank2arr)
 
     if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/up/derivatives_sym",  drank3arr)
+      call hdf5_read_data(ifile, "/up/derivative",  drank3arr)
       edisp%band_dk(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/up/curvatures_sym",    drank3arr)
+      call hdf5_read_data(ifile, "/up/curvatures",    drank3arr)
       edisp%band_d2k(:,:,:,1) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/derivatives_sym", drank3arr)
+      call hdf5_read_data(ifile, "/dn/derivatives", drank3arr)
       edisp%band_dk(:,:,:,2) = drank3arr
       deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/curvatures_sym",   drank3arr)
+      call hdf5_read_data(ifile, "/dn/curvatures",   drank3arr)
       edisp%band_d2k(:,:,:,2) = drank3arr
       deallocate(drank3arr)
 
