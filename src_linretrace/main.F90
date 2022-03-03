@@ -326,6 +326,7 @@ program main
     endif
     write(stdout,*)
     write(stdout,*) 'INPUT'
+    write(stdout,*) '  dimensions: ', kmesh%ndim
     write(stdout,*) '  k-Points: ', kmesh%nkp
     write(stdout,*) '  spins: ', edisp%ispin
     write(stdout,*) '  electrons: ', edisp%nelect

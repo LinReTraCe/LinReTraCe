@@ -180,6 +180,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   ! unit cell information
   call hdf5_read_data(ifile, "/.unitcell/volume", kmesh%vol)
   call hdf5_read_data(ifile, "/.unitcell/ndim",   kmesh%ndim)
+  call hdf5_read_data(ifile, "/.unitcell/dims",   kmesh%dims)
 
   ! number of saved k-points
   if (edisp%ispin == 2) then
@@ -633,7 +634,9 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
     enddo
   endif
 
-
+  call hdf5_write_data(ifile, "/.unitcell/dims", kmesh%dims)
+  call hdf5_write_data(ifile, "/.unitcell/ndim", kmesh%ndim)
+  call hdf5_write_data(ifile, "/.unitcell/vol",  kmesh%vol)
 
   call hdf5_close_file(ifile)
 

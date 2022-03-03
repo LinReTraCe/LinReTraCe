@@ -51,6 +51,7 @@ module Mtypes
     integer               :: nkp
     real(8)               :: vol
     integer               :: ndim
+    logical, allocatable  :: dims(:)
   end type
 
   ! energy dispersion and derived quantities
