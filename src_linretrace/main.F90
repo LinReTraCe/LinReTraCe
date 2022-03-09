@@ -154,8 +154,12 @@ program main
     allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
     pot%occ = 0.d0
-    pot%MM = pot%mu ! here we either have the fixed mu
-                    ! or the mu_dft initialized from the preprocessed energy file
+
+    if (algo%muSearch) then
+      pot%MM = pot%mu_dft ! initialize MM array with DFT mu
+    else
+      pot%MM = pot%mu_config ! use fixed config mu for all points
+    endif
 
     if (algo%lOldmu) then
       call read_muT_hdf5(temp, algo%old_output_file, pot%MM)
@@ -294,14 +298,14 @@ program main
     sct%gam = sct%gam * sct%zqp
 
     ! find the equilibrium chemical potential
-    call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+    ! call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
 
     ! shift the chemical potential ranges by the calculated chemical potential
     ! for the given temperature
-
-    pot%MuMin = pot%MuMin + pot%mu
-    pot%MuMax = pot%MuMax + pot%mu
-    pot%MM    = pot%MM + pot%mu
+    ! mu input == difference from DFT mu
+    pot%MuMin = pot%MuMin + pot%mu_dft
+    pot%MuMax = pot%MuMax + pot%mu_dft
+    pot%MM    = pot%MM + pot%mu_dft
   endif
 
 
@@ -371,7 +375,7 @@ program main
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
     write(stdout,*) '  Temperature: ', temp%TT(1)
-    write(stdout,*) '  Chemical Potential for given Temp: ', pot%mu
+    write(stdout,*) '  DFT Chemical Potential: ', pot%mu_dft
     write(stdout,*) '  Chemical Potential range:'
     write(stdout,*) '  Mumin: ', pot%Mumin
     write(stdout,*) '  Mumax: ', pot%Mumax
@@ -398,7 +402,7 @@ program main
 
   if (myid .eq. master) then
     call hdf5_create_file(algo%output_file)
-    call output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
+    call output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   endif
 
 
@@ -685,10 +689,11 @@ program main
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
+
     ! FIXME ... keep this or not ?
-    if (algo%lMuMode) then
-      pot%MM = pot%MM - pot%mu ! for output reasons
-    endif
+    ! if (algo%lMuMode) then
+    !   pot%MM = pot%MM - pot%mu ! for output reasons
+    ! endif
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)

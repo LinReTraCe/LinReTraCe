@@ -249,7 +249,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       call stop_with_message(stderr, 'TempMode group not found')
     endif
 
-    call float_find('ChemicalPotential', pot%mu, search_start, search_end, found)
+    call float_find('ChemicalPotential', pot%mu_config, search_start, search_end, found)
     if (found) then
       algo%muSearch = .false.
     else

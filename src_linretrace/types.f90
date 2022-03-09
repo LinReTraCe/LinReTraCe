@@ -159,7 +159,8 @@ module Mtypes
     real(16), allocatable :: QMM(:) ! same mu array in quad precision
     real(8), allocatable  :: occ(:) ! corresponding occupation
 
-    real(8)  :: mu                ! temporary variable
+    real(8)  :: mu_config             ! chemical potential provided by config file
+    real(8)  :: mu_dft                ! chemical potential provided by energy file
   end type
 
   type runinfo

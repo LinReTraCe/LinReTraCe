@@ -59,7 +59,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   endif
 
   if ((algo%lTMODE .and. algo%muSearch) .or. algo%lMUMODE) then  ! in order to not overwrite variable
-    call hdf5_read_data(ifile, "/.bands/mu",           pot%mu)
+    call hdf5_read_data(ifile, "/.bands/mu",           pot%mu_dft)
   endif
 
   allocate(edisp%gapped(edisp%ispin))
@@ -503,10 +503,11 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
 
 end subroutine
 
-subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
+subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   implicit none
   type(algorithm)   :: algo
   type(runinfo)     :: info
+  type(potential)   :: pot
   type(temperature) :: temp
   type(kpointmesh)  :: kmesh
   type(energydisp)  :: edisp
@@ -582,6 +583,7 @@ subroutine output_auxiliary(algo, info, temp, kmesh, edisp, sct, imp)
     call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
   endif
 
+  call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
