@@ -217,29 +217,39 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       call stop_with_message(stderr, 'Scattering group not found')
     endif
 
-    call int_find('MuPoints', pot%nMu, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'MuPoints in MuMode group not found')
-    call float_find('Temperature', temp%temp, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'Temperature in MuMode group not found')
-    call float_find('MuMinimum', pot%MuMin, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'MuMinimum in MuMode group not found')
-    call float_find('MuMaximum', pot%MuMax, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'MuMaximum in MuMode group not found')
-
-    if (pot%MuMin > pot%MuMax) then
-      call stop_with_message(stderr, 'MuMinimum must be smaller than MuMaximum')
+    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+    call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
+    if (found) then
+      algo%lScatteringFile = .true.
+    else
+      algo%lScatteringFile = .false.
     endif
-    ! with respect to Fermi level at given Temperature
-    ! shift afterwards
 
-    call float_find('ScatteringRate', floattemp, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'ScatteringRate in MuMode group not found')
-    allocate(sct%gamcoeff(1))
-    sct%gamcoeff(1) = floattemp
-    call float_find('QuasiParticleWeight', floattemp, subsearch_start, subsearch_end, found)
-    if (.not. found) call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group not found')
-    allocate(sct%zqpcoeff(1))
-    sct%zqpcoeff(1) = floattemp
+    if (.not. algo%lScatteringFile) then
+      call int_find('MuPoints', pot%nMu, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'MuPoints in MuMode group not found')
+      call float_find('Temperature', temp%temp, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'Temperature in MuMode group not found')
+      call float_find('MuMinimum', pot%MuMin, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'MuMinimum in MuMode group not found')
+      call float_find('MuMaximum', pot%MuMax, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'MuMaximum in MuMode group not found')
+
+      if (pot%MuMin > pot%MuMax) then
+        call stop_with_message(stderr, 'MuMinimum must be smaller than MuMaximum')
+      endif
+      ! with respect to Fermi level at given Temperature
+      ! shift afterwards
+
+      call float_find('ScatteringRate', floattemp, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'ScatteringRate in MuMode group not found')
+      allocate(sct%gamcoeff(1))
+      sct%gamcoeff(1) = floattemp
+      call float_find('QuasiParticleWeight', floattemp, subsearch_start, subsearch_end, found)
+      if (.not. found) call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group not found')
+      allocate(sct%zqpcoeff(1))
+      sct%zqpcoeff(1) = floattemp
+    endif
   endif
 
   if (algo%lTMODE) then

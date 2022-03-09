@@ -110,7 +110,7 @@ program main
       ! at this point we just extract the temperature ranges
       ! and check wether bandshifts exist
       ! the scattering rates then gets loaded for each temperature-point
-      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
+      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else if (algo%lScatteringText) then
       call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
     else
@@ -151,7 +151,7 @@ program main
     electrons = 0.d0
     imp_contribution = 0.d0
     holes = 0.d0
-    allocate(pot%MM(pot%nMu))
+    if (.not. allocated(pot%MM)) allocate(pot%MM(pot%nMu))
     allocate(pot%occ(pot%nMu))
     pot%occ = 0.d0
 
@@ -171,34 +171,35 @@ program main
   endif
 
   if (algo%lMUMODE) then
-    ! construct mu grid
-    temp%nT = pot%nMu
-    allocate(temp%TT(pot%nMu))
-    allocate(temp%BB(pot%nMu))
-    allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-    allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+    if (algo%lScatteringFile) then
+      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+    else
+      ! construct mu grid
+      temp%nT = pot%nMu
+      allocate(temp%TT(pot%nMu))
+      allocate(temp%BB(pot%nMu))
+      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(pot%MM(pot%nMu))
+      temp%TT = temp%temp
+      temp%BB = 1.d0/(temp%temp * kB)
 
+      ! define Chemical potential grid
+      pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
+      do imu=1,pot%nMu
+         pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
+      enddo
+    endif
     allocate(energy(pot%nMu))
     allocate(electrons(pot%nMu))
     allocate(holes(pot%nMu))
     allocate(imp_contribution(pot%nMu))
+    allocate(pot%occ(pot%nMu))
     energy = 0.d0
     electrons = 0.d0
     holes = 0.d0
     imp_contribution = 0.d0
-    allocate(pot%MM(pot%nMu))
-    allocate(pot%occ(pot%nMu))
-
-    temp%TT = temp%temp
-    temp%BB = 1.d0/(temp%temp * kB)
     pot%occ = 0.d0
-
-    ! define Chemical potential grid
-    pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
-    do imu=1,pot%nMu
-       pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
-    enddo
-
   endif
 
   call mpi_genkstep(kmesh%nkp)
@@ -246,7 +247,7 @@ program main
 
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
 
-  if (algo%lTMODE .and. algo%lScatteringFile) then
+  if (algo%lScatteringFile) then
     call hdf5_open_file(algo%input_scattering_hdf5, ifile_scatter_hdf5, rdonly=.true.)
   endif
 
@@ -293,19 +294,20 @@ program main
     info%betaQ=1.q0/(kB*info%TempQ)
     info%beta2pQ=info%betaQ/(2.q0*piQ)
 
-    sct%gam = sct%gamcoeff(1)
-    sct%zqp = sct%zqpcoeff(1)
-    sct%gam = sct%gam * sct%zqp
+    if (.not. algo%lScatteringFile) then ! all of this is already done for the file
+      sct%gam = sct%gamcoeff(1)
+      sct%zqp = sct%zqpcoeff(1)
+      sct%gam = sct%gam * sct%zqp
+      ! find the equilibrium chemical potential
+      ! call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
 
-    ! find the equilibrium chemical potential
-    ! call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-
-    ! shift the chemical potential ranges by the calculated chemical potential
-    ! for the given temperature
-    ! mu input == difference from DFT mu
-    pot%MuMin = pot%MuMin + pot%mu_dft
-    pot%MuMax = pot%MuMax + pot%mu_dft
-    pot%MM    = pot%MM + pot%mu_dft
+      ! shift the chemical potential ranges by the calculated chemical potential
+      ! for the given temperature
+      ! mu input == difference from DFT mu
+      pot%MuMin = pot%MuMin + pot%mu_dft
+      pot%MuMax = pot%MuMax + pot%mu_dft
+      pot%MM    = pot%MM + pot%mu_dft
+    endif
   endif
 
 
@@ -367,10 +369,8 @@ program main
     if (algo%lTMODE) then
     write(stdout,*) 'TEMPERATURE MODE'
     write(stdout,*) '  Temperature range:'
-    if (.not. algo%lScatteringFile .and. .not. algo%lScatteringText) then
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
-    endif
     write(stdout,*) '  Temperature points: ', temp%nT
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
@@ -397,7 +397,7 @@ program main
     endif
     write(stdout,*) 'Starting calculation...'
     write(stdout,*) '____________________________________________________________________________'
-    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV]'
+    write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV], rootFindingSteps'
   endif
 
   if (myid .eq. master) then
@@ -413,7 +413,6 @@ program main
 #ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
-
 
 
   ! MAIN LOOP
@@ -448,7 +447,7 @@ program main
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature
-    if (algo%lTMODE .and. algo%lScatteringFile) then
+    if (algo%lScatteringFile) then
       ! as mentioned above
       ! apply the scissors:
       if (algo%lScissors .and. edisp%lBandShift) then

@@ -313,12 +313,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
 end subroutine
 
-subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
+subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
   type(energydisp)             :: edisp
   type(scattering)             :: sct
+  type(potential)              :: pot
   type(temperature)            :: temp
 
   integer                      :: kpoints
@@ -329,6 +330,7 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
   real(8), allocatable         :: drank2arr(:,:)
 
   integer :: iT, ik
+  logical :: ltemp
 
   call hdf5_init()
   call hdf5_open_file(trim(adjustl(algo%input_scattering_hdf5)), ifile, rdonly=.true.)
@@ -337,6 +339,12 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
   call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
   call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
   call hdf5_read_data(ifile, "/.quantities/iSpin",  iSpin)
+
+  call hdf5_read_data(ifile, "/.quantities/tempmode",  ltemp)
+
+  if (algo%lTMODE /= ltemp) then
+    call stop_with_message(stderr, "Scattering File mode does not coincide with Config file mode")
+  endif
 
   ! allow identical k-meshes / bands
   ! or kpoints == 1 or nbands == 1 ... this way we are able to save storage
@@ -361,13 +369,15 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
   call hdf5_read_data(ifile, "/.quantities/tempAxis", temp%TT)
   call hdf5_read_data(ifile, "/.quantities/betaAxis", temp%BB)
 
+  call hdf5_read_data(ifile, "/.quantities/muAxis", pot%MM)
+
   ! scattering rates
   ! and quasi particle renormalizations
   allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
   if (edisp%iSpin == 1) then
-    if (hdf5_dataset_exists(ifile, "/tPoint/000001/bandshift")) then
+    if (hdf5_dataset_exists(ifile, "/step/000001/bandshift")) then
       edisp%lBandShift = .true.
       if (.not. allocated(edisp%band_shift)) then
         allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
@@ -378,7 +388,7 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
     endif
 
   else if (edisp%iSpin == 2) then
-    if (hdf5_dataset_exists(ifile, "/up/tPoint/000001/bandshift")) then
+    if (hdf5_dataset_exists(ifile, "/up/step/000001/bandshift")) then
       edisp%lBandShift = .true.
       if (.not. allocated(edisp%band_shift)) then
         allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
@@ -388,6 +398,9 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, temp)
       edisp%lBandShift = .false.
     endif
   endif
+
+  pot%mumin = minval(pot%MM)
+  pot%mumax = maxval(pot%MM)
 
   call hdf5_close_file(ifile)
 
@@ -497,9 +510,11 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
   do i=1,temp%nT
     read(file_save(i),'(3F)') temp%TT(i), sct%gamtext(i), sct%zqptext(i)
   enddo
-  sct%gamtext = sct%gamtext + sct%gamimp
-
+  temp%tmin = minval(temp%TT)
+  temp%tmax = maxval(temp%TT)
   temp%BB = 1.d0/(temp%TT * kB)
+
+  sct%gamtext = sct%gamtext + sct%gamimp
 
 end subroutine
 
@@ -692,32 +707,40 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
   logical :: k_dependence
   logical :: band_dependence
 
-  ! sanity check
-  call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
-  call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
+  integer, allocatable :: hdf5shape(:)
 
-  if (kpoints == 1) then
-    k_dependence = .false.
+  ! sanity check
+  ! call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
+  ! call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
+
+  if (edisp%ispin == 1) then
+    call hdf5_get_shape(ifile, "step/000001/scatrate", hdf5shape)
   else
-    k_dependence = .true.
+    call hdf5_get_shape(ifile, "up/step/000001/scatrate", hdf5shape)
   endif
 
-  if (nbands == 1) then
+  ! deduce from the array shape if we have a band or momentum dependence
+  if (hdf5shape(1) == 1) then
     band_dependence = .false.
   else
     band_dependence = .true.
   endif
-
+  if (hdf5shape(2) == 1) then
+    k_dependence = .false.
+  else
+    k_dependence = .true.
+  endif
+  deallocate(hdf5shape)
 
   if (edisp%ispin == 1) then
-    write(string,'("tPoint/",I6.6,"/scatrate")') info%iT
+    write(string,'("step/",I6.6,"/scatrate")') info%iT
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("tPoint/",I6.6,"/qpweight")') info%iT
+    write(string,'("step/",I6.6,"/qpweight")') info%iT
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("tPoint/",I6.6,"/bandshift")') info%iT
+      write(string,'("step/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
@@ -761,14 +784,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
 
   else
 
-    write(string,'("up/tPoint/",I6.6,"/scatrate")') info%iT
+    write(string,'("up/step/",I6.6,"/scatrate")') info%iT
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("up/tPoint/",I6.6,"/qpweight")') info%iT
+    write(string,'("up/step/",I6.6,"/qpweight")') info%iT
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("up/tPoint/",I6.6,"/bandshift")') info%iT
+      write(string,'("up/step/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
@@ -802,14 +825,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
       endif
     endif
 
-    write(string,'("dn/tPoint/",I6.6,"/scatrate")') info%iT
+    write(string,'("dn/step/",I6.6,"/scatrate")') info%iT
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("dn/tPoint/",I6.6,"/qpweight")') info%iT
+    write(string,'("dn/step/",I6.6,"/qpweight")') info%iT
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("dn/tPoint/",I6.6,"/bandshift")') info%iT
+      write(string,'("dn/step/",I6.6,"/bandshift")') info%iT
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
