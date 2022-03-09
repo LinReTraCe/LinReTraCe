@@ -30,6 +30,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   integer :: pst, empty
 
   real(8), allocatable :: impurityinfo(:)
+  character(len=256), allocatable :: rootmethod(:)
   character(len=256), allocatable :: impdescription(:)
   character(len=256), allocatable :: imptype(:)
   integer :: nshape(1)
@@ -105,7 +106,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_mu_text = ''
   algo%old_output_file       = ''
   algo%lBField               = .false.
-  algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> riddler; 3 -> bisection
+  algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
 
   algo%lScatteringFile = .false.
@@ -164,7 +165,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
 
   if (algo%muFermi) then
-    ! change standard root method from ridder to bisection
+    ! change standard root method from ridders to bisection
     ! to avoid ridder problems for this systems
     algo%rootMethod = 3
   endif
@@ -175,6 +176,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
   call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)
+  call bool_find('QuadResponse', algo%lQuad, search_start, search_end, found)
 
   call floatn_find('Bandgap', edisp%scissors, search_start, search_end, found)
   if (found) then
@@ -183,7 +185,23 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     algo%lScissors = .false.
   endif
 
-  call int_find('RootMethod', algo%rootMethod, search_start, search_end, found)
+  allocate(rootmethod(0:3))
+  rootmethod(0) = 'secant'
+  rootmethod(1) = 'linint'
+  rootmethod(2) = 'ridders'
+  rootmethod(3) = 'bisection'
+  call string_find('RootMethod', str_temp, search_start, search_end, found)
+  if (found) then
+    algo%rootMethod = -1
+    do i=0,3
+      if (index(trim(rootmethod(i)),to_lower(trim(str_temp))) .ne. 0) then
+        algo%rootMethod = i
+      endif
+    enddo
+    if (algo%rootMethod == -1) then
+      call stop_with_message(stderr, 'RootMethod Description not available')
+    endif
+  endif
 
 
   if (algo%lMUMODE) then
@@ -336,10 +354,11 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       impdescription(1) = 'Valence'
       impdescription(2) = 'Conduction'
       impdescription(3) = 'Percentage'
-      allocate(imptype(0:2))
+      allocate(imptype(0:3))
       imptype(0) = 'box'
       imptype(1) = 'lorentzian'
       imptype(2) = 'gaussian'
+      imptype(3) = 'halfcircle'
 
       do iimp=1,imp%nimp
         write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
@@ -380,7 +399,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           imp%Bandtype(iimp) = 0 ! box
         else
           imp%Bandtype(iimp) = -1
-          do i=0,2
+          do i=0,3
             if (index(trim(imptype(i)),to_lower(trim(str_temp))) .ne. 0) then
               imp%Bandtype(iimp) = i
             endif

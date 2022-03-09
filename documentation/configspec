@@ -16,15 +16,10 @@ Intraband         = (default = T)  # calculate Intraband quantities
 Boltzmann         = (default = T)  # calculate Boltzmann regime
 BoltzFermi        = (default = T)  # calculate the Boltzmann regime with the Gamma to 0 expression
                                    # if False use the actual real part of the polygamma function (psi_1)
+QuadResponse      = (default = F)  # calculate quad precision responses
 
 FermiOccupation   = (default = F)  # use fermi functions to determine occupation
-
-RootMethod        = (default = 2)  # 0 secant
-                                   # 1 linint
-                                   # 2 riddler
-                                   # 3 bisection
-                                   # riddler might lead to problems with irreducible k-points in low-T regime ..
-                                   # dont ask me why
+RootMethod        = (default = ridders)  # secant linint ridders bisection
 
 OutputFile = (default='linretrace-output.hdf5')
 
@@ -102,6 +97,5 @@ Debug string here (one oneline)
 
 Debug options:
   Mpi : Output MPI information
-  Quad : Calculate the Intra and Interband quantities also in quad precision.
   TempReverse : Reverse the temperature loop such that we start at the Minimum
   Verbose : Output various warnings otherwise suppressed

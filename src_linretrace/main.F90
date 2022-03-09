@@ -225,7 +225,7 @@ program main
   ! for the responses we need psi_1, psi_2 and psi_3
   allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
-  if (algo%lDebug .and. (index(algo%dbgstr,"Quad") .ne. 0)) then
+  if (algo%lQuad) then
     call allocate_response(algo, edisp, temp, qresp_intra)
     if (algo%lInterbandquantities) then
       call allocate_response(algo, edisp, temp, qresp_inter)
@@ -306,46 +306,26 @@ program main
 
 
   if (myid .eq. master) then
-    write(stdout,*)
-    if (algo%lTMODE) then
-    write(stdout,*) 'TEMPERATURE MODE'
-    write(stdout,*) '  Temperature range:'
-    if (.not. algo%lScatteringFile .and. .not. algo%lScatteringText) then
-    write(stdout,*) '  Tmin: ', temp%Tmin
-    write(stdout,*) '  Tmax: ', temp%Tmax
-    endif
-    write(stdout,*) '  Temperature points:   ', temp%nT
-    else if (algo%lMUMODE) then
-    write(stdout,*) 'MU MODE'
-    write(stdout,*) '  Temperature: ', temp%TT(1)
-    write(stdout,*) '  Chemical Potential for given Temp: ', pot%mu
-    write(stdout,*) '  Chemical Potential range:'
-    write(stdout,*) '  Mumin: ', pot%Mumin
-    write(stdout,*) '  Mumax: ', pot%Mumax
-    write(stdout,*) '  Chemical Potential points:   ', pot%nMu
-    endif
-    write(stdout,*)
     write(stdout,*) 'INPUT'
-    write(stdout,*) '  dimensions: ', kmesh%ndim
-    write(stdout,*) '  k-Points: ', kmesh%nkp
-    write(stdout,*) '  spins: ', edisp%ispin
-    write(stdout,*) '  electrons: ', edisp%nelect
-    write(stdout,*)
     write(stdout,*) '  energy-file: ', trim(algo%input_energies)
+    write(stdout,*) '  dimensions:  ', kmesh%ndim
+    write(stdout,*) '  k-Points:    ', kmesh%nkp
+    write(stdout,*) '  bands:       ', edisp%nband_max
+    write(stdout,*) '  spins:       ', edisp%ispin
+    write(stdout,*) '  electrons:   ', edisp%nelect
     if (algo%lScissors) then
-      write(stdout,*) '  old gap: ', edisp%gap - edisp%scissors
-      write(stdout,*) '  new gap: ', edisp%gap
-      write(stdout,*) '  scissors: ', edisp%scissors
+      write(stdout,*) '  old gap:   ', edisp%gap - edisp%scissors
+      write(stdout,*) '  new gap:   ', edisp%gap
+      write(stdout,*) '  scissors:  ', edisp%scissors
     else
       write(stdout,*) '  gap: ', edisp%gap
     endif
     if (algo%lTMODE) then
-      write(stdout,*)
       if (algo%muSearch) then
         if (algo%muFermi) then
-          write(stdout,*) '  chemical potential: determined via Fermi function'
+          write(stdout,*) '  chemical potential via: Fermi function'
         else
-          write(stdout,*) '  chemical potential: determined via Digamma function'
+          write(stdout,*) '  chemical potential via: Digamma function'
         endif
       else
         if (algo%lOldmu) then
@@ -355,7 +335,6 @@ program main
         endif
       endif
     endif
-    write(stdout,*)
     if (algo%lScatteringFile) then
       write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
@@ -366,13 +345,12 @@ program main
       write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
       write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
     endif
-    write(stdout,*)
     if (algo%lImpurities) then
       write(stdout,*) '  impurity levels: ', imp%nimp
       write(stdout,*) '    ______________________________________________'
       write(stdout,*) '    iimp, dopant, density, energy [eV], degeneracy, width [eV], cutoff [sigma]'
       do iimp = 1,imp%nimp
-        write(stdout,'(2X,I5,I5,5F15.10)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), &
+        write(stdout,'(2X,I5,I5,5E14.4)') iimp, int(imp%Dopant(iimp)), imp%Density(iimp), &
                                            imp%Energy(iimp), imp%Degeneracy(iimp), imp%Bandwidth(iimp), &
                                            imp%Bandcutoff(iimp)
       enddo
@@ -382,12 +360,31 @@ program main
     write(stdout,*) '  output-file: ', trim(algo%output_file)
     write(stdout,*) '  full-output: ', algo%lFullOutput
     write(stdout,*)
-    write(stdout,*) '  run-options:'
-    write(stdout,*) '  interband quantities: ', algo%lIntrabandQuantities
-    write(stdout,*) '  interband quantities: ', algo%lInterbandQuantities
-    write(stdout,*) '  Boltzmann quantities: ', algo%lBoltzmann
+    if (algo%lTMODE) then
+    write(stdout,*) 'TEMPERATURE MODE'
+    write(stdout,*) '  Temperature range:'
+    if (.not. algo%lScatteringFile .and. .not. algo%lScatteringText) then
+    write(stdout,*) '  Tmin: ', temp%Tmin
+    write(stdout,*) '  Tmax: ', temp%Tmax
+    endif
+    write(stdout,*) '  Temperature points: ', temp%nT
+    else if (algo%lMUMODE) then
+    write(stdout,*) 'MU MODE'
+    write(stdout,*) '  Temperature: ', temp%TT(1)
+    write(stdout,*) '  Chemical Potential for given Temp: ', pot%mu
+    write(stdout,*) '  Chemical Potential range:'
+    write(stdout,*) '  Mumin: ', pot%Mumin
+    write(stdout,*) '  Mumax: ', pot%Mumax
+    write(stdout,*) '  Chemical Potential points:   ', pot%nMu
+    endif
+    write(stdout,*)
+    write(stdout,*) 'RUN OPTIONS'
+    write(stdout,*) '  interband quantities:     ', algo%lIntrabandQuantities
+    write(stdout,*) '  interband quantities:     ', algo%lInterbandQuantities
+    write(stdout,*) '  Boltzmann quantities:     ', algo%lBoltzmann
     write(stdout,*) '    Boltzmann with Fermi approximation: ', algo%lBoltzmannFermi
-    write(stdout,*) '  B-field   quantities: ', algo%lBfield
+    write(stdout,*) '  B-field   quantities:     ', algo%lBfield
+    write(stdout,*) '  Quad Precision Responses: ', algo%lQuad
     write(stdout,*)
     if (algo%lDebug) then
       write(stdout,*) 'DEBUG MODE'
@@ -510,6 +507,10 @@ program main
         ! fuck it
         call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
+
+      if (niitact > niitQ) then
+        call log_master(stdout, 'warning: mu determination aborted (number of steps)')
+      endif
       call cpu_time(tfinish)
       timings(2) = timings(2) + (tfinish - tstart)
       tstart = tfinish
@@ -553,7 +554,7 @@ program main
     ! once and use it later for all the different response types
     call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+    if (algo%lQuad) then
       call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
       call initresp_qp(algo, qresp_intra)
       if (algo%lInterBandQuantities) then
@@ -605,7 +606,7 @@ program main
       endif
 
       ! quad precision routines
-      if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+      if (algo%lQuad) then
         if (algo%lIntrabandQuantities) then
           call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
@@ -646,7 +647,7 @@ program main
       endif
     endif
 
-    if (algo%lDebug .and. (index(algo%dbgstr, "Quad") .ne. 0)) then
+    if (algo%lQuad) then
       if (algo%lIntrabandQuantities) then
         call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
         if (algo%lBoltzmann) then

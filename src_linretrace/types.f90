@@ -30,7 +30,7 @@ module Mtypes
     logical :: lBoltzmannFermi! calc boltzmann response with Fermi function or PolyGamma
     logical :: lScissors      ! apply gap widening
     logical :: lImpurities    ! include impurity levels
-    logical :: lBfieldnew     ! new style elements
+    logical :: lQuad          ! quad precision response
 
     character(len=256) :: input_energies
     character(len=256) :: input_scattering_hdf5
