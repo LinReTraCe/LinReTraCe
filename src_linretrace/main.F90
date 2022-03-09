@@ -413,14 +413,20 @@ program main
 
 
   ! MAIN LOOP
-  if (algo%lDebug .and. (index(algo%dbgstr,"TempReverse") .ne. 0)) then
+  if (algo%lTMODE) then
+    if (algo%lDebug .and. (index(algo%dbgstr,"TempReverse") .ne. 0)) then
+      iTstart = 1
+      iTend   = temp%nT
+      iTstep  = 1
+    else
+      iTstart = temp%nT
+      iTend   = 1
+      iTstep  = -1
+    endif
+  else
     iTstart = 1
     iTend   = temp%nT
     iTstep  = 1
-  else
-    iTstart = temp%nT
-    iTend   = 1
-    iTstep  = -1
   endif
 
   temp%Tstep = iTstep

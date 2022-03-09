@@ -83,6 +83,11 @@ Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in ter
 
 
 [MuMode] # if MuMode activated
+[[Scattering]]
+ScatteringFile    = (default = '') # if existent use all the quantities from this HDF5 file only
+ScatteringImpurity = (default = 0) # in combination with Scattering File
+                                   # adds an additional constant scattering rate
+
 Temperature = (default = 300)
 MuMinimum = (default = mu_fermi - 15 eV)
 MuMaximum = (default = mu_fermi + 15 eV)
