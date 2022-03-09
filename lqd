@@ -1,0 +1,85 @@
+#! /usr/bin/env python
+
+import sys
+import logging
+
+import numpy as np
+import scipy.optimize
+
+from structure.inout import h5output
+from structure.model import quadratic
+
+'''
+lqd: Pre-processing of a quadradic dispersion for the LRTC code
+'''
+
+__author__     = 'Matthias Pickem'
+__maintainer__ = 'Matthias Pickem'
+__email__      = 'matthias.pickem@gmail.com'
+__version__    = '0.3'
+__status__     = 'Dev'
+__license__    = 'GPLv3'
+__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
+
+error = lambda string: sys.exit('lqd: {}'.format(string))
+
+logging.basicConfig()
+logger = logging.getLogger() # root logger
+logger.setLevel(logging.DEBUG)
+
+debug = (logger.getEffectiveLevel() == logging.DEBUG)
+
+
+
+nk = 100
+qd = quadratic(spacing=5.0, nkx=nk,nky=nk,nkz=1)
+
+logger.debug(qd._kmeshx)
+logger.debug(qd._kmeshy)
+logger.debug(qd._kmeshz)
+logger.debug(qd.kpoints)
+
+# first argument:  list ofenergy offsets [eV]
+# second argument: hopping parameters [eV]
+# third argument:  charge
+
+# qd.computeData(e0=[0.4,-0.2], mass=[0.2, -0.4], charge=1.0)
+qd.computeData(e0=[0.4], mass=[0.2], charge=1.0)
+
+if debug:
+  try:
+    import matplotlib.pyplot as plt
+  except ImportError:
+    error('Debug option requires matplotlib library')
+
+  for iband in range(qd.energyBandMax):
+    plt.plot(qd.energies[0][:,iband], label='band {}'.format(iband+1))
+    mean = np.mean(qd.energies[0][:,iband])
+  plt.axhline(qd.mu, label='mu_qd = {:.3f}'.format(qd.mu), color='black', lw=2, ls='--')
+  plt.axhline(y=0, color='black', lw=2, ls='-')
+  plt.legend(loc='best')
+  plt.show()
+
+if debug:
+  qd.calcDOS(gamma=0.05, windowsize=4, npoints=40000)
+
+  fig = plt.figure()
+  ax1 = fig.add_subplot(111)
+  ax2 = ax1.twinx()
+  for ispin in range(qd.spins):
+    ax1.plot(qd.dosaxis, qd.dos[ispin], label='dos', color='blue')
+    ax2.plot(qd.dosaxis, qd.nos[ispin], label='nos', color='red')
+
+  ax1.axvline(x=qd.mu, color='black', lw=1, ls='-')
+  ax1.set_ylim(ymin=0)
+  ax1.set_ylabel(r'$\mathrm{dos}$')
+  ax1.legend(loc='center left')
+
+  ax2.axhline(y=qd.charge, color='black', lw=1, ls='-')
+  ax2.set_ylim(ymin=0)
+  ax2.set_ylabel(r'$\mathrm{nos}$')
+  ax2.legend(loc='center right')
+
+  plt.show()
+
+h5output('qd-{}-{}-{}.hdf5'.format(qd.nkx,qd.nky,qd.nkz), qd, qd)

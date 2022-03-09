@@ -1,0 +1,133 @@
+#! /usr/bin/env python
+
+from __future__ import print_function, division, absolute_import
+import sys
+import logging
+
+import numpy as np
+import h5py
+
+from  scattering.inout import LRTCscat
+# from scattering import dmftloader
+
+'''
+lscat: user script to create more elaborate scattering data
+
+ways to include scattering data
+1. simplistic user input via config file:
+   Z(T), gamma(T) in form of a polynomial -> "ScatteringCoefficients", "QuasiParticleCoefficients"
+
+2. simplistic user input via text file
+   Z(T), gamma(T) as columns -> "ScatteringText"
+
+3. gamma(T) with arbitrary dependencies (spin, momentum, band)
+   use _this_ script and manipulate the generated arrays before they get saved
+
+'''
+
+__author__     = 'Matthias Pickem'
+__maintainer__ = 'Matthias Pickem'
+__email__      = 'matthias.pickem@gmail.com'
+__version__    = '0.2'
+__status__     = 'Dev'
+__license__    = 'GPLv3'
+__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
+
+
+def main_temp():
+  ''' load LRTC energy file '''
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+
+  ''' define temperature grid in Kelvin - logarithmic steps or linear steps'''
+  nt = 100 # steps
+  scatobj.defineTemperatures(tmin = 10, \
+                             tmax = 300, \
+                             nt   = nt, \
+                             tlog = True)
+
+  ''' create scattering numpy array '''
+  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma *= 1e-3
+
+  ''' load the array into the instantiated object '''
+  scatobj.defineScatteringRates(gamma)
+
+  ''' create output file '''
+  scatobj.createOutput('scattering_file.hdf5')
+
+def main_temp_nokdependence():
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+  nt = 100 # steps
+  scatobj.defineTemperatures(tmin = 10, \
+                             tmax = 300, \
+                             nt   = nt, \
+                             tlog = True)
+
+  ''' OVERWRITE the number of k-points -> no k-dependence '''
+  nkp = 1
+
+  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma *= 1e-3
+  scatobj.defineScatteringRates(gamma)
+  scatobj.createOutput('scattering_file.hdf5')
+
+def main_mu():
+
+  ''' load LRTC energy file '''
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+
+  ''' define chemical potential grid in eV
+      if muabs: take the values as they are
+      if not muabs: interpret them as difference to mu_DFT '''
+  nt = 100 # steps
+  scatobj.defineChemicalPotentials(temp = 300, \
+                                   mumin = -3, \
+                                   mumax = +3, \
+                                   nmu   = nt, \
+                                   muabs = False)
+
+  ''' create scattering numpy array unit: eV '''
+  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma *= 1e-5
+
+  ''' create quasi particle weight numpy array: range (0,1] '''
+  qpweight = np.ones_like(gamma, dtype=np.float64)
+  qpweight *= 0.5 # Z = 0.5 throughout
+
+  ''' load the array into the instantiated object '''
+  scatobj.defineScatteringRates(scattering = gamma, \
+                                qpweight   = qpweight, \
+                                bandshift  = None)
+
+  ''' create output file '''
+  scatobj.createOutput('scattering_file.hdf5')
+
+
+def setLogger():
+  ''' some logging '''
+  class log_formatter(logging.Formatter):
+    def format(self, record):
+      if record.levelname == 'INFO':
+        return record.msg
+      else:
+        return '{}: {}: {}'.format(record.filename, record.levelname, record.msg)
+  logger = logging.getLogger()
+  logger.setLevel(logging.DEBUG) # root logger
+  console = logging.StreamHandler()
+  console.setFormatter(log_formatter())
+  console.setLevel(logging.INFO) # console logger print INFO, WARNING, ERROR and CRITICAL
+  logger.addHandler(console)
+
+if __name__ == '__main__':
+  print('WARNING: this script only serves illustrative purposes')
+  print('Either copy and change the main function called here')
+  print('Or write your own script that employs the classes called here\n\n')
+
+  try:
+    setLogger()
+    main_mu()
+  except BaseException as e:
+    sys.exit('ERROR.\n{}'.format(str(e)))

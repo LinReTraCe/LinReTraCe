@@ -1,0 +1,89 @@
+#! /usr/bin/env python
+
+import sys
+import logging
+import argparse
+
+import numpy as np
+import scipy.optimize
+
+from structure.inout import h5output
+from structure.hamiltonian import hamiltonian_wannier90
+from structure.hamiltonian import hamiltonian_matrix
+
+'''
+ltb: Pre-processing of Wannier90 files and arbitrary H(k) structures in LRTC
+'''
+
+__author__     = 'Matthias Pickem'
+__maintainer__ = 'Matthias Pickem'
+__email__      = 'matthias.pickem@gmail.com'
+__version__    = '0.1'
+__status__     = 'Dev'
+__license__    = 'GPLv3'
+__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
+
+error = lambda string: sys.exit('lwann: {}'.format(string))
+
+logging.basicConfig()
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+
+# INTERFACE WITH hamiltonian file
+if True:
+  ham = hamiltonian_wannier90(hk_file='SVO_k20.hk', charge=1)
+  fname = 'SVO.hdf5'
+  h5output(fname, ham, ham, peierls=True)
+
+# INTERFACE WITH hamiltonian arrays
+if False:
+  hk = np.zeroes((8000,3,3), dtype=np.float64)
+  vk = np.zeroes((8000,3,3,3), dtype=np.float64)
+  ck = np.zeroes((8000,3,3,6), dtype=np.float64)
+  ham = hamiltonian_matrix(hk, vk, ck, charge=1)
+  fname = 'SVO.hdf5'
+  h5output(fname, ham, ham, peierls=True)
+
+
+plot = True
+
+if plot:
+  try:
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    import matplotlib.pyplot as plt
+  except ImportError:
+    error('Debug option requires matplotlib library')
+
+  for iband in range(ham.energyBandMax):
+    plt.plot(ham.energies[0][:,iband], label='band {}'.format(iband+1), lw=2)
+    mean = np.mean(ham.energies[0][:,iband])
+  plt.axhline(ham.mu, label='mu_ham = {:.3f}'.format(ham.mu), color='black', lw=1, ls='--')
+  plt.xlabel(r'$k_i$')
+  plt.ylabel(r'$\varepsilon(k_i)$')
+  plt.legend(loc='best')
+  plt.show()
+
+if plot:
+  ham.calcDOS(gamma=0.03, npoints=10000, windowsize=1.5)
+
+  fig = plt.figure()
+  ax1 = fig.add_subplot(111)
+  ax2 = ax1.twinx()
+  for ispin in range(ham.spins):
+    ax1.plot(ham.dosaxis, ham.dos[ispin], label='dos', color='blue', lw=2)
+    ax2.plot(ham.dosaxis, ham.nos[ispin], label='nos', color='red', lw=2)
+
+  ax1.axvline(x=ham.mu, color='black', lw=1, ls='-')
+  ax1.set_ylim(ymin=0)
+  ax1.set_ylabel(r'$\mathrm{dos}$')
+  ax1.set_xlabel(r'$\mu$ [eV]')
+  ax1.legend(loc='center left')
+
+  ax2.axhline(y=ham.charge, color='black', lw=1, ls='-')
+  ax2.set_ylim(ymin=0)
+  ax2.set_ylabel(r'$\mathrm{nos}$')
+  ax2.legend(loc='center right')
+
+  plt.show()
+

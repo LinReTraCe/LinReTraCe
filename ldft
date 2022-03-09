@@ -1,0 +1,177 @@
+#! /usr/bin/env python
+
+from __future__ import print_function, division, absolute_import
+import argparse
+import os
+import sys
+import logging
+
+from structure       import dft
+from structure.inout import h5output
+from structure.trunc import truncate
+from structure.trunc import TruncationError
+
+try:
+  from structure import btp
+  btp_exists = True
+except ImportError:
+  btp_exists = False
+
+'''
+ldft: Pre-processing of DFT codes for the LRTC code
+'''
+
+__author__     = 'Matthias Pickem'
+__maintainer__ = 'Matthias Pickem'
+__email__      = 'matthias.pickem@gmail.com'
+__version__    = '0.3'
+__status__     = 'Dev'
+__license__    = 'GPLv3'
+__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
+
+def parse_args(args=None):
+  parser = argparse.ArgumentParser(
+    description='Argument parser for the DFT pre-processing for LRTC',
+    epilog="That's the end of the help")
+  parser.add_argument('system',     help='Folder of DFT calculation')
+  parser.add_argument('-o', '--output',   help='Outputname of hdf5 (default="lrtc-energies.hdf5")', default='lrtc-energies.hdf5')
+  parser.add_argument('--optic',    help='Read optical elements (Wien2K)', default=False, action='store_true')
+
+  parser.add_argument('--truncate', nargs=2, help='Energy levels to truncate')
+  parser.add_argument('--abs',      help='Absolute energy levels in truncate option', default=False, action='store_true')
+
+  # if not present -> False; if present -> 30; if present + optional parameter -> optional parameter
+  parser.add_argument('--interp',   nargs='?', help='Interpolate band structure and calculate derivatives', const=5, default=False, type=int)
+  parser.add_argument('--peierls',  help='Use the interpolated velocities for the peierls approximation.', default=False, action='store_true')
+
+  parser.add_argument('--debug',    help=argparse.SUPPRESS, default=False, action='store_true')
+  return parser.parse_args(args)
+
+class log_formatter(logging.Formatter):
+  def format(self, record):
+    if record.levelname == 'INFO':
+      return record.msg # so it looks like print
+    else:
+      return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information
+
+class Program(object):
+  '''
+  Program class which executes the DFT read-in,
+  BTP interpolation, Band truncation and output.
+  '''
+
+  def __init__(self, loglevel=1):
+    '''
+    Parse the arguments and define the input function (python 2/3 compatibility)
+    and define the logger.
+    '''
+    self.args = parse_args()
+    self.inputmethod = input if sys.version_info >= (3, 0) else raw_input
+    self.setlogger(0 if self.args.debug else loglevel)
+
+  def setlogger(self, value):
+    '''
+    Define a custom logger
+    '''
+    if value < 0: value = 0
+    if value > 4: value = 4
+    levels = [logging.DEBUG,logging.INFO,logging.WARNING,logging.ERROR,logging.CRITICAL]
+
+    self.log = logging.getLogger()   # apparently this has to be empty
+    self.log.setLevel(logging.DEBUG) # the root logger should be set to DEBUG
+                                     # it essentially sets a lower limit for all the handlers
+    # configure the console stream
+    console = logging.StreamHandler()
+    console.setFormatter(log_formatter())
+    console.setLevel(levels[value])
+    self.log.addHandler(console)
+
+    # configure the file stream
+    # fileh   = logging.FileHandler('logfile.log')
+    # fileh.setFormatter(logging.Formatter('%(asctime)s: %(name)s: %(message)s'))
+    # fileh.setLevel(logging.WARNING)
+    # self.log.addHandler(fileh)
+
+  def main(self):
+    '''
+    Check for existance of the provided file.
+    Define the DFT calculation.
+    optional: Interpolate the band-structure
+    optional: Truncate the band-structure
+    Output everything to HDF5
+    '''
+
+    # option check
+    if self.args.abs and self.args.truncate is None:
+      self.log.error('--abs requires --truncate')
+      return
+
+    if self.args.interp and not btp_exists:
+      self.log.error('Interpolation option requires BoltzTrap2')
+      return
+
+    # DFT detection + read-in
+    dftsearch = dft.DFTdetection(self.args.system)
+    dftdict = dftsearch()
+    if dftdict is None:
+      self.log.error('Could not detect supported DFT calculation in provided folder')
+      return
+    dftclass = dftdict.pop('dft')
+
+    # check if output file exists
+    if os.path.isfile(self.args.output):
+      print('Output file already exists!')
+      overwrite = self.inputmethod('Overwrite? (y/N) ').strip().lower()
+      if overwrite not in ['y','yes']:
+        self.log.info('File will not be overwritten.\nExiting.')
+        return
+
+    calc = dftclass(self.args.system, optic=self.args.optic, **dftdict)
+    calc.readData()
+
+    # Band interpolation via BTP2
+    if self.args.interp:
+      self.log.info('')
+      try:
+        btinterp = btp.BTPInterpolation(calc)
+        btinterp.interpolate(self.args.interp)
+      except BaseException as e:
+        self.log.exception(str(e))
+        self.log.warning('Continuing without interpolation data.\n')
+        btinterp = None
+    else:
+      btinterp = None
+
+    # Band truncation
+    if self.args.truncate:
+      self.log.info('')
+      try:
+        truncate(calc, btinterp, float(self.args.truncate[0]), \
+                                 float(self.args.truncate[1]), absolute=self.args.abs)
+      except TruncationError as e:
+        self.log.exception(str(e))
+        self.log.warning('Continuing without truncation.')
+
+    # Data output
+    self.log.info('')
+    h5output(self.args.output, calc, btinterp, self.args.peierls)
+
+    print("Output file {!r} successfully created.".format(self.args.output))
+    print("File size: {} MB.".format(os.stat(self.args.output).st_size/1000000))
+
+  def cleanup(self):
+    if os.path.isfile(self.args.output):
+      os.remove(self.args.output)
+
+  def run(self):
+    try:
+      self.main()
+    except KeyboardInterrupt:
+      self.log.info('User exit ...')
+    except MemoryError:
+      self.log.exception('Memory error: Initialized arrays require too much memory.')
+    except BaseException as e:
+      self.log.exception(str(e))
+
+if __name__ == '__main__':
+  Program(loglevel=1).run()

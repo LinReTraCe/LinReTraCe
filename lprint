@@ -1,0 +1,164 @@
+#! /usr/bin/env python
+
+from __future__ import print_function, division, absolute_import
+import sys
+import argparse
+
+from postproc.output import *
+from postproc.input  import *
+
+'''
+lprint: Post-processing of LRTC HDF5 files
+'''
+
+__author__     = 'Matthias Pickem'
+__maintainer__ = 'Matthias Pickem'
+__email__      = 'matthias.pickem@gmail.com'
+__version__    = '0.2'
+__status__     = 'Dev'
+__license__    = 'GPLv3'
+__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
+
+error = lambda string: sys.exit('lprint: {}'.format(string))
+
+def parse_args(args=None):
+  parser = argparse.ArgumentParser(
+    description='''Argument parser for LRTC input and LRTC output data
+           " lprint <file> list " --- list all options
+           -------------------------------------------
+           " lprint <inputfile> info " --- structural information of input file
+           " lprint -p <inputfile> dos " --- plot density of states
+           -------------------------------------------
+           " lprint <outputfile> config " --- config information of lrtc run
+           " lprint -p <outputfile> mu " --- plot chemical potential of latest lrtc run
+           " lprint <outputfile> c-total 111 " --- print total conductivity of spin up in xx direction ''',
+    formatter_class=argparse.RawTextHelpFormatter,
+    epilog="That's the end of the help")
+  parser.add_argument('file',    help='LRTC input/output file')
+  parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
+  parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
+  parser.add_argument('--gap',  help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--imag', help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--diag', help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--debug',help=argparse.SUPPRESS, default=False, action='store_true')
+
+  return parser.parse_args(args)
+
+def directionTransform(string, dims):
+  '''
+    transform character input into numerical inpot via mapping
+    also: pre-check for incorrect characters and incorrect argument lengths
+  '''
+
+  prevstring = string
+  if len(string)>1 and len(string)<5:
+    try:
+      string = string.lower()
+
+      ''' replace up and down with 1 and 2 '''
+      for char, nmb in zip(['u','d'],['1','2']):
+        string = string.replace(char,nmb)
+
+      ''' if nothing is replaced place a 0 in front '''
+      if prevstring == string:
+        string = '0'+string
+
+      for char, nmb in zip(['x','y','z'],['1','2','3']):
+        string = string.replace(char,nmb)
+      test = int(string)
+      return string
+    except:
+      raise ValueError("Invalid directional argument: {} -- incorrect direction".format(prevstring))
+  raise ValueError("Invalid directional argument: {} -- incorrect argument length".format(prevstring))
+
+if __name__ == '__main__':
+  args = parse_args()
+
+  if args.plot:
+    try:
+      import matplotlib.pyplot as plt
+    except ImportError:
+      error('Could not import matplotlib')
+
+  inpobj = outobj = None
+  ''' Initiate input / output objects '''
+  try:
+    inpobj = LRTCinput(args.file)
+  except IOError as e1:
+    try:
+      outobj = LRTCoutput(args.file)
+    except IOError as e2:
+      error('\n'+str(e1)+'\n'+str(e2))
+
+  cmd = args.output[0].strip()
+  cmdlength = len(args.output)
+
+  ''' Input object commands '''
+  if inpobj is not None:
+    try:
+      if cmd == 'list':
+        inpobj.outputList()
+      elif cmd == 'info':
+        inpobj.outputStructure()
+      elif cmd == 'dos':
+        if cmdlength == 1:
+          inpobj.outputDOS(args.plot)
+        else:
+          broadening = float(args.output[1])
+          inpobj.outputDOS(args.plot, broadening)
+
+      if args.plot:
+        plt.title(inpobj.fname)
+        plt.show()
+    except BaseException as s:
+      error('\nERROR: '+str(e)+'\n')
+
+    sys.exit(0)
+
+  ''' Output object commands '''
+  if outobj is not None:
+    try:
+      if cmd == 'list':
+        outobj.outputList(full=False)
+      elif cmd == 'flist':
+        outobj.outputList(full=True)
+      elif cmd == 'config':
+        outobj.outputConfig()
+      else:
+        if cmdlength == 1:
+          outobj.outputData(cmd, args.imag, args.plot, args.diag)
+        else:
+          # we iterate through the list and check the following arguments
+          for i,icmd in enumerate(args.output):
+            try:
+              check = int(args.output[i])
+              continue
+            except:
+              try:
+                check = directionTransform(args.output[i], outobj.dims)
+                continue
+              except:
+                pass
+
+            # check if arguments afterwards are fine
+            add_arguments = []
+            for j in range(i+1,cmdlength):
+              try:
+                check = int(args.output[j])
+                add_arguments.append(args.output[j])
+              except:
+                check = directionTransform(args.output[j], outobj.dims)
+                add_arguments.append(check)
+
+            outobj.outputData(icmd, args.imag, args.plot, args.diag, *add_arguments)
+        try:
+          if outobj.mode == 'temp' and cmd == 'mu' and args.gap and args.plot:
+            outobj.plotBandgap()
+        except:
+          pass
+        if args.plot:
+          plt.title(outobj.fname)
+          plt.legend(loc='best')
+          plt.show()
+    except BaseException as e:
+      error('\nERROR: '+str(e)+'\n')

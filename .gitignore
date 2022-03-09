@@ -29,3 +29,7 @@ bin
 
 # tag files
 tags
+
+# data files
+*.hdf5
+*.bt2
