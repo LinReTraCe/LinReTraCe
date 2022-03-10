@@ -21,9 +21,9 @@ module Mfermi
     module procedure polygamma2fermi_dp, polygamma2fermi_qp
   end interface polygamma2fermi
 
-  interface polygamma2fermi_poly
-    module procedure polygamma2fermi_poly_dp, polygamma2fermi_poly_qp
-  end interface polygamma2fermi_poly
+  interface polygamma2psi1
+    module procedure polygamma2psi1_dp, polygamma2psi1_qp
+  end interface polygamma2psi1
 
   contains
 
@@ -153,21 +153,21 @@ module Mfermi
 
   ! these functions represent the psi_1 approximation
   ! i.e. all higher order psi_i i>1 are thrown out
-  function polygamma2fermi_poly_dp(gamma,eps,beta)
+  function polygamma2psi1_dp(gamma,eps,beta)
     implicit none
     real(8), intent(in) :: gamma,eps,beta
     complex(8), external :: wpsipg
-    real(8) :: polygamma2fermi_poly_dp
-    polygamma2fermi_poly_dp = real(wpsipg(0.5d0 + beta/2.d0/pi * (gamma + ci*eps),1))
-  end function polygamma2fermi_poly_dp
+    real(8) :: polygamma2psi1_dp
+    polygamma2psi1_dp = real(wpsipg(0.5d0 + beta/2.d0/pi * (gamma + ci*eps),1))
+  end function polygamma2psi1_dp
 
-  function polygamma2fermi_poly_qp(gamma,eps,beta)
+  function polygamma2psi1_qp(gamma,eps,beta)
     implicit none
     real(16), intent(in) :: eps,beta
     real(8), intent(in)  :: gamma
     complex(16), external :: wpsipghp
-    real(16) :: polygamma2fermi_poly_qp
-    polygamma2fermi_poly_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
-  end function polygamma2fermi_poly_qp
+    real(16) :: polygamma2psi1_qp
+    polygamma2psi1_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
+  end function polygamma2psi1_qp
 
 end module Mfermi

@@ -423,7 +423,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   else
     do is=1,edisp%ispin
       do iband=edisp%nbopt_min,edisp%nbopt_max
-        resp%s_full(1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
+        resp%s_full(1,1,iband,is,info%ik) = polygamma2psi1(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
                                         * sct%zqp(iband,info%ik,is)**2 * info%beta &
                                         / (4.d0 * pi**3 * sct%gam(iband,info%ik,is))
       enddo
@@ -443,7 +443,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
     else
       do is=1,edisp%ispin
         do iband=edisp%nbopt_min,edisp%nbopt_max
-          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
+          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2psi1(sct%gam(iband,info%ik,is),enrgy(iband,is),info%beta) &
                                           * 3.d0 * sct%zqp(iband,info%ik,is)**3 * info%beta &
                                           / (16.d0 * pi**4 * sct%gam(iband,info%ik,is)**2)
         enddo
@@ -496,7 +496,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
   else
     do is=1,edisp%ispin
       do iband=edisp%nbopt_min,edisp%nbopt_max
-        resp%s_full(1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
+        resp%s_full(1,1,iband,is,info%ik) = polygamma2psi1(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
                                         * sct%zqp(iband,info%ik,is)**2 * info%beta &
                                         / (4.q0 * piQ**3 * sct%gam(iband,info%ik,is))
       enddo
@@ -516,7 +516,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
     else
       do is=1,edisp%ispin
         do iband=edisp%nbopt_min,edisp%nbopt_max
-          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2fermi_poly(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
+          resp%sB_full(1,1,1,iband,is,info%ik) = polygamma2psi1(sct%gam(iband,info%ik,is),enrgy(iband,is),info%betaQ) &
                                           * 3.q0 * sct%zqp(iband,info%ik,is)**3 * info%betaQ &
                                           / (16.q0 * piQ**4 * sct%gam(iband,info%ik,is)**2)
         enddo
