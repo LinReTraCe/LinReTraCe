@@ -77,20 +77,20 @@ class LRTCinput(object):
       print('  charge: {}'.format(h5['.bands/charge'][()]))
       if spins==1:
         gapped = h5['.bands/bandgap/gapped'][()]
-        print('  gapped: {}'.format('yes' if gapped==1 else 'no'))
+        print('  gapped: {}'.format('yes' if gapped else 'no'))
         if gapped:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/vband'][()]))
           print('    conduction band: {}'.format(h5['.bands/bandgap/cband'][()]))
       else:
         gappedup = h5['.bands/bandgap/up/gapped'][()]
-        print('  spin up gapped: {}'.format('yes' if gappedup==1 else 'no'))
+        print('  spin up gapped: {}'.format('yes' if gappedup else 'no'))
         if gappedup:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/up/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/up/vband'][()]))
           print('    conduction band: {}'.format(h5['.bands/bandgap/up/cband'][()]))
         gappeddn = h5['.bands/bandgap/dn/gapped'][()]
-        print('  spin dn gapped: {}'.format('yes' if gappeddn==1 else 'no'))
+        print('  spin dn gapped: {}'.format('yes' if gappeddn else 'no'))
         if gappeddn:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/dn/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/dn/vband'][()]))
