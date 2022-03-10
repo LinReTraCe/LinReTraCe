@@ -46,9 +46,17 @@ def main_temp():
                              nt   = nt, \
                              tlog = True)
 
+  ''' get momentum grid : kpoints are on range [0,1) defined'''
+  kgrid = scatobj.getMomentumGrid() # shape: nkp, 3
+  print(kgrid)
+
   ''' create scattering numpy array '''
-  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
-  gamma *= 1e-3
+  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
+
+  ''' create functional dependency for all temperatures, spins and bands '''
+  gamma[...] = np.sum(np.sin(kgrid*2*np.pi)**2,axis=1)[None,None,:,None]
+  gamma /= 3000.
+  gamma[gamma<1e-7] = 1e-7 # introduce scattering cut-off
 
   ''' load the array into the instantiated object '''
   scatobj.defineScatteringRates(gamma)
@@ -128,6 +136,6 @@ if __name__ == '__main__':
 
   try:
     setLogger()
-    main_mu()
+    main_temp()
   except BaseException as e:
     sys.exit('ERROR.\n{}'.format(str(e)))

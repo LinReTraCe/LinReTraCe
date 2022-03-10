@@ -36,9 +36,13 @@ class LRTCscat(object):
       self.nbands = h5in['.bands/energyBandMax'][()]
       self.nkp    = h5in['.kmesh/nkp'][()]
       self.mudft  = h5in['.bands/mu'][()] # chemical potential from electronic structure
+      self.kgrid  = h5in['.kmesh/points'][()]
 
   def getDependencies(self):
     return self.spins, self.nkp, self.nbands
+
+  def getMomentumGrid(self):
+    return self.kgrid
 
   def defineTemperatures(self, tmin, tmax, nt, tlog=False):
     ''' Define temperature range given by the provided temperatures
