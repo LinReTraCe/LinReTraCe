@@ -1,43 +1,39 @@
 ________________________________________________________________________________
 [General]
-EnergyFile = (default='')
-RunMode    = (default='')
-           # temp or mu
+EnergyFile      = (default='')                       # LRTC energy (input) file
+OutputFile      = (default='linretrace-output.hdf5') # Output file name - does not create folders
 
-Bandgap   = (default = None) # new size of bandgap
+RunMode         = (default='')                       # 'temp' or 'mu'
+Bandgap         = (default = None)                   # Adjust Bandgap - one or two numbers
 
-BFieldMode = (default = F)   # calculate B-field kernels
+FullOutput      = (default = F)                      # output band- and k-resolved response quantities
+EnergyOutput    = (default = F)                      # output renormalized bands
 
-FullOutput        = (default = F)  # output band- and k-resolved response quantities
-EnergyOutput      = (default = F)  # output renormalized bands
+QuadResponse    = (default = F)                      # calculate quad precision responses
+Interband       = (default = T)                      # calculate Interband quantities
+Intraband       = (default = T)                      # calculate Intraband quantities
+Boltzmann       = (default = T)                      # calculate Boltzmann regime
+BFieldMode      = (default = F)                      # calculate magnetic Intraband quantities
 
-Interband         = (default = T)  # calculate Interband quantities
-Intraband         = (default = T)  # calculate Intraband quantities
-Boltzmann         = (default = T)  # calculate Boltzmann regime
-BoltzFermi        = (default = T)  # calculate the Boltzmann regime with the Gamma to 0 expression
-                                   # if False use the actual real part of the polygamma function (psi_1)
-QuadResponse      = (default = F)  # calculate quad precision responses
+FermiOccupation = (default = F)                      # True: Fermi function to determine occupation
+                                                     # False: Digamma function to determine occupation
 
-FermiOccupation   = (default = F)  # use fermi functions to determine occupation
-RootMethod        = (default = ridders)  # secant linint ridders bisection
-
-OutputFile = (default='linretrace-output.hdf5')
+RootMethod      = (default = ridders)                # secant linint ridders bisection
+BoltzFermi      = (default = T)                      # True: Boltzmann approximation
+                                                     # False: Psi_1 approximation
 
 ________________________________________________________________________________
-[TempMode] # if TMode activated
+[TempMode]      # RunMode = temp
 
-ChemicalPotential = (default = 0)  # if here run with the given mu
-OldOutput = (default = None) # old output file from which we take the mu(T)
-NImp = (default = 0) # number of additional impurity levels
-ElectronOccupation = (default = -1) # number of electrons ... if not provided use the energyfile input
-
-
+ChemicalPotential  = (default = 0)    # Fix Chemical potential for all temperatures
+OldOutput          = (default = None) # Use chemical potentials from old OutputFile
+NImp               = (default = 0)    # number of additional impurity levels
+ElectronOccupation = (default = -1)   # Adjust system charge ... default: use value from EnergyFile
 
 
 [[Scattering]]
 ScatteringFile    = (default = '') # if existent use all the quantities from this HDF5 file only
 ScatteringText    = (default = '') # if existent use all the quantities from this TEXT file only
-
 ScatteringImpurity = (default = 0) # in combination with Scattering File
                                    # adds an additional constant scattering rate
 
@@ -51,54 +47,58 @@ TPoints                   = (default = None)
 TLogarithmic              = (default = F)
 ScatteringCoefficients    = (default = None)
 QuasiParticleCoefficients = (default = None)
-
 ________________________________________________________________________________
+
 [[Impurities]]
 [[[1]]]
-# one of these 4 input types
+# Provide one of the following four keywords:
 Absolute   = (default = None) # energy is absolute in [eV]
 Valence    = (default = None) # relative upwards shift from top of valence band [eV]
 Conduction = (default = None) # relative downwards shift from bottom of conduction band [eV]
 Percentage = (default = None) # relative position inside the gap
+# Valence Conduction and Percentage only work for a gapped system
 
-Bandwidth  = (default = 0) #
+# Absolute -- irrespective of spins
+# 4 numbers:    +1(donor)/-1(acceptor) density energy degeneracy
+# Valence Conduction Percentage
+# 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
+# 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2(spin)
+# if no spin is provided default to spin up
+# energy shifts are applied after adjusting the bandgap!
+
+# example donor
+# Conduction = +1 1e-8 0.02 1
+# example acceptor for spin down
+# Valence    = -1 1e-5 0.01 2 2
+
 Bandtype   = (default = '')  # 'Box', 'Lorentzian', 'Gaussian'
-Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth, i.e. sigma / gamma
+Bandwidth  = (default = 0)   # Bandwidth / Sigma in [eV] for the provided Bandtype
+Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth
 
-
-# INPUT DATA
-# Absolute : 4 numbers -- donor(+1)/acceptor(-1) density(per unit cell) energy degenracy
-
-# Rest :     4 numbers -- donor(+1)/acceptor(-1) density(per unit cell) energy degenracy
-# if there is a spin - dependency it defaults to spin 1 (up)
-
-# e.g.: +1 1e-4 8.2514 2
-
-# Rest :     5 numbers -- donor(+1)/acceptor(-1) density(per unit cell) energy degenracy spin
-# e.g.: +1 1e-4 8.2514 2 1
 [[[2]]]
 ... # as many as there are NImp supplied
 # these shifts are applied AFTER the application of scissors
 
 
-
-[MuMode] # if MuMode activated
+________________________________________________________________________________
+[MuMode]       # RunMode = mu
 [[Scattering]]
-ScatteringFile    = (default = '') # if existent use all the quantities from this HDF5 file only
-ScatteringImpurity = (default = 0) # in combination with Scattering File
-                                   # adds an additional constant scattering rate
+ScatteringFile      = (default = '')     # if existent use all the quantities from this HDF5 file only
+ScatteringImpurity  = (default = 0)      # in combination with Scattering File
+                                         # adds an additional constant scattering rate
 
-Temperature = (default = 300)      # in Kelvin
-MuMinimum = (default = -15 eV)     # difference to DFT chemical potential
-MuMaximum = (default = +15 eV)     # difference to DFT chemical potential
-MuPoints   = (default = 100)
 
-ScatteringRate = (default = None)  # in eV^-1
+Temperature         = (default = 300)    # in Kelvin
+MuMinimum           = (default = -15 eV) # difference to DFT chemical potential
+MuMaximum           = (default = +15 eV) # difference to DFT chemical potential
+MuPoints            = (default = 100)
+
+ScatteringRate      = (default = None)   # in eV^-1
 QuasiParticleWeight = (default = 1)
 
 ________________________________________________________________________________
 [Debug]
-Debug string here (one oneline)
+Debug string here (one line)
 
 Debug options:
   Mpi : Output MPI information
