@@ -249,6 +249,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       if (.not. found) call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group not found')
       allocate(sct%zqpcoeff(1))
       sct%zqpcoeff(1) = floattemp
+
+      edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
   endif
 
