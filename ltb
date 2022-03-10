@@ -72,6 +72,8 @@ if __name__ == '__main__':
 
 
   tbdata = np.genfromtxt(args.tb_file)
+  if (tbdata.shape[1] != 5):
+    raise IOError('Provided tight binding file has wrong format (number of columns: 5)')
 
   # create tightbinding object
   irr = not args.red
