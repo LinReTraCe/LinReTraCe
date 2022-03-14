@@ -186,6 +186,9 @@ program main
       temp%TT = temp%temp
       temp%BB = 1.d0/(temp%temp * kB)
 
+      ! shift
+      pot%MuMin = pot%MuMin + pot%mu_dft
+      pot%MuMax = pot%MuMax + pot%mu_dft
       ! define Chemical potential grid
       if (pot%nMu .gt. 1) then
         if (pot%mlogarithmic) then
@@ -207,6 +210,7 @@ program main
         enddo
       endif
     endif
+
 
     allocate(energy(pot%nMu))
     allocate(electrons(pot%nMu))
@@ -304,31 +308,26 @@ program main
   endif
 
   ! final preparation step for chemical potential mode
-  if (algo%lMUMODE) then
-    info%iT = 1
-    info%Temp=temp%TT(info%iT)
-    info%beta=1.d0/(kB*info%Temp)
-    info%beta2p=info%beta/(2.d0*pi)
+  ! do not do this
+  ! if (algo%lMUMODE) then
+  !   info%iT = 1
+  !   info%Temp=temp%TT(info%iT)
+  !   info%beta=1.d0/(kB*info%Temp)
+  !   info%beta2p=info%beta/(2.d0*pi)
 
-    info%TempQ=real(info%Temp,16)
-    info%betaQ=1.q0/(kB*info%TempQ)
-    info%beta2pQ=info%betaQ/(2.q0*piQ)
+  !   info%TempQ=real(info%Temp,16)
+  !   info%betaQ=1.q0/(kB*info%TempQ)
+  !   info%beta2pQ=info%betaQ/(2.q0*piQ)
 
-    if (.not. algo%lScatteringFile) then ! all of this is already done for the file
-      sct%gam = sct%gamcoeff(1)
-      sct%zqp = sct%zqpcoeff(1)
-      sct%gam = sct%gam * sct%zqp
-      ! find the equilibrium chemical potential
-      ! call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+  !   sct%gam = sct%gamcoeff(1)
+  !   sct%zqp = sct%zqpcoeff(1)
+  !   sct%gam = sct%gam * sct%zqp
 
-      ! shift the chemical potential ranges by the calculated chemical potential
-      ! for the given temperature
-      ! mu input == difference from DFT mu
-      pot%MuMin = pot%MuMin + pot%mu_dft
-      pot%MuMax = pot%MuMax + pot%mu_dft
-      pot%MM    = pot%MM + pot%mu_dft
-    endif
-  endif
+  !   if (.not. algo%lScatteringFile) then ! all of this is already done for the file
+  !     ! find the equilibrium chemical potential
+  !     call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+  !   endif
+  ! endif
 
 
   if (myid .eq. master) then
