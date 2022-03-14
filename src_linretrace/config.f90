@@ -146,6 +146,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   else
     if (index('mu',to_lower(trim(str_temp))) .ne. 0) then
       algo%lMUMODE = .true.
+      algo%muFermi = .true. ! change default value in mu-mode ... important for carrier concentration
     else if (index('temp',to_lower(trim(str_temp))) .ne. 0) then
       algo%lTMODE = .true.
     endif

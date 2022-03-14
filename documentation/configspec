@@ -104,5 +104,5 @@ Debug string here (one line)
 
 Debug options:
   Mpi : Output MPI information
-  TempReverse : Reverse the temperature loop such that we start at the Minimum
+  LoopReverse : Reverse the internal temp/mu loop
   Verbose : Output various warnings otherwise suppressed
