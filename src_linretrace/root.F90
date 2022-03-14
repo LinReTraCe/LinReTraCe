@@ -423,10 +423,10 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! quadruple precision for digamma function occupation
   ! is enough (even when the system is gapped)
-  if (.not. algo%muFermi) then
-    mu = real(mu_qp, 8) ! transform back to dp
-    return
-  endif
+  ! if (.not. algo%muFermi) then
+  !   mu = real(mu_qp, 8) ! transform back to dp
+  !   return
+  ! endif
 
 
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
@@ -441,7 +441,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! perform the mu_refinement if we have a gap
   call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
-  call occ_fermi_Q_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+  call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
   ! write(*,*) 'after qp root finding: ',mu_qp
   ! write(*,*) 'deviation QP: ',target_zero2
@@ -478,8 +478,8 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     ! decrease the step size until we dont cross an impurity level essentially
     ! thats wrong
     do
-      call occ_fermi_Q_refine(mu_qp+dmu, test_up, edisp, sct, kmesh, imp, algo, info)
-      call occ_fermi_Q_refine(mu_qp-dmu, test_dn, edisp, sct, kmesh, imp, algo, info)
+      call occ_refine(mu_qp+dmu, test_up, edisp, sct, kmesh, imp, algo, info)
+      call occ_refine(mu_qp-dmu, test_dn, edisp, sct, kmesh, imp, algo, info)
       test_up = test_up - target_zero1
       test_dn = test_dn - target_zero1
       ! debug
@@ -508,7 +508,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
               (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0)) .and. iit < niitQ)
       mu2 = mu2 + dmu
-      call occ_fermi_Q_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
+      call occ_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
       iit = iit + 1
     enddo
 
@@ -527,7 +527,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     ! perform a bisection in the previous working interval
     do iit = 1,niitQ
        mu_qp = (mu1+mu2)/2.q0
-       call occ_fermi_Q_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
+       call occ_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
        niitact = niitact + 1
 
        if ( abs(mu1-mu2) < 1q-12) exit ! we go all out here
@@ -946,7 +946,7 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_fermi_Q
 
-subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
+subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
   real(16), intent(in)  :: mu
@@ -973,32 +973,59 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 
   real(16) :: elec
   real(16) :: hole
+  real(16) :: psikern
 
   real(16) :: densii, eneii, dist
   real(16) :: occimp
 
+  complex(16), external :: wpsipghp
+
   sumelec = 0.q0
   sumhole = 0.q0
 
-  do is = 1,edisp%ispin
-    do ik = ikstr, ikend
-      do iband=1,edisp%nband_max
-        ! directly call the specific fermi function in order to avoid unnecessary many
-        ! vtable look-ups
-        elec = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        hole = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+  ! do this if statement outside
+  ! code speed > code duplication
+  if (algo%muFermi) then
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          ! directly call the specific fermi function in order to avoid unnecessary many
+          ! vtable look-ups
+          elec = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+          hole = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
 
-        ! here we take the smaller of the two quantities
-        ! and weigh it with the quadruple precision weight
-        if (hole > elec) then
-          sumelec = sumelec + elec * kmesh%weightQ(ik)
-        else
-          sumhole = sumhole + hole * kmesh%weightQ(ik)
-        endif
+          ! here we take the smaller of the two quantities
+          ! and weigh it with the quadruple precision weight
+          if (hole > elec) then
+            sumelec = sumelec + elec * kmesh%weightQ(ik)
+          else
+            sumhole = sumhole + hole * kmesh%weightQ(ik)
+          endif
 
+        enddo
       enddo
     enddo
-  enddo
+  else
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          ! only calculate the '0th' polygamma function
+          psikern = 1.q0/piQ * aimag(wpsipghp(0.5q0 + info%betaQ/2.q0/piQ * \
+                             (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)),0))
+          elec = 0.5q0 - psikern
+          hole = 0.5q0 + psikern
+          ! here we take the smaller of the two quantities
+          ! and weigh it with the quadruple precision weight
+          if (hole > elec) then
+            sumelec = sumelec + elec * kmesh%weightQ(ik)
+          else
+            sumhole = sumhole + hole * kmesh%weightQ(ik)
+          endif
+
+        enddo
+      enddo
+    enddo
+  endif
 
 #ifdef MPI
   call mpi_reduce_quad(sumelec, elecmpi) ! custom quad reduction
@@ -1024,7 +1051,7 @@ subroutine occ_fermi_Q_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   endif
 
   return
-end subroutine occ_fermi_Q_refine
+end subroutine occ_refine
 
 subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none

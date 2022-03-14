@@ -501,19 +501,8 @@ program main
       call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
-        if (algo%muFermi) then
-          ! use quadruple precision
-          ! internally use refinement method if in the right temperature range
-          call find_mu(pot%MM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-        else
-          ! also use quadruple precision
-          ! however the root-finding can be aborted earlier
-          call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-        endif
+        call find_mu(pot%MM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       else
-        ! if the system is not gapped, simple double precision is enough
-        ! call find_mu(mu(iT),ndev,ndevact,niitact, edisp, sct, kmesh, imp, algo, info)
-        ! fuck it
         call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
 
