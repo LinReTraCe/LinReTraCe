@@ -1046,6 +1046,18 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
   integer :: iband, ik
 
+  ! purely for output purposes
+  ! we get the responses on the optical ranges
+  ! we shift them onto the full energy range
+  ! to avoid confusion when handling full output arrays
+  ! for the time being this remains an internal switch
+  logical :: lshift = .true. ! shift output to energy range
+  complex(8),  allocatable :: s_shift_array(:,:,:,:,:)
+  complex(8),  allocatable :: a_shift_array(:,:,:,:,:)
+  complex(8),  allocatable :: x_shift_array(:,:,:,:,:)
+  complex(8),  allocatable :: sB_shift_array(:,:,:,:,:,:)
+  complex(8),  allocatable :: aB_shift_array(:,:,:,:,:,:)
+  complex(8),  allocatable :: xB_shift_array(:,:,:,:,:,:)
 
   if (algo%lBfield) then
     if(present(lBfield)) then
@@ -1070,6 +1082,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     ! we gather all the data at the master node and write it to hdf5
     if (myid .eq. master) then
       allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      if (lshift) allocate(s_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
       allocate(resp%s_gather(1,1,1,1,1))
     endif
@@ -1084,6 +1097,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       allocate(resp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      if (lshift) allocate(a_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
       allocate(resp%a_gather(1,1,1,1,1))
     endif
@@ -1098,6 +1112,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       allocate(resp%x_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      if (lshift) allocate(x_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
       allocate(resp%x_gather(1,1,1,1,1))
     endif
@@ -1114,23 +1129,47 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> A / m
     resp%x_gather = resp%x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> VA / m
 
+    if (lshift) then
+      ! shift onto full range
+      s_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%s_gather
+      a_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%a_gather
+      x_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%x_gather
+    endif
+
     if (myid .eq. master) then
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/L11/" // trim(adjustl(gname)) // "/full"
-      call hdf5_write_data(ifile, string, resp%s_gather)
+      if (lshift) then
+        call hdf5_write_data(ifile, string, s_shift_array)
+      else
+        call hdf5_write_data(ifile, string, resp%s_gather)
+      endif
 
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/L12/" // trim(adjustl(gname)) // "/full"
-      call hdf5_write_data(ifile, string, resp%a_gather)
+      if (lshift) then
+        call hdf5_write_data(ifile, string, a_shift_array)
+      else
+        call hdf5_write_data(ifile, string, resp%a_gather)
+      endif
 
       write(string,'(I6.6)') info%iT
       string = trim(string) // "/L22/" // trim(adjustl(gname)) // "/full"
-      call hdf5_write_data(ifile, string, resp%x_gather)
+      if (lshift) then
+        call hdf5_write_data(ifile, string, x_shift_array)
+      else
+        call hdf5_write_data(ifile, string, resp%x_gather)
+      endif
     endif
 
     deallocate(resp%s_gather)
     deallocate(resp%a_gather)
     deallocate(resp%x_gather)
+    if (myid.eq.master .and. lshift) then
+      deallocate(s_shift_array)
+      deallocate(a_shift_array)
+      deallocate(x_shift_array)
+    endif
 
   ! full output end ... this is always for each T-point
   ! arrays would be too large for this
@@ -1194,6 +1233,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
     if (algo%lFullOutput) then
       if (myid .eq. master) then
         allocate(resp%sB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        if (lshift) allocate(sB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
         allocate(resp%sB_gather(1,1,1,1,1,1))
       endif
@@ -1208,6 +1248,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
       if (myid .eq. master) then
         allocate(resp%aB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        if (lshift) allocate(aB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
         allocate(resp%aB_gather(1,1,1,1,1,1))
       endif
@@ -1222,6 +1263,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
       if (myid .eq. master) then
         allocate(resp%xB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        if (lshift) allocate(xB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
         allocate(resp%xB_gather(1,1,1,1,1,1))
       endif
@@ -1238,24 +1280,47 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
       resp%aB_gather = resp%aB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
       resp%xB_gather = resp%xB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
 
+      if (lshift) then
+        sB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%sB_gather
+        aB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%aB_gather
+        xB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%xB_gather
+      endif
+
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/L11M/" // trim(adjustl(gname)) // "/full"
-        call hdf5_write_data(ifile, string, resp%sB_gather)
+        if (lshift) then
+          call hdf5_write_data(ifile, string, sB_shift_array)
+        else
+          call hdf5_write_data(ifile, string, resp%sB_gather)
+        endif
 
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/L12M/" // trim(adjustl(gname)) // "/full"
-        call hdf5_write_data(ifile, string, resp%aB_gather)
+        if (lshift) then
+          call hdf5_write_data(ifile, string, aB_shift_array)
+        else
+          call hdf5_write_data(ifile, string, resp%aB_gather)
+        endif
 
         write(string,'(I6.6)') info%iT
         string = trim(string) // "/L22M/" // trim(adjustl(gname)) // "/full"
-        call hdf5_write_data(ifile, string, resp%xB_gather)
+        if (lshift) then
+          call hdf5_write_data(ifile, string, xB_shift_array)
+        else
+          call hdf5_write_data(ifile, string, resp%xB_gather)
+        endif
 
       endif
 
       deallocate(resp%sB_gather)
       deallocate(resp%aB_gather)
       deallocate(resp%xB_gather)
+      if (myid.eq.master .and. lshift) then
+        deallocate(sB_shift_array)
+        deallocate(aB_shift_array)
+        deallocate(xB_shift_array)
+      endif
     endif ! full output
 
     ! perform a local summation
@@ -1316,99 +1381,6 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 
 end subroutine
-
-
-!subroutine globfac(kmesh, resp, hpresp)
-!   implicit none
-!   type(kpointmesh) :: kmesh
-!   class(dp_resp) :: resp
-!   type(response_qp), optional ::hpresp
-!!local variables
-!   integer :: ktot
-!   real(8) :: fac,facB
-!   real(16):: facQ,facBQ
-
-!   fac   = 2.d0 * pi * ( echarge / (lat%vol*hbarevs)) * 1.d10
-!   facB  = 2.d0 * pi**2 * ( echarge / (lat%vol*hbarevs) ) * (1.d-10 / hbareVs)
-!   facQ  = 2.q0 * piQ * ( real(echarge,16) / real(lat%vol*hbarevs,16)) * 1.q10
-!   facBQ = 2.q0 * piQ**2 * ( real(echarge,16) / real(lat%vol*hbarevs,16)) *  (1.q-10 / real(hbareVs,16))
-
-!   resp%s  = resp%s * fac ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
-!   resp%a  = resp%a * fac * ( - beta * kb)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
-!   resp%s_tot  = resp%s_tot * fac
-!   resp%a_tot  = resp%a_tot * fac * ( - beta * kb)
-!   if(algo%lBfield) then
-!      resp%sB = resp%sB * facB
-!      resp%aB = resp%aB * facB * ( - beta * kb)
-!      resp%sB_tot = resp%sB_tot * facB
-!      resp%aB_tot = resp%aB_tot * facB * ( - beta * kb)
-!   endif
-
-!   if (present(hpresp)) then
-!      hpresp%s  = hpresp%s * facQ ! --> sigma in 1/(Ohm m)     [vk's are in eV*Angstroem]
-!      hpresp%a  = hpresp%a * facQ * ( - betaQ * kbQ)  ! --> S=alpha/sigma in units V/K (below conversion to mV/K for output of S)
-!      hpresp%s_tot  = hpresp%s_tot * facQ
-!      hpresp%a_tot  = hpresp%a_tot * facQ * ( - betaQ * kbQ)
-!      if(algo%lBfield) then
-!         hpresp%sB = hpresp%sB * facBQ
-!         hpresp%aB = hpresp%aB * facBQ * ( - betaQ * kbQ)
-!         hpresp%sB_tot = hpresp%sB_tot * facBQ
-!         hpresp%aB_tot = hpresp%aB_tot * facBQ * ( - betaQ * kbQ)
-!      endif
-!   endif
-
-!end subroutine globfac
-
-!subroutine derresp(resp, hpresp)
-!   implicit none
-!   class(dp_resp)  :: resp
-!   type(response_qp),optional :: hpresp
-!!local variables
-!   integer :: ix
-
-!! In Seebeck: *1000 so as to yield [S]=mV/K
-
-!     do ix=1,3
-!        if (.not. lat%lortho) then
-!           resp%Seebeck(ix)=1000.d0*resp%a_tot(ix,ix)/resp%s_tot(ix,ix)
-!           if (present(hpresp)) hpresp%Seebeck(ix)=1000.q0*hpresp%a_tot(ix,ix)/hpresp%s_tot(ix,ix)
-!        else
-!           resp%Seebeck(ix)=1000.d0*resp%a_tot(1,1)/resp%s_tot(1,1)
-!           if (present(hpresp)) hpresp%Seebeck(ix)=1000.q0*hpresp%a_tot(1,1)/hpresp%s_tot(1,1)
-!        endif
-!     enddo
-
-
-!!     1 = xy
-!!     2 = xz
-!!     3 = yz
-
-!     if (algo%lBfield) then
-!        resp%Nernst(1) = (resp%aB_tot(1,2)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,2))/(resp%s_tot(1,1)**2)
-!        resp%Nernst(2) = (resp%aB_tot(1,3)*resp%s_tot(1,1)-resp%a_tot(1,1)*resp%sB_tot(1,3))/(resp%s_tot(1,1)**2)
-!        resp%Nernst(3) = (resp%aB_tot(2,3)*resp%s_tot(2,2)-resp%a_tot(2,2)*resp%sB_tot(2,3))/(resp%s_tot(2,2)**2)
-!        resp%Nernst = resp%Nernst * 1000.d0 ! V/K --> mV/K
-!        if (present(hpresp)) then
-!           hpresp%Nernst(1) = (hpresp%aB_tot(1,2)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,2))/(hpresp%s_tot(1,1)**2)
-!           hpresp%Nernst(2) = (hpresp%aB_tot(1,3)*hpresp%s_tot(1,1)-hpresp%a_tot(1,1)*hpresp%sB_tot(1,3))/(hpresp%s_tot(1,1)**2)
-!           hpresp%Nernst(3) = (hpresp%aB_tot(2,3)*hpresp%s_tot(2,2)-hpresp%a_tot(2,2)*hpresp%sB_tot(2,3))/(hpresp%s_tot(2,2)**2)
-!           hpresp%Nernst = hpresp%Nernst * 1000.q0 ! V/K --> mV/K
-
-!           hpresp%Nernstpart(1) = ( hpresp%aB_tot(1,2)*hpresp%s_tot(1,1))/(hpresp%s_tot(1,1)**2)*1000.q0
-!           hpresp%Nernstpart(2) = (-hpresp%a_tot(1,1)*hpresp%sB_tot(1,2))/(hpresp%s_tot(1,1)**2)*1000.q0
-!        endif
-!        resp%RH(1) = -resp%sB_tot(1,2)/(resp%s_tot(1,1)*resp%s_tot(2,2))
-!        resp%RH(2) = -resp%sB_tot(1,3)/(resp%s_tot(1,1)*resp%s_tot(3,3))
-!        resp%RH(3) = -resp%sB_tot(2,3)/(resp%s_tot(3,3)*resp%s_tot(3,3))
-!        resp%RH = resp%RH * 1.d+7 ! --> 10^-7 m^3/C
-!        if (present(hpresp)) then
-!           hpresp%RH(1) = -hpresp%sB_tot(1,2)/(hpresp%s_tot(1,1)*hpresp%s_tot(2,2))
-!           hpresp%RH(2) = -hpresp%sB_tot(1,3)/(hpresp%s_tot(1,1)*hpresp%s_tot(3,3))
-!           hpresp%RH(3) = -hpresp%sB_tot(2,3)/(hpresp%s_tot(3,3)*hpresp%s_tot(3,3))
-!           hpresp%RH = hpresp%RH * 1.q+7 ! --> 10^-7 m^3/C
-!        endif
-!     endif
-!end subroutine derresp
 
 subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   implicit none
