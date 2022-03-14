@@ -75,12 +75,13 @@ class LRTCoutput(object):
 
 
     # quantities
-    self.datasets.update({'energy':     (True, '.quantities/energy', 'Total of energy of the system [eV]', False, False)})
-    self.datasets.update({'mu':         (True, '.quantities/mu',     'Chemical potential [eV]',            False, False)})
-    self.datasets.update({'electrons':  (True, '.quantities/electrons',     'Thermally activated electrons',            False, False)})
-    self.datasets.update({'holes':      (True, '.quantities/holes',     'Thermally activated holes',            False, False)})
-    self.datasets.update({'occupation': (True, '.quantities/occupation',     'Total occupation in the system',            False, False)})
-    self.datasets.update({'imp':        (True, '.quantities/imp_contribution',     'Thermally activated impurity electrons',            False, False)})
+    self.datasets.update({'energy':     (True, '.quantities/energy',           'Total of energy of the system [eV]',         False, False)})
+    self.datasets.update({'mu':         (True, '.quantities/mu',               'Chemical potential [eV]',                    False, False)})
+    self.datasets.update({'occupation': (True, '.quantities/occupation',       'Total occupation in the system',             False, False)})
+    self.datasets.update({'carrier':    (True, '.quantities/carrier',          'Carrier concentration in the system w.r.t. neutral charge [1/m^3]', False, False)})
+    self.datasets.update({'electrons':  (True, '.quantities/electrons',        'Thermally activated electrons',              False, False)})
+    self.datasets.update({'holes':      (True, '.quantities/holes',            'Thermally activated holes',                  False, False)})
+    self.datasets.update({'imp':        (True, '.quantities/imp_contribution', 'Thermally activated impurity electrons',     False, False)})
 
     # raw responses
     for iL, unit in zip(['L11','L12','L22'],['V/(A*m)','A/m', 'V*A/m']):
@@ -142,6 +143,7 @@ class LRTCoutput(object):
       self.data.update({'temp':self.temp})
       self.data.update({'invtemp':self.invtemp})
       self.data.update({'mu':self.mu})
+      self.data.update({'carrier':self.carrier})
 
     if response:
       for icmd in commands: # iterate through all the required items
@@ -278,7 +280,7 @@ class LRTCoutput(object):
             elvl = ( enev + (eimp - wid/2.) ) /2.
           plt.axhline(y=elvl,  color='gray', lw=1, ls='-.')
 
-  def outputData(self, command, imag=False, plot=False, diag=False, *args):
+  def outputData(self, command, imag=False, plot=False, diag=False, altaxis=False, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -293,9 +295,27 @@ class LRTCoutput(object):
     self.headerwritten = False
 
     if self.mode == 'temp':
-      axis = self.data['temp']
+      if altaxis:
+        axis = self.data['invtemp']
+        axisname = 'beta'
+        axisunit = '[eV^{-1}]'
+        axislatex = r'$\beta$ [eV$^{-1}$]'
+      else:
+        axis = self.data['temp']
+        axisname = 'T'
+        axisunit = '[K]'
+        axislatex = r'$T$ [K]'
     elif self.mode == 'mu':
-      axis = self.data['mu']
+      if altaxis:
+        axis = self.data['carrier']
+        axisname = 'n'
+        axisunit = '[m^{-3}]'
+        axislatex = r'$n$ [m$^{-3}$]'
+      else:
+        axis = self.data['mu']
+        axisname = 'mu'
+        axisunit = '[eV]'
+        axislatex = r'$\mu$ [eV]'
     else:
       raise ValueError('no properly defined x-axis to plot')
 
@@ -384,7 +404,7 @@ class LRTCoutput(object):
                     np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i', \
                                header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2'.format \
-                               (self.mode,'[K]' if self.mode=='temp' else '[eV]',command))
+                               (axisname,axisunit,command))
                     self.headerwritten = True
 
                   else:
@@ -398,7 +418,7 @@ class LRTCoutput(object):
                     np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
                                header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3'.format \
-                               (self.mode,'[K]' if self.mode=='temp' else '[eV]',command))
+                               (axisname,axisunit,command))
                     self.headerwritten = True
 
                   else:
@@ -415,14 +435,15 @@ class LRTCoutput(object):
         plt.plot(axis, outarray, label='{}'.format(command))
       else:
         np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
-        (self.mode,'[K]' if self.mode=='temp' else '[eV]', self.owned[command][1]))
+        (axisname,axisunit, self.owned[command][1]))
 
     if plot:
-      if self.mode=='temp':
-        plt.xlabel(r'$T$ [K]', fontsize=14)
-      else:
-        plt.xlabel(r'$\mu$ [eV]', fontsize=14)
-        plt.axvline(x=self.mudft, ls='--', color='gray', label=r'$\mu_{\mathrm{DFT}}$') # fermi level
+      plt.xlabel(axislatex, fontsize=14)
+      if self.mode == 'mu':
+        if altaxis:
+          plt.axvline(x=0, ls='--', color='gray') # carrier concentration are differences to 0
+        else:
+          plt.axvline(x=self.mudft, ls='--', color='gray', label=r'$\mu_{\mathrm{DFT}}$') # fermi level
 
 
   def outputList(self, full=False):
@@ -685,11 +706,12 @@ class LRTCoutput(object):
     '''
 
     with h5py.File(self.fname, 'r') as h5:
-      self.temp = h5['.quantities/tempAxis'][()]
+      self.temp    = h5['.quantities/tempAxis'][()]
       self.invtemp = h5['.quantities/betaAxis'][()]
-      self.mu = h5['.quantities/mu'][()]
-      self.mudft = h5['.quantities/mudft'][()]
-      self.nT = self.temp.shape[0]
+      self.carrier = h5['.quantities/carrier'][()]
+      self.mu      = h5['.quantities/mu'][()]
+      self.mudft   = h5['.quantities/mudft'][()]
+      self.nT      = self.temp.shape[0]
 
   def invert(self, data):
     '''

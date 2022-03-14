@@ -51,6 +51,7 @@ program main
   ! quantities saved on the Temperature grid
   ! and derived quantities
   real(8), allocatable :: energy(:) ! total energy
+  real(8), allocatable :: carrier(:) ! carrier concentration
   real(8), allocatable :: electrons(:) ! thermally activated electrons w.r.t chemical potential
   real(8), allocatable :: holes(:) ! thermally activated holes w.r.t chemical potential
   real(8), allocatable :: imp_contribution(:)
@@ -144,6 +145,7 @@ program main
 
 
     allocate(energy(temp%nT))
+    allocate(carrier(temp%nT))
     allocate(electrons(temp%nT))
     allocate(holes(temp%nT))
     allocate(imp_contribution(temp%nT))
@@ -192,9 +194,11 @@ program main
     endif
     allocate(energy(pot%nMu))
     allocate(electrons(pot%nMu))
+    allocate(carrier(temp%nT))
     allocate(holes(pot%nMu))
     allocate(imp_contribution(pot%nMu))
     allocate(pot%occ(pot%nMu))
+    carrier = 0.d0
     energy = 0.d0
     electrons = 0.d0
     holes = 0.d0
@@ -541,6 +545,9 @@ program main
 
     ! calculates the difference to the demanded electron number
     call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
+    ! deviation rescaled to volume is the carrier concentration
+    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e30 ! 1 / A**3 -> 1 / m**3
+    ! actual occupation is then the difference to the charge neutrality
     pot%occ(iT) = edisp%nelect - pot%occ(iT)
 
     if (myid.eq.master) then
@@ -684,6 +691,7 @@ program main
     ! endif
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
+    call hdf5_write_data(ifile_output, '.quantities/carrier', carrier)
     call hdf5_write_data(ifile_output, '.quantities/energy', energy)
     call hdf5_write_data(ifile_output, '.quantities/electrons', electrons)
     call hdf5_write_data(ifile_output, '.quantities/holes', holes)

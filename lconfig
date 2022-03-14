@@ -137,6 +137,7 @@ if __name__ == '__main__':
       cf.write(f"ScatteringCoefficients     =  {' '.join(config['tempmode']['scat'])}\n")
       cf.write(f"QuasiParticleCoefficients  =  {' '.join(config['tempmode']['qp'])}\n")
     elif config['mode'] == 2: # mumode
+      cf.write("FermiOccupation =  T\n") # reasonable to calculate carrier doping
       cf.write("\n[MuMode]\n")
       cf.write("[[Scattering]]\n")
       cf.write(f"Temperature = {config['mumode']['temp']}\n")

@@ -37,6 +37,7 @@ def parse_args(args=None):
   parser.add_argument('file',    help='LRTC input/output file')
   parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
+  parser.add_argument('-x', '--axis', help='Use alternate axis (beta or carrier)', default=False, action='store_true')
   parser.add_argument('--gap',  help=argparse.SUPPRESS, default=False, action='store_true')
   parser.add_argument('--imag', help=argparse.SUPPRESS, default=False, action='store_true')
   parser.add_argument('--diag', help=argparse.SUPPRESS, default=False, action='store_true')
@@ -126,7 +127,7 @@ if __name__ == '__main__':
         outobj.outputConfig()
       else:
         if cmdlength == 1:
-          outobj.outputData(cmd, args.imag, args.plot, args.diag)
+          outobj.outputData(cmd, args.imag, args.plot, args.diag, args.axis)
         else:
           # we iterate through the list and check the following arguments
           for i,icmd in enumerate(args.output):
@@ -150,7 +151,7 @@ if __name__ == '__main__':
                 check = directionTransform(args.output[j], outobj.dims)
                 add_arguments.append(check)
 
-            outobj.outputData(icmd, args.imag, args.plot, args.diag, *add_arguments)
+            outobj.outputData(icmd, args.imag, args.plot, args.diag, args.axis, *add_arguments)
         try:
           if outobj.mode == 'temp' and cmd == 'mu' and args.gap and args.plot:
             outobj.plotBandgap()
