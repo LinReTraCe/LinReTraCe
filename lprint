@@ -139,17 +139,20 @@ if __name__ == '__main__':
                 check = directionTransform(args.output[i], outobj.dims)
                 continue
               except:
-                pass
+                pass # interpret as command
 
-            # check if arguments afterwards are fine
+            # check arguments afterward until we get to an error
             add_arguments = []
             for j in range(i+1,cmdlength):
               try:
                 check = int(args.output[j])
                 add_arguments.append(args.output[j])
               except:
-                check = directionTransform(args.output[j], outobj.dims)
-                add_arguments.append(check)
+                try:
+                  check = directionTransform(args.output[j], outobj.dims)
+                  add_arguments.append(check)
+                except:
+                  break
 
             outobj.outputData(icmd, args.imag, args.plot, args.diag, args.axis, *add_arguments)
         try:
