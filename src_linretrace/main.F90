@@ -187,11 +187,27 @@ program main
       temp%BB = 1.d0/(temp%temp * kB)
 
       ! define Chemical potential grid
-      pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
-      do imu=1,pot%nMu
-         pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
-      enddo
+      if (pot%nMu .gt. 1) then
+        if (pot%mlogarithmic) then
+          pot%dMu= (pot%Mumax/pot%Mumin) ** (1.d0 / dble(pot%nMu -1))
+        else
+          pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
+        endif
+      else
+        pot%dMu = 0
+      endif
+
+      if (pot%mlogarithmic) then
+        do imu=1,pot%nMu
+           pot%MM(imu)=pot%Mumin * pot%dMu**(real(imu-1,8))
+        enddo
+      else
+        do imu=1,pot%nMu
+           pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
+        enddo
+      endif
     endif
+
     allocate(energy(pot%nMu))
     allocate(electrons(pot%nMu))
     allocate(carrier(temp%nT))

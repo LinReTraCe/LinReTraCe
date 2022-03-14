@@ -150,6 +150,7 @@ module Mtypes
   end type
 
   type potential
+    logical :: mlogarithmic         ! logarithmic steps
     integer :: nMu
     integer :: Mustep
     real(8) :: MuMin

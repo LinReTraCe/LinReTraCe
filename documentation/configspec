@@ -33,10 +33,10 @@ ElectronOccupation = (default = -1)   # Adjust system charge ... default: use va
 
 
 [[Scattering]]
-ScatteringFile    = (default = '') # if existent use all the quantities from this HDF5 file only
-ScatteringText    = (default = '') # if existent use all the quantities from this TEXT file only
-ScatteringImpurity = (default = 0) # in combination with Scattering File
-                                   # adds an additional constant scattering rate
+ScatteringFile     = (default = '') # if existent use all the quantities from this HDF5 file only
+ScatteringText     = (default = '') # if existent use all the quantities from this TEXT file only
+ScatteringImpurity = (default = 0)  # in combination with Scattering File
+                                    # adds an additional constant scattering rate
 
 # if we do NOT have a Scattering file
 # we can supply a temperature range (in Kelvin)
@@ -89,13 +89,14 @@ ScatteringImpurity  = (default = 0)      # in combination with Scattering File
                                          # adds an additional constant scattering rate
 
 
-Temperature         = (default = 300)    # in Kelvin
-MuMinimum           = (default = -15 eV) # difference to DFT chemical potential
-MuMaximum           = (default = +15 eV) # difference to DFT chemical potential
-MuPoints            = (default = 100)
+Temperature         = (default = None)    # in Kelvin
+MuMinimum           = (default = None)    # difference to DFT chemical potential
+MuMaximum           = (default = None)    # difference to DFT chemical potential
+MuPoints            = (default = None)
+MLogarithmic        = (default = F)
 
 ScatteringRate      = (default = None)   # in eV^-1
-QuasiParticleWeight = (default = 1)
+QuasiParticleWeight = (default = None)
 
 ________________________________________________________________________________
 [Debug]
