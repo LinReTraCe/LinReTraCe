@@ -364,7 +364,7 @@ program main
     write(stdout,*)
     write(stdout,*) 'OUTPUT'
     write(stdout,*) '  output-file: ', trim(algo%output_file)
-    write(stdout,*) '  full-output: ', algo%lFullOutput
+    write(stdout,*) '  full output: ', algo%lFullOutput
     write(stdout,*)
     if (algo%lTMODE) then
     write(stdout,*) 'TEMPERATURE MODE'
@@ -383,7 +383,7 @@ program main
     endif
     write(stdout,*)
     write(stdout,*) 'RUN OPTIONS'
-    write(stdout,*) '  interband quantities:     ', algo%lIntrabandQuantities
+    write(stdout,*) '  intraband quantities:     ', algo%lIntrabandQuantities
     write(stdout,*) '  interband quantities:     ', algo%lInterbandQuantities
     write(stdout,*) '  Boltzmann quantities:     ', algo%lBoltzmann
     write(stdout,*) '    Boltzmann with Fermi approximation: ', algo%lBoltzmannFermi

@@ -107,9 +107,9 @@ if __name__ == '__main__':
           broadening = float(args.output[1])
           inpobj.outputDOS(args.plot, broadening)
 
-      if args.plot:
-        plt.title(inpobj.fname)
-        plt.show()
+        if args.plot:
+          plt.title(inpobj.fname)
+          plt.show()
     except BaseException as s:
       error('\nERROR: '+str(e)+'\n')
 
