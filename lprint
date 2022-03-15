@@ -125,6 +125,12 @@ if __name__ == '__main__':
         outobj.outputList(full=True)
       elif cmd == 'config':
         outobj.outputConfig()
+      elif cmd == 'dos':
+        if cmdlength == 1:
+          outobj.outputDOS(args.plot)
+        else:
+          broadening = float(args.output[1])
+          outobj.outputDOS(args.plot, broadening)
       else:
         if cmdlength == 1:
           outobj.outputData(cmd, args.imag, args.plot, args.diag, args.axis)
@@ -160,9 +166,9 @@ if __name__ == '__main__':
             outobj.plotBandgap()
         except:
           pass
-        if args.plot:
-          plt.title(outobj.fname)
-          plt.legend(loc='best')
-          plt.show()
+      if args.plot:
+        plt.title(outobj.fname)
+        plt.legend(loc='best')
+        plt.show()
     except BaseException as e:
       error('\nERROR: '+str(e)+'\n')

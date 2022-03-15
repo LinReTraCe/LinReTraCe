@@ -12,6 +12,8 @@ with warnings.catch_warnings():
   warnings.filterwarnings("ignore",category=FutureWarning)
   import h5py
 
+from structure import es
+
 class LRTCoutput(object):
   '''
   Output class for the main output of LRTC
@@ -75,6 +77,7 @@ class LRTCoutput(object):
 
 
     # quantities
+    self.datasets.update({'dos':        (True, '.energies',                    'Density of States',                          False, False)})
     self.datasets.update({'energy':     (True, '.quantities/energy',           'Total of energy of the system [eV]',         False, False)})
     self.datasets.update({'mu':         (True, '.quantities/mu',               'Chemical potential [eV]',                    False, False)})
     self.datasets.update({'occupation': (True, '.quantities/occupation',       'Total occupation in the system',             False, False)})
@@ -713,6 +716,71 @@ class LRTCoutput(object):
       self.mudft   = h5['.quantities/mudft'][()]
       self.nT      = self.temp.shape[0]
 
+  def outputDOS(self, plot, broadening=0.02):
+    '''
+    Print DOS/NOS
+    '''
+
+    import matplotlib.pyplot as plt
+
+    with h5py.File(self.fname,'r') as h5:
+      mu  = h5['.quantities/mudft'][()]
+      spins = h5['.quantities/ispin'][()]
+      weights = h5['.quantities/weights'][()]
+
+      if spins==1:
+        ene = h5['.energies'][()]
+        dosaxis, dos, nos = LRTCoutput.calcDOS(ene, weights, gamma=broadening)
+        del ene
+      else:
+        eneup = h5['.energies/up'][()]
+        dosaxisup, dosup, nosup = LRTCoutput.calcDOS(eneup, weights, gamma=broadening)
+        del eneup
+        enedn = h5['.energies/dn'][()]
+        dosaxisdn, dosdn, nosdn = LRTCoutput.calcDOS(enedn, weights, gamma=broadening)
+        del enedn
+
+      if plot:
+        if spins==1:
+          plt.plot(dosaxis, dos, color='black', lw=2, label='DOS')
+          plt.legend(loc='upper left')
+          plt.ylabel('DOS [eV^-1]')
+          plt.xlabel(r'$\varepsilon$ [eV]')
+
+          plt.twinx()
+          plt.ylabel('NOS')
+          plt.plot(dosaxis, nos, color='gray', lw=2, label='NOS')
+          plt.legend(loc='upper right')
+        else:
+          plt.plot(dosaxisup, dosup, color='blue', lw=2, label='DOS up')
+          plt.plot(dosaxisdn, -dosdn, color='red', lw=2, label='DOS dn')
+          ylim = max(np.max(dosup),np.max(dosdn)) * 1.1
+          plt.ylim(-ylim,ylim)
+          plt.legend(loc='upper left')
+          plt.ylabel('DOS [eV^-1]')
+          plt.xlabel(r'$\varepsilon$ [eV]')
+
+          plt.twinx()
+          plt.plot(dosaxisup, nosup, color='deepskyblue', lw=2, label='NOS up')
+          plt.plot(dosaxisup, -nosdn, color='indigo', lw=2, label='NOS dn')
+          ylim = max(np.max(nosup),np.max(nosdn)) * 1.1
+          plt.ylim(-ylim,ylim)
+          plt.legend(loc='upper right')
+          plt.ylabel('NOS')
+        plt.axvline(x=mu, ls='--', color='gray', lw=2)
+        plt.xlabel('energy')
+      else:
+        if spins==1:
+          np.savetxt(self.textpipe, np.hstack((dosaxis[:,None], dos[:,None], nos[:,None])), \
+                     fmt='%25.15e %25.15e %25.15e', comments='', \
+                     header='# energy [eV], DOS [eV^-1], NOS]')
+        else:
+          np.savetxt(self.textpipe, np.hstack((dosaxis[:,None], dosup[:,None], dosdn[:,None], nosup[:,None], nosdn[:,None])), \
+                     fmt='%25.15e %25.15e %25.15e %25.15e %25.15e', comments='', \
+                     header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
+
+    print('') # empty line before next CLI input
+
   def invert(self, data):
     '''
     Invert given data
@@ -788,3 +856,27 @@ class LRTCoutput(object):
       returned = inverted
 
     return returned
+
+  @staticmethod
+  def calcDOS(energies, weights, windowsize=1.4, npoints=1000, gamma=0.02):
+    # first we find the energy interval
+    globmin = np.min(energies)
+    globmax = np.max(energies)
+
+    if windowsize < 1:
+      windowsize = 1
+    increase = (windowsize-1)/2.
+
+    # extend it a bit outwards
+    interval = globmax-globmin
+    globmin -= interval*increase
+    globmax += interval*increase
+
+    dosaxis = np.linspace(globmin,globmax,npoints)
+
+    dosresolved = es.ElectronicStructure.Lorentzian(dosaxis[None,None,:],energies[:,:,None],gamma)
+    dos = np.sum(dosresolved*weights[:,None,None],axis=(0,1))
+
+    nosresolved = es.ElectronicStructure.IntLorentzian(dosaxis[None,None,:],energies[:,:,None],gamma)
+    nos = np.sum(nosresolved*weights[:,None,None],axis=(0,1))
+    return dosaxis, dos, nos

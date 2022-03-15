@@ -581,8 +581,9 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
     call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
   endif
 
+  call hdf5_write_data(ifile, ".quantities/ispin", edisp%ispin)
   call hdf5_write_data(ifile, ".quantities/charge", edisp%nelect) ! this might have been changed by config
-  call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)
+  call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)    ! this also might have changed
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
   call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
@@ -637,6 +638,13 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_data(ifile, "/.unitcell/dims", kmesh%dims)
   call hdf5_write_data(ifile, "/.unitcell/ndim", kmesh%ndim)
   call hdf5_write_data(ifile, "/.unitcell/vol",  kmesh%vol)
+
+  if (edisp%ispin == 1) then
+    call hdf5_write_data(ifile, "/.energies", edisp%band(:,:,1))
+  else
+    call hdf5_write_data(ifile, "/.energies/up", edisp%band(:,:,1))
+    call hdf5_write_data(ifile, "/.energies/dn", edisp%band(:,:,2))
+  endif
 
   call hdf5_close_file(ifile)
 
