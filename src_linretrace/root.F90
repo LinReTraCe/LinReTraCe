@@ -59,7 +59,8 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
      call occ_DFT(mu,occ,edisp,kmesh)
      target_zero = edisp%nelect - occ
 
-     if (abs(target_zero).lt.abort) exit
+     if ((mu2-mu1)/2.d0 .lt. abort) exit ! abort if the difference is smaller than the possible
+                                         ! changes caused by the kmesh
 
      if (target_zero.gt.0.q0) then
         mu1=mu

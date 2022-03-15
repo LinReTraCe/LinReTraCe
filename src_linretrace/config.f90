@@ -280,7 +280,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     else
       if (edisp%nelect_config <= 0.d0) then
         edisp%nelect_config = -1.d0
-        call stop_with_message(stderr, 'Error: Negative number of electrons provided')
+        call stop_with_message(stderr, 'Error: ElectronOccupation must be > 0.0')
       else
         algo%lRedoMudft = .true.
       endif
@@ -321,7 +321,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       else if (imp%nimp == 0) then
         algo%lImpurities = .false.
       else
-        call stop_with_message(stderr, 'Error: Negative number of impurities')
+        call stop_with_message(stderr, 'Error: NImp must be > 0')
       endif
     else
       algo%lImpurities = .false.

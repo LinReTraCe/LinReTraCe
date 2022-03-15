@@ -331,13 +331,11 @@ program main
     if (algo%lRedoMudft) then
       write(stdout,*)
       write(stdout,*) 'ENERGY ADJUSTMENTS'
-      if (algo%lScissors) then
-      write(stdout,*) '  new gap:          ', edisp%gap
-      write(stdout,*) '  new mu:           ', pot%mu_dft
-      endif
       if (edisp%nelect_config > 0.d0) then
       write(stdout,*) '  new electrons:    ', edisp%nelect
       endif
+      write(stdout,*) '  new gap:          ', edisp%gap
+      write(stdout,*) '  new mu:           ', pot%mu_dft
     endif
     write(stdout,*)
     write(stdout,*) 'CONFIG'
