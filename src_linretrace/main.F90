@@ -505,7 +505,7 @@ program main
       ! initialize the new chemical potential
       if (iT /= iTstart) then
         pot%MM(iT) = pot%MM(iT-iTstep) ! we initialize it to the value from the previous iteration
-                               ! this does nothing if mu is constant
+                                       ! this does nothing if mu is constant
       endif
 
       call cpu_time(tstart)
@@ -517,23 +517,21 @@ program main
       endif
 
       if (niitact > niitQ) then
-        call log_master(stdout, 'warning: mu determination aborted (number of steps)')
+        if (iT == iTstart) then
+          call stop_with_message(stderr, 'ERROR: Cannot determine mu')
+        else if (iTstep == (-1) .and. iT <= iTstart-2) then
+          call log_master(stdout, 'Warning: mu determination aborted, using dMu/dT')
+          pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
+                                      (temp%TT(iT)-temp%TT(iT+1))
+        else
+          call log_master(stdout, 'Warning: mu determination aborted, mu from previous step')
+          pot%MM(iT) = pot%MM(iT-iTstep)
+        endif
       endif
+
       call cpu_time(tfinish)
       timings(2) = timings(2) + (tfinish - tstart)
       tstart = tfinish
-    endif
-
-
-    if (algo%lTMODE .and. (.not. (index(algo%dbgstr,"TempReverse") .ne. 0)) .and. info%Temp < edisp%gap_min / 1.95q0 &
-        .and. algo%muFermi) then
-        if (iT+2 <= temp%nT) then
-          pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
-                   (temp%TT(iT)-temp%TT(iT+1))
-          if (index(algo%dbgstr,"Verbose") .ne.0) call log_master(stdout, 'Applying dmu/dT')
-        else
-          call stop_with_message(stderr, 'Debug: Cannot apply dmu/dT')
-        endif
     endif
 
     ! calculating total energy according to the occuption above
@@ -545,7 +543,7 @@ program main
       call calc_elecholes_digamma(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     endif
 
-    if (algo%lTMODE) then
+    if (algo%lTMODE .and. algo%lImpurities) then
       call occ_impurity(imp_contribution(iT), pot%MM(iT), imp, info)
     endif
 
@@ -557,7 +555,7 @@ program main
     pot%occ(iT) = edisp%nelect - pot%occ(iT)
 
     if (myid.eq.master) then
-      write(stdout,'(3X,3F15.7,I7)') info%Temp, info%beta, pot%MM(iT), niitact
+      write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iT), niitact
     endif
 
     ! calculate the polygamma function (1...3)

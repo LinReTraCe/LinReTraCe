@@ -37,10 +37,12 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
   real(8) :: occ1,occ2,occ
   real(8) :: target_zero1, target_zero2, target_zero
 
-  real(8) :: abort
   real(8) :: emin, emax
+  real(8) :: minkweight
   integer :: is, iband
 
+
+  minkweight = minval(kmesh%weight)
   ! root finding purely for a DFT band structure
   ! i.e. T = 0
   ! bisection
@@ -53,15 +55,13 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
   target_zero2 = edisp%nelect - occ2
 
   ! Bisection root finding
-  abort = minval(kmesh%weight) / 2.d0
   do
      mu = (mu1+mu2)/2.d0
      call occ_DFT(mu,occ,edisp,kmesh)
      target_zero = edisp%nelect - occ
 
-     if ((mu2-mu1)*5.d0 .lt. abort) exit ! abort if the difference is smaller than the possible
-       ! changes caused by the kmesh
-       ! makes sure that the chemical potential always lands inside the gap and ned minimally below it
+     if (abs(target_zero) < minkweight) exit ! if we hit the band gap
+     if ((mu2-mu1)*10.d0 < minkweight) exit ! if converged
 
      if (target_zero.gt.0.q0) then
         mu1=mu
@@ -363,14 +363,12 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
   ! local variables
-  logical :: skipped
-  real(16) mu_qp
+  logical  :: refine_success
+  real(16) :: mu_qp, mu_refine
   real(16) target_zero1, target_zero2
   real(16) test_up, test_dn
   real(16) mu1, mu2, dmu
-  real(16) :: target_zero_old
-  integer iit, niit0, itest
-  logical :: switchsign
+  integer iit, niit0
   logical lsecant  ! selects the secant root finding algorithm
   ! linear interpolation method
   real(16), allocatable :: Y(:) !array containig the function to minimise
@@ -515,149 +513,163 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
     niitact = iit
   endif
 
-  ! quadruple precision for digamma function occupation
-  ! is enough (even when the system is gapped)
-  ! if (.not. algo%muFermi) then
-  !   mu = real(mu_qp, 8) ! transform back to dp
-  !   return
-  ! endif
-
-  ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
-  ! i.e. the fermi function with quadruple precision is not accurate neough
-  if (algo%lTMODE .and. .not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
-    if (index(algo%dbgstr,"Verbose") .ne.0) then
-      call log_master(stdout, 'Warning: mu-refinement does not work at this temperature')
+  ! hard temperature cutoff relative to band gap size
+  if (info%Temp < edisp%gap_min*300) then
+    call find_mu_refine_Q(mu_qp, mu_refine, refine_success, niitact, edisp, sct, kmesh, imp, algo, info)
+    if (refine_success) then
+      mu = real(mu_refine, 8)
+      return
     endif
-    mu = real(mu_qp, 8) ! transform back to dp
+    niitact = niitQ+1 ! notify main
+  endif
+
+  mu = real(mu_qp, 8)
+
+end subroutine find_mu_Q
+
+subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, kmesh, imp, algo, info)
+  implicit none
+  ! passed variables
+  real(16), intent(in)   :: mu_in
+  real(16), intent(out)  :: mu_out
+  logical, intent(out)   :: refine_success
+  integer, intent(inout) :: niitact
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(impurity)   :: imp
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+
+  ! local variables
+  real(16) :: target_zero1, target_zero2, target_zero
+  real(16) :: mu1, mu2, dmu
+  real(16) :: test_up, test_dn
+  integer  :: iit
+  integer  :: cnt
+
+
+  ! calculate numeric deviations from 0 for the two methods
+  call ndeviation_Q(mu_in, target_zero2, edisp, sct, kmesh, imp, algo, info)
+  call occ_refine(mu_in, target_zero1, edisp, sct, kmesh, imp, algo, info)
+
+  ! we have a reasonal value from this function
+  ! if this value is too high
+  ! we might run off to another root ..
+  ! this reasonable value is smaller for fermi occupations
+  if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
+    refine_success = .false.
     return
   endif
 
-  ! perform the mu_refinement if we have a gap
-  call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
-  call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
-
-  ! if(myid.eq.master) then
-  !   write(*,*) 'after qp root finding: ',mu_qp
-  !   write(*,*) 'deviation QP: ',target_zero2
-  !   write(*,*) 'deviation refine: ',target_zero1
-  ! endif
-
-  if ( (info%Temp < edisp%gap_min*300) .and. &  ! hard temperature cutoff
-       ((algo%muFermi .and. (abs(target_zero1) < 1d-18)) .or. &
-        (.not. algo%muFermi .and. (abs(target_zero1) < 1d-16)))) then
-            ! we have a reasonal value from thisfunction
-            ! if this value is too high
-            ! we might run off to another root ..
-            ! this reasonable value is smaller for fermi occupations
-
-    ! TODO: more testing here
-    ! essentially whats happening is that the deviation is this large
-    ! when we are really close to an impurity crossing...
-    ! this close around the impurity normal QP is enough
-    ! the same thing that happens when the temperature gets too large
-    ! -> we get too many contributions and run-off to the wrong root (artificial root)
-    ! so this if conditions cuts off the two causes for the same result
-    ! -> avoidance of artifical roots
-    ! -> results in a smooth chemical potential
-
-    dmu = edisp%gap_min/100.q0
-    mu1 = mu_qp
-    mu2 = mu_qp
-    iit = 1
-
-    if (target_zero1 < 0.q0) then
-      dmu = +dmu
-    else
-      dmu = -dmu
-    endif
-
-    ! decrease the step size until we dont cross an impurity level essentially
-    ! thats wrong
-    do
-      call occ_refine(mu_qp+dmu, test_up, edisp, sct, kmesh, imp, algo, info)
-      call occ_refine(mu_qp-dmu, test_dn, edisp, sct, kmesh, imp, algo, info)
-      test_up = test_up - target_zero1
-      test_dn = test_dn - target_zero1
-      ! debug
-      ! check if both point in the same direction
-      ! write(*,*) 'test step up: ', mu_qp+dmu, test_up
-      ! write(*,*) 'test step dn: ', mu_qp+dmu, test_dn
-      ! if they do, decrease step size and try again
-      if ( (test_up > 0 .and. test_dn > 0) .or. (test_up < 0 .and. test_dn < 0) ) then
-        dmu = dmu/5.q0
-      else
-        exit
-      endif
-    enddo
-
-
-    ! abort if we have a sudden change ( by crossing an impurity level )
-    ! if(myid.eq.master) write(*,*) target_test
-    ! if (abs(target_zero) > 1d-15) then
-    !   mu = real(mu_qp, 8)
-    !   return
-    ! endif
-
-    target_zero2 = target_zero1 ! from the top
-
-    ! get the working interval
-    do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
-              (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0)) .and. iit < niitQ)
-      mu2 = mu2 + dmu
-      call occ_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
-      iit = iit + 1
-    enddo
-
-    ! do not count this
-    ! this might be a large number if the mu_qp deviates strongly from the actual value
-    ! (digamma function + small gammas)
-    ! niitact = niitact + iit
-
-    if (iit >= niitQ) then
-      call log_master(stdout, 'ERROR: mu-refinement did not converge!')
-      mu = real(mu_qp, 8) ! transform back to dp
-      return
-    endif
-
-    mu1 = mu2 - dmu ! one step before
-                    ! this ensures the smallest possible working range
-                    ! with opposing signs in the root - finding
-
-    ! perform a bisection in the previous working interval
-    do iit = 1,niitQ
-       mu_qp = (mu1+mu2)/2.q0
-       call occ_refine(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
-       niitact = niitact + 1
-
-       if ( abs(mu1-mu2) < 1q-12) exit ! we go all out here
-
-       if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
-            .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
-          mu2=mu_qp
-          target_zero2=target_zero ! here we are on the bisection side of mu2
-                                   ! we set the middle point as new mu2
-       else
-          mu1=mu_qp                ! the other way aorund here
-          target_zero1=target_zero
-       endif
-    enddo
-
-    if (iit >= niitQ) then
-      call log_master(stdout, 'ERROR: mu-refinement did not converge!')
-      return
-    endif
-    niitact = niitact + iit
+  if (.not. algo%muFermi .and. abs(target_zero1) > 1d-16) then
+    refine_success = .false.
+    return
   endif
 
-  ! if (myid .eq. master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
-  !    write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndevQ_actual =",real(target_zero,8)
-  !    write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",T, " with  niitQ=",niitQ, " ndevQ =", real(dev,8)
-  !    write(*,*) "increase niitQ, or allow for bigger ndevQ (see params.F90)"
+  ! create a small stepping size in relation to the gap size
+  dmu = edisp%gap_min/100.q0
+  mu1 = mu_in
+  mu2 = mu_in
+  iit = 1
+
+  ! determine direction in which we have to move
+  if (target_zero1 < 0.q0) then
+    dmu = +dmu
+  else
+    dmu = -dmu
+  endif
+
+  ! decrease the step size if necessary
+  do cnt = 1,10
+    call occ_refine(mu_in+dmu, test_up, edisp, sct, kmesh, imp, algo, info)
+    call occ_refine(mu_in-dmu, test_dn, edisp, sct, kmesh, imp, algo, info)
+    test_up = test_up - target_zero1
+    test_dn = test_dn - target_zero1
+    ! check if both point in the same direction
+    if ( (test_up > 0 .and. test_dn > 0) .or. (test_up < 0 .and. test_dn < 0) ) then
+      dmu = dmu/2.q0
+    else
+      exit
+    endif
+  enddo
+  ! abort if this for some reason fails
+  if (cnt >= 10) then
+    refine_success = .false.
+    return
+  endif
+
+  ! get the working interval for the bisection
+  target_zero2 = target_zero1 ! from the top
+  do while (((target_zero1 <= 0.q0 .and. target_zero2 <= 0.q0) .or. &
+            (target_zero1 >= 0.q0  .and. target_zero2 >= 0.q0)) .and. iit < niitQ)
+    mu2 = mu2 + dmu
+    call occ_refine(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
+    iit = iit + 1
+  enddo
+  ! avoid adding this to the count
+  ! this some times becomes large if the initial chemical potential is far away from the solution
+
+
+  ! minimize the working interval
+  ! i.e. interval that _just_ contains the sign change
+  mu1 = mu2 - dmu
+
+  ! finally perform a bisection in the previous working interval
+  do iit = 1,niitQ
+    mu_out = (mu1+mu2)/2.q0
+    call occ_refine(mu_out, target_zero, edisp, sct, kmesh, imp, algo, info)
+    niitact = niitact + 1
+
+    if ( abs(mu1-mu2) < 1q-15) then
+      exit ! we go all out here
+    endif
+
+    if ((target_zero .gt. 0.q0 .and. target_zero2.gt. 0.q0) &
+         .or. (target_zero .lt. 0.q0 .and. target_zero2 .lt. 0.q0)) then
+      mu2=mu_out
+      target_zero2=target_zero ! here we are on the bisection side of mu2
+                                ! we set the middle point as new mu2
+    else
+      mu1=mu_out                ! the other way aorund here
+      target_zero1=target_zero
+    endif
+  enddo
+
+  ! too many interations
+  if (iit >= niitQ) then
+    refine_success = .false.
+    return
+  endif
+
+  ! numeric boundary .. undefined ~ quad precision
+  ! smallest quad number = 2^{-16494} ~ 10^{-4965}
+  if ((abs(target_zero) < 1q-4900) .or. &
+      (abs(target_zero1) < 1q-4900) .or. &
+      (abs(target_zero2) < 1q-4900)) then
+    refine_success = .false.
+    return
+  endif
+
+  ! we ran into some direction we dont want
+  ! note: we enter this routine with smaller values than this
+  if ((abs(target_zero) > 1q-15) .or. &
+      (abs(target_zero1) > 1q-15) .or. &
+      (abs(target_zero2) > 1q-15)) then
+    refine_success = .false.
+    return
+  endif
+
+  ! if(myid.eq.master) then
+  !   write(*,*) target_zero1, target_zero, target_zero2
   ! endif
 
-  mu = real(mu_qp, 8) ! transform back to dp
-end subroutine find_mu_Q
+  ! the final destination (:
+  refine_success = .true.
+  niitact = niitact + iit
 
+end subroutine
 
 
 !*******************************************************************************
@@ -677,10 +689,6 @@ end subroutine find_mu_Q
 
 
 
-! calculate the occupation and return the difference
-! required electrons - current electrons
-! if positive we have to increase the chemical potential
-! if negative we have to decrease the chemical potential
 subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
@@ -703,10 +711,8 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
   if (algo%muFermi) then
     call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
-    ! call occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, info)
   else
     call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
-    ! call occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   endif
 
   if (algo%lTMODE .and. algo%lImpurities) then
@@ -892,59 +898,6 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_fermi_D
 
-! Neumaier algorithm to increase summation accuracy
-subroutine occ_fermi_comp_D(mu, occ_tot, edisp, kmesh, algo, info)
-  implicit none
-
-  real(8), intent(in)  :: mu
-  real(8), intent(out) :: occ_tot
-
-  type(energydisp) :: edisp
-  type(kpointmesh) :: kmesh
-  type(runinfo)    :: info
-  type(algorithm)  :: algo
-  !local variables
-
-  real(8) :: occ_sum
-  integer :: is, ik, iband
-
-  real(8), allocatable :: occupation(:,:,:)
-  real(8) :: t,c
-
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
-  ! evaluate the function
-  occ_sum = 0.d0
-  t = 0.d0
-  c = 0.d0
-  do is = 1,edisp%ispin
-    do ik = ikstr, ikend
-      do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi((edisp%band(iband,ik,is)-mu), info%beta)
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
-
-        t = occ_sum + occupation(iband,ik,is)
-        if (abs(occ_sum) >= abs(occupation(iband,ik,is))) then
-          c = c + (occ_sum - t) + occupation(iband,ik,is)
-        else
-          c = c + (occupation(iband,ik,is) - t) + occ_sum
-        endif
-        occ_sum = t
-
-      enddo
-    enddo
-  enddo
-
-  occ_sum = occ_sum + c
-  deallocate(occupation)
-
-#ifdef MPI
-  call MPI_ALLREDUCE(occ_sum, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
-#else
-  occ_tot = occ_sum
-#endif
-
-end subroutine occ_fermi_comp_D
 
 subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
@@ -1151,70 +1104,6 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 
   return
 end subroutine occ_refine
-
-subroutine occ_digamma_comp_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
-  implicit none
-
-  real(8), intent(in)  :: mu
-  real(8), intent(out) :: occ_tot
-
-  type(energydisp) :: edisp
-  type(scattering) :: sct
-  type(kpointmesh) :: kmesh
-  type(algorithm)  :: algo
-  type(runinfo)    :: info
-  !local variables
-
-  real(8) :: occ_sum
-  integer :: is, ik, iband
-  complex(8), allocatable :: to_evaluate(:,:,:)
-  real(8), allocatable    :: occupation(:,:,:)
-  !external variables
-  complex(8), external :: wpsipg
-
-  real(8) :: t,c
-
-  allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
-  to_evaluate = 0.5d0 + info%beta2p * &
-                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-
-  ! evaluate the function
-  occ_sum = 0.d0
-  t = 0.d0
-  c = 0.d0
-  do is = 1,edisp%ispin
-    do ik = ikstr, ikend
-      do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = 0.5d0 + aimag(wpsipg(to_evaluate(iband,ik,is),0))/pi
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
-
-        ! what the fuck
-        t = occ_sum + occupation(iband,ik,is)
-        if (abs(occ_sum) >= abs(occupation(iband,ik,is))) then
-          c = c + (occ_sum - t) + occupation(iband,ik,is)
-        else
-          c = c + (occupation(iband,ik,is) - t) + occ_sum
-        endif
-        occ_sum = t
-
-      enddo
-    enddo
-  enddo
-
-  occ_sum = occ_sum + c
-  deallocate(to_evaluate)
-  deallocate(occupation)
-
-#ifdef MPI
-  call MPI_ALLREDUCE(occ_sum, occ_tot, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr)
-#else
-  occ_tot = occ_sum
-#endif
-
-
-end subroutine occ_digamma_comp_D
 
 subroutine occ_impurity_D(occimp, mu, imp, info)
   real(8), intent(in)   :: mu
