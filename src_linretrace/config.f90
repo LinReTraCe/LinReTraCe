@@ -115,6 +115,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
 
+  algo%lRedoMudft     = .false.
+
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
   algo%lBoltzmannFermi= .true.
@@ -182,7 +184,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   call floatn_find('Bandgap', edisp%scissors, search_start, search_end, found)
   if (found) then
-    algo%lScissors = .true.
+    algo%lScissors  = .true.
+    algo%lRedoMudft = .true.
   else
     algo%lScissors = .false.
   endif
@@ -271,13 +274,15 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .true.
     endif
 
-    call float_find('ElectronOccupation', edisp%config_nelect, search_start, search_end, found)
+    call float_find('ElectronOccupation', edisp%nelect_config, search_start, search_end, found)
     if (.not. found) then ! set to -1 if not found or wrong value
-      edisp%config_nelect = -1.d0
+      edisp%nelect_config = -1.d0
     else
-      if (edisp%config_nelect <= 0.d0) then
-        edisp%config_nelect = -1.d0
+      if (edisp%nelect_config <= 0.d0) then
+        edisp%nelect_config = -1.d0
         call stop_with_message(stderr, 'Error: Negative number of electrons provided')
+      else
+        algo%lRedoMudft = .true.
       endif
     endif
 

@@ -27,6 +27,98 @@ module Mroot
 
   contains
 
+subroutine find_mu_DFT(edisp,kmesh,pot)
+  implicit none
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+  type(potential)  :: pot
+
+  real(8) :: mu1,mu2,mu
+  real(8) :: occ1,occ2,occ
+  real(8) :: target_zero1, target_zero2, target_zero
+
+  real(8) :: abort
+  real(8) :: emin, emax
+  integer :: is, iband
+
+  ! root finding purely for a DFT band structure
+  ! i.e. T = 0
+  ! bisection
+  mu1 = minval(edisp%band) - 0.1
+  call occ_DFT(mu1,occ1,edisp,kmesh)
+  target_zero1 = edisp%nelect - occ1
+
+  mu2 = maxval(edisp%band) + 0.1
+  call occ_DFT(mu2,occ2,edisp,kmesh)
+  target_zero2 = edisp%nelect - occ2
+
+  ! Bisection root finding
+  abort = minval(kmesh%weight) / 2.d0
+  do
+     mu = (mu1+mu2)/2.d0
+     call occ_DFT(mu,occ,edisp,kmesh)
+     target_zero = edisp%nelect - occ
+
+     if (abs(target_zero).lt.abort) exit
+
+     if (target_zero.gt.0.q0) then
+        mu1=mu
+        target_zero1=target_zero
+     else
+        mu2=mu
+        target_zero2=target_zero
+     endif
+  enddo
+
+
+  ! Detect if we are gapped
+  edisp%gapped = .true.
+  do is = 1,edisp%ispin
+    do iband = 1,edisp%nband_max
+      emin = minval(edisp%band(iband,:,is))
+      emax = maxval(edisp%band(iband,:,is))
+      if ((mu > emin) .and. (mu < emax)) then ! we cut through a band -> not gapped
+        edisp%gapped(is) = .false.
+        exit
+      endif
+    enddo
+  enddo
+
+  ! Redefine gap sizes
+  do is = 1,edisp%ispin
+    if (edisp%gapped(is)) then
+      do iband = 1, edisp%nband_max
+        emin = minval(edisp%band(iband,:,is))
+        emax = maxval(edisp%band(iband,:,is))
+        if (mu>emax) then
+          edisp%ene_valenceBand(edisp%ispin) = emax
+        endif
+        if (mu<emin) then
+          edisp%ene_conductionBand(edisp%ispin) = emin
+          exit
+        endif
+      enddo
+      edisp%gap(is) = edisp%ene_conductionBand(edisp%ispin) - edisp%ene_valenceBand(edisp%ispin)
+    else
+      edisp%gap(is) = 0.d0
+    endif
+  enddo
+
+  ! Adjust the flags
+  if (((edisp%ispin == 1) .and. (edisp%gapped(1) .eqv. .true.)) .or. &
+      ((edisp%ispin == 2) .and. (edisp%gapped(1) .eqv. .true.) .and. (edisp%gapped(2) .eqv. .true.))) then
+    edisp%gapped_complete = .true.
+    edisp%gap_min = minval(edisp%ene_conductionBand) - maxval(edisp%ene_valenceBand)
+    mu = (minval(edisp%ene_conductionBand) + maxval(edisp%ene_valenceBand)) / 2.d0
+  else
+    edisp%gap_min = 0.d0
+    edisp%gapped_complete = .false.
+  endif
+
+  pot%mu_dft = mu ! finally, save it into the data structure
+
+end subroutine find_mu_DFT
+
 subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
@@ -1232,5 +1324,42 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
   enddo
 
 end subroutine occ_impurity_Q
+
+subroutine occ_DFT(mu, occ_tot, edisp, kmesh)
+  implicit none
+
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(kpointmesh) :: kmesh
+
+  real(8) :: occ_loc
+  integer :: is, ik, iband
+  real(8), allocatable :: occupation(:,:,:)
+  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  occupation = 0.d0
+
+  ! evaluate the function
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        if (edisp%band(iband,ik,is) < mu) then
+          occupation(iband,ik,is) = kmesh%weight(ik)
+        endif
+      enddo
+    enddo
+  enddo
+
+  occ_loc = sum(occupation)
+  deallocate(occupation)
+
+#ifdef MPI
+  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_DFT
 
 end module Mroot

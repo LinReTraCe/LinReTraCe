@@ -42,24 +42,23 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
 
   ! band information + charge
-  call hdf5_read_data(ifile, "/.bands/charge",         edisp%nelect)
+  call hdf5_read_data(ifile, "/.bands/mu",             pot%mu_dft_file)
+  call hdf5_read_data(ifile, "/.bands/charge",         edisp%nelect_file)
   call hdf5_read_data(ifile, "/.bands/energyBandMax",  edisp%nband_max)
   call hdf5_read_data(ifile, "/.bands/opticalBandMin", edisp%nbopt_min)
   call hdf5_read_data(ifile, "/.bands/opticalBandMax", edisp%nbopt_max)
   call hdf5_read_data(ifile, "/.bands/ispin",          edisp%ispin)
 
   ! reset electron occupation from config file if it is invalid ... earlierst point to check is here
-  if (edisp%config_nelect >= kmesh%weightsum * edisp%nband_max) then ! too many electrons
-    edisp%config_nelect = -1.d0
+  if (edisp%nelect_config >= kmesh%weightsum * edisp%nband_max) then ! too many electrons
+    edisp%nelect_config = -1.d0
     call stop_with_message(stderr, 'Error: Number of electrons provided is above maximum')
   endif
 
-  if ((edisp%config_nelect > 0.d0)) then
-    edisp%nelect = edisp%config_nelect
-  endif
-
-  if ((algo%lTMODE .and. algo%muSearch) .or. algo%lMUMODE) then  ! in order to not overwrite variable
-    call hdf5_read_data(ifile, "/.bands/mu",           pot%mu_dft)
+  if ((edisp%nelect_config > 0.d0)) then
+    edisp%nelect = edisp%nelect_config
+  else
+    edisp%nelect = edisp%nelect_file
   endif
 
   allocate(edisp%gapped(edisp%ispin))
@@ -136,29 +135,13 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
       call stop_with_message(stderr, 'Must have as many scissor parameters as spins')
     endif
 
+    ! save to scissors operator
     do is=1,edisp%ispin
       edisp%scissors(is) = edisp%scissors(is) - edisp%gap(is) ! transform bandgap input to scissors
       if (.not. edisp%gapped(is) .and. abs(edisp%scissors(is)) > 0.d0) then
         call stop_with_message(stdout, 'Error: Cannot apply scissors to gapless band structure')
       endif
     enddo
-
-    ! apply scissors
-    do is=1,edisp%ispin
-      ! scissors shift the conduction band
-      ! and therefore the gap
-      edisp%gap(is) = edisp%gap(is) + edisp%scissors(is)
-      edisp%ene_conductionBand(is) = edisp%ene_conductionBand(is) + edisp%scissors(is)
-
-      ! update the minimum gap and gapped_complete flag
-      ! if the gap vanishes (by negative scissors)
-      if (edisp%gap(is) < 0.d0) then
-        edisp%gapped(is) = .false.
-        edisp%gapped_complete = .false.
-        edisp%gap_min = 0.d0
-      endif
-    enddo
-    edisp%gap_min = minval(edisp%gap)
   endif
 
   ! now that we have all the information we can adjust the energies of the impurity levels

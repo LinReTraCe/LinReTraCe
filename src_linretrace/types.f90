@@ -31,6 +31,7 @@ module Mtypes
     logical :: lScissors      ! apply gap widening
     logical :: lImpurities    ! include impurity levels
     logical :: lQuad          ! quad precision response
+    logical :: lRedoMudft     ! flag to recalculate the provided dft chemical potential
 
     character(len=256) :: input_energies
     character(len=256) :: input_scattering_hdf5
@@ -65,8 +66,9 @@ module Mtypes
     logical :: lBandShift   ! do we get band_shifts from the scattering file?
     logical :: lFullMoments ! do we have the full optical elements (n n' dependence)
     integer :: iOptical     ! number of optical elements 3 6 or 9
+    real(8) :: nelect_file   ! electrons given by energy file
+    real(8) :: nelect_config ! number of electrons given by config file
     real(8) :: nelect
-    real(8) :: config_nelect ! number of electrons given by config file # overwrites input file
 
     ! gap information
     logical              :: gapped_complete       ! is the system completely gapped (false if spin-dependnet gap)
@@ -161,7 +163,8 @@ module Mtypes
     real(8), allocatable  :: occ(:) ! corresponding occupation
 
     real(8)  :: mu_config             ! chemical potential provided by config file
-    real(8)  :: mu_dft                ! chemical potential provided by energy file
+    real(8)  :: mu_dft_file           ! chemical potential provided by energy file
+    real(8)  :: mu_dft                ! new DFT chemical potential (changed electrons / bandgap)
   end type
 
   type runinfo

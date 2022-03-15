@@ -40,6 +40,7 @@ program main
   integer :: niitact
   integer :: iTstart, iTend, iTstep
   logical :: igap
+  real(8) :: mu_test
   real(8) :: maxgap
   real(8) :: ndevact
   real(16):: ndevactQ
@@ -47,6 +48,7 @@ program main
   character(len=128) :: string
   real(8) :: tstart, tfinish, timings(5)
   real(8) :: time, maxtime
+  real(8), allocatable :: gap_file(:)
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -105,6 +107,43 @@ program main
     endif
   endif
 
+  ! distribute k-grid
+  call mpi_genkstep(kmesh%nkp)
+
+#ifdef MPI
+  if (algo%ldebug .and. (index(algo%dbgstr,"Mpi") .ne. 0)) then
+     write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
+     call mpi_barrier(mpi_comm_world, mpierr)
+  endif
+#endif
+
+
+  allocate(gap_file(edisp%ispin))
+  gap_file = edisp%gap
+
+  ! redo the DFT mu calculation -  if we apply a scissor operator or change the electron occupation
+  if (algo%lRedoMudft) then
+    if (algo%lScissors) then
+      ! only for the print output
+      do is=1,edisp%ispin
+        edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
+        edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+      enddo
+      edisp%band = edisp%band_original + edisp%band_shift
+    else
+      edisp%band = edisp%band_original ! the energies are constant throughout
+    endif
+    ! redefine mu and adjust flags / gap sizes etc
+    call find_mu_DFT(edisp,kmesh,pot)
+    if (.not. edisp%lBandShift) then
+      deallocate(edisp%band_original)
+      deallocate(edisp%band_shift)
+    endif
+  else
+    pot%mu_dft = pot%mu_dft_file
+  endif
+
+
   if (algo%lTMODE) then
     ! construct temperature grid
     if (algo%lScatteringFile) then
@@ -143,7 +182,6 @@ program main
     endif
     pot%nMu = temp%nT
 
-
     allocate(energy(temp%nT))
     allocate(carrier(temp%nT))
     allocate(electrons(temp%nT))
@@ -158,9 +196,9 @@ program main
     pot%occ = 0.d0
 
     if (algo%muSearch) then
-      pot%MM = pot%mu_dft ! initialize MM array with DFT mu
+      pot%MM = pot%mu_dft ! initialize MM array with DFT mu (energy file)
     else
-      pot%MM = pot%mu_config ! use fixed config mu for all points
+      pot%MM = pot%mu_config ! use fixed config mu for all points (config file)
     endif
 
     if (algo%lOldmu) then
@@ -226,14 +264,6 @@ program main
     pot%occ = 0.d0
   endif
 
-  call mpi_genkstep(kmesh%nkp)
-
-#ifdef MPI
-  if (algo%ldebug .and. (index(algo%dbgstr,"Mpi") .ne. 0)) then
-     write(stdout,*) "MPI: myid: ", myid, "ikstr: ", ikstr, "ikend: ", ikend
-     call mpi_barrier(mpi_comm_world, mpierr)
-  endif
-#endif
 
 
   ! allocate the arrays once outside of the main (temperature) loop
@@ -275,25 +305,6 @@ program main
     call hdf5_open_file(algo%input_scattering_hdf5, ifile_scatter_hdf5, rdonly=.true.)
   endif
 
-  ! for this option we can do the shifts once
-  ! and deallocate the unused arrays
-  ! otherwise we have to recalculate the shifts for every T-point
-  if (.not. edisp%lBandShift) then
-    if (algo%lScissors) then
-      do is=1,edisp%ispin
-        edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
-        edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
-      enddo
-      ! apply once and deallocate the unused arrays
-      edisp%band = edisp%band_original + edisp%band_shift
-      deallocate(edisp%band_original)
-      deallocate(edisp%band_shift)
-    else
-      edisp%band = edisp%band_original ! the energies are constant throughout
-      deallocate(edisp%band_shift)
-      deallocate(edisp%band_original)
-    endif
-  endif
 
   ! load the optical elements for each processes k-range
   if (algo%lInterbandQuantities) then
@@ -307,44 +318,29 @@ program main
     deallocate(edisp%Moptk)
   endif
 
-  ! final preparation step for chemical potential mode
-  ! do not do this
-  ! if (algo%lMUMODE) then
-  !   info%iT = 1
-  !   info%Temp=temp%TT(info%iT)
-  !   info%beta=1.d0/(kB*info%Temp)
-  !   info%beta2p=info%beta/(2.d0*pi)
-
-  !   info%TempQ=real(info%Temp,16)
-  !   info%betaQ=1.q0/(kB*info%TempQ)
-  !   info%beta2pQ=info%betaQ/(2.q0*piQ)
-
-  !   sct%gam = sct%gamcoeff(1)
-  !   sct%zqp = sct%zqpcoeff(1)
-  !   sct%gam = sct%gam * sct%zqp
-
-  !   if (.not. algo%lScatteringFile) then ! all of this is already done for the file
-  !     ! find the equilibrium chemical potential
-  !     call find_mu(pot%mu,ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
-  !   endif
-  ! endif
-
-
   if (myid .eq. master) then
-    write(stdout,*) 'INPUT'
-    write(stdout,*) '  energy-file: ', trim(algo%input_energies)
-    write(stdout,*) '  dimensions:  ', kmesh%ndim
-    write(stdout,*) '  k-Points:    ', kmesh%nkp
-    write(stdout,*) '  bands:       ', edisp%nband_max
-    write(stdout,*) '  spins:       ', edisp%ispin
-    write(stdout,*) '  electrons:   ', edisp%nelect
-    if (algo%lScissors) then
-      write(stdout,*) '  old gap:   ', edisp%gap - edisp%scissors
-      write(stdout,*) '  new gap:   ', edisp%gap
-      write(stdout,*) '  scissors:  ', edisp%scissors
-    else
-      write(stdout,*) '  gap: ', edisp%gap
+    write(stdout,*) 'ENERGY INPUT'
+    write(stdout,*) '  energy-file:      ', trim(algo%input_energies)
+    write(stdout,*) '  mu (file):        ', pot%mu_dft_file
+    write(stdout,*) '  electrons (file): ', edisp%nelect_file
+    write(stdout,*) '  gap (file):       ', gap_file
+    write(stdout,*) '  dimensions:       ', kmesh%ndim
+    write(stdout,*) '  k-Points:         ', kmesh%nkp
+    write(stdout,*) '  bands:            ', edisp%nband_max
+    write(stdout,*) '  spins:            ', edisp%ispin
+    if (algo%lRedoMudft) then
+      write(stdout,*)
+      write(stdout,*) 'ENERGY ADJUSTMENTS'
+      if (algo%lScissors) then
+      write(stdout,*) '  new gap:          ', edisp%gap
+      write(stdout,*) '  new mu:           ', pot%mu_dft
+      endif
+      if (edisp%nelect_config > 0.d0) then
+      write(stdout,*) '  new electrons:    ', edisp%nelect
+      endif
     endif
+    write(stdout,*)
+    write(stdout,*) 'CONFIG'
     if (algo%lTMODE) then
       if (algo%muSearch) then
         if (algo%muFermi) then
@@ -394,7 +390,6 @@ program main
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
     write(stdout,*) '  Temperature: ', temp%TT(1)
-    write(stdout,*) '  DFT Chemical Potential: ', pot%mu_dft
     write(stdout,*) '  Chemical Potential range:'
     write(stdout,*) '  Mumin: ', pot%Mumin
     write(stdout,*) '  Mumax: ', pot%Mumax
