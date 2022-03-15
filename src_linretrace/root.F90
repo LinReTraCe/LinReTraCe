@@ -521,7 +521,6 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   !   return
   ! endif
 
-
   ! mu refinement is numerically unstable below a certain Temperate/Gap ratio
   ! i.e. the fermi function with quadruple precision is not accurate neough
   if (algo%lTMODE .and. .not. algo%lImpurities .and. info%Temp < edisp%gap_min / 1.95q0) then
@@ -536,17 +535,20 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
   call ndeviation_Q(mu_qp, target_zero2, edisp, sct, kmesh, imp, algo, info)
   call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
-  ! write(*,*) 'after qp root finding: ',mu_qp
-  ! write(*,*) 'deviation QP: ',target_zero2
-  ! write(*,*) 'deviation refine: ',target_zero1
-  ! write(*,*)
-
-  ! if (myid.eq.master) write(*,*) target_zero1, target_zero2
+  ! if(myid.eq.master) then
+  !   write(*,*) 'after qp root finding: ',mu_qp
+  !   write(*,*) 'deviation QP: ',target_zero2
+  !   write(*,*) 'deviation refine: ',target_zero1
+  ! endif
 
   if ( (info%Temp < edisp%gap_min*300) .and. &  ! hard temperature cutoff
-       (abs(target_zero1) < 1d-18)) then        ! we have a reasonal value from thisfunction
-                                                ! if this value is too high
-                                                ! we might run off to another root ..
+       ((algo%muFermi .and. (abs(target_zero1) < 1d-18)) .or. &
+        (.not. algo%muFermi .and. (abs(target_zero1) < 1d-16)))) then
+            ! we have a reasonal value from thisfunction
+            ! if this value is too high
+            ! we might run off to another root ..
+            ! this reasonable value is smaller for fermi occupations
+
     ! TODO: more testing here
     ! essentially whats happening is that the deviation is this large
     ! when we are really close to an impurity crossing...
@@ -590,10 +592,10 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
     ! abort if we have a sudden change ( by crossing an impurity level )
     ! if(myid.eq.master) write(*,*) target_test
-    if (abs(target_zero) > 1d-15) then
-      mu = real(mu_qp, 8)
-      return
-    endif
+    ! if (abs(target_zero) > 1d-15) then
+    !   mu = real(mu_qp, 8)
+    !   return
+    ! endif
 
     target_zero2 = target_zero1 ! from the top
 
@@ -605,7 +607,10 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
       iit = iit + 1
     enddo
 
-    niitact = niitact + iit
+    ! do not count this
+    ! this might be a large number if the mu_qp deviates strongly from the actual value
+    ! (digamma function + small gammas)
+    ! niitact = niitact + iit
 
     if (iit >= niitQ) then
       call log_master(stdout, 'ERROR: mu-refinement did not converge!')
