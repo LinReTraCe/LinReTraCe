@@ -143,6 +143,9 @@ program main
     pot%mu_dft = pot%mu_dft_file
   endif
 
+  if (algo%lImpurities) then
+    call set_impurities(edisp,imp) ! set the impurity positions according to possible reshaped band structure
+  endif
 
   if (algo%lTMODE) then
     ! construct temperature grid

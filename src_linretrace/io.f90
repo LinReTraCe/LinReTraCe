@@ -144,22 +144,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
     enddo
   endif
 
-  ! now that we have all the information we can adjust the energies of the impurity levels
-  if (algo%lImpurities) then
-    do iimp = 1, imp%nimp
-      select case (imp%inputtype(iimp))
-        ! case 0 -> already absolute
-        case (1) ! relative upwards shift from top of valence band
-          imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
-        case (2) ! relative downwards shift from bottom of conduction band
-          imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
-        case (3) ! percentage gap shift from top of valence band
-          imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
-                           + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
-      end select
-    enddo
-  endif
-
   ! unit cell information
   call hdf5_read_data(ifile, "/.unitcell/volume", kmesh%vol)
   call hdf5_read_data(ifile, "/.unitcell/ndim",   kmesh%ndim)
@@ -293,6 +277,29 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   endif
 
   call hdf5_close_file(ifile)
+
+end subroutine
+
+subroutine set_impurities(edisp, imp)
+  implicit none
+  type(energydisp) :: edisp
+  type(impurity)   :: imp
+
+  integer :: iimp
+
+  ! now that we have all the information we can adjust the energies of the impurity levels
+  do iimp = 1, imp%nimp
+    select case (imp%inputtype(iimp))
+      ! case 0 -> already absolute
+      case (1) ! relative upwards shift from top of valence band
+        imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
+      case (2) ! relative downwards shift from bottom of conduction band
+        imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
+      case (3) ! percentage gap shift from top of valence band
+        imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
+                         + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
+    end select
+  enddo
 
 end subroutine
 
