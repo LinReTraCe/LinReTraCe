@@ -166,9 +166,11 @@ if __name__ == '__main__':
             outobj.plotBandgap()
         except:
           pass
+
+        if args.plot:
+          plt.legend(loc='best')
       if args.plot:
         plt.title(outobj.fname)
-        plt.legend(loc='best')
         plt.show()
     except BaseException as e:
       error('\nERROR: '+str(e)+'\n')

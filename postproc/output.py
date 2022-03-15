@@ -744,7 +744,7 @@ class LRTCoutput(object):
         if spins==1:
           plt.plot(dosaxis, dos, color='black', lw=2, label='DOS')
           plt.legend(loc='upper left')
-          plt.ylabel('DOS [eV^-1]')
+          plt.ylabel(r'DOS [eV$^{-1}$]')
           plt.xlabel(r'$\varepsilon$ [eV]')
 
           plt.twinx()
@@ -757,7 +757,7 @@ class LRTCoutput(object):
           ylim = max(np.max(dosup),np.max(dosdn)) * 1.1
           plt.ylim(-ylim,ylim)
           plt.legend(loc='upper left')
-          plt.ylabel('DOS [eV^-1]')
+          plt.ylabel(r'DOS [eV$^{-1}$]')
           plt.xlabel(r'$\varepsilon$ [eV]')
 
           plt.twinx()

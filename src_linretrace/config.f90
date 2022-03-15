@@ -190,6 +190,18 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     algo%lScissors = .false.
   endif
 
+  call float_find('ElectronOccupation', edisp%nelect_config, search_start, search_end, found)
+  if (.not. found) then ! set to -1 if not found or wrong value
+    edisp%nelect_config = -1.d0
+  else
+    if (edisp%nelect_config <= 0.d0) then
+      edisp%nelect_config = -1.d0
+      call stop_with_message(stderr, 'Error: ElectronOccupation must be > 0.0')
+    else
+      algo%lRedoMudft = .true.
+    endif
+  endif
+
   allocate(rootmethod(0:3))
   rootmethod(0) = 'secant'
   rootmethod(1) = 'linint'
@@ -272,18 +284,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .false.
     else
       algo%muSearch = .true.
-    endif
-
-    call float_find('ElectronOccupation', edisp%nelect_config, search_start, search_end, found)
-    if (.not. found) then ! set to -1 if not found or wrong value
-      edisp%nelect_config = -1.d0
-    else
-      if (edisp%nelect_config <= 0.d0) then
-        edisp%nelect_config = -1.d0
-        call stop_with_message(stderr, 'Error: ElectronOccupation must be > 0.0')
-      else
-        algo%lRedoMudft = .true.
-      endif
     endif
 
     call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
