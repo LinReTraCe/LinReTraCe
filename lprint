@@ -162,8 +162,11 @@ if __name__ == '__main__':
 
             outobj.outputData(icmd, args.imag, args.plot, args.diag, args.axis, *add_arguments)
         try:
-          if outobj.mode == 'temp' and cmd == 'mu' and args.gap and args.plot:
-            outobj.plotBandgap()
+          if outobj.mode == 'temp' and cmd == 'mu'  and args.plot:
+            if args.gap:
+              outobj.plotBandgap()
+            else:
+              plt.axhline(y=outobj.mudft, ls='--', color='black', label=r'$\mu_{\mathrm{DFT}}$')
         except:
           pass
 
