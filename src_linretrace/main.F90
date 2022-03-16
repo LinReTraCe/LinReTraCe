@@ -121,25 +121,28 @@ program main
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
 
-  ! redo the DFT mu calculation -  if we apply a scissor operator or change the electron occupation
+  if (algo%lScissors) then
+    do is=1,edisp%ispin
+      edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
+      edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+    enddo
+    edisp%band = edisp%band_original + edisp%band_shift
+  else
+    edisp%band = edisp%band_original
+  endif
+  if (.not. edisp%lBandShift) then
+    ! we do the above shift once and then leave edisp%band unchanged
+    ! for bandshifts : we have to reapply the scissors + band_shifts for every point in the
+    ! temp/mu loop
+    deallocate(edisp%band_original)
+    deallocate(edisp%band_shift)
+  endif
   if (algo%lRedoMudft) then
-    if (algo%lScissors) then
-      ! only for the print output
-      do is=1,edisp%ispin
-        edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
-        edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
-      enddo
-      edisp%band = edisp%band_original + edisp%band_shift
-    else
-      edisp%band = edisp%band_original ! the energies are constant throughout
-    endif
+    ! redo the DFT mu calculation -  if we apply a scissor operator or change the electron occupation
     ! redefine mu and adjust flags / gap sizes etc
     call find_mu_DFT(edisp,kmesh,pot)
-    if (.not. edisp%lBandShift) then
-      deallocate(edisp%band_original)
-      deallocate(edisp%band_shift)
-    endif
   else
+    ! use the value from the energy file
     pot%mu_dft = pot%mu_dft_file
   endif
 
