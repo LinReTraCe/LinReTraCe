@@ -522,6 +522,17 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! hard temperature cutoff relative to band gap size
   if (info%Temp < edisp%gap_min*300) then
+    ! do not enter refinement algorithm
+    call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+    if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
+      mu = real(mu_qp, 8)
+      return
+    endif
+    if (.not. algo%muFermi .and. abs(target_zero1) > 1d-16) then
+      mu = real(mu_qp, 8)
+      return
+    endif
+    ! refinement
     call find_mu_refine_Q(mu_qp, mu_refine, refine_success, niitact, edisp, sct, kmesh, imp, algo, info)
     if (refine_success) then
       mu = real(mu_refine, 8)
@@ -560,20 +571,6 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
   ! calculate numeric deviations from 0 for the two methods
   call ndeviation_Q(mu_in, target_zero2, edisp, sct, kmesh, imp, algo, info)
   call occ_refine(mu_in, target_zero1, edisp, sct, kmesh, imp, algo, info)
-
-  ! we have a reasonal value from this function
-  ! if this value is too high
-  ! we might run off to another root ..
-  ! this reasonable value is smaller for fermi occupations
-  if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
-    refine_success = .false.
-    return
-  endif
-
-  if (.not. algo%muFermi .and. abs(target_zero1) > 1d-16) then
-    refine_success = .false.
-    return
-  endif
 
   ! create a small stepping size in relation to the gap size
   dmu = edisp%gap_min/100.q0
