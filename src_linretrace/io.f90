@@ -609,6 +609,8 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
       call hdf5_write_data(ifile, "/.quantities/bandgap/gapsize", edisp%gap(1))
       call hdf5_write_data(ifile, "/.quantities/bandgap/ene_vband", edisp%ene_valenceBand(1))
       call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/cband", edisp%conductionBand(1))
     endif
   else
     call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapped", edisp%gapped(1))
@@ -616,6 +618,8 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
       call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
       call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
       call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/up/cband", edisp%conductionBand(1))
     endif
 
     call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapped", edisp%gapped(2))
@@ -623,6 +627,8 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
       call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapsize", edisp%gap(2))
       call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
       call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/cband", edisp%conductionBand(1))
     endif
   endif
 

@@ -93,14 +93,21 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
         emin = minval(edisp%band(iband,:,is))
         emax = maxval(edisp%band(iband,:,is))
         if (mu>emax) then
-          edisp%ene_valenceBand(edisp%ispin) = emax
+          edisp%ene_valenceBand(is) = emax
+          edisp%valenceBand(is) = iband
         endif
         if (mu<emin) then
-          edisp%ene_conductionBand(edisp%ispin) = emin
+          edisp%ene_conductionBand(is) = emin
+          edisp%conductionBand(is) = iband
           exit
         endif
       enddo
-      edisp%gap(is) = edisp%ene_conductionBand(edisp%ispin) - edisp%ene_valenceBand(edisp%ispin)
+
+      if ((edisp%conductionBand(is) - edisp%valenceBand(is)) /= 1) then
+        call stop_with_message(stderr, 'ERROR: something went wrong in find_mu_DFT')
+      endif
+
+      edisp%gap(is) = edisp%ene_conductionBand(is) - edisp%ene_valenceBand(is)
     else
       edisp%gap(is) = 0.d0
     endif
