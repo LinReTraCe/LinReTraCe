@@ -345,21 +345,33 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine subsubgroup_find
 
+  ! https://github.com/abinitiodga/adga
+  ! + some adjustment regarding boundaries
+  ! GPLv3 code
   subroutine spell_check(search_start, search_end, grname, dictionary, er, erstr)
     character(*), intent(in) :: grname
     character(*), intent(in) :: dictionary(:)
     integer, intent(in) :: search_start, search_end
     integer, intent(out) :: er
-    character(len=200), intent(out) :: erstr
+    character(len=256), intent(out) :: erstr
+    character(len=1) :: boundary = "["
 
     do i=search_start,search_end
       str_temp = file_save(i)
+
+      pst=scan(str_temp,boundary)
+      if (pst .eq. 1) then ! found boundary
+        er = 0
+        exit
+      endif
+
       pst=scan(str_temp,separator)
       if (pst .eq. 0) then
         er = 100
         erstr = 'Variable in '//trim(grname)//' group without argument: '//str_temp
         return
       endif
+
       str_temp=trim(adjustl(str_temp(:(pst-1))))
       er = 101
       do j = 1,size(dictionary)
@@ -368,10 +380,12 @@ module Mlookup
           exit
         endif
       enddo
+
       if (er .ne. 0) then
         erstr = 'Spelling error or unknown variable in '//trim(grname)//' group: '//str_temp
         return
       endif
+
     enddo
   end subroutine spell_check
 

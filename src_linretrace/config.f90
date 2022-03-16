@@ -28,11 +28,14 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   integer :: subsearch_start, subsearch_end
   integer :: subsubsearch_start, subsubsearch_end
   integer :: pst, empty
+  integer :: er
 
   real(8), allocatable :: impurityinfo(:)
   character(len=256), allocatable :: rootmethod(:)
   character(len=256), allocatable :: impdescription(:)
   character(len=256), allocatable :: imptype(:)
+  character(len=256), allocatable :: dictionary(:)
+  character(len=256) :: erstr
   integer :: nshape(1)
   real(8) :: floattemp
 
@@ -140,7 +143,29 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   else if (search_start .eq. -1) then
     call stop_with_message(stderr, 'General Group empty')
   endif
+
   !--------------------------------------------------------------------------------
+  allocate(dictionary(15))
+  dictionary(1) = 'EnergyFile'
+  dictionary(2) = 'OutputFile'
+  dictionary(3) = 'RunMode'
+  dictionary(4) = 'Bandgap'
+  dictionary(5) = 'ElectronOccupation'
+  dictionary(6) = 'FullOutput'
+  dictionary(7) = 'EnergyOutput'
+  dictionary(8) = 'QuadResponse'
+  dictionary(9) = 'Interband'
+  dictionary(10) = 'Intraband'
+  dictionary(11) = 'Boltzmann'
+  dictionary(12) = 'BFieldMode'
+  dictionary(13) = 'FermiOccupation'
+  dictionary(14) = 'RootMethod'
+  dictionary(15) = 'BoltzFermi'
+  call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
+  deallocate(dictionary)
+  if (er /= 0) call stop_with_message(stdout, erstr)
+  !--------------------------------------------------------------------------------
+
   call string_find('EnergyFile', algo%input_energies, search_start, search_end, found)
   call string_find('RunMode', str_temp, search_start, search_end, found)
   if (.not. found) then
@@ -234,6 +259,22 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       call stop_with_message(stderr, 'Scattering group not found')
     endif
 
+    !--------------------------------------------------------------------------------
+    allocate(dictionary(9))
+    dictionary(1) = 'ScatteringFile'
+    dictionary(2) = 'ScatteringImpurity'
+    dictionary(3) = 'Temperature'
+    dictionary(4) = 'MuMinimum'
+    dictionary(5) = 'MuMaximum'
+    dictionary(6) = 'MuPoints'
+    dictionary(7) = 'MLogarithmic'
+    dictionary(8) = 'ScatteringRate'
+    dictionary(9) = 'QuasiParticleWeight'
+    call spell_check(subsearch_start,subsearch_end, '[MuMode] [[Scattering]]', dictionary, er, erstr)
+    deallocate(dictionary)
+    if (er /= 0) call stop_with_message(stdout, erstr)
+    !--------------------------------------------------------------------------------
+
     call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
     call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
     if (found) then
@@ -278,6 +319,17 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     if (search_start .le. 0) then
       call stop_with_message(stderr, 'TempMode group not found')
     endif
+
+    !--------------------------------------------------------------------------------
+    allocate(dictionary(4))
+    dictionary(1) = 'ChemicalPotential'
+    dictionary(2) = 'OldOutput'
+    dictionary(3) = 'OldOutputText'
+    dictionary(4) = 'NImp'
+    call spell_check(search_start,search_end, '[TempMode]', dictionary, er, erstr)
+    deallocate(dictionary)
+    if (er /= 0) call stop_with_message(stdout, erstr)
+    !--------------------------------------------------------------------------------
 
     call float_find('ChemicalPotential', pot%mu_config, search_start, search_end, found)
     if (found) then
@@ -331,6 +383,21 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     if (subsearch_start .le. 0) then
       call stop_with_message(stderr, 'Scattering group not found')
     endif
+
+    !--------------------------------------------------------------------------------
+    allocate(dictionary(9))
+    dictionary(1) = 'ScatteringFile'
+    dictionary(2) = 'ScatteringText'
+    dictionary(3) = 'ScatteringImpurity'
+    dictionary(4) = 'TMinimum'
+    dictionary(5) = 'TMaximum'
+    dictionary(6) = 'TPoints'
+    dictionary(7) = 'TLogarithmic'
+    dictionary(8) = 'ScatteringCoefficients'
+    dictionary(9) = 'QuasiParticleCoefficients'
+    call spell_check(subsearch_start,subsearch_end, '[TempMode] [[Scattering]]', dictionary, er, erstr)
+    deallocate(dictionary)
+    if (er /= 0) call stop_with_message(stdout, erstr)
     !--------------------------------------------------------------------------------
     call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
     call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
@@ -388,8 +455,22 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
         call subsubgroup_find(str_imp, subsearch_start, subsearch_end, subsubsearch_start, subsubsearch_end)
         if (subsubsearch_start .le. 0) then
-          call stop_with_message(stderr, 'Impurity sub group not found')
+          call stop_with_message(stderr, 'Impurity sub group not found: '//str_imp)
         endif
+
+        !--------------------------------------------------------------------------------
+        allocate(dictionary(7))
+        dictionary(1) = 'Absolute'
+        dictionary(2) = 'Valence'
+        dictionary(3) = 'Conduction'
+        dictionary(4) = 'Percentage'
+        dictionary(5) = 'Bandtype'
+        dictionary(6) = 'Bandwidth'
+        dictionary(7) = 'Bandcutoff'
+        call spell_check(subsubsearch_start,subsubsearch_end, '[TempMode] [[Impurities]] '//str_imp, dictionary, er, erstr)
+        deallocate(dictionary)
+        if (er /= 0) call stop_with_message(stdout, erstr)
+        !--------------------------------------------------------------------------------
 
         do i=0,3
           call floatn_find(impdescription(i), impurityinfo, subsubsearch_start, subsubsearch_end, found)
@@ -402,7 +483,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
         ! if we didn't find an identifier
         if (.not. found) then
-          call stop_with_message(stderr, 'Impurity Description not found')
+          call stop_with_message(stderr, 'Valid impurity Description not found in '//str_imp)
         endif
 
         call float_find('Bandwidth', imp%Bandwidth(iimp), subsubsearch_start, subsubsearch_end, found)
@@ -429,7 +510,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
             endif
           enddo
           if (imp%Bandtype(iimp) == -1) then
-            call stop_with_message(stderr, 'Bandtype Description not available')
+            call stop_with_message(stderr, 'Bandtype Description not available in '//str_imp)
           endif
         endif
 

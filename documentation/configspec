@@ -24,6 +24,7 @@ ________________________________________________________________________________
 [TempMode]      # RunMode = temp
 ChemicalPotential  = (default = 0)    # Fix Chemical potential for all temperatures
 OldOutput          = (default = None) # Use chemical potentials from old OutputFile
+OldOutputText      = (default = None) # Use chemical potentials from text file
 NImp               = (default = 0)    # number of additional impurity levels
 
 [[Scattering]]
