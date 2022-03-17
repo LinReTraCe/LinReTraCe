@@ -12,7 +12,7 @@ with warnings.catch_warnings():
   warnings.filterwarnings("ignore",category=FutureWarning)
   import h5py
 
-# from structure.es    import ElectronicStructure
+from structure.dft import DFTcalculation
 # from structure.model import Model
 # from structure.btp   import BTPInterpolation
 
@@ -81,30 +81,52 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
       # energies + derivatives
       h5out[prefix+'energies']          = escalc.energies[ispin]
       if btpinterp is not None:
+        # we do not need to truncate here
         h5out[prefix+'derivatives']     = btpinterp.velocities[ispin]
         h5out[prefix+'curvatures']      = btpinterp.curvatures[ispin]
         h5out[prefix+'momentsDiagonalBfield'] = btpinterp.BopticalDiag[ispin]
+
+
+      if isinstance(escalc, DFTcalculation):
+        if ispin == 0: # only warn once
+          if escalc.opticdiag and btpinterp is not None:
+            if peierls:
+              logger.warning('CAREFUL: Overwriting intra-band optical elements from DFT calculation.')
+            else:
+              logger.warning('CAREFUL: You are mixing DFT and Peierls optical elements.')
 
       # optical elements
       # use the peierls approximation
       # if a) specificially asked for
       #    b) its the only thing we have
-      if (peierls and btpinterp is not None) or (not escalc.opticdiag and btpinterp is not None):
-        h5out[prefix+'momentsDiagonal'] = btpinterp.opticalDiag[ispin]
-        if ispin == 0:
-          logger.info('Using peierls approximation for intra-band optical elements.') # only once
-          h5out['.bands/opticalBandMin']  = btpinterp.opticalBandMin + 1 # internal -> Fortran
-          h5out['.bands/opticalBandMax']  = btpinterp.opticalBandMax
 
+      if not escalc.opticdiag and btpinterp is not None:
+        peierls = True
+
+      if (peierls and btpinterp is not None):
+        if escalc.opticfull:
+          ''' if the full elements are present we need to truncate accordingly '''
+          h5out[prefix+'momentsDiagonal'] = btpinterp.opticalDiag[ispin][:,escalc.opticalBandMin:escalc.opticalBandMax,:]
+          if ispin == 0:
+            h5out['.bands/opticalBandMin']  = escalc.opticalBandMin + 1 # internal -> Fortran
+            h5out['.bands/opticalBandMax']  = escalc.opticalBandMax
+        else:
+          ''' if they are not : use the full range from the interpolated data '''
+          h5out[prefix+'momentsDiagonal'] = btpinterp.opticalDiag[ispin]
+          if ispin == 0:
+            h5out['.bands/opticalBandMin']  = btpinterp.opticalBandMin + 1 # internal -> Fortran
+            h5out['.bands/opticalBandMax']  = btpinterp.opticalBandMax
       elif escalc.opticdiag:
         h5out[prefix+'momentsDiagonal'] = escalc.opticalDiag[ispin]
         if ispin == 0:
           h5out['.bands/opticalBandMin']  = escalc.opticalBandMin + 1 # internal -> Fortran
           h5out['.bands/opticalBandMax']  = escalc.opticalBandMax
-
       else:
-        logger.critical('No optical elements available. Use band interpolation + Peierls approximation or provide them.')
-        logger.critical('Output file WILL NOT WORK with LRTC.\n')
+        if not (peierls and btpinterp is not None):
+          if ispin == 0: # only warn once
+            logger.critical('No optical elements available. Use band interpolation + Peierls approximation or provide them.')
+            logger.critical('Output file WILL NOT WORK with LRTC.\n')
+
 
       if escalc.opticfull:
         for ikp in range(escalc.nkp):
