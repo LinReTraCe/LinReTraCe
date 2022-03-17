@@ -77,6 +77,12 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   bmin = min(cutoffbottom)
   bmax = max(cutofftop)
 
+  enemin = []
+  enemax = []
+  for ispin in range(dftcalc.spins):
+    enemin.append(min(dftcalc.energies[ispin][:,bmin]))
+    enemax.append(max(dftcalc.energies[ispin][:,bmax]))
+
   # number of cut-off bands
   cutlow  = bmin
   cuthigh = dftcalc.energyBandMax - bmax - 1
@@ -108,6 +114,8 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   # output truncation information (it rhymes)
   logger.info("Truncating window: {} - {} [eV]".format(truncmin, truncmax))
   logger.info("Truncating procedure resulted in:")
+  logger.info("   window:  {} - {} [eV]".format(min(enemin),max(enemax)))
+  logger.info("   ( bands that touch the limit get included )")
   logger.info("   range:  1 - {:3<} ---> {:3>} - {:3<}".format(oldbandmax, bmin+1, bmax+1))
   logger.info("   bands:    {:3>}   --->   {:3<}".format(oldbandmax, dftcalc.energyBandMax))
   logger.info("   charge:  {:5.1f} ---> {:5.1f}".format(oldcharge, dftcalc.charge))
@@ -125,7 +133,8 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
 
 
   # general case of truncation procedure
-  # fuck this shit
+  # im pretty certain that this code segment is correct
+  # good luck trying to debug it (:
   # 0                                            energyBandMax
   # |--------------------------------------------| energies
   #      bmin                               bmax+1
@@ -136,6 +145,8 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   #   |----------------------------------|         one side
   #        |-----------------------------------|   one side
   # all 4 case have to be cut appropiately
+
+  # nb: opticalbandmin and opticalbandmax are still in python notation from the input
 
   # truncate optical elements
   if dftcalc.opticdiag:

@@ -66,7 +66,7 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
       if escalc.spins == 1:
         prefix = '/'
       else:
-        prefix = '/up/' if ispin == 1 else '/dn/'
+        prefix = '/up/' if ispin == 0 else '/dn/'
 
       # band gap information
       h5out['.bands/bandgap'+prefix+'gapped']      = escalc.gapped[ispin]
