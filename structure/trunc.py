@@ -68,12 +68,10 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
       if bandmin > truncmax:
         continue
       else:
-        cutofftop.append(iband)
+        cutofftop.append(iband+1)
         break
 
-
   # take the lowest and highest bands
-  # remember: these are python indices
   bmin = min(cutoffbottom)
   bmax = max(cutofftop)
 
@@ -81,11 +79,11 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   enemax = []
   for ispin in range(dftcalc.spins):
     enemin.append(min(dftcalc.energies[ispin][:,bmin]))
-    enemax.append(max(dftcalc.energies[ispin][:,bmax]))
+    enemax.append(max(dftcalc.energies[ispin][:,bmax-1]))
 
   # number of cut-off bands
   cutlow  = bmin
-  cuthigh = dftcalc.energyBandMax - bmax - 1
+  cuthigh = dftcalc.energyBandMax - bmax
 
   logger.debug('')
   logger.debug('spin band min max (# == included)')
@@ -94,29 +92,29 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
       ene = dftcalc.energies[ispin][:,iband]
       bandmin = np.min(ene)
       bandmax = np.max(ene)
-      logger.debug('{:4} {:4} {:18.10f} {:18.10f} {}'.format(ispin,iband,bandmin,bandmax, '#' if iband in range(bmin,bmax+1) else '' ))
+      logger.debug('{:4} {:4} {:18.10f} {:18.10f} {}'.format(ispin,iband,bandmin,bandmax, '#' if iband in range(bmin,bmax) else '' ))
     logger.debug("")
 
 
-  oldbandmax = dftcalc.energyBandMax # for verbose output
-  oldcharge  = dftcalc.charge        # for verbose output
+  oldbandmax = dftcalc.energyBandMax
+  oldcharge  = dftcalc.charge
 
   # truncate the energies
   for ispin in range(dftcalc.spins):
-    dftcalc.energies[ispin] = dftcalc.energies[ispin][:,bmin:bmax+1] # +1 because of python ranges
+    dftcalc.energies[ispin] = dftcalc.energies[ispin][:,bmin:bmax]
     if dftcalc.gapped[ispin]:
       dftcalc.cb[ispin] -= bmin
       dftcalc.vb[ispin] -= bmin
     dftcalc.charge -= bmin*dftcalc.weightsum # remove charge equivalent to the cut-off bands
 
-  dftcalc.energyBandMax = bmax - bmin + 1
+  dftcalc.energyBandMax = bmax - bmin
 
   # output truncation information (it rhymes)
   logger.info("Truncating window: {} - {} [eV]".format(truncmin, truncmax))
   logger.info("Truncating procedure resulted in:")
   logger.info("   window:  {} - {} [eV]".format(min(enemin),max(enemax)))
   logger.info("   ( bands that touch the limit get included )")
-  logger.info("   range:  1 - {:3<} ---> {:3>} - {:3<}".format(oldbandmax, bmin+1, bmax+1))
+  logger.info("   range:  1 - {:3<} ---> {:3>} - {:3<}".format(oldbandmax, bmin+1, bmax))
   logger.info("   bands:    {:3>}   --->   {:3<}".format(oldbandmax, dftcalc.energyBandMax))
   logger.info("   charge:  {:5.1f} ---> {:5.1f}".format(oldcharge, dftcalc.charge))
 
@@ -125,53 +123,50 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   # this is straight-forward: same treatment as the energies
   if btpinterp is not None:
     for ispin in range(btpinterp.spins):
-      btpinterp.velocities[ispin]  = btpinterp.velocities[ispin][:,bmin:bmax+1]
-      btpinterp.curvatures[ispin]  = btpinterp.curvatures[ispin][:,bmin:bmax+1]
-      btpinterp.opticalDiag[ispin] = btpinterp.opticalDiag[ispin][:,bmin:bmax+1] # peierls
+      btpinterp.velocities[ispin]  = btpinterp.velocities[ispin][:,bmin:bmax]
+      btpinterp.curvatures[ispin]  = btpinterp.curvatures[ispin][:,bmin:bmax]
+      btpinterp.opticalDiag[ispin] = btpinterp.opticalDiag[ispin][:,bmin:bmax] # peierls
       btpinterp.opticalBandMin = 0
       btpinterp.opticalBandMax = dftcalc.energyBandMax
 
 
   # general case of truncation procedure
-  # im pretty certain that this code segment is correct
-  # good luck trying to debug it (:
-  # 0                                            energyBandMax
+  # energy truncation
+  # 0                     :                      energyBandMax
   # |--------------------------------------------| energies
-  #      bmin                               bmax+1
+  # ->---->--->-
+  #      bmin             :                 bmax
   #      |----------------------------------|      new energies
-  # optical elements could be
+  #
+  #
+  # optical are on the original energy energy range but could look like
   #   |----------------------------------------|   outside
   #        |-----------------------------|         inside
-  #   |----------------------------------|         one side
-  #        |-----------------------------------|   one side
+  #   |----------------------------------|         one side out one in
+  #        |-----------------------------------|   one side in one out
   # all 4 case have to be cut appropiately
 
   # nb: opticalbandmin and opticalbandmax are still in python notation from the input
+  #  i.e. energies[:energyBandMax] -- optical[opticalBandMin:opticalBandMax]
 
   # truncate optical elements
   if dftcalc.opticdiag:
-    # offset from optical band range to old energy band range
-    offsetlow  = dftcalc.opticalBandMin
-    offsethigh = oldbandmax - dftcalc.opticalBandMax
+
     opticalinterval = dftcalc.opticalBandMax - dftcalc.opticalBandMin # original optical interval
 
-    if cutlow > offsetlow:
-      optstart = cutlow - offsetlow
-    else:
-      optstart = 0
-
-    if cuthigh > offsethigh:
-      optend = opticalinterval - (cuthigh - offsethigh)
-    else:
-      optend = opticalinterval
-
-    opticalinterval = optend - optstart
-
-    if optstart > 0: # lower truncation -> same starting index
+    # offset from optical band range to old energy band range
+    if cutlow > dftcalc.opticalBandMin: # we cut into the lower optical interval
+      opticalinterval -= (cutlow - dftcalc.opticalBandMin)
+      optstart = (cutlow - dftcalc.opticalBandMin) # array access
       dftcalc.opticalBandMin = 0
     else:
       dftcalc.opticalBandMin -= cutlow
+      optstart = 0
 
+    if cuthigh > (oldbandmax - dftcalc.opticalBandMax): # we cut into the upper optical interval
+      opticalinterval -= (cuthigh - (oldbandmax-dftcalc.opticalBandMax))
+
+    optend = optstart + opticalinterval
     dftcalc.opticalBandMax = dftcalc.opticalBandMin + opticalinterval
 
     # perform the truncation of the arrays
