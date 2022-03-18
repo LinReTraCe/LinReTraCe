@@ -14,22 +14,24 @@ Interband          = (default = T)                      # calculate Interband qu
 Intraband          = (default = T)                      # calculate Intraband quantities
 Boltzmann          = (default = T)                      # calculate Boltzmann regime
 BFieldMode         = (default = F)                      # calculate magnetic Intraband quantities
-FermiOccupation    = (default = F)                      # True: Fermi function to determine occupation
+FermiOccupation    = (default = T)                      # True: Fermi function to determine occupation
                                                         # False: Digamma function to determine occupation
-RootMethod         = (default = ridders)                # secant linint ridders bisection
+                                                        # Affects chemical potential, carrier concentration and energies
+RootMethod         = (default = ridders)                # chemical potential root finding method
+                                                        # secant linint ridders bisection
 
 ________________________________________________________________________________
 [TempMode]      # RunMode = temp
-ChemicalPotential  = (default = 0)    # Fix Chemical potential for all temperatures
-OldOutput          = (default = None) # Use chemical potentials from old OutputFile
-OldOutputText      = (default = None) # Use chemical potentials from text file
-NImp               = (default = 0)    # number of additional impurity levels
+ChemicalPotential  = (default = 0)                      # Fix Chemical potential for all temperatures
+OldOutput          = (default = None)                   # Use chemical potentials from old OutputFile
+OldOutputText      = (default = None)                   # Use chemical potentials from text file
+NImp               = (default = 0)                      # number of additional impurity levels
 
 [[Scattering]]
-ScatteringFile     = (default = '') # if existent use all the quantities from this HDF5 file only
-ScatteringText     = (default = '') # if existent use all the quantities from this TEXT file only
-ScatteringImpurity = (default = 0)  # in combination with Scattering File
-                                    # adds an additional constant scattering rate
+ScatteringFile     = (default = '')                     # if existent use all the quantities from this HDF5 file only
+ScatteringText     = (default = '')                     # if existent use all the quantities from this TEXT file only
+ScatteringImpurity = (default = 0)                      # in combination with ScatteringFile or ScatterintText
+                                                        # adds an additional constant scattering rate
 # if we do NOT have a Scattering file
 # we can supply a temperature range (in Kelvin)
 # and a polynomial for the scattering rate
@@ -45,10 +47,10 @@ ________________________________________________________________________________
 [[Impurities]]
 [[[1]]]
 # Provide one of the following four keywords:
-Absolute   = (default = None) # energy is absolute in [eV]
-Valence    = (default = None) # relative upwards shift from top of valence band [eV]
-Conduction = (default = None) # relative downwards shift from bottom of conduction band [eV]
-Percentage = (default = None) # relative position inside the gap
+Absolute   = (default = None)                           # energy is absolute in [eV]
+Valence    = (default = None)                           # relative upwards shift from top of valence band [eV]
+Conduction = (default = None)                           # relative downwards shift from bottom of conduction band [eV]
+Percentage = (default = None)                           # relative position inside the gap
 # Valence Conduction and Percentage only work for a gapped system
 
 # Absolute -- irrespective of spins
@@ -64,9 +66,9 @@ Percentage = (default = None) # relative position inside the gap
 # example acceptor for spin down
 # Valence    = -1 1e-5 0.01 2 2
 
-Bandtype   = (default = '')  # 'Box', 'Lorentzian', 'Gaussian'
-Bandwidth  = (default = 0)   # Bandwidth / Sigma in [eV] for the provided Bandtype
-Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth
+Bandtype   = (default = '')                             # 'Box', 'Lorentzian', 'Gaussian'
+Bandwidth  = (default = 0)                              # Bandwidth / Sigma in [eV] for the provided Bandtype
+Bandcutoff = (default = '1')                            # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth
 
 [[[2]]]
 ... # as many as there are NImp supplied
@@ -76,18 +78,18 @@ Bandcutoff = (default = '1') # Energy cutoff for Lorentzian and Gaussian, in ter
 ________________________________________________________________________________
 [MuMode]       # RunMode = mu
 [[Scattering]]
-ScatteringFile      = (default = '')     # if existent use all the quantities from this HDF5 file only
-ScatteringImpurity  = (default = 0)      # in combination with Scattering File
-                                         # adds an additional constant scattering rate
+ScatteringFile      = (default = '')                    # if existent use all the quantities from this HDF5 file only
+ScatteringImpurity  = (default = 0)                     # in combination with Scattering File
+                                                        # adds an additional constant scattering rate
 
-Temperature         = (default = None)    # in Kelvin
-MuMinimum           = (default = None)    # difference to DFT chemical potential
-MuMaximum           = (default = None)    # difference to DFT chemical potential
+Temperature         = (default = None)                  # in Kelvin
+MuMinimum           = (default = None)                  # difference to DFT chemical potential
+MuMaximum           = (default = None)                  # difference to DFT chemical potential
 MuPoints            = (default = None)
 MLogarithmic        = (default = F)
 
-ScatteringRate      = (default = None)   # in eV^-1
-QuasiParticleWeight = (default = None)
+ScatteringRate      = (default = None)                  # in eV^-1
+QuasiParticleWeight = (default = None)                  # in range 0 - 1
 
 ________________________________________________________________________________
 [Debug]
