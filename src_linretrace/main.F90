@@ -566,7 +566,9 @@ program main
     ! calculate the polygamma function (1...3)
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
-    call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+    if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
+      call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+    endif
 
     if (algo%lQuad) then
       call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
