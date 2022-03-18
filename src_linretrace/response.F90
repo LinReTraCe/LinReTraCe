@@ -8,6 +8,10 @@ module Mresponse
 
   implicit none
 
+  interface initialize_response
+    module procedure initresp, initresp_qp
+  end interface
+
   interface allocate_response
     module procedure dpresp_alloc, qpresp_alloc
   end interface

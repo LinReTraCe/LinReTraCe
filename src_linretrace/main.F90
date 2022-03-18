@@ -572,14 +572,14 @@ program main
 
     if (algo%lQuad) then
       call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
-      call initresp_qp(algo, qresp_intra)
+      call initialize_response(algo, qresp_intra)
       if (algo%lInterBandQuantities) then
-        call initresp_qp(algo, qresp_inter)
+        call initialize_response(algo, qresp_inter)
       endif
       if (algo%lBoltzmann) then
-        call initresp_qp(algo, qresp_intra_Boltzmann)
+        call initialize_response(algo, qresp_intra_Boltzmann)
         if (algo%lInterBandQuantities) then
-          call initresp_qp(algo, qresp_inter_Boltzmann)
+          call initialize_response(algo, qresp_inter_Boltzmann)
         endif
       endif
     endif
@@ -592,15 +592,15 @@ program main
 
     ! initialize the already allocated arrays to 0
     if (algo%lIntraBandQuantities) then
-      call initresp(algo, resp_intra)
+      call initialize_response(algo, resp_intra)
       if(algo%lBoltzmann) then
-        call initresp(algo, resp_intra_Boltzmann)
+        call initialize_response(algo, resp_intra_Boltzmann)
       endif
     endif
     if (algo%lInterBandQuantities) then
-      call initresp(algo, resp_inter)
+      call initialize_response(algo, resp_inter)
       if (algo%lBoltzmann) then
-        call initresp(algo, resp_inter_Boltzmann)
+        call initialize_response(algo, resp_inter_Boltzmann)
       endif
     endif
 
@@ -643,11 +643,6 @@ program main
     call cpu_time(tfinish)
     timings(4) = timings(4) + (tfinish - tstart)
     tstart = tfinish
-
-    ! if (myid.eq. master) then
-    !   call intldos(mu(iT), dos, edisp, sct, kmesh, algo, info)
-    ! endif
-
 
     ! output the response
     ! this subroutines include the summations necessary
@@ -697,11 +692,6 @@ program main
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile_output)
-
-    ! FIXME ... keep this or not ?
-    ! if (algo%lMuMode) then
-    !   pot%MM = pot%MM - pot%mu ! for output reasons
-    ! endif
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
     call hdf5_write_data(ifile_output, '.quantities/carrier', carrier)
