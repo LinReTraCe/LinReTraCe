@@ -163,17 +163,16 @@ if __name__ == '__main__':
             outobj.outputData(icmd, args.imag, args.plot, args.diag, args.axis, *add_arguments)
         try:
           if outobj.mode == 'temp' and cmd == 'mu'  and args.plot:
+            plt.axhline(y=outobj.mudft, ls='--', color='black', label=r'$\mu_{\mathrm{DFT}}$')
             if args.gap:
               outobj.plotBandgap()
-            else:
-              plt.axhline(y=outobj.mudft, ls='--', color='black', label=r'$\mu_{\mathrm{DFT}}$')
         except:
           pass
 
         if args.plot:
           plt.legend(loc='best')
-      if args.plot:
-        plt.title(outobj.fname)
-        plt.show()
+          plt.title(outobj.fname)
+          plt.show()
+
     except BaseException as e:
       error('\nERROR: '+str(e)+'\n')

@@ -242,7 +242,6 @@ class LRTCoutput(object):
 
   def plotBandgap(self):
     '''
-    Experimental function !!!
     When plotting the chemical potential:
     Plot the maximum of the valence and the minimum of the conduction band
     Plot the impurity states.
@@ -251,37 +250,70 @@ class LRTCoutput(object):
     import matplotlib.pyplot as plt
 
     with h5py.File(self.fname,'r') as h5:
-      gapped = h5['.quantities/bandgap/gapped'][()]
-      if gapped:
-        enev = h5['.quantities/bandgap/ene_vband'][()]
-        enec = h5['.quantities/bandgap/ene_cband'][()]
-        mid = enev + (enec-enev)/2.
-
-        plt.axhline(y=enev, color='black', lw=2)
-        plt.axhline(y=enec, color='black', lw=2)
-        plt.axhline(y=mid,  color='black', lw=1, ls='--')
-
-        nimp = h5['.quantities/impurities/nimp'][()]
-        if nimp > 0:
-          for iimp in range(nimp):
-            eimp = h5['.quantities/impurities/imp-{:03}/energy'.format(iimp+1)][()]
-            dop  = h5['.quantities/impurities/imp-{:03}/dopant'.format(iimp+1)][()]
-            wid  = h5['.quantities/impurities/imp-{:03}/width'.format(iimp+1)][()]
-            if wid < 1e-7:
-              plt.axhline(y=eimp, color='red' if dop==1. else 'blue', lw=2)
-            else:
-              plt.axhspan(eimp-wid/2., eimp+wid/2., color='red' if dop==1. else 'blue', alpha=0.5)
-
-        if nimp == 1:
-          eimp = h5['.quantities/impurities/imp-001/energy'][()]
-          dop  = h5['.quantities/impurities/imp-001/dopant'][()]
-          wid  = h5['.quantities/impurities/imp-001/width'][()]
-
-          if dop==1:
-            elvl = ( enec + (eimp + wid/2.) ) /2.
+      enev = []
+      enec = []
+      fullgap = True
+      for ispin in range(self.spins):
+        if self.spins == 1:
+          prefix = '/'
+        else:
+          if ispin == 0:
+            prefix = '/up'
           else:
-            elvl = ( enev + (eimp - wid/2.) ) /2.
-          plt.axhline(y=elvl,  color='gray', lw=1, ls='-.')
+            prefix = '/dn'
+
+        gapped = h5['.quantities/bandgap'+prefix+'/gapped'][()]
+
+        if gapped:
+          enev.append(h5['.quantities/bandgap'+prefix+'/ene_vband'][()])
+          enec.append(h5['.quantities/bandgap'+prefix+'/ene_cband'][()])
+        else:
+          fullgap = False
+          enev.append(np.nan)
+          enec.append(np.nan)
+
+      if fullgap:
+        plt.axhline(y=np.min(enev), color='black', lw=2)
+        plt.axhline(y=np.max(enec), color='black', lw=2)
+
+      nimp = h5['.quantities/impurities/nimp'][()]
+      if nimp > 0:
+        for iimp in range(nimp):
+          eimp = h5['.quantities/impurities/imp-{:03}/energy'.format(iimp+1)][()]
+          dop  = h5['.quantities/impurities/imp-{:03}/dopant'.format(iimp+1)][()]
+          wid  = h5['.quantities/impurities/imp-{:03}/width'.format(iimp+1)][()]
+          if wid < 1e-7:
+            plt.axhline(y=eimp, color='red' if dop==1. else 'blue', lw=2)
+          else:
+            plt.axhspan(eimp-wid/2., eimp+wid/2., color='red' if dop==1. else 'blue', alpha=0.5)
+
+      if nimp == 1 and fullgap:
+        eimp = h5['.quantities/impurities/imp-001/energy'][()]
+        dop  = h5['.quantities/impurities/imp-001/dopant'][()]
+        wid  = h5['.quantities/impurities/imp-001/width'][()]
+
+        enec = np.min(enec)
+        enev = np.min(enev)
+
+        if dop == 1:
+          elvl = ( enec + (eimp + wid/2.) ) /2.
+        else:
+          elvl = ( enev + (eimp - wid/2.) ) /2.
+        plt.axhline(y=elvl,  color='gray', lw=1, ls='-.')
+
+      # # some matplotlib stuff to create a secondary axis, fixed to the primary one
+      # # used only for labellying
+      # # does not work properly
+      # ax1 = plt.gca()
+      # ax2 = ax1.twinx()
+      # ax2.set_ylim(ax1.get_ylim())
+      # def fix_secondaxis(ax1):
+      #   ax2.set_ylim(ax1.get_ylim())
+      #   ax2.figure.canvas.draw()
+      # ax1.callbacks.connect("ylim_changed", fix_secondaxis)
+      # plt.sca(ax1) # return focus
+
+
 
   def outputData(self, command, imag=False, plot=False, diag=False, altaxis=False, *args):
     '''
@@ -779,6 +811,9 @@ class LRTCoutput(object):
                      fmt='%25.15e %25.15e %25.15e %25.15e %25.15e', comments='', \
                      header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
 
+    if plot:
+      plt.title(self.fname)
+      plt.show()
     print('') # empty line before next CLI input
 
   def invert(self, data):
