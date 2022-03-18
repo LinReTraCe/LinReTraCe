@@ -122,10 +122,9 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
           h5out['.bands/opticalBandMin']  = escalc.opticalBandMin + 1 # internal -> Fortran
           h5out['.bands/opticalBandMax']  = escalc.opticalBandMax
       else:
-        if not (peierls and btpinterp is not None):
-          if ispin == 0: # only warn once
-            logger.critical('No optical elements available. Use band interpolation + Peierls approximation or provide them.')
-            logger.critical('Output file WILL NOT WORK with LRTC.\n')
+        if ispin == 0: # only warn once
+          logger.critical('No optical elements available. Use band interpolation (--interp) or provide them (--optic).')
+          logger.critical('Output file WILL NOT WORK with linretrace.\n')
 
 
       if escalc.opticfull:
