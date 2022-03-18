@@ -317,31 +317,41 @@ class BTPInterpolation(object):
       BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.float64)
       opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
 
-      vel     = self.velocities[ispin] # kp, nbands, 3
-      cur     = self.curvatures[ispin] # kp, nbands, 6
+      for ikp in range(nkp):
+        es.ElectronicStructure.progressBar(ikp+1,nkp)
 
-      curmat  = np.zeros((nkp,nbands,3,3), dtype=np.float64)
-      curmat[:,:,[0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:,:]
-      curmat[:,:,[0,0,1],[1,2,2]] = curmat[:,:,[1,2,2], [0,0,1]]
 
-      vk = np.einsum('pbj,nji->pbni',vel,syms) # points, bands, nsym, 3
-      ck = np.einsum('nij,pbjk,nkl->pbnil',symsinv,curmat,syms) # bands, nsym, 3, 3
+        vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
+        cur     = self.curvatures[ispin][ikp,:,:] # nbands, 6
 
-      vk2 = vk[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
-      vk2 = np.mean(vk2,axis=2)
+        curmat  = np.zeros((nbands,3,3), dtype=np.float64)
+        curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
+        curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
-      levmatrix = np.zeros((3,3,3), dtype=np.float64)
-      for i in range(3):
-        for j in range(3):
-          for k in range(3):
-            levmatrix[i,j,k] = levicivita(i,j,k)
+        mbsym   = np.zeros((nbands,nsym,3,3,3), dtype=np.float64)
 
-      #           epsilon_cij v_a v_j c_bi -> abc
-      mb = np.einsum('zij,pbnx,pbnj,pbnyi->pbnxyz',levmatrix,vk,vk,ck)
-      mb = np.mean(mb,axis=2)
+        vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3 -- active transormation
+        ck = np.einsum('nij,bjk,nkl->bnil',symsinv,curmat,syms) # bands, nsym, 3, 3
 
-      self.opticalDiag.append(vk2)
-      self.BopticalDiag.append(mb)
+        vk2 = vk[:,:,[0,1,2,0,0,1]]**2
+        vk2 = np.mean(vk2,axis=1)
+
+        levmatrix = np.zeros((3,3,3), dtype=np.float64)
+        for i in range(3):
+          for j in range(3):
+            for k in range(3):
+              levmatrix[i,j,k] = levicivita(i,j,k)
+
+        #           epsilon_cij v_a v_j c_bi -> abc
+        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
+        mb = np.mean(mb,axis=1)
+
+
+        opticalDiag[ikp,:,:] = vk2
+        BopticalDiag[ikp,:,:,:,:] = mb
+
+      self.opticalDiag.append(opticalDiag)
+      self.BopticalDiag.append(BopticalDiag)
 
     # if we need the peierls approximation
     self.opticalBandMin = 0
