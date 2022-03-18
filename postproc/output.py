@@ -32,8 +32,10 @@ class LRTCoutput(object):
     self.data     = None
     self.dataspinsum = None
 
-    self._parse()                         # runmode, quad, dimensions
-    if dp is not None: self.quad = not dp # overwrite quad if wanted
+    self._parse()        # runmode, quad, dimensions
+    if dp:
+      self.quad = not dp # overwrite quad if wanted
+      print('#\n#   DEBUG: USING DOUBLE PRECISION DATA')
 
     self._get_axis()        # T / beta / mu / carrier axis
     self._defineDicts()     # define all possible response datasets internally
