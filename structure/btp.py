@@ -322,10 +322,10 @@ class BTPInterpolation(object):
 
 
         vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
-        cur     = self.velocities[ispin][ikp,:,:] # nbands, 6
+        cur     = self.curvatures[ispin][ikp,:,:] # nbands, 6
 
         curmat  = np.zeros((nbands,3,3), dtype=np.float64)
-        curmat[:, d2ksave] = cur
+        curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
         mbsym   = np.zeros((nbands,nsym,3,3,3), dtype=np.float64)
@@ -340,7 +340,7 @@ class BTPInterpolation(object):
         for i in range(3):
           for j in range(3):
             for k in range(3):
-              levmatrix[i,j,k] = levicitiva(i,j,k)
+              levmatrix[i,j,k] = levicivita(i,j,k)
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
