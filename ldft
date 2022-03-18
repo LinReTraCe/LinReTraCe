@@ -38,9 +38,9 @@ def parse_args(args=None):
   parser.add_argument('--optic',    help='Read optical elements (Wien2K)', default=False, action='store_true')
 
   parser.add_argument('--trunc', nargs=2, help='Relative energy levels to include in the truncation. (relative to DFT chem. potential in [eV], e.g. -5 5)')
-  parser.add_argument('--abs',   help='Absolute energy levels in trunc option. Must include', default=False, action='store_true')
+  parser.add_argument('--abs',   help='Absolute energy levels in trunc option. Must include Fermi level.', default=False, action='store_true')
 
-  parser.add_argument('--interp',   nargs='?', help='Interpolate band structure and calculate derivatives.\nAutomatically creates optical elements if no others exist.', const=3, default=False, type=int)
+  parser.add_argument('--interp',   nargs='?', help='Interpolate band structure and calculate derivatives.\nAutomatically creates optical elements if no others present.', const=3, default=False, type=int)
   parser.add_argument('--peierls',  help='Enforce Peierls approximation (overwrites existing optical elements).', default=False, action='store_true')
 
   parser.add_argument('--debug',    help=argparse.SUPPRESS, default=False, action='store_true')

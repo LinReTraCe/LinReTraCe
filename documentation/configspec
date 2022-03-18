@@ -1,7 +1,7 @@
 ________________________________________________________________________________
 [General]
 EnergyFile         = (default='')                       # LRTC energy (input) file
-OutputFile         = (default='linretrace-output.hdf5') # Output file name - does not create folders
+OutputFile         = (default='lrtc-date-time.hdf5')    # Output file name - does not create folders
 
 RunMode            = (default='')                       # 'temp' or 'mu'
 Bandgap            = (default = None)                   # Adjust Bandgap - one or two numbers
@@ -9,7 +9,7 @@ ElectronOccupation = (default = -1)                     # Adjust system charge .
 FullOutput         = (default = F)                      # output band- and k-resolved response quantities
                                                         # this data only stems from the double precision responses
 EnergyOutput       = (default = F)                      # output renormalized bands
-QuadResponse       = (default = F)                      # calculate quad precision responses
+QuadResponse       = (default = T)                      # calculate quad precision responses
 Interband          = (default = T)                      # calculate Interband quantities
 Intraband          = (default = T)                      # calculate Intraband quantities
 Boltzmann          = (default = T)                      # calculate Boltzmann regime
@@ -17,8 +17,6 @@ BFieldMode         = (default = F)                      # calculate magnetic Int
 FermiOccupation    = (default = F)                      # True: Fermi function to determine occupation
                                                         # False: Digamma function to determine occupation
 RootMethod         = (default = ridders)                # secant linint ridders bisection
-BoltzFermi         = (default = T)                      # True: Boltzmann approximation
-                                                        # False: Psi_1 approximation
 
 ________________________________________________________________________________
 [TempMode]      # RunMode = temp

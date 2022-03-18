@@ -111,6 +111,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lBField               = .false.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
+  algo%lQuad                 = .true.
 
   algo%lScatteringFile = .false.
   algo%lScatteringText = .false.
@@ -122,7 +123,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
-  algo%lBoltzmannFermi= .true.
+  algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann ans psi1 approx
   algo%lFullOutput    = .false.
   sct%gamimp          = 0.d0
   imp%nimp            = 0
@@ -145,7 +146,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   !--------------------------------------------------------------------------------
-  allocate(dictionary(15))
+  allocate(dictionary(14))
   dictionary(1) = 'EnergyFile'
   dictionary(2) = 'OutputFile'
   dictionary(3) = 'RunMode'
@@ -160,7 +161,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(12) = 'BFieldMode'
   dictionary(13) = 'FermiOccupation'
   dictionary(14) = 'RootMethod'
-  dictionary(15) = 'BoltzFermi'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -202,7 +202,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
-  call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
+  ! call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
   call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)
   call bool_find('QuadResponse', algo%lQuad, search_start, search_end, found)

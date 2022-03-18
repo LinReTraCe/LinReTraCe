@@ -25,22 +25,24 @@ class LRTCoutput(object):
   saveData purely saves the requested data in the data dictionary
   while outputData additionally outputs said data either to stdout or plots it via matplotlib
   '''
-  def __init__(self, fname):
+  def __init__(self, fname, dp=None):
     self.fname    = fname.strip()
     self.datasets = OrderedDict({})
     self.owned    = OrderedDict({})
     self.data     = None
     self.dataspinsum = None
 
-    self._defineDicts()
-    self._parse()
+    self._parse()                         # runmode, quad, dimensions
+    if dp is not None: self.quad = not dp # overwrite quad if wanted
+
+    self._get_axis()        # T / beta / mu / carrier axis
+    self._defineDicts()     # define all possible response datasets internally
+    self._retrieve_groups() # define available response datasets + spin
 
     if sys.version_info >= (3, 0): #  for numpy
       self.textpipe = sys.stdout.buffer
     else:
       self.textpipe = sys.stdout
-
-    self._get_axis()
 
   def __repr__(self):
     return ('LRTCoutput(fname={0.fname!r})'.format(self))
@@ -74,11 +76,20 @@ class LRTCoutput(object):
     # key: userinput; value: (raw dset, (internal path(s)), description, response, magnetic)
     #                        (True    ,  ...         ,  ...       , True/False, True/False)
     # for derived quantities
-    # key: userinput; value: (raw dset, requirements,  description, response)
+    # key: userinput; value: (raw dset, requirements,  description, response, magnetic)
     #                        (False   ,  ...         ,  ...       , True      , True/False)
 
+    # key : what the user inputs
+    # raw dset : direct datasets or onsager coefficients // conductivity - resistivity - etc are ' derived '
+    # internal path : hdf5 path
+    # requirements : refers to keys of raw quantities
+    # response : false for direct datasets, true for onsager and derived thereof
+    # magnetic : magnetic onsager or derived quantities that require magnetic onsager (hall, nernst, mobilities)
 
-    # quantities
+
+    # 'raw' direct quantities
+    # dos is only listed here so the 'list' command shows is, we use a different method to calculate it
+
     self.datasets.update({'dos':        (True, '.energies',                    'Density of States',                          False, False)})
     self.datasets.update({'energy':     (True, '.quantities/energy',           'Total of energy of the system [eV]',         False, False)})
     self.datasets.update({'mu':         (True, '.quantities/mu',               'Chemical potential [eV]',                    False, False)})
@@ -88,26 +99,28 @@ class LRTCoutput(object):
     self.datasets.update({'holes':      (True, '.quantities/holes',            'Thermally activated holes',                  False, False)})
     self.datasets.update({'imp':        (True, '.quantities/imp_contribution', 'Thermally activated impurity electrons',     False, False)})
 
-    # raw responses
+
+    quadprefix = 'Quad' if self.quad else ''
+
+    # 'raw' Onsager coefficients
     for iL, unit in zip(['L11','L12','L22'],['V/(A*m)','A/m', 'V*A/m']):
-      for ii in ['inter','intra','intraQuad','interQuad']:
+      for ii in ['inter','intra']:
         for iM, iMdescr, iMflag in zip(['','M'],['',' in magnetic field'],[False,True]):
-          for iB, iBdescr in zip(['','B'],['','Boltzmann']):
-            key = '{}{}-{}{}'.format(iL,iM,ii,iB)
+          for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
+            key = '{}{}-{}{}'.format(iL,iM,ii,iB) # L11M-intraBoltz
             if key[-1] == '-': key = key[:-1]
-            internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip())
+            internalpath = '{}{}/{}{}{}/sum'.format(iL,iM,ii,quadprefix,iBdescr.strip())
             description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
-    # holy shit this is fucking ugly
-    # derived non-magnetic responses
+    # 'derived' quantities ... that are constructed from the Onsager coefficients
     for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','tc','tr','rh','n','muh','mut'], \
             [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11M','L11'),('L11M','L12M','L11','L12'),('L11','L11M'),('L12','L12M')], \
             ['resistivity', 'conductivity','peltier', 'seebeck', 'thermal conductivity', 'thermal resistivity', 'hall', 'nernst', 'hall mobility', 'thermal mobility'], \
             ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(m*K)]','[m*K/W]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
             [False,False,False,False,False,False,True,True,True,True]):
-      for ii, iireq in zip(['inter','intra','interQuad','intraQuad','total','totalQuad'], [('inter',), ('intra',), ('interQuad',), ('intraQuad',), ('inter','intra'), ('interQuad','intraQuad')]):
-        for iB, iBdescr in zip(['','B'],['','Boltzmann']):
+      for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
+        for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
           key = '{}-{}{}'.format(iL,ii,iB)
           requirement = []
@@ -597,18 +610,6 @@ class LRTCoutput(object):
     with h5py.File(self.fname,'r') as h5:
       outputarray = h5['{}'.format(key)][()]
 
-      # reduce dimension access to avoid problems
-      # mainly: singular matrices when inverting
-      # if self.ndim < 3:
-      #   if len(outputarray.shape) == 5: # magnetic
-      #     outputmasked = outputarray # in 2D systems xyz is still valid
-      #     # outputmasked = outputarray[:,:,self.dimmask3]
-      #     # outputmasked = outputmasked.reshape(outputarray.shape[0],outputarray.shape[1],self.ndim,self.ndim,self.ndim)
-      #   else:
-      #     # outputmasked = outputarray[:,:,self.dimmask2]
-      #     # outputmasked = outputmasked.reshape(outputarray.shape[0],outputarray.shape[1],self.ndim,self.ndim)
-      #   outputarray = outputmasked
-
     if spinsum:
       data = np.sum(outputarray, axis=1)
       return data
@@ -688,7 +689,6 @@ class LRTCoutput(object):
       self._parse_latest()
     else:
       self._parse_file()
-    self._retrieve_groups() # also determines spins
 
 
   def _parse_latest(self):
@@ -723,8 +723,10 @@ class LRTCoutput(object):
   def _parse_file(self):
     '''
     Check if the provided file is one of 'our' output files.
-    Furthermore detect the 'run-mode' of the calculation and
-    the number of dimensions and which dimensions (necessary for quantities that require an inversion)
+    Detect the 'run-mode' of the calculation
+    Detect if we have quad precision response
+    Detect the number of dimensions and which dimensions are valid
+    (necessary for quantities that require an inversion)
     '''
 
     try:
@@ -740,6 +742,9 @@ class LRTCoutput(object):
         print('#   Using file:', self.fname)
         print('#   Detected run mode:', self.mode)
 
+        self.quad = hfi['.config'].attrs['quad']
+        if self.quad:
+          print('#   Detected Quad Precision')
         self.ndim = hfi['.unitcell/ndim'][()]
         self.dims = hfi['.unitcell/dims'][()]
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
@@ -753,7 +758,6 @@ class LRTCoutput(object):
     Get the temperature and inverse temperature axis
     Also save the number of temperature steps
     '''
-
     with h5py.File(self.fname, 'r') as h5:
       self.temp    = h5['.quantities/tempAxis'][()]
       self.invtemp = h5['.quantities/betaAxis'][()]

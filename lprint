@@ -26,22 +26,24 @@ def parse_args(args=None):
     description='''Argument parser for LRTC input and LRTC output data
            " lprint <file> list " --- list all options
            -------------------------------------------
-           " lprint <inputfile> info " --- structural information of input file
-           " lprint -p <inputfile> dos " --- plot density of states
+           " lprint <inputfile> info "         --- structural information of input file
+           " lprint -p <inputfile> dos "       --- plot density of states
            -------------------------------------------
-           " lprint <outputfile> config " --- config information of lrtc run
-           " lprint -p <outputfile> mu " --- plot chemical potential of latest lrtc run
-           " lprint <outputfile> c-total 111 " --- print total conductivity of spin up in xx direction ''',
+           " lprint <outputfile> config "      --- config information of lrtc run
+           " lprint -p <outputfile> mu "       --- plot chemical potential of latest lrtc run
+           " lprint <outputfile> c-total uyy " --- print total conductivity of spin up in yy direction
+           " lprint <outputfile> s-intra xx  " --- print intra seebeck (spin summed) in xx direction''',
     formatter_class=argparse.RawTextHelpFormatter,
     epilog="That's the end of the help")
   parser.add_argument('file',    help='LRTC input/output file')
   parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
-  parser.add_argument('-x', '--axis', help='Use alternate axis (beta or carrier)', default=False, action='store_true')
-  parser.add_argument('--gap',  help=argparse.SUPPRESS, default=False, action='store_true')
-  parser.add_argument('--imag', help=argparse.SUPPRESS, default=False, action='store_true')
-  parser.add_argument('--diag', help=argparse.SUPPRESS, default=False, action='store_true')
-  parser.add_argument('--debug',help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('-x', '--axis', help='Use alternate axis (T -> beta or mu -> carrier)', default=False, action='store_true')
+  parser.add_argument('--gap',  help='Plot the band gap in combination with mu', default=False, action='store_true')
+  parser.add_argument('--double', help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--imag',   help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--diag',   help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--debug',  help=argparse.SUPPRESS, default=False, action='store_true')
 
   return parser.parse_args(args)
 
@@ -87,7 +89,7 @@ if __name__ == '__main__':
     inpobj = LRTCinput(args.file)
   except IOError as e1:
     try:
-      outobj = LRTCoutput(args.file)
+      outobj = LRTCoutput(args.file, dp=args.double)
     except IOError as e2:
       error('\n'+str(e1)+'\n'+str(e2))
 

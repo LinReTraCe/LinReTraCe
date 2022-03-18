@@ -288,17 +288,20 @@ program main
 
 
   ! for the responses we need psi_1, psi_2 and psi_3
-  allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  if (algo%lIntrabandQuantities .or. algo%lInterbandQuantities) then
+    allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  endif
 
   if (algo%lQuad) then
-    call allocate_response(algo, edisp, temp, qresp_intra)
+    if (algo%lIntrabandQuantities) then
+      call allocate_response(algo, edisp, temp, qresp_intra)
+      if (algo%lBoltzmann) then
+        call allocate_response(algo, edisp, temp, qresp_intra_Boltzmann)
+      endif
+    endif
     if (algo%lInterbandquantities) then
       call allocate_response(algo, edisp, temp, qresp_inter)
-    endif
-
-    if (algo%lBoltzmann) then
-      call allocate_response(algo, edisp, temp, qresp_intra_Boltzmann)
-      if (algo%lInterbandquantities) then
+      if (algo%lBoltzmann) then
         call allocate_response(algo, edisp, temp, qresp_inter_Boltzmann)
       endif
     endif
@@ -400,13 +403,12 @@ program main
     write(stdout,*) '  Chemical Potential points:   ', pot%nMu
     endif
     write(stdout,*)
-    write(stdout,*) 'RUN OPTIONS'
-    write(stdout,*) '  intraband quantities:     ', algo%lIntrabandQuantities
-    write(stdout,*) '  interband quantities:     ', algo%lInterbandQuantities
-    write(stdout,*) '  Boltzmann quantities:     ', algo%lBoltzmann
-    write(stdout,*) '    Boltzmann with Fermi approximation: ', algo%lBoltzmannFermi
-    write(stdout,*) '  B-field   quantities:     ', algo%lBfield
-    write(stdout,*) '  Quad Precision Responses: ', algo%lQuad
+    write(stdout,*) 'TRANSPORT RESPONSES'
+    write(stdout,*) '  Intraband      : ', algo%lIntrabandQuantities
+    write(stdout,*) '  Interband      : ', algo%lInterbandQuantities
+    write(stdout,*) '  Boltzmann      : ', algo%lBoltzmann
+    write(stdout,*) '  Magnetic field : ', algo%lBfield
+    write(stdout,*) '  Quad Precision : ', algo%lQuad
     write(stdout,*)
     if (algo%lDebug) then
       write(stdout,*) 'DEBUG MODE'
@@ -587,9 +589,11 @@ program main
 
 
     ! initialize the already allocated arrays to 0
-    call initresp(algo, resp_intra)
-    if(algo%lBoltzmann) then
-      call initresp(algo, resp_intra_Boltzmann)
+    if (algo%lIntraBandQuantities) then
+      call initresp(algo, resp_intra)
+      if(algo%lBoltzmann) then
+        call initresp(algo, resp_intra_Boltzmann)
+      endif
     endif
     if (algo%lInterBandQuantities) then
       call initresp(algo, resp_inter)
