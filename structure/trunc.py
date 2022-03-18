@@ -120,12 +120,14 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
 
 
   # truncate possible derivatives
-  # this is straight-forward: same treatment as the energies
+  # this is straight-forward: same treatment as the energies as we get the derivatives
+  # and curvatures on the full energy range
   if btpinterp is not None:
     for ispin in range(btpinterp.spins):
       btpinterp.velocities[ispin]  = btpinterp.velocities[ispin][:,bmin:bmax]
       btpinterp.curvatures[ispin]  = btpinterp.curvatures[ispin][:,bmin:bmax]
-      btpinterp.opticalDiag[ispin] = btpinterp.opticalDiag[ispin][:,bmin:bmax] # peierls
+      btpinterp.opticalDiag[ispin] = btpinterp.opticalDiag[ispin][:,bmin:bmax]
+      btpinterp.BopticalDiag[ispin] = btpinterp.BopticalDiag[ispin][:,bmin:bmax]
       btpinterp.opticalBandMin = 0
       btpinterp.opticalBandMax = dftcalc.energyBandMax
 
