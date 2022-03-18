@@ -142,11 +142,11 @@ class Program(object):
       btinterp = None
 
     # Band truncation
-    if self.args.truncate:
+    if self.args.trunc:
       self.log.info('')
       try:
-        truncate(calc, btinterp, float(self.args.truncate[0]), \
-                                 float(self.args.truncate[1]), absolute=self.args.abs)
+        truncate(calc, btinterp, float(self.args.trunc[0]), \
+                                 float(self.args.trunc[1]), absolute=self.args.abs)
       except TruncationError as e:
         self.log.exception(str(e))
         self.log.warning('Continuing without truncation.')
