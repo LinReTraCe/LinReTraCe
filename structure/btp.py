@@ -319,43 +319,36 @@ class BTPInterpolation(object):
 
       for ikp in range(nkp):
         es.ElectronicStructure.progressBar(ikp+1,nkp)
-        for iband in range(nbands):
 
-          vel = self.velocities[ispin][ikp,iband,:] # velocitites dx dy dz
-          vel2sym = np.zeros((6,), dtype=np.float64) # velocitiy squared which we symmetrize
 
-          # fill the curvatures square matrix
-          cur = np.empty((3,3), dtype=np.float64)
-          cur[d2ksave] = self.curvatures[ispin][ikp,iband,:]
-          cur[[0,0,1],[1,2,2]] = cur[[1,2,2],[0,0,1]]
+        vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
+        cur     = self.velocities[ispin][ikp,:,:] # nbands, 6
 
-          mbsym = np.zeros((3,3,3), dtype=np.float64)
+        curmat  = np.zeros((nbands,3,3), dtype=np.float64)
+        curmat[:, d2ksave] = cur
+        curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
-          for isym in range(nsym):
-            vk = np.matmul(vel, syms[isym]) # velocitiy at the symmetry applied k-point
-            ck = np.matmul(symsinv[isym], np.matmul(cur,syms[isym])) # curvature at the symmetry applied k-point
+        mbsym   = np.zeros((nbands,nsym,3,3,3), dtype=np.float64)
 
-            vel2sym += vk[[0,1,2,0,0,1]] * np.conjugate(vk[[0,1,2,1,2,2]]) # symmetrize the squares
+        vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3 -- active transormation
+        ck = np.einsum('nij,bjk,nkl->bnil',symsinv,curmat,syms) # bands, nsym, 3, 3
 
-           # Mbopt _abc = epsilon cij * va * vj * M^-1 bi # << BoltrzTrap 1 CPC !
-            for a in range(3):
-              for b in range(3):
-                for c in range(3):
+        vk2 = vk[:,:,[0,1,2,0,0,1]]**2
+        vk2 = np.mean(vk2,axis=1)
 
-                  for i in range(3):
-                    for j in range(3):
-                      sign = levicivita(c,i,j)
-                      if sign == 0:
-                        continue
-                      else:
-                        mbsym[a,b,c] += sign * vk[a] * vk[j] * ck[b,i]
+        levmatrix = np.zeros((3,3,3), dtype=np.float64)
+        for i in range(3):
+          for j in range(3):
+            for k in range(3):
+              levmatrix[i,j,k] = levicitiva(i,j,k)
 
-          mbsym /= nsym
+        #           epsilon_cij v_a v_j c_bi -> abc
+        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
+        mb = np.mean(mb,axis=1)
 
-          vel2sym /= nsym
 
-          opticalDiag[ikp,iband,:] = vel2sym
-          BopticalDiag[ikp,iband,:,:,:] = mbsym
+        opticalDiag[ikp,:,:] = vk2
+        BopticalDiag[ikp,:,:,:,:] = mb
 
       self.opticalDiag.append(opticalDiag)
       self.BopticalDiag.append(BopticalDiag)
