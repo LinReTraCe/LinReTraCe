@@ -67,8 +67,8 @@ class LRTCinput(object):
 
       print('\nKMESH')
       print('  k-points: {}'.format(h5['.kmesh/nkp'][()]))
-      weights = h5['.kmesh/weights'][()]
       print('  irreducible: {}'.format(h5['.kmesh/irreducible'][()]))
+      print('  kx ky kz: {} {} {}'.format(h5['.kmesh/nkx'][()],h5['.kmesh/nky'][()],h5['.kmesh/nkz'][()]))
 
       print('\nBANDS')
       spins = h5['.bands/ispin'][()]
