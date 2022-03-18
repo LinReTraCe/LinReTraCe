@@ -40,6 +40,8 @@ class LRTCoutput(object):
     else:
       self.textpipe = sys.stdout
 
+    self._get_axis()
+
   def __repr__(self):
     return ('LRTCoutput(fname={0.fname!r})'.format(self))
 
@@ -135,8 +137,6 @@ class LRTCoutput(object):
         commands = [command]
     else:
       raise IOError('Provided dataset does not exist.')
-
-    self._get_axis()  # get the (inv-) temperature axis and chemical potential
 
     if self.data is None:
       # we define the dictionary and the temperatures
@@ -537,20 +537,34 @@ class LRTCoutput(object):
       print(barlength*u'\u2500')
 
 
-      try:
-        gapped = h5['.quantities/bandgap/gapped'][()]
-        gap    = h5['.quantities/bandgap/gapsize'][()]
-        print('gap:',gap)
-      except:
+      if self.spins == 1:
         try:
-          gappedup = h5['.quantities/bandgaup/up/gapped'][()]
-          gappeddn = h5['.quantities/bandgaup/up/gapped'][()]
-          gapup  = h5['.quantities/bandgap/up/gapsize'][()]
-          gapdn  = h5['.quantities/bandgap/dn/gapsize'][()]
-          print('gap up:',gapup)
-          print('gap dn:',gapdn)
+          gapped = h5['.quantities/bandgap/gapped'][()]
+          gap    = h5['.quantities/bandgap/gapsize'][()]
+          print('gap:',gap)
         except:
           print('no gap')
+      else:
+        try:
+          gappedup = h5['.quantities/bandgap/up/gapped'][()]
+          gapup    = h5['.quantities/bandgap/up/gapsize'][()]
+          print('up: gap:',gapup)
+        except:
+          print('up: no gap')
+        try:
+          gappeddn = h5['.quantities/bandgap/up/gapped'][()]
+          gapdn    = h5['.quantities/bandgap/dn/gapsize'][()]
+          print('dn: gap:',gapdn)
+        except:
+          print('dn: no gap')
+
+      print(barlength*u'\u2500')
+
+      print('{}-mode steps: {}'.format(self.mode, self.temp.shape[0]))
+      if self.mode == 'temp':
+        print('tmin: {}\ntmax: {}'.format(self.temp[0],self.temp[-1]))
+      elif self.mode == 'mu':
+        print('mumin: {}\nmumax: {}'.format(self.mu[0],self.mu[-1]))
 
       print(barlength*u'\u2500')
 

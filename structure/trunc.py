@@ -113,7 +113,7 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   logger.info("Truncating window: {} - {} [eV]".format(truncmin, truncmax))
   logger.info("Truncating procedure resulted in:")
   logger.info("   window:  {} - {} [eV]".format(min(enemin),max(enemax)))
-  logger.info("   ( bands that touch the limit get included )")
+  logger.info("   [ bands that touch the limits get fully included ]")
   logger.info("   range:  1 - {:3<} ---> {:3>} - {:3<}".format(oldbandmax, bmin+1, bmax))
   logger.info("   bands:    {:3>}   --->   {:3<}".format(oldbandmax, dftcalc.energyBandMax))
   logger.info("   charge:  {:5.1f} ---> {:5.1f}".format(oldcharge, dftcalc.charge))
