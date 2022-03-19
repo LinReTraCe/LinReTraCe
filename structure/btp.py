@@ -311,6 +311,12 @@ class BTPInterpolation(object):
 
     d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
 
+    levmatrix = np.zeros((3,3,3), dtype=np.float64)
+    for i in range(3):
+      for j in range(3):
+        for k in range(3):
+          levmatrix[i,j,k] = levicivita(i,j,k)
+
     for ispin in range(self.dftcalc.spins):
       nkp, nbands = self.velocities[ispin].shape[:2]
 
@@ -330,17 +336,14 @@ class BTPInterpolation(object):
 
         mbsym   = np.zeros((nbands,nsym,3,3,3), dtype=np.float64)
 
-        vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3 -- active transormation
+        # vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3 -- active transormation
+
+        vk = np.einsum('bj,nji->bni',vel,syms) # bands, nsym, 3 -- old equation
         ck = np.einsum('nij,bjk,nkl->bnil',symsinv,curmat,syms) # bands, nsym, 3, 3
 
-        vk2 = vk[:,:,[0,1,2,0,0,1]]**2
+        vk2 = vk[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
         vk2 = np.mean(vk2,axis=1)
 
-        levmatrix = np.zeros((3,3,3), dtype=np.float64)
-        for i in range(3):
-          for j in range(3):
-            for k in range(3):
-              levmatrix[i,j,k] = levicivita(i,j,k)
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
