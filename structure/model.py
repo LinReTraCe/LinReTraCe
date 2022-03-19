@@ -393,7 +393,7 @@ class tightbinding(Model):
       kirr = collections.OrderedDict()
 
       for ik in range(self.nkp):
-        es.ElectronicStructure.progressBar(ik+1,self.nkp)
+        es.ElectronicStructure.progressBar(ik+1,self.nkp,status='k-points')
 
         kfloat = kpoints[ik,:]
         kstring = tuple(['{0:.7f}'.format(s%1) for s in kfloat])
@@ -415,7 +415,7 @@ class tightbinding(Model):
         kirr[kstring] =  size_after-size_before # difference = multiplicity
 
         if size_after == self.nkp: # if we arrived at all possible k-points break out of loop
-          es.ElectronicStructure.progressBar(self.nkp,self.nkp)
+          es.ElectronicStructure.progressBar(self.nkp,self.nkp,status='k-points')
           break
 
       self.kpoints = []
@@ -508,7 +508,7 @@ class tightbinding(Model):
       logger.info('Symmetrizing optical elements')
 
       for ikp in range(self.nkp):
-        es.ElectronicStructure.progressBar(ikp+1,self.nkp)
+        es.ElectronicStructure.progressBar(ikp+1,self.nkp,status='k-points')
 
         vel     = self.velocities[0][ikp,:,:]
         cur     = self.curvatures[0][ikp,:,:]

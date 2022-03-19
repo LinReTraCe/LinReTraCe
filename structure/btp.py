@@ -318,13 +318,22 @@ class BTPInterpolation(object):
           levmatrix[i,j,k] = levicivita(i,j,k)
 
     for ispin in range(self.dftcalc.spins):
+
+      if self.dftcalc.spins == 1:
+        prefix = ''
+      else:
+        if ispin == 0:
+          prefix = 'up:'
+        else:
+          prefix = 'dn:'
+
       nkp, nbands = self.velocities[ispin].shape[:2]
 
       BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.float64)
       opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
 
       for ikp in range(nkp):
-        es.ElectronicStructure.progressBar(ikp+1,nkp)
+        es.ElectronicStructure.progressBar(ikp+1,nkp, status='k-points', prefix=prefix)
 
 
         vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
