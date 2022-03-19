@@ -513,6 +513,7 @@ class tightbinding(Model):
         vel     = self.velocities[0][ikp,:,:]
         cur     = self.curvatures[0][ikp,:,:]
 
+        # put the curvatures into matrix form
         curmat  = np.zeros((self.energyBandMax,3,3), dtype=np.float64)
         curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
@@ -527,11 +528,10 @@ class tightbinding(Model):
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
-        # take the mean over the mbopt
         mb = np.mean(mb,axis=1)
 
         self.opticalMoments[0][ikp,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
-                                          = vk2[:,:3] # only use xyz since we are orthogonal here
+                                          = vk2[:,:3] # only use xyz since we enforce orthogonality in this class
         self.BopticalDiag[0][ikp,:,:,:,:] = mb
 
     else: # reducible

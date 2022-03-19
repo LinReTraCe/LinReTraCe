@@ -330,25 +330,24 @@ class BTPInterpolation(object):
         vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
         cur     = self.curvatures[ispin][ikp,:,:] # nbands, 6
 
+        # put the curvatures in symmetric matrix form
         curmat  = np.zeros((nbands,3,3), dtype=np.float64)
         curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
-        mbsym   = np.zeros((nbands,nsym,3,3,3), dtype=np.float64)
+        # the k-points transform like k' = R k
+        # therefore the velocities transform identical: v' = R v
+        # the equivalent matrix transformation is then R^{-1} c R
 
-        # vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3 -- active transormation
-
-        vk = np.einsum('bj,nji->bni',vel,syms) # bands, nsym, 3 -- old equation
+        vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3
         ck = np.einsum('nij,bjk,nkl->bnil',symsinv,curmat,syms) # bands, nsym, 3, 3
 
         vk2 = vk[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
-        vk2 = np.mean(vk2,axis=1)
-
+        vk2 = np.mean(vk2,axis=1) # symmetrize over the squares
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
         mb = np.mean(mb,axis=1)
-
 
         opticalDiag[ikp,:,:] = vk2
         BopticalDiag[ikp,:,:,:,:] = mb
