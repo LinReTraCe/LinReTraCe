@@ -724,6 +724,10 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
     occ_tot = occ_tot - occimp
   endif
 
+  if (algo%lTMODE .and. algo%ldoping) then
+    occ_tot = occ_tot - edisp%doping
+  endif
+
   target_zero = edisp%nelect - occ_tot
 end subroutine ndeviation_D
 
@@ -757,6 +761,10 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   if (algo%lTMODE .and. algo%lImpurities) then
     call occ_impurity(occimp, mu, imp, info)
     occ_tot = occ_tot - occimp
+  endif
+
+  if (algo%lTMODE .and. algo%ldoping) then
+    occ_tot = occ_tot - edisp%doping
   endif
 
   target_zero=real(edisp%nelect,16) - occ_tot
@@ -1104,6 +1112,10 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   if (algo%lTMODE .and. algo%lImpurities) then
     call occ_impurity_Q(occimp, mu, imp, info)
     deviation = deviation - occimp
+  endif
+
+  if (algo%lTMODE .and. algo%ldoping) then
+    deviation = deviation - edisp%doping
   endif
 
   return

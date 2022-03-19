@@ -32,6 +32,7 @@ module Mtypes
     logical :: lImpurities    ! include impurity levels
     logical :: lQuad          ! quad precision response
     logical :: lRedoMudft     ! flag to recalculate the provided dft chemical potential
+    logical :: lDoping        ! include doping
 
     character(len=256) :: input_energies
     character(len=256) :: input_scattering_hdf5
@@ -70,6 +71,8 @@ module Mtypes
     real(8) :: nelect_config ! number of electrons given by config file
     real(8) :: nelect
 
+    real(8) :: doping       ! additional eletrons (>0) or holes (<0) w.r.t. nominal filling (nelect)
+
     ! gap information
     logical              :: gapped_complete       ! is the system completely gapped (false if spin-dependnet gap)
     real(8)              :: gap_min               ! smallest gap -> important for mu-refinement
@@ -94,8 +97,8 @@ module Mtypes
     real(8), allocatable    :: Moptk(:,:,:,:)    ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
                                                  ! 3..9, nband,nband, spin
     ! for the MPI k-range
-    real(8), allocatable    :: Mopt(:,:,:,:,:)     ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
-                                                 ! 3..9, nband,nband, spin
+    real(8), allocatable    :: Mopt(:,:,:,:,:)   ! M(xy,n,n')= <n,k|p.e_x|n',k> * <n',k|p.e_y|n,k> *
+                                                 ! 3..9, nband,nband, spin, krange
     ! the diagonal optical elements
     ! are loaded in one go
     real(8), allocatable    :: MoptDiag(:,:,:,:) ! 3..9, nband, spin, k-points

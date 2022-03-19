@@ -107,6 +107,10 @@ program main
     endif
   endif
 
+  if (algo%ldoping) then
+    edisp%doping = edisp%doping * 1.d-30 * kmesh%vol ! m-3 -> filling
+  endif
+
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -337,6 +341,9 @@ program main
     write(stdout,*) '  k-Points:         ', kmesh%nkp
     write(stdout,*) '  bands:            ', edisp%nband_max
     write(stdout,*) '  spins:            ', edisp%ispin
+      if (algo%ldoping) then
+      write(stdout,*) '  doping:           ', edisp%doping
+      endif
     if (algo%lRedoMudft) then
       write(stdout,*)
       write(stdout,*) 'ENERGY ADJUSTMENTS'
