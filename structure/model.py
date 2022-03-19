@@ -353,6 +353,7 @@ class tightbinding(Model):
   def computeData(self, tbdata, charge, mu=None):
     self.tbdata  = tbdata
     self.charge  = charge
+    self._checkFile()
 
     self.energyBandMax  = int(np.max(tbdata[:,3]))
     self.tbparams       = tbdata.shape[0]
@@ -435,6 +436,27 @@ class tightbinding(Model):
       self.weights = np.full((self.nkp,), fill_value=2./self.nkp, dtype=np.float64)
       self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
 
+  def _checkFile(self):
+    '''
+        Check if bands start at 1
+        Check if every band has some given value
+        Raise IOError if something is wrong
+    '''
+
+    bandmin = int(np.min(self.tbdata[:,3]))
+    bandmax = int(np.max(self.tbdata[:,3]))
+
+    if bandmin != 1:
+      raise IOError('Error: tight binding parameter set must start at band 1')
+
+    bandcheck = np.full((bandmax,), fill_value=False)
+    for itb in range(self.tbdata.shape[0]):
+      band = int(self.tbdata[itb,3]) - 1 # band identifier
+      bandcheck[band] = True
+
+    if not np.all(bandcheck):
+      raise IOError('Error: tight binding parameter set does not contain all bands')
+
   def _computeDispersion(self):
     '''
     create the energy dispersion from the following arrays:
@@ -455,9 +477,10 @@ class tightbinding(Model):
     ck = np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.complex128)
 
     for itb in range(self.tbparams):
-      rvec = self.tbdata[itb,:3]
-      band = int(self.tbdata[itb,3]) - 1
-      hop  = self.tbdata[itb,4]
+
+      rvec = self.tbdata[itb,:3]         # r - vector
+      band = int(self.tbdata[itb,3]) - 1 # band identifier
+      hop  = self.tbdata[itb,4]          # hopping parameter
 
       if np.sum(np.abs(rvec)) == 0:
         hop = -hop
@@ -501,9 +524,8 @@ class tightbinding(Model):
 
     if self.irreducible:
       '''
-          unfortunately here we have code duplication
-          to calculate the energies / velocities / curavtures of the generated k-points
-          which we symmetrize over
+          Symmetrize the velocity squares -> Mopt
+          and the magnetic optical elements ~ v*v*c -> Mbop
       '''
       logger.info('Symmetrizing optical elements')
 
@@ -523,7 +545,7 @@ class tightbinding(Model):
         ck = np.einsum('nij,bjk,nkl->bnil',self.invsymop,curmat,self.symop) # bands, nsym, 3, 3
 
         # take the mean over the squares
-        vk2 = vk[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
+        vk2 = vk[:,:,[0,1,2]] * vk[:,:,[0,1,2]]
         vk2 = np.mean(vk2,axis=1)
 
         #           epsilon_cij v_a v_j c_bi -> abc
@@ -531,7 +553,7 @@ class tightbinding(Model):
         mb = np.mean(mb,axis=1)
 
         self.opticalMoments[0][ikp,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
-                                          = vk2[:,:3] # only use xyz since we enforce orthogonality in this class
+                                          = vk2[:,:] # only use xyz since we enforce orthogonality in this class
         self.BopticalDiag[0][ikp,:,:,:,:] = mb
 
     else: # reducible

@@ -58,7 +58,7 @@ def parse_args(args=None):
 
 
 if __name__ == '__main__':
-  error = lambda string: sys.exit('ltb: {}'.format(string))
+  error = lambda string: sys.exit('\nltb: {}'.format(string))
   args = parse_args()
   debug = args.debug
 
@@ -71,9 +71,12 @@ if __name__ == '__main__':
   logger.addHandler(console)
 
 
-  tbdata = np.genfromtxt(args.tb_file)
-  if (tbdata.shape[1] != 5):
-    raise IOError('Provided tight binding file has wrong format (number of columns: 5)')
+  try:
+    tbdata = np.genfromtxt(args.tb_file)
+    if (tbdata.shape[1] != 5):
+      raise IOError('Provided tight binding file has wrong format (number of columns: 5)')
+  except Exception as e:
+    error(str(e)+'\nExit.')
 
   # create tightbinding object
   irr = not args.red
@@ -87,7 +90,11 @@ if __name__ == '__main__':
                     kshift=args.shift)
 
   # compute the dispersion, etc and output it
-  tb.computeData(tbdata = tbdata, charge=args.filling, mu=args.mu)
+  try:
+    tb.computeData(tbdata = tbdata, charge=args.filling, mu=args.mu)
+  except Exception as e:
+    error(str(e)+'\nExit.')
+
   if args.intra is not None:
     tb.setDiagonal(args.intra)
   if args.inter is not None:
