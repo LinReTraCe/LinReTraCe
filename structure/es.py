@@ -302,12 +302,12 @@ class ElectronicStructure(ABC):
   # and/or sell copies of the Software, and to permit persons to whom the Software
   # is furnished to do so, subject to the following conditions:
   @staticmethod
-  def progressBar(count, total, status=''):
+  def progressBar(count, total, status='', prefix=''):
     bar_len = 60
     filled_len = int(round(bar_len * count / float(total)))
     percents = round(100.0 * count / float(total), 1)
     bar = '=' * filled_len + '-' * (bar_len - filled_len)
-    sys.stdout.write('[{}] {}{} ... {}\r'.format(bar, percents, '%', status))
+    sys.stdout.write('{} [{}] {}{} ... {}\r'.format(prefix, bar, percents, '%', status))
     sys.stdout.flush()
     if count == total:
       sys.stdout.write('\n')
@@ -317,5 +317,5 @@ class ElectronicStructure(ABC):
 if __name__ == '__main__':
   import time
   for i in range(100):
-    ElectronicStructure.progressBar(i+1,100)
-    time.sleep(0.3)
+    ElectronicStructure.progressBar(i+1,100, status='k-points', prefix='up:')
+    time.sleep(0.1)

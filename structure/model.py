@@ -353,6 +353,7 @@ class tightbinding(Model):
   def computeData(self, tbdata, charge, mu=None):
     self.tbdata  = tbdata
     self.charge  = charge
+    self._checkFile()
 
     self.energyBandMax  = int(np.max(tbdata[:,3]))
     self.tbparams       = tbdata.shape[0]
@@ -393,7 +394,7 @@ class tightbinding(Model):
       kirr = collections.OrderedDict()
 
       for ik in range(self.nkp):
-        es.ElectronicStructure.progressBar(ik+1,self.nkp)
+        es.ElectronicStructure.progressBar(ik+1,self.nkp,status='k-points')
 
         kfloat = kpoints[ik,:]
         kstring = tuple(['{0:.7f}'.format(s%1) for s in kfloat])
@@ -415,7 +416,7 @@ class tightbinding(Model):
         kirr[kstring] =  size_after-size_before # difference = multiplicity
 
         if size_after == self.nkp: # if we arrived at all possible k-points break out of loop
-          es.ElectronicStructure.progressBar(self.nkp,self.nkp)
+          es.ElectronicStructure.progressBar(self.nkp,self.nkp,status='k-points')
           break
 
       self.kpoints = []
@@ -434,6 +435,27 @@ class tightbinding(Model):
       self.nkp = self.kpoints.shape[0]
       self.weights = np.full((self.nkp,), fill_value=2./self.nkp, dtype=np.float64)
       self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
+
+  def _checkFile(self):
+    '''
+        Check if bands start at 1
+        Check if every band has some given value
+        Raise IOError if something is wrong
+    '''
+
+    bandmin = int(np.min(self.tbdata[:,3]))
+    bandmax = int(np.max(self.tbdata[:,3]))
+
+    if bandmin != 1:
+      raise IOError('Error: tight binding parameter set must start at band 1')
+
+    bandcheck = np.full((bandmax,), fill_value=False)
+    for itb in range(self.tbdata.shape[0]):
+      band = int(self.tbdata[itb,3]) - 1 # band identifier
+      bandcheck[band] = True
+
+    if not np.all(bandcheck):
+      raise IOError('Error: tight binding parameter set does not contain all bands')
 
   def _computeDispersion(self):
     '''
@@ -455,9 +477,10 @@ class tightbinding(Model):
     ck = np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.complex128)
 
     for itb in range(self.tbparams):
-      rvec = self.tbdata[itb,:3]
-      band = int(self.tbdata[itb,3]) - 1
-      hop  = self.tbdata[itb,4]
+
+      rvec = self.tbdata[itb,:3]         # r - vector
+      band = int(self.tbdata[itb,3]) - 1 # band identifier
+      hop  = self.tbdata[itb,4]          # hopping parameter
 
       if np.sum(np.abs(rvec)) == 0:
         hop = -hop
@@ -493,121 +516,59 @@ class tightbinding(Model):
     self.velocities[0][:,:,:] = vk.real
     self.curvatures[0][:,:,:] = ck.real
 
+    levmatrix = np.zeros((3,3,3), dtype=np.float64)
+    for i in range(3):
+      for j in range(3):
+        for k in range(3):
+          levmatrix[i,j,k] = levicivita(i,j,k)
+
     if self.irreducible:
       '''
-          unfortunately here we have code duplication
-          to calculate the energies / velocities / curavtures of the generated k-points
-          which we symmetrize over
+          Symmetrize the velocity squares -> Mopt
+          and the magnetic optical elements ~ v*v*c -> Mbop
       '''
       logger.info('Symmetrizing optical elements')
+
       for ikp in range(self.nkp):
-        es.ElectronicStructure.progressBar(ikp+1,self.nkp)
+        es.ElectronicStructure.progressBar(ikp+1,self.nkp,status='k-points')
 
-        kfloat = self.kpoints[ikp,:] # take the irreducible point
+        vel     = self.velocities[0][ikp,:,:]
+        cur     = self.curvatures[0][ikp,:,:]
 
-        ''' create all equivalent k-points via symmetry '''
-        ikps = set([]) # ik point set
-        knew = np.matmul(self.symop,kfloat) # generate all new k-vectors
-        kmod = knew%1                  # shift them into the BZ
+        # put the curvatures into matrix form
+        curmat  = np.zeros((self.energyBandMax,3,3), dtype=np.float64)
+        curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
+        curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
-        for isym in range(self.nsym):       # iterate through them and add them to the set
-          kshift = ['{0:.7f}'.format(s) for s in kmod[isym]]
-          ikps.add(tuple(kshift))
+        # generate the transformed velocities and curvatures
+        vk = np.einsum('nij,bj->bni',self.symop,vel) # bands, nsym, 3 -- active transormation
+        ck = np.einsum('nij,bjk,nkl->bnil',self.invsymop,curmat,self.symop) # bands, nsym, 3, 3
 
-        assert(len(ikps) == self.multiplicity[ikp])
+        # take the mean over the squares
+        vk2 = vk[:,:,[0,1,2]] * vk[:,:,[0,1,2]]
+        vk2 = np.mean(vk2,axis=1)
 
-        # generate numpy array
-        ikpp = []
-        for kk in ikps:
-          ikpp.append(np.array(kk, dtype=np.float64))
-        ikpp = np.array(ikpp, dtype=np.float64) # ik point prime generated from one irreducible point
+        #           epsilon_cij v_a v_j c_bi -> abc
+        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
+        mb = np.mean(mb,axis=1)
 
-        ''' calculate the derivatives and curvatures of these k-points
-            and average over them '''
+        self.opticalMoments[0][ikp,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
+                                          = vk2[:,:] # only use xyz since we enforce orthogonality in this class
+        self.BopticalDiag[0][ikp,:,:,:,:] = mb
 
-        vk = np.zeros((ikpp.shape[0], self.energyBandMax, 3), dtype=np.complex128)
-        ck = np.zeros((ikpp.shape[0], self.energyBandMax, 6), dtype=np.complex128)
-        for itb in range(self.tbparams):
-          rvec = self.tbdata[itb,:3]
-          band = int(self.tbdata[itb,3]) - 1
-          hop  = self.tbdata[itb,4]
-
-          if np.sum(np.abs(rvec)) == 0:
-            hop = -hop
-
-          for i in range(3):
-            vk[:,band, i] -= hop * np.exp(1j * np.sum(2*np.pi*ikpp * rvec[None,:], axis=1)) \
-                                 * 1j * rvec[i] * self.spacing[i]
-
-          for i in range(3):
-            ck[:,band, i] -= hop * np.exp(1j * np.sum(2*np.pi*ikpp * rvec[None,:], axis=1)) \
-                                 * (-1) * rvec[i]**2 * self.spacing[i]**2
-          ck[:,band, 3] -= hop * np.exp(1j * np.sum(2*np.pi*ikpp * rvec[None,:], axis=1)) \
-                               * (-1) * rvec[0] * rvec[1] * self.spacing[0] * self.spacing[1]
-          ck[:,band, 4] -= hop * np.exp(1j * np.sum(2*np.pi*ikpp * rvec[None,:], axis=1)) \
-                               * (-1) * rvec[0] * rvec[2] * self.spacing[0] * self.spacing[2]
-          ck[:,band, 5] -= hop * np.exp(1j * np.sum(2*np.pi*ikpp * rvec[None,:], axis=1)) \
-                               * (-1) * rvec[1] * rvec[2] * self.spacing[1] * self.spacing[2]
-
-
-        # dont check here a second time ... we have already done that at the start
-        # and warned accordingly
-        ek = ek.real
-        vk = vk.real
-        ck = ck.real
-
-        # Mbopt _abc = epsilon cij * va * vj * M^-1 bi # << BoltrzTrap 1 CPC !
-        # doi: 10.1016/j.cpc.2006.03.007
-
-        mb = np.zeros((ikpp.shape[0],self.energyBandMax,3,3,3), dtype=np.float64)
-
-        temp = np.array([[0,3,4],\
-                         [3,1,5],\
-                         [4,5,2]])
-
-        for a in range(3):
-          for b in range(3):
-            for c in range(3):
-
-              for i in range(3):
-                for j in range(3):
-                  sign = levicivita(c,i,j)
-                  if sign == 0:
-                    continue
-                  else:
-                    curvindex = temp[b,i]
-                    mb[:,:,a,b,c] += sign * vk[:,:,a] * vk[:,:,j] * ck[:,:,curvindex]
-
-        mbmean = np.mean(mb,axis=0) # symmetrize over generated k-points
-        self.BopticalDiag[0][ikp,...]   = mbmean
-
-        vkmean = np.mean(vk[...,[0,1,2]] * vk[...,[0,1,2]] ,axis=0) # symmetrize over generated k-points
-        self.opticalMoments[0][ikp,...]  = vkmean
     else: # reducible
 
       # Mbopt _abc = epsilon cij * va * vj * M^-1 bi # << BoltrzTrap 1 CPC !
       # doi: 10.1016/j.cpc.2006.03.007
+      vk = self.velocities[0][:,:,:]
 
-      # access array
-      temp = np.array([[0,3,4],\
-                       [3,1,5],\
-                       [4,5,2]])
+      ck = np.zeros((self.nkp,self.energyBandMax,3,3), dtype=np.float64)
+      ck[:,:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = self.curvatures[0][:,:,:]
+      ck[:,:, [0,0,1], [1,2,2]] = ck[:,:, [1,2,2], [0,0,1]]
 
-      for a in range(3):
-        for b in range(3):
-          for c in range(3):
+      mb = np.einsum('zij,pbx,pbj,pbyi->pbxyz',levmatrix,vk,vk,ck)
 
-            for i in range(3):
-              for j in range(3):
-                sign = levicivita(c,i,j)
-                if sign == 0:
-                  continue
-                else:
-                  curvindex = temp[b,i]
-                  self.BopticalDiag[0][:,:,a,b,c] += sign * self.velocities[0][:,:,a] \
-                                                   * self.velocities[0][:,:,j] \
-                                                   * self.curvatures[0][:,:,curvindex]
-
+      self.BopticalDiag[0][...] = mb
       self.opticalMoments[0][:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
                   = self.velocities[0][:,:,[0,1,2]] \
                   * self.velocities[0][:,:,[0,1,2]]

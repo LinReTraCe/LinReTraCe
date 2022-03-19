@@ -525,7 +525,7 @@ class w2kcalculation(DFTcalculation):
 
           for ikp in range(self.nkp):
             if logger.getEffectiveLevel() in [logging.DEBUG,logging.INFO]:
-              ElectronicStructure.progressBar(ikp+1,self.nkp, status=' k-points')
+              ElectronicStructure.progressBar(ikp+1,self.nkp, status='k-points')
             # temp = mlist.readline().split() # read the KP: line
             temp = mlist.readline()
 
