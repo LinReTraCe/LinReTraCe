@@ -343,12 +343,12 @@ program main
     write(stdout,*) '  k-Points:         ', kmesh%nkp
     write(stdout,*) '  bands:            ', edisp%nband_max
     write(stdout,*) '  spins:            ', edisp%ispin
-      if (algo%ldoping) then
-      write(stdout,*) '  doping:           ', edisp%doping
-      endif
-    if (algo%lRedoMudft) then
+    if (algo%lRedoMudft .or. algo%ldoping) then
       write(stdout,*)
       write(stdout,*) 'ENERGY ADJUSTMENTS'
+      if (algo%ldoping) then
+      write(stdout,*) '  doping:            ', edisp%doping
+      endif
       if (edisp%nelect_config > 0.d0) then
       write(stdout,*) '  new electrons:     ', edisp%nelect
       endif
@@ -362,8 +362,12 @@ program main
       write(stdout,*) '  WARNING - gapped :',  gapped_file, ' -> ', edisp%gapped_complete
       write(stdout,*)
       endif
+      if (algo%lscissors) then
       write(stdout,*) '  new gap:           ', edisp%gap
+      endif
+      if (algo%lRedoMudft) then
       write(stdout,*) '  new mu:            ', pot%mu_dft
+      endif
     endif
     write(stdout,*)
     write(stdout,*) 'CONFIG'

@@ -370,7 +370,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
 
   ! local variables
-  logical  :: refine_success
+  logical  :: refine_abort
   real(16) :: mu_qp, mu_refine
   real(16) target_zero1, target_zero2
   real(16) test_up, test_dn
@@ -522,8 +522,9 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   ! hard temperature cutoff relative to band gap size
   if (info%Temp < edisp%gap_min*300) then
-    ! do not enter refinement algorithm
     call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+
+    ! do not enter refinement algorithm if this value is too large
     if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
       mu = real(mu_qp, 8)
       return
@@ -533,24 +534,25 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
       return
     endif
     ! refinement
-    call find_mu_refine_Q(mu_qp, mu_refine, refine_success, niitact, edisp, sct, kmesh, imp, algo, info)
-    if (refine_success) then
+    call find_mu_refine_Q(mu_qp, mu_refine, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
+    if (.not. refine_abort) then
+      ! if the algorithm is not aborted due to numerical problems at the refinmenet stage
       mu = real(mu_refine, 8)
       return
     endif
-    niitact = niitQ+1 ! notify main
+    niitact = niitQ+1 ! notify main ! this number triggers the dmu/dT calculation in main.F90
   endif
 
   mu = real(mu_qp, 8)
 
 end subroutine find_mu_Q
 
-subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, kmesh, imp, algo, info)
+subroutine find_mu_refine_Q(mu_in, mu_out, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
   real(16), intent(in)   :: mu_in
   real(16), intent(out)  :: mu_out
-  logical, intent(out)   :: refine_success
+  logical, intent(out)   :: refine_abort
   integer, intent(inout) :: niitact
 
   type(energydisp) :: edisp
@@ -565,8 +567,15 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
   real(16) :: mu1, mu2, dmu
   real(16) :: test_up, test_dn
   integer  :: iit
+  integer  :: is
   integer  :: cnt
 
+
+  refine_abort = .false.
+  ! flag that is only triggered if we ran into numerical problems at the very end
+  ! i.e. we are limited by quad precision evaluation or ran or ran into some false root
+  ! this flag is only used there because it we need to set the chemical potential to some values
+  ! i.e. via dmu/dT
 
   ! calculate numeric deviations from 0 for the two methods
   call ndeviation_Q(mu_in, target_zero2, edisp, sct, kmesh, imp, algo, info)
@@ -598,9 +607,10 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
       exit
     endif
   enddo
+
   ! abort if this for some reason fails
   if (cnt >= 10) then
-    refine_success = .false.
+    mu_out = mu_in
     return
   endif
 
@@ -643,7 +653,7 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
 
   ! too many interations
   if (iit >= niitQ) then
-    refine_success = .false.
+    mu_out = mu_in
     return
   endif
 
@@ -652,7 +662,7 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
   if ((abs(target_zero) < 1q-4900) .or. &
       (abs(target_zero1) < 1q-4900) .or. &
       (abs(target_zero2) < 1q-4900)) then
-    refine_success = .false.
+    refine_abort = .true.
     return
   endif
 
@@ -661,16 +671,22 @@ subroutine find_mu_refine_Q(mu_in, mu_out, refine_success, niitact, edisp, sct, 
   if ((abs(target_zero) > 1q-15) .or. &
       (abs(target_zero1) > 1q-15) .or. &
       (abs(target_zero2) > 1q-15)) then
-    refine_success = .false.
+    refine_abort = .true.
     return
   endif
+
+  ! check if the mu is inside a band -- do not use this value
+  do is=1,edisp%ispin
+    if (mu_out < edisp%ene_valenceBand(is) .or. mu_out > edisp%ene_conductionBand(is)) then
+      mu_out = mu_in
+    endif
+  enddo
 
   ! if(myid.eq.master) then
   !   write(*,*) target_zero1, target_zero, target_zero2
   ! endif
 
   ! the final destination (:
-  refine_success = .true.
   niitact = niitact + iit
 
 end subroutine
