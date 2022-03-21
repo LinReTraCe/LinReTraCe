@@ -278,12 +278,22 @@ class tightbinding(Model):
     self.spacing     = [self.ax, self.ay, self.az]
     self.irreducible = irreducible  # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
+    self.vol = self.ax*self.ay*self.az
 
     self._defineDimension() # method from parent class
     self._defineSymmetries()
-    self._setupKmesh()      # setup reducible and reduce to irreducible
 
-    self.vol = self.ax*self.ay*self.az
+    logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
+    logger.info('nkx = {}'.format(self.nkx))
+    logger.info('nky = {}'.format(self.nky))
+    logger.info('nkz = {}'.format(self.nkz))
+    if self.irreducible:
+      try:
+        self._setupKmeshSpglib()
+      except Exception as e:
+        self._setupKmesh()
+    else:
+      self._setupKmesh()
 
   def _setupArrays(self):
     '''
@@ -366,15 +376,73 @@ class tightbinding(Model):
     self._computeDispersion()
     self._calcFermiLevel(mu)
 
+  def _setupKmeshSpglib(self):
+    '''
+        employ spglib to create irreducible kpoints,
+        multiplicity and symmetry operations
+    '''
+    import spglib # we are protected by a try except from outside
+
+    ''' define k-grid, shift if required '''
+    kgrid = np.array([self.nkx,self.nky,self.nkz], dtype=np.int)
+
+    if self.kshift:
+      is_shift = np.array([int(i) for i in self.dims], dtype=np.float64)
+    else:
+      is_shift = np.array([0,0,0], dtype=np.int)
+
+    # primitive tight-binding lattice model
+    lattice = np.array([[self.ax,0.0,0.0],\
+                        [0.0,self.ay,0.0],\
+                        [0.0,0.0,self.az]])
+    positions = [[0.0,0.0,0.0]] # only one atomic position at origin
+    numbers = [1,]              # to distinguish atomic species
+
+    logger.info('Spglib: Generating irreducible kpoints.')
+
+    cell = (lattice, positions, numbers)
+    mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
+
+    unique = np.unique(mapping)
+    self.nkp  = len(unique)
+
+    logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
+
+    self.kpoints = grid[unique]
+    self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
+
+    ''' get multiplicity by going getting the return counts, i.e. how often each unique point appears '''
+    self.multiplicity = np.unique(mapping, return_counts=True)
+    self.multiplicity = np.array(self.multiplicity, dtype=np.int)
+    self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
+
+    ''' get symmetry and reduce unnecessary ones '''
+    symmetry = spglib.get_symmetry(cell, symprec=1e-5)
+    symsfull = symmetry['rotations']
+
+    self.symop = []
+    for ii in np.arange(symsfull.shape[0]):
+      isym = symsfull[ii]
+      to_add = True
+      for i, dim in enumerate(self.dims):
+        if dim: continue
+        for j in range(3):
+          if i==j:
+            if isym[i,j] != 1: to_add = False
+          else:
+            if isym[j,i] != 0: to_add = False
+            if isym[i,j] != 0: to_add = False # redundant I think
+
+      if to_add: self.symop.append(isym)
+
+    self.symop = np.array(self.symop)
+    self.invsymop = np.linalg.inv(self.symop)
+    self.nsym = self.symop.shape[0]
+
   def _setupKmesh(self):
     '''
     Setup the kmesh in the interval [0,1) 2pi/a
     '''
-
-    logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
-    logger.info('nkx = {}'.format(self.nkx))
-    logger.info('nky = {}'.format(self.nky))
-    logger.info('nkz = {}'.format(self.nkz))
 
     self._kmeshx = np.linspace(0,1,self.nkx,endpoint=False)
     self._kmeshy = np.linspace(0,1,self.nky,endpoint=False)
