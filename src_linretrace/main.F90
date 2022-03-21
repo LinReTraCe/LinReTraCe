@@ -49,6 +49,7 @@ program main
   real(8) :: tstart, tfinish, timings(5)
   real(8) :: time, maxtime
   real(8), allocatable :: gap_file(:)
+  logical :: gapped_file
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -124,6 +125,7 @@ program main
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
+  gapped_file = edisp%gapped_complete
 
   if (algo%lScissors) then
     do is=1,edisp%ispin
@@ -348,10 +350,20 @@ program main
       write(stdout,*)
       write(stdout,*) 'ENERGY ADJUSTMENTS'
       if (edisp%nelect_config > 0.d0) then
-      write(stdout,*) '  new electrons:    ', edisp%nelect
+      write(stdout,*) '  new electrons:     ', edisp%nelect
       endif
-      write(stdout,*) '  new gap:          ', edisp%gap
-      write(stdout,*) '  new mu:           ', pot%mu_dft
+      if (edisp%gapped_complete .and. (int(edisp%nelect) /= edisp%nelect)) then
+      write(stdout,*)
+      write(stdout,*) '  WARNING: Detected gapped system without integer filling. Correct input?'
+      write(stdout,*)
+      endif
+      if(edisp%gapped_complete .neqv. gapped_file) then
+      write(stdout,*)
+      write(stdout,*) '  WARNING - gapped :',  gapped_file, ' -> ', edisp%gapped_complete
+      write(stdout,*)
+      endif
+      write(stdout,*) '  new gap:           ', edisp%gap
+      write(stdout,*) '  new mu:            ', pot%mu_dft
     endif
     write(stdout,*)
     write(stdout,*) 'CONFIG'
