@@ -6,6 +6,8 @@ OutputFile         = (default='lrtc-date-time.hdf5')    # Output file name - doe
 RunMode            = (default='')                       # 'temp' or 'mu'
 Bandgap            = (default = None)                   # Adjust Bandgap - one or two numbers
 ElectronOccupation = (default = -1)                     # Adjust system charge ... After the Bandgap adjustment
+                                                        # Do not use this option to 'dope' the system with minimal charge
+                                                        # use [TempMode] 'Doping' instead
 FullOutput         = (default = F)                      # output band- and k-resolved response quantities
                                                         # this data only stems from the double precision responses
 EnergyOutput       = (default = F)                      # output renormalized bands
@@ -26,6 +28,7 @@ ChemicalPotential  = (default = 0)                      # Fix Chemical potential
 OldOutput          = (default = None)                   # Use chemical potentials from old OutputFile
 OldOutputText      = (default = None)                   # Use chemical potentials from text file
 NImp               = (default = 0)                      # number of additional impurity levels
+Doping             = (default = 0)                      # Additional doping [cm-3]
 
 [[Scattering]]
 ScatteringFile     = (default = '')                     # if existent use all the quantities from this HDF5 file only
