@@ -658,13 +658,7 @@ class LRTCoutput(object):
         if not raw_dset:
           continue
         if response:
-          # exist = '000001/{}'.format(path) in h5
-          # if exist:
-          #   self.spins = h5['000001/{}'.format(path)][()].shape[0] # this is the normal output format
-          # else:
-          exist = '{}'.format(path) in h5 # this is the ReduceIO output format
-          if exist:
-            self.spins = h5['{}'.format(path)][()].shape[1]
+          exist = '{}'.format(path) in h5
         else:
           exist = path in h5
         if exist:
@@ -750,6 +744,7 @@ class LRTCoutput(object):
         self.quad = hfi['.config'].attrs['quad']
         if self.quad:
           print('#   Detected Quad Precision')
+        self.spins = hfi['.quantities/ispin'][()]
         self.ndim = hfi['.unitcell/ndim'][()]
         self.dims = hfi['.unitcell/dims'][()]
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
