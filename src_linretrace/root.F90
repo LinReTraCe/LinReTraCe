@@ -5,10 +5,6 @@ module Mroot
   use Mfermi
   use Maux
 
-  interface find_mu
-    module procedure find_mu_D, find_mu_Q
-  end interface find_mu
-
   interface ndeviation
     module procedure ndeviation_D, ndeviation_Q
   end interface ndeviation
@@ -128,232 +124,237 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
 
 end subroutine find_mu_DFT
 
-subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
-  implicit none
+! old double precision routine
+! this is depecrecated since we always ensure that the chemical potential is found in quad precision
+! the result is then always transformed back into double precision
+! commented out: march 21st 2022 -- due to lapack dependencies
 
-  real(8), intent(inout)        :: mu ! chemical potential which is calculated
-  real(8), intent(in)           :: dev    ! allowed deviation
-  real(8), intent(out)          :: target_zero ! deviation from root after convergence
-  integer, intent(out)          :: niitact ! number of iterations
+!subroutine find_mu_D(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
+!  implicit none
 
-  type(algorithm)  :: algo
-  type(energydisp) :: edisp
-  type(kpointmesh) :: kmesh
-  type(scattering) :: sct
-  type(impurity)   :: imp
-  type(runinfo)    :: info
+!  real(8), intent(inout)        :: mu ! chemical potential which is calculated
+!  real(8), intent(in)           :: dev    ! allowed deviation
+!  real(8), intent(out)          :: target_zero ! deviation from root after convergence
+!  integer, intent(out)          :: niitact ! number of iterations
 
-  ! local variables
-  real(8)  target_zero1, target_zero2, mu1, mu2
-  integer iit,niit0
-  ! Secand method
-  logical lsecant
-  ! linear interpolation method
-  real(8), allocatable :: Y(:), X(:) !arrays containig the function to minimise and the chemical potential
-  integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
-  real(8) :: dmu ! increment
-  real(8) :: a11, a22, a31, a42
-  real(8) :: A(4,4), B(4)
-  integer :: i, j
-  integer :: ipiv(4)
-  integer :: ierr
-  ! Linear interpolation
-  logical linint
-  ! Ridders' method
-  real(8) :: F(4), P(4)
-  real(8) :: s
-  integer  :: maxiter ! maximum number of iterations
-  logical  :: lridd   ! selects Ridders' method
-  ! Bisection method
-  logical :: lbisec
+!  type(algorithm)  :: algo
+!  type(energydisp) :: edisp
+!  type(kpointmesh) :: kmesh
+!  type(scattering) :: sct
+!  type(impurity)   :: imp
+!  type(runinfo)    :: info
 
-  lsecant = .false.
-  linint  = .false.
-  lridd   = .false.
-  lbisec  = .false.
-  ! choose method according to input
-  ! if method is not provided: default to Riddler
- select case (algo%rootMethod)
-   case (0)
-     lsecant = .true.
-   case (1)
-     linint  = .true.
-   case (2)
-     lridd   = .true.
-   case (3)
-     lbisec  = .true.
-   case default
-     call stop_with_message(stderr, "Root-finding method not properly defined")
- end select
+!  ! local variables
+!  real(8)  target_zero1, target_zero2, mu1, mu2
+!  integer iit,niit0
+!  ! Secand method
+!  logical lsecant
+!  ! linear interpolation method
+!  real(8), allocatable :: Y(:), X(:) !arrays containig the function to minimise and the chemical potential
+!  integer :: nmu  ! number of points that sample the mu interval (mu1,mu2)
+!  real(8) :: dmu ! increment
+!  real(8) :: a11, a22, a31, a42
+!  real(8) :: A(4,4), B(4)
+!  integer :: i, j
+!  integer :: ipiv(4)
+!  integer :: ierr
+!  ! Linear interpolation
+!  logical linint
+!  ! Ridders' method
+!  real(8) :: F(4), P(4)
+!  real(8) :: s
+!  integer  :: maxiter ! maximum number of iterations
+!  logical  :: lridd   ! selects Ridders' method
+!  ! Bisection method
+!  logical :: lbisec
 
-! deviation from set particle number with initial mu
-! output: target_zero1 = required - actual electrons
-  call ndeviation(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
+!  lsecant = .false.
+!  linint  = .false.
+!  lridd   = .false.
+!  lbisec  = .false.
+!  ! choose method according to input
+!  ! if method is not provided: default to Riddler
+! select case (algo%rootMethod)
+!   case (0)
+!     lsecant = .true.
+!   case (1)
+!     linint  = .true.
+!   case (2)
+!     lridd   = .true.
+!   case (3)
+!     lbisec  = .true.
+!   case default
+!     call stop_with_message(stderr, "Root-finding method not properly defined")
+! end select
 
-! coarse initialization of secant bracket mu1, mu2
-  target_zero2=target_zero1
-  mu1=mu
-  mu2=mu
+!! deviation from set particle number with initial mu
+!! output: target_zero1 = required - actual electrons
+!  call ndeviation(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
-  do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
-     mu2 = mu2 + 0.5d0
-     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
-  enddo
-  do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
-     mu1 = mu1 - 0.5d0
-     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, imp, algo, info)
-  enddo
+!! coarse initialization of secant bracket mu1, mu2
+!  target_zero2=target_zero1
+!  mu1=mu
+!  mu2=mu
 
-  ! maximal steps for double precision calculations
-  niit0=niit
+!  do while (target_zero2.gt.0.d0) ! too few electrons -> increase mu
+!     mu2 = mu2 + 0.5d0
+!     call ndeviation(mu2, target_zero2, edisp, sct, kmesh, imp, algo, info)
+!  enddo
+!  do while (target_zero1.le.0.d0) ! too many electrons -> decrease mu
+!     mu1 = mu1 - 0.5d0
+!     call ndeviation(mu1, target_zero1, edisp, sct, kmesh, imp, algo, info)
+!  enddo
 
-  if (lsecant) then
-  !Secant root finding
-    do iit=1,niit0
-       mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
-       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
+!  ! maximal steps for double precision calculations
+!  niit0=niit
 
-       if (abs(target_zero).lt.dev)  exit
-       if (target_zero.gt.0.d0) then
-          mu1=mu
-          target_zero1=target_zero
-       else
-          mu2=mu
-          target_zero2=target_zero
-       endif
-    enddo
-    niitact=iit
+!  if (lsecant) then
+!  !Secant root finding
+!    do iit=1,niit0
+!       mu=mu1-target_zero1*(mu2-mu1)/(target_zero2-target_zero1)
+!       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
-  elseif (linint) then
-    ! evaluate the target function on an interval and find the root by linear interpolation
-    ! fix the number of points to sample the (mu1,mu2)
-    nmu=30
-    allocate(Y(nmu), X(nmu))
-    Y(:)=0.0d0 ; X(:)=0.0d0
-    ! construct linear grid
-    X(1)=mu1; X(nmu)=mu2; dmu=(mu2-mu1)/(nmu-1)
-    !write(*,*) 'mu1',mu1,'mu2',mu2,'dmu',dmu
-    Y(1)=target_zero1
-    Y(nmu)=target_zero2
+!       if (abs(target_zero).lt.dev)  exit
+!       if (target_zero.gt.0.d0) then
+!          mu1=mu
+!          target_zero1=target_zero
+!       else
+!          mu2=mu
+!          target_zero2=target_zero
+!       endif
+!    enddo
+!    niitact=iit
 
-    do i=2,nmu-1
-      X(i)=X(i-1)+dmu
-    enddo
-    ! evaluate target function in the interval
-    do i=2,nmu-1
-       call ndeviation(X(i), Y(i), edisp, sct, kmesh, imp, algo, info)
-    enddo
-    do i=1,nmu
-      Y(i)=Y(i)+X(i) !this is the correct target function for this method
-    enddo
+!  elseif (linint) then
+!    ! evaluate the target function on an interval and find the root by linear interpolation
+!    ! fix the number of points to sample the (mu1,mu2)
+!    nmu=30
+!    allocate(Y(nmu), X(nmu))
+!    Y(:)=0.0d0 ; X(:)=0.0d0
+!    ! construct linear grid
+!    X(1)=mu1; X(nmu)=mu2; dmu=(mu2-mu1)/(nmu-1)
+!    !write(*,*) 'mu1',mu1,'mu2',mu2,'dmu',dmu
+!    Y(1)=target_zero1
+!    Y(nmu)=target_zero2
 
-    ! find root by linear interpolation
-    do i = 1, nmu-1
-       do j = 1, nmu-1
-          A(:,:) = 0.0d0
-          a11 = X(i+1)-X(i)
-          a22 = X(j+1)-X(j)
-          a31 = Y(i+1)-Y(i)
-          a42 = X(j+1)-X(j)
+!    do i=2,nmu-1
+!      X(i)=X(i-1)+dmu
+!    enddo
+!    ! evaluate target function in the interval
+!    do i=2,nmu-1
+!       call ndeviation(X(i), Y(i), edisp, sct, kmesh, imp, algo, info)
+!    enddo
+!    do i=1,nmu
+!      Y(i)=Y(i)+X(i) !this is the correct target function for this method
+!    enddo
 
-          A(1,1)=a11; A(2,2)=a22; A(3,1)=a31; A(4,2)=a42
-          A(1,3)=-1.0d0; A(2,3)=-1.0d0
-          A(3,4)=-1.0d0; A(4,4)=-1.0d0
-          B(1) = -X(i); B(2) = -X(j)
-          B(3) = -Y(i); B(4) = -X(j)
+!    ! find root by linear interpolation
+!    do i = 1, nmu-1
+!       do j = 1, nmu-1
+!          A(:,:) = 0.0d0
+!          a11 = X(i+1)-X(i)
+!          a22 = X(j+1)-X(j)
+!          a31 = Y(i+1)-Y(i)
+!          a42 = X(j+1)-X(j)
 
-          !write(*,*) 'LU factorisation begins'
-          call dgetrf(4, 4, A, 4, ipiv, ierr )
-          if (ierr /= 0) write(*,*) 'LU factorisation failed', ierr, i, j, a31
+!          A(1,1)=a11; A(2,2)=a22; A(3,1)=a31; A(4,2)=a42
+!          A(1,3)=-1.0d0; A(2,3)=-1.0d0
+!          A(3,4)=-1.0d0; A(4,4)=-1.0d0
+!          B(1) = -X(i); B(2) = -X(j)
+!          B(3) = -Y(i); B(4) = -X(j)
 
-          !write(*,*) 'solution lin syst begins'
-          call dgetrs( 'N', 4, 1, A, 4, ipiv, B, 4, ierr)
-          if (ierr /= 0) write(*,*) 'solution of the system of linear equations has failed', ierr, i, j
+!          !write(*,*) 'LU factorisation begins'
+!          call dgetrf(4, 4, A, 4, ipiv, ierr )
+!          if (ierr /= 0) write(*,*) 'LU factorisation failed', ierr, i, j, a31
 
-          ! check if there is any intersection
-          if (B(1) < 1.0d0 .and. B(2) < 1.0d0) then
-             if (B(1) >= 0.0d0 .and. B(2) >= 0.0d0) then
-                !write(*,*) b(3), b(4)
-                ! save the values of the intersection
-                mu = B(3)
-                call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
-             endif
-          endif
-       enddo ! over freq. counter j
-    enddo ! over freq. counter i
-    deallocate(Y,X)
+!          !write(*,*) 'solution lin syst begins'
+!          call dgetrs( 'N', 4, 1, A, 4, ipiv, B, 4, ierr)
+!          if (ierr /= 0) write(*,*) 'solution of the system of linear equations has failed', ierr, i, j
 
-  elseif(lridd) then   !Ridders' method for root finding
-    P(1)=mu1 ; P(2)=mu2
-    F(1)= target_zero1; F(2)= target_zero2
-    maxiter=  niit
+!          ! check if there is any intersection
+!          if (B(1) < 1.0d0 .and. B(2) < 1.0d0) then
+!             if (B(1) >= 0.0d0 .and. B(2) >= 0.0d0) then
+!                !write(*,*) b(3), b(4)
+!                ! save the values of the intersection
+!                mu = B(3)
+!                call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
+!             endif
+!          endif
+!       enddo ! over freq. counter j
+!    enddo ! over freq. counter i
+!    deallocate(Y,X)
 
-     do j = 1, maxiter
-        P(3) = 0.5d0*(P(1)+P(2))
-        call ndeviation(P(3), F(3), edisp, sct, kmesh, imp, algo, info)
-        s = dsqrt((F(3)**2)-(F(1)*F(2)))
-        if (s==0.0d0) then
-           write(*,*) 'Error in Ridders search for chemical potential'
-           write(*,*) 'ITER', j, 'x1', P(1),'  x2',P(2),'  x3', P(3)
-           write(*,*) 'ITER', j, 'F1', F(1),'  F2',F(2),'  F3', F(3)
-           goto 400
-        endif
-        P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
-        call ndeviation(P(4), F(4), edisp, sct, kmesh, imp, algo, info)
-        if (abs(F(4)) .lt. dev) goto 400
-        if (sign(F(3), F(4)) /= F(3)) then
-        !change of sign btw x3 and x4 then reduce search interval
-           P(1)  = P(3)
-           F(1)  = F(3)
-           P(2)  = P(4)
-           F(2)  = F(4)
-        else if (sign(F(1), F(4)) /= F(1)) then
-        !change of sign btw x1 and x4 then reduce search interval
-           P(2)  = P(4)
-           F(2)  = F(4)
-        else if (sign(F(2), F(4)) /= F(2)) then
-        !change of sign btw x2 and x4 then reduce search interval
-           P(1)  = P(4)
-           F(1)  = F(4)
-        endif
-     enddo ! over number of iterations
+!  elseif(lridd) then   !Ridders' method for root finding
+!    P(1)=mu1 ; P(2)=mu2
+!    F(1)= target_zero1; F(2)= target_zero2
+!    maxiter=  niit
 
- 400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
+!     do j = 1, maxiter
+!        P(3) = 0.5d0*(P(1)+P(2))
+!        call ndeviation(P(3), F(3), edisp, sct, kmesh, imp, algo, info)
+!        s = dsqrt((F(3)**2)-(F(1)*F(2)))
+!        if (s==0.0d0) then
+!           write(*,*) 'Error in Ridders search for chemical potential'
+!           write(*,*) 'ITER', j, 'x1', P(1),'  x2',P(2),'  x3', P(3)
+!           write(*,*) 'ITER', j, 'F1', F(1),'  F2',F(2),'  F3', F(3)
+!           goto 400
+!        endif
+!        P(4) = P(3)+(P(3)-P(1))*(SIGN(1.0d0,F(1)-F(2))*F(3)/s)
+!        call ndeviation(P(4), F(4), edisp, sct, kmesh, imp, algo, info)
+!        if (abs(F(4)) .lt. dev) goto 400
+!        if (sign(F(3), F(4)) /= F(3)) then
+!        !change of sign btw x3 and x4 then reduce search interval
+!           P(1)  = P(3)
+!           F(1)  = F(3)
+!           P(2)  = P(4)
+!           F(2)  = F(4)
+!        else if (sign(F(1), F(4)) /= F(1)) then
+!        !change of sign btw x1 and x4 then reduce search interval
+!           P(2)  = P(4)
+!           F(2)  = F(4)
+!        else if (sign(F(2), F(4)) /= F(2)) then
+!        !change of sign btw x2 and x4 then reduce search interval
+!           P(1)  = P(4)
+!           F(1)  = F(4)
+!        endif
+!     enddo ! over number of iterations
 
-     ! save the values of the intersection
-     mu = P(4)
-     niitact = j
-     niit0   = maxiter
-     target_zero = F(4)
+! 400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
 
-  elseif(lbisec) then
-    ! Bisection root finding
-    do iit=1,niit0
-       mu = (mu1+mu2)/2.d0
-       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
-       if (myid.eq.master .and. iit .ge. 50) write(*,*) mu
-       if (abs(target_zero).lt.dev) exit
-       if (target_zero.gt.0.q0) then
-          mu1=mu
-          target_zero1=target_zero
-       else
-          mu2=mu
-          target_zero2=target_zero
-       endif
-    enddo
-    niitact = iit
-  endif ! root finding algorithm
+!     ! save the values of the intersection
+!     mu = P(4)
+!     niitact = j
+!     niit0   = maxiter
+!     target_zero = F(4)
+
+!  elseif(lbisec) then
+!    ! Bisection root finding
+!    do iit=1,niit0
+!       mu = (mu1+mu2)/2.d0
+!       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
+!       if (myid.eq.master .and. iit .ge. 50) write(*,*) mu
+!       if (abs(target_zero).lt.dev) exit
+!       if (target_zero.gt.0.q0) then
+!          mu1=mu
+!          target_zero1=target_zero
+!       else
+!          mu2=mu
+!          target_zero2=target_zero
+!       endif
+!    enddo
+!    niitact = iit
+!  endif ! root finding algorithm
 
 
 
-  ! if (myid.eq.master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
-  !   write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
-  !   write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
-  !   write(*,*) "increase niit, or allow for bigger ndev (see params.F90)"
-  ! endif
-end subroutine find_mu_D
+!  ! if (myid.eq.master .and. (niitact .ge. niit0 .or. abs(target_zero) .ge. dev)) then
+!  !   write(*,'(A,1E20.12)') "WARNING: diminished root precision. ndev_actual =",target_zero
+!  !   write(*,'(A,1F10.3,A,1I5,A,1E20.12)') "at T=",sct%TT(iT), " with  niit=",niit0, " ndev =", dev
+!  !   write(*,*) "increase niit, or allow for bigger ndev (see params.F90)"
+!  ! endif
+!end subroutine find_mu_D
 
-subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
+subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
   real(8), intent(inout)        :: mu
@@ -534,7 +535,7 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
       return
     endif
     ! refinement
-    call find_mu_refine_Q(mu_qp, mu_refine, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
+    call find_mu_refine(mu_qp, mu_refine, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
     if (.not. refine_abort) then
       ! if the algorithm is not aborted due to numerical problems at the refinmenet stage
       mu = real(mu_refine, 8)
@@ -545,9 +546,9 @@ subroutine find_mu_Q(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, i
 
   mu = real(mu_qp, 8)
 
-end subroutine find_mu_Q
+end subroutine find_mu
 
-subroutine find_mu_refine_Q(mu_in, mu_out, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
+subroutine find_mu_refine(mu_in, mu_out, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
   real(16), intent(in)   :: mu_in
@@ -709,6 +710,7 @@ end subroutine
 
 
 
+! we keep this, since this is used once in main
 subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
