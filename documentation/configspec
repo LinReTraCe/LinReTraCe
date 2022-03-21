@@ -14,7 +14,7 @@ EnergyOutput       = (default = F)                      # output renormalized ba
 QuadResponse       = (default = T)                      # calculate quad precision responses
 Interband          = (default = T)                      # calculate Interband quantities
 Intraband          = (default = T)                      # calculate Intraband quantities
-Boltzmann          = (default = T)                      # calculate Boltzmann regime
+Boltzmann          = (default = T)                      # calculate Boltzmann approximation to inter and/or intra
 BFieldMode         = (default = F)                      # calculate magnetic Intraband quantities
 FermiOccupation    = (default = T)                      # True: Fermi function to determine occupation
                                                         # False: Digamma function to determine occupation
@@ -97,6 +97,8 @@ ________________________________________________________________________________
 Debug string here (one line)
 
 Debug options:
-  Mpi : Output MPI information
-  LoopReverse : Reverse the internal temp/mu loop
-  Verbose : Output various warnings otherwise suppressed
+  Mpi:         Output MPI information
+  LoopReverse: Reverse the internal temp/mu loop
+  Bisection:   Always perform root finding with bisection (slower but numerically robust)
+  Ridders:     Always perform root finding with Ridders algorithm
+  Secant:      Always perform root finding with secant algorithm

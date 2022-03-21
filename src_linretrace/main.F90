@@ -103,9 +103,7 @@ program main
   if (.not. algo%lIntrabandQuantities .and. .not. algo%lInterbandQuantities) then
     ! I will keep this running here
     ! One may just want to look at the chemical potential // total energy
-    if (index(algo%dbgstr,"Verbose") .ne.0) then
-      call log_master(stdout, 'Warning: Neither Intra nor Interband responses will be calculated')
-    endif
+    call log_master(stdout, 'WARNING: Neither Intra nor Interband responses will be calculated')
   endif
 
   if (algo%ldoping) then
@@ -116,6 +114,17 @@ program main
     algo%rootMethod = 3
   else
     algo%rootMethod = 2
+  endif
+
+  ! debug strings to overwrite the standard behavior
+  if (algo%ldebug) then
+    if (index(algo%dbgstr,"Bisection") .ne. 0) then
+      algo%rootMethod = 3
+    else if (index(algo%dbgstr,"Ridders") .ne. 0) then
+      algo%rootMethod = 2
+    else if (index(algo%dbgstr,"Secant") .ne. 0) then
+      algo%rootMethod = 0
+    endif
   endif
 
   ! distribute k-grid
