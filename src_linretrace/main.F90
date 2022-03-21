@@ -109,7 +109,7 @@ program main
   endif
 
   if (algo%ldoping) then
-    edisp%doping = edisp%doping * 1.d-30 * kmesh%vol ! m-3 -> filling
+    edisp%doping = edisp%doping * 1.d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
   endif
 
   ! distribute k-grid
@@ -574,7 +574,7 @@ program main
     ! calculates the difference to the demanded electron number
     call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
     ! deviation rescaled to volume is the carrier concentration
-    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e30 ! 1 / A**3 -> 1 / m**3
+    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e24 ! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
     pot%occ(iT) = edisp%nelect - pot%occ(iT)
 
