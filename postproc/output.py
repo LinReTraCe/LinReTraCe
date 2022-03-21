@@ -556,30 +556,33 @@ class LRTCoutput(object):
         try:
           gapped = h5['.quantities/bandgap/gapped'][()]
           gap    = h5['.quantities/bandgap/gapsize'][()]
-          print('gap:',gap)
+          print('gap [eV]:',gap)
         except:
           print('no gap')
       else:
         try:
           gappedup = h5['.quantities/bandgap/up/gapped'][()]
           gapup    = h5['.quantities/bandgap/up/gapsize'][()]
-          print('up: gap:',gapup)
+          print('up: gap [eV]:',gapup)
         except:
           print('up: no gap')
         try:
           gappeddn = h5['.quantities/bandgap/up/gapped'][()]
           gapdn    = h5['.quantities/bandgap/dn/gapsize'][()]
-          print('dn: gap:',gapdn)
+          print('dn: gap [eV]:',gapdn)
         except:
           print('dn: no gap')
+
+      if (self.config['doping']):
+        print('doping: ', h5['.quantities/doping'][()])
 
       print(barlength*u'\u2500')
 
       print('{}-mode steps: {}'.format(self.mode, self.temp.shape[0]))
       if self.mode == 'temp':
-        print('tmin: {}\ntmax: {}'.format(self.temp[0],self.temp[-1]))
+        print('tmin [K]: {}\ntmax [K]: {}'.format(self.temp[0],self.temp[-1]))
       elif self.mode == 'mu':
-        print('mumin: {}\nmumax: {}'.format(self.mu[0],self.mu[-1]))
+        print('mumin [eV]: {}\nmumax [eV]: {}'.format(self.mu[0],self.mu[-1]))
 
       print(barlength*u'\u2500')
 

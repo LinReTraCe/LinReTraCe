@@ -133,6 +133,9 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   temp%tlogarithmic   = .false.
   pot%mlogarithmic    = .false.
 
+  edisp%doping        = 0.d0
+  algo%ldoping        = .false.
+
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
   !--------------------------------------------------------------------------------
@@ -321,11 +324,12 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     !--------------------------------------------------------------------------------
-    allocate(dictionary(4))
+    allocate(dictionary(5))
     dictionary(1) = 'ChemicalPotential'
     dictionary(2) = 'OldOutput'
     dictionary(3) = 'OldOutputText'
     dictionary(4) = 'NImp'
+    dictionary(5) = 'Doping'
     call spell_check(search_start,search_end, '[TempMode]', dictionary, er, erstr)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
@@ -353,6 +357,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         algo%muSearch = .false. !overwrite the previous option
       else
         algo%lOldmuText = .false.
+      endif
+    endif
+
+    call float_find('Doping', edisp%doping, search_start, search_end, found)
+    if (found) then
+      if (edisp%doping /= 0.d0) then
+        algo%lDoping = .true.
       endif
     endif
 

@@ -528,6 +528,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_create_group(ifile, '.config')
   call hdf5_write_attribute(ifile, '.config', 'tmode', algo%lTMODE)
   call hdf5_write_attribute(ifile, '.config', 'mumode',algo%lMUMODE)
+  call hdf5_write_attribute(ifile, '.config', 'doping',algo%ldoping)
   call hdf5_write_attribute(ifile, '.config', 'quad',algo%lQuad)
   call hdf5_write_attribute(ifile, '.config', 'debug', algo%lDebug)
   call hdf5_write_attribute(ifile, '.config', 'bfield', algo%lBfield)
@@ -591,6 +592,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
 
   call hdf5_write_data(ifile, ".quantities/ispin", edisp%ispin)
   call hdf5_write_data(ifile, ".quantities/charge", edisp%nelect) ! this might have been changed by config
+  call hdf5_write_data(ifile, ".quantities/doping", edisp%doping)
   call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)    ! this also might have changed
   call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
   call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)

@@ -49,6 +49,7 @@ program main
   real(8) :: tstart, tfinish, timings(5)
   real(8) :: time, maxtime
   real(8), allocatable :: gap_file(:)
+  logical :: gapped_file
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -107,6 +108,10 @@ program main
     endif
   endif
 
+  if (algo%ldoping) then
+    edisp%doping = edisp%doping * 1.d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+  endif
+
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -120,6 +125,7 @@ program main
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
+  gapped_file = edisp%gapped_complete
 
   if (algo%lScissors) then
     do is=1,edisp%ispin
@@ -337,14 +343,31 @@ program main
     write(stdout,*) '  k-Points:         ', kmesh%nkp
     write(stdout,*) '  bands:            ', edisp%nband_max
     write(stdout,*) '  spins:            ', edisp%ispin
-    if (algo%lRedoMudft) then
+    if (algo%lRedoMudft .or. algo%ldoping) then
       write(stdout,*)
       write(stdout,*) 'ENERGY ADJUSTMENTS'
-      if (edisp%nelect_config > 0.d0) then
-      write(stdout,*) '  new electrons:    ', edisp%nelect
+      if (algo%ldoping) then
+      write(stdout,*) '  doping:            ', edisp%doping
       endif
-      write(stdout,*) '  new gap:          ', edisp%gap
-      write(stdout,*) '  new mu:           ', pot%mu_dft
+      if (edisp%nelect_config > 0.d0) then
+      write(stdout,*) '  new electrons:     ', edisp%nelect
+      endif
+      if (edisp%gapped_complete .and. (int(edisp%nelect) /= edisp%nelect)) then
+      write(stdout,*)
+      write(stdout,*) '  WARNING: Detected gapped system without integer filling. Correct input?'
+      write(stdout,*)
+      endif
+      if(edisp%gapped_complete .neqv. gapped_file) then
+      write(stdout,*)
+      write(stdout,*) '  WARNING - gapped :',  gapped_file, ' -> ', edisp%gapped_complete
+      write(stdout,*)
+      endif
+      if (algo%lscissors) then
+      write(stdout,*) '  new gap:           ', edisp%gap
+      endif
+      if (algo%lRedoMudft) then
+      write(stdout,*) '  new mu:            ', pot%mu_dft
+      endif
     endif
     write(stdout,*)
     write(stdout,*) 'CONFIG'
@@ -555,7 +578,7 @@ program main
     ! calculates the difference to the demanded electron number
     call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
     ! deviation rescaled to volume is the carrier concentration
-    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e30 ! 1 / A**3 -> 1 / m**3
+    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e24 ! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
     pot%occ(iT) = edisp%nelect - pot%occ(iT)
 
