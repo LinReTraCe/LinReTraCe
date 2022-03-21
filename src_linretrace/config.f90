@@ -149,7 +149,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   !--------------------------------------------------------------------------------
-  allocate(dictionary(14))
+  allocate(dictionary(13))
   dictionary(1) = 'EnergyFile'
   dictionary(2) = 'OutputFile'
   dictionary(3) = 'RunMode'
@@ -163,7 +163,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(11) = 'Boltzmann'
   dictionary(12) = 'BFieldMode'
   dictionary(13) = 'FermiOccupation'
-  dictionary(14) = 'RootMethod'
+  ! dictionary(14) = 'RootMethod'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -196,12 +196,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
 
-  if (algo%muFermi) then
-    ! change standard root method from ridders to bisection
-    ! to avoid ridder problems for this systems
-    algo%rootMethod = 3
-  endif
-
   call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
@@ -230,23 +224,24 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
   endif
 
-  allocate(rootmethod(0:3))
-  rootmethod(0) = 'secant'
-  rootmethod(1) = 'linint'
-  rootmethod(2) = 'ridders'
-  rootmethod(3) = 'bisection'
-  call string_find('RootMethod', str_temp, search_start, search_end, found)
-  if (found) then
-    algo%rootMethod = -1
-    do i=0,3
-      if (index(trim(rootmethod(i)),to_lower(trim(str_temp))) .ne. 0) then
-        algo%rootMethod = i
-      endif
-    enddo
-    if (algo%rootMethod == -1) then
-      call stop_with_message(stderr, 'RootMethod Description not available')
-    endif
-  endif
+  ! dont let user dictate root method
+  ! allocate(rootmethod(0:3))
+  ! rootmethod(0) = 'secant'
+  ! rootmethod(1) = 'linint'
+  ! rootmethod(2) = 'ridders'
+  ! rootmethod(3) = 'bisection'
+  ! call string_find('RootMethod', str_temp, search_start, search_end, found)
+  ! if (found) then
+  !   algo%rootMethod = -1
+  !   do i=0,3
+  !     if (index(trim(rootmethod(i)),to_lower(trim(str_temp))) .ne. 0) then
+  !       algo%rootMethod = i
+  !     endif
+  !   enddo
+  !   if (algo%rootMethod == -1) then
+  !     call stop_with_message(stderr, 'RootMethod Description not available')
+  !   endif
+  ! endif
 
 
   if (algo%lMUMODE) then

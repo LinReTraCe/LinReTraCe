@@ -19,8 +19,6 @@ BFieldMode         = (default = F)                      # calculate magnetic Int
 FermiOccupation    = (default = T)                      # True: Fermi function to determine occupation
                                                         # False: Digamma function to determine occupation
                                                         # Affects chemical potential, carrier concentration and energies
-RootMethod         = (default = ridders)                # chemical potential root finding method
-                                                        # secant linint ridders bisection
 
 ________________________________________________________________________________
 [TempMode]      # RunMode = temp

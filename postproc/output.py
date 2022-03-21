@@ -96,7 +96,7 @@ class LRTCoutput(object):
     self.datasets.update({'energy':     (True, '.quantities/energy',           'Total of energy of the system [eV]',         False, False)})
     self.datasets.update({'mu':         (True, '.quantities/mu',               'Chemical potential [eV]',                    False, False)})
     self.datasets.update({'occupation': (True, '.quantities/occupation',       'Total occupation in the system',             False, False)})
-    self.datasets.update({'carrier':    (True, '.quantities/carrier',          'Carrier concentration in the system w.r.t. neutral charge [1/m^3]', False, False)})
+    self.datasets.update({'carrier':    (True, '.quantities/carrier',          'Carrier concentration in the system w.r.t. neutral charge [cm^-3]', False, False)})
     self.datasets.update({'electrons':  (True, '.quantities/electrons',        'Thermally activated electrons',              False, False)})
     self.datasets.update({'holes':      (True, '.quantities/holes',            'Thermally activated holes',                  False, False)})
     self.datasets.update({'imp':        (True, '.quantities/imp_contribution', 'Thermally activated impurity electrons',     False, False)})
@@ -359,8 +359,8 @@ class LRTCoutput(object):
       if altaxis:
         axis = self.data['carrier']
         axisname = 'n'
-        axisunit = '[m^{-3}]'
-        axislatex = r'$n$ [m$^{-3}$]'
+        axisunit = '[cm^{-3}]'
+        axislatex = r'$n$ [cm$^{-3}$]'
       else:
         axis = self.data['mu']
         axisname = 'mu'

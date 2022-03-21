@@ -112,6 +112,12 @@ program main
     edisp%doping = edisp%doping * 1.d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
   endif
 
+  if (algo%muFermi .and. edisp%gapped_complete) then
+    algo%rootMethod = 3
+  else
+    algo%rootMethod = 2
+  endif
+
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -338,7 +344,10 @@ program main
     write(stdout,*) '  energy-file:      ', trim(algo%input_energies)
     write(stdout,*) '  mu (file):        ', pot%mu_dft_file
     write(stdout,*) '  electrons (file): ', edisp%nelect_file
+    write(stdout,*) '  gapped (file):              ', gapped_file
+    if (gapped_file) then
     write(stdout,*) '  gap (file):       ', gap_file
+    endif
     write(stdout,*) '  dimensions:       ', kmesh%ndim
     write(stdout,*) '  k-Points:         ', kmesh%nkp
     write(stdout,*) '  bands:            ', edisp%nband_max
