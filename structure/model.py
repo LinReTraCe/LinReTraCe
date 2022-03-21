@@ -403,18 +403,18 @@ class tightbinding(Model):
     cell = (lattice, positions, numbers)
     mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
 
-    unique = np.unique(mapping)
+    unique, counts = np.unique(mapping, return_counts=True)
     self.nkp  = len(unique)
 
     logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
 
+    ''' from the mapping and counts thereof generate multiplicity and weights '''
+    self.multiplicity = np.array(counts, dtype=np.int)
+    self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
+
     self.kpoints = grid[unique]
     self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
 
-    ''' get multiplicity by going getting the return counts, i.e. how often each unique point appears '''
-    self.multiplicity = np.unique(mapping, return_counts=True)
-    self.multiplicity = np.array(self.multiplicity, dtype=np.int)
-    self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
 
     ''' get symmetry and reduce unnecessary ones '''
     symmetry = spglib.get_symmetry(cell, symprec=1e-5)
