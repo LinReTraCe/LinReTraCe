@@ -274,14 +274,6 @@ class tightbinding(Model):
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
     self.vol = self.ax*self.ay*self.az
 
-    if self.irreducible:
-      for ai, ki in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
-        if ki == 1: continue
-        for aj, kj in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
-          if kj == 1: continue
-          if ai == aj and ki != kj:
-            raise ValueError('crystal symmetry and kmesh must agree in irreducible setups')
-
     self._defineDimension() # method from parent class
 
     logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
@@ -476,14 +468,22 @@ class tightbinding(Model):
         irrk += 1    # new point -> increase irreducible counter
         mult[ik] = 1 # reset multiplicity counter
 
-        knew = np.einsum('nij,j->ni',self.symop,kpoints[ik,:]) # generate all new k-vectors
-        kmod = knew%1 # shift them into the BZ
-
-        kindex = (np.rint(kmod[:,2]*self.nkz) + \
-                  np.rint(kmod[:,1]*self.nky) * self.nkz + \
-                  np.rint(kmod[:,0]*self.nkx) * self.nkz * self.nky).astype(int)
-                  # get the hash index
-
+        ''' generate all the symmetry related k-points in the Brillouin zone '''
+        knew = np.einsum('nij,j->ni',self.symop,kpoints[ik,:])
+        kmod = knew%1
+        ''' round to neareast integer '''
+        kround = np.rint(kmod * np.array([self.nkx,self.nky,self.nkz])[None,:])
+        ''' exact floating calculation '''
+        kexact = kmod * np.array([self.nkx,self.nky,self.nkz])[None,:]
+        ''' only use the values that transform properly on all three axes '''
+        mask = np.all(np.isclose(kround,kexact),axis=1)
+        ''' apply the mask to filter '''
+        kmask = kround[mask]
+        ''' get the hash index '''
+        kindex = (kmask[:,2] + \
+                  kmask[:,1] * self.nkz + \
+                  kmask[:,0] * self.nkz * self.nky).astype(int)
+        ''' remove the k-points connected via symmetry and increase the multiplicity accordingly '''
         for ikk in kindex:
           if ikk <= ik: continue
           if unique[ikk]:
@@ -545,8 +545,10 @@ class tightbinding(Model):
             break
 
         if not transformed:
-          raise IOError('Error: tight binding parameter set does not fulfill symmteries given by unit cell' + \
-                        '\n symmetry of {} is not fulfilled'.format(rvec1))
+          logger.warning('Tight binding parameter set does not fulfill symmteries given by unit cell' + \
+                        '\n symmetry of r-vector {} is not fulfilled'.format(rvec1) + \
+                        '\n avoid irreducible calculation if this is done on purpose\n\n')
+          return
 
 
 
