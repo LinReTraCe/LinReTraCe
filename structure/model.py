@@ -68,6 +68,10 @@ class Model(ElectronicStructure, ABC):
     self.opticalBandMax = 1
     self.spins          = 1
 
+    self.nsym           = structure.symmetries.C1.nsym
+    self.symop          = structure.symmetries.C1.symop
+    self.invsymop       = structure.symmetries.C1.invsymop
+
     self.velocities     = []
     self.curvatures     = []
 
@@ -93,16 +97,6 @@ class Model(ElectronicStructure, ABC):
         self.dims.append(False)
     self.dims = np.array(self.dims)
     logger.info('Detected {} dimensions.'.format(self.ndim))
-
-  def _defineSymmetries(self):
-    '''
-    Define symmetry and inverse symmetry operations necessary for the construction
-    of an irreducible k-grid
-    In this parent class we set only the unit.
-    '''
-    self.nsym     = structure.symmetries.C1.nsym
-    self.symop    = structure.symmetries.C1.symop
-    self.invsymop = structure.symmetries.C1.invsymop
 
   def _setupArrays(self):
     '''
@@ -280,8 +274,12 @@ class tightbinding(Model):
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
     self.vol = self.ax*self.ay*self.az
 
+    for ai, ki in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
+      for aj, kj in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
+        if ai == aj and ki != kj:
+          raise ValueError('crystal symmetry and kmesh must agree')
+
     self._defineDimension() # method from parent class
-    self._defineSymmetries()
 
     logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
     logger.info('nkx = {}'.format(self.nkx))
@@ -291,6 +289,7 @@ class tightbinding(Model):
       try:
         self._setupKmeshSpglib()
       except Exception as e:
+        self._defineSymmetries()
         self._setupKmesh()
     else:
       self._setupKmesh()
@@ -409,7 +408,7 @@ class tightbinding(Model):
     logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
 
     ''' from the mapping and counts thereof generate multiplicity and weights '''
-    self.multiplicity = np.array(counts, dtype=np.int)
+    self.multiplicity = np.array(counts, dtype=np.float64)
     self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
 
     self.kpoints = grid[unique]
@@ -453,49 +452,44 @@ class tightbinding(Model):
       if self.nky > 1: self._kmeshy += 1./self.nky/2.
       if self.nkz > 1: self._kmeshz += 1./self.nkz/2.
 
-    mesh = np.meshgrid(self._kmeshx,self._kmeshy,self._kmeshz)
-    kpoints = np.array(list(zip(*(dim.flat for dim in mesh))))
+    # the way these points are ordered is important for the indexing below
+    kpoints = []
+    for ikx in self._kmeshx:
+      for iky in self._kmeshy:
+        for ikz in self._kmeshz:
+          kpoints.append([ikx,iky,ikz])
+    kpoints = np.array(kpoints)
+    unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=np.int)
+    mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.float64)
+    irrk    = 0
 
     if self.irreducible:
       logger.info('Generating irreducible kpoints:')
-      kgen = set([]) # we start with the gamma point
-      kirr = collections.OrderedDict()
 
       for ik in range(self.nkp):
         es.ElectronicStructure.progressBar(ik+1,self.nkp,status='k-points')
 
-        kfloat = kpoints[ik,:]
-        kstring = tuple(['{0:.7f}'.format(s%1) for s in kfloat])
+        if unique[ik] == 0: continue # skip if we already went there via symmetry
+        irrk += 1    # new point -> increase irreducible counter
+        mult[ik] = 1 # reset multiplicity counter
 
-        # if its already there .. skip completely
-        if kstring in kgen:
-          continue
+        knew = np.einsum('nij,j->ni',self.symop,kpoints[ik,:]) # generate all new k-vectors
+        kmod = knew%1 # shift them into the BZ
 
-        size_before = len(kgen) # size before we start adding
+        kindex = (np.rint(kmod[:,2]*self.nkz) + \
+                  np.rint(kmod[:,1]*self.nky) * self.nkz + \
+                  np.rint(kmod[:,0]*self.nkx) * self.nkz * self.nky).astype(int)
+                  # get the hash index
 
-        knew = np.matmul(self.symop,kfloat) # generate all new k-vectors
-        kmod = knew%1                  # shift them into the BZ
-        for isym in range(self.nsym):       # iterate through them and add them to the set
-          kshift = ['{0:.7f}'.format(s) for s in kmod[isym]]
-          kgen.add(tuple(kshift))
+        for ikk in kindex:
+          if ikk <= ik: continue
+          if unique[ikk]:
+            unique[ikk] = 0
+            mult[ik] += 1
 
-        size_after = len(kgen) # size after we added
-
-        kirr[kstring] =  size_after-size_before # difference = multiplicity
-
-        if size_after == self.nkp: # if we arrived at all possible k-points break out of loop
-          es.ElectronicStructure.progressBar(self.nkp,self.nkp,status='k-points')
-          break
-
-      self.kpoints = []
-      self.multiplicity = []
-      for kk, m in kirr.items():
-        self.kpoints.append(np.array(kk, dtype=np.float64))
-        self.multiplicity.append(m)
-
-      self.kpoints = np.array(self.kpoints, dtype=np.float64)
-      self.nkp = self.kpoints.shape[0]
-      self.multiplicity = np.array(self.multiplicity, dtype=np.float64)
+      self.nkp = irrk
+      self.kpoints = kpoints[unique>0]
+      self.multiplicity = mult[unique>0]
       self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
       logger.info('Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
     else:
