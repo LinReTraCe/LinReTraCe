@@ -80,14 +80,17 @@ if __name__ == '__main__':
 
   # create tightbinding object
   irr = not args.red
-  tb = tightbinding(ax=args.ax, \
-                    ay=args.ay, \
-                    az=args.az, \
-                    nkx=args.nkx, \
-                    nky=args.nky, \
-                    nkz=args.nkz, \
-                    irreducible=irr, \
-                    kshift=args.shift)
+  try:
+    tb = tightbinding(ax=args.ax, \
+                      ay=args.ay, \
+                      az=args.az, \
+                      nkx=args.nkx, \
+                      nky=args.nky, \
+                      nkz=args.nkz, \
+                      irreducible=irr, \
+                      kshift=args.shift)
+  except:
+    error(str(e)+'\nExit.')
 
   # compute the dispersion, etc and output it
   try:

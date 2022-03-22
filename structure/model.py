@@ -275,7 +275,9 @@ class tightbinding(Model):
     self.vol = self.ax*self.ay*self.az
 
     for ai, ki in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
+      if ki == 1: continue
       for aj, kj in zip(self.spacing, [self.nkx,self.nky,self.nkz]):
+        if kj == 1: continue
         if ai == aj and ki != kj:
           raise ValueError('crystal symmetry and kmesh must agree')
 
