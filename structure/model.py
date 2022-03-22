@@ -503,6 +503,7 @@ class tightbinding(Model):
         Check if bands start at 1
         Check if every band has some given value
         Raise IOError if something is wrong
+        Check symmetries ?
     '''
 
     bandmin = int(np.min(self.tbdata[:,3]))
@@ -518,6 +519,33 @@ class tightbinding(Model):
 
     if not np.all(bandcheck):
       raise IOError('Error: tight binding parameter set does not contain all bands')
+
+    for itb1 in range(self.tbdata.shape[0]):
+      band1  = int(self.tbdata[itb1,3]) - 1 # band identifier
+      rvec1  = self.tbdata[itb1,:3].astype(int)
+      hop1   = self.tbdata[itb1,4]
+
+      rvecsym = np.einsum('nij,j->ni',self.symop,rvec1)
+
+      for isym in range(self.nsym):
+        transformed = False
+        rvec_transformed = rvecsym[isym]
+
+        for itb2 in range(self.tbdata.shape[0]):
+          band2  = int(self.tbdata[itb1,3]) - 1 # band identifier
+          if band1 != band2: continue
+
+          rvec2  = self.tbdata[itb2,:3].astype(int)
+          hop2   = self.tbdata[itb2,4]
+          if np.allclose(rvec_transformed,rvec2) and np.abs(hop1-hop2) < 1e-6:
+            transformed = True
+            break
+
+        if not transformed:
+          raise IOError('Error: tight binding parameter set does not fulfill symmteries given by unit cell' + \
+                        '\n symmetry of {} is not fulfilled'.format(rvec1))
+
+
 
   def _computeDispersion(self):
     '''
