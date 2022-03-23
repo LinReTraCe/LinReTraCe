@@ -443,9 +443,13 @@ class tightbinding(Model):
     self._kmeshz = np.linspace(0,1,self.nkz,endpoint=False)
 
     if self.kshift:
-      if self.nkx > 1: self._kmeshx += 1./self.nkx/2.
-      if self.nky > 1: self._kmeshy += 1./self.nky/2.
-      if self.nkz > 1: self._kmeshz += 1./self.nkz/2.
+      self._kmeshshift = []
+      for ik in [self.nkx,self.nky,self.nkz]:
+        if ik > 1:
+          self._kmeshshift.append(1./ik/2.)
+        else:
+          self._kmeshshift.append(0.0)
+      self._kmeshshift = np.array(self._kmeshshift, dtype=np.float64)
 
     # the way these points are ordered is important for the indexing below
     kpoints = []
@@ -454,6 +458,8 @@ class tightbinding(Model):
         for ikz in self._kmeshz:
           kpoints.append([ikx,iky,ikz])
     kpoints = np.array(kpoints)
+    if self.kshift: kpoints += self._kmeshshift[None,:]
+
     unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=np.int)
     mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.float64)
     irrk    = 0
@@ -471,6 +477,9 @@ class tightbinding(Model):
         ''' generate all the symmetry related k-points in the Brillouin zone '''
         knew = np.einsum('nij,j->ni',self.symop,kpoints[ik,:])
         kmod = knew%1
+        ''' in order to index properly and if kshift is applied , shift back '''
+        if self.kshift:
+          kmod -= self._kmeshshift
         ''' round to neareast integer '''
         kround = np.rint(kmod * np.array([self.nkx,self.nky,self.nkz])[None,:])
         ''' exact floating calculation '''
