@@ -161,20 +161,62 @@ class LRTCscat(object):
       h5out['.quantities/Tmax']     = self.tmax
 
       # common output routines
-      if (self.spins == 1):
-        for iT in range(self.nt):
-          h5out['step/{:06}/scatrate'.format(iT+1)] = self.scattering[iT,0,:,:]
-          h5out['step/{:06}/qpweight'.format(iT+1)] = self.qpweight[iT,0,:,:]
+
+      for ispin in range(self.spins):
+        if self.spins == 1:
+          prefix = '/'
+        else:
+          if ispin == 0:
+            prefix = '/up/'
+          else:
+            prefix = '/dn/'
+
+        independence = self._checkIndependence(ispin)
+
+        if independence:
+          h5out['{}step/{:06}/scatrate'.format(prefix,1)] = self.scattering[0,ispin,:,:]
+          h5out['{}step/{:06}/qpweight'.format(prefix,1)] = self.qpweight[0,ispin,:,:]
           if self.bandshift is not None:
-            h5out['step/{:06}/bandshift'.format(iT+1)] = self.bandshift[iT,0,:,:]
-      elif (iSpin == 2):
-        for iT in range(self.nt):
-          h5out['up/step/{:06}/scatrate'.format(iT+1)] = self.scattering[iT,0,:,:]
-          h5out['dn/step/{:06}/scatrate'.format(iT+1)] = self.scattering[iT,1,:,:]
-          h5out['up/step/{:06}/qpweight'.format(iT+1)] = self.qpweight[iT,0,:,:]
-          h5out['dn/step/{:06}/qpweight'.format(iT+1)] = self.qpweight[iT,1,:,:]
-          if self.bandshift is not None:
-            h5out['up/step/{:06}/bandshift'.format(iT+1)] = self.bandshift[iT,0,:,:]
-            h5out['dn/step/{:06}/bandshift'.format(iT+1)] = self.bandshift[iT,1,:,:]
+            h5out['{}step/{:06}/bandshift'.format(prefix,1)] = self.bandshift[0,ispin,:,:]
+
+          ''' hard links '''
+          for iT in range(1,self.nt):
+            h5out['{}step/{:06}'.format(prefix,iT+1)] = h5out['{}step/{:06}'.format(prefix,1)]
+        else:
+          for iT in range(self.nt):
+            h5out['{}step/{:06}/scatrate'.format(prefix,iT+1)] = self.scattering[iT,ispin,:,:]
+            h5out['{}step/{:06}/qpweight'.format(prefix,iT+1)] = self.qpweight[iT,ispin,:,:]
+            if self.bandshift is not None:
+              h5out['{}step/{:06}/bandshift'.format(prefix,iT+1)] = self.bandshift[iT,ispin,:,:]
 
     logger.info('Successfully created scattering file: {}'.format(outname))
+
+  def _checkIndependence(self, ispin):
+    '''
+    check whether we got a temperature / mu independent input for the provided spin
+    if all temperature / mu steps are identical to the first one return True
+    otherwise return False
+    '''
+
+    steps = self.nt
+    if steps == 1: return True
+
+    compare_scattering = self.scattering[0,ispin,...]
+    compare_qpweight   = self.qpweight[0,ispin,...]
+    if self.bandshift is not None:
+      compare_bandshift = self.bandshift[0,ispin,...]
+
+    independence = True
+    for i in range(1,self.nt):
+      if not np.allclose(compare_scattering, self.scattering[i,ispin,...]):
+        independence = False
+        break
+      if not np.allclose(compare_qpweight, self.qpweight[i,ispin,...]):
+        independence = False
+        break
+      if self.bandshift is not None:
+        if not np.allclose(compare_bandshift, self.bandshift[i,ispin,...]):
+          independence = False
+          break
+
+    return independence
