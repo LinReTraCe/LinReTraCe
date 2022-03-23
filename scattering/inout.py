@@ -37,12 +37,13 @@ class LRTCscat(object):
       self.nkp    = h5in['.kmesh/nkp'][()]
       self.mudft  = h5in['.bands/mu'][()] # chemical potential from electronic structure
       self.kgrid  = h5in['.kmesh/points'][()]
-      self.energies = []
+
+      self.energies = np.zeros((self.spins,self.nkp,self.nbands), dtype=np.float64)
       if self.spins == 1:
-        self.energies.append(h5in['energies'][()])
+        self.energies[0,...] = h5in['energies'][()]
       else:
-        self.energies.append(h5in['up/energies'][()])
-        self.energies.append(h5in['dn/energies'][()])
+        self.energies[0,...] = h5in['up/energies'][()]
+        self.energies[1,...] = h5in['dn/energies'][()]
 
   def getDependencies(self):
     return self.spins, self.nkp, self.nbands
@@ -71,7 +72,7 @@ class LRTCscat(object):
     self.betas = 1.0/(self.temps * kB) # beta interval on eV^-1
     self.mus = np.ones_like(self.temps, dtype=np.float64) * self.mudft
 
-  def defineChemicalPotentials(self, temp, mumin, mumax, nmu, muabs=False):
+  def defineChemicalPotentials(self, temp, mumin, mumax, nmu, mlog=False, muabs=False):
     '''
         Define temperature which to run on and
         define chemical potential range given by the provided parameters
@@ -93,7 +94,11 @@ class LRTCscat(object):
       self.mumin += self.mudft
       self.mumax += self.mudft
 
-    self.mus   = np.linspace(self.mumin, self.mumax, self.nmu, endpoint=True) # eV
+    if not mlog:
+      self.mus   = np.linspace(self.mumin, self.mumax, self.nmu, endpoint=True) # eV
+    else:
+      self.mus   = np.logspace(np.log10(mumin),np.log10(mumax),nmu, endpoint=True)
+
     self.temps = np.ones_like(self.mus, dtype=np.float64) * temp
     self.betas = 1.0/(self.temps * kB) # beta interval on eV^-1
 
