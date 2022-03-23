@@ -35,6 +35,7 @@ scatobj.defineTemperatures(tmin = 10, \
                            tlog = True)
 
 ''' or chemical potential grid:
+    temp:  temperature [K]
     mumin: minimum chemical potential [eV]
     mumax: maximum chemical potential [eV]
     nmu  : number of chemical potential steps
