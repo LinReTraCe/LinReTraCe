@@ -123,21 +123,30 @@ class LRTCscat(object):
     self.qpweight   = qpweight
     self.bandshift  = bandshift
 
-    assert(self.scattering.shape[0] == self.nt)
-    assert(self.scattering.shape[1] == self.spins)
-    assert(self.scattering.shape[2] == 1 or self.scattering.shape[2] == self.nkp)
-    assert(self.scattering.shape[3] == 1 or self.scattering.shape[3] == self.nbands)
-    assert(self.scattering.dtype == np.float64)
+    try:
+      assert(self.scattering.shape[0] == self.nt)
+      assert(self.scattering.shape[1] == self.spins)
+      assert(self.scattering.shape[2] == 1 or self.scattering.shape[2] == self.nkp)
+      assert(self.scattering.shape[3] == 1 or self.scattering.shape[3] == self.nbands)
+      assert(self.scattering.dtype == np.float64)
+    except:
+      raise IOError('Scattering array shape mismatch')
 
-    if qpweight is not None:
-      assert(self.qpweight.shape == self.scattering.shape)
-      assert(self.qpweight.dtype == np.float64)
-    else:
-      self.qpweight = np.ones_like(self.scattering, dtype=np.float64)
+    try:
+      if qpweight is not None:
+        assert(self.qpweight.shape == self.scattering.shape)
+        assert(self.qpweight.dtype == np.float64)
+      else:
+        self.qpweight = np.ones_like(self.scattering, dtype=np.float64)
+    except:
+      raise IOError('Quasi-particle weight array shape mismatch')
 
-    if bandshift is not None:
-      assert(self.bandshift.shape == self.scattering.shape)
-      assert(self.bandshift.dtype == np.float64)
+    try:
+      if bandshift is not None:
+        assert(self.bandshift.shape == self.scattering.shape)
+        assert(self.bandshift.dtype == np.float64)
+    except:
+      raise IOError('Bandshift array shape mismatch')
 
   def createOutput(self, outname):
     if (not self.mumode) and (not self.tempmode):
