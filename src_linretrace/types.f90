@@ -86,8 +86,9 @@ module Mtypes
     ! gap widening
     real(8), allocatable :: scissors(:)
 
-    real(8), allocatable    :: band_original(:,:,:)
-    real(8), allocatable    :: band_shift(:,:,:)  ! same as band
+    real(8), allocatable    :: band_file(:,:,:)   ! directly from the hdf5 file
+    real(8), allocatable    :: band_shift(:,:,:)  ! real part shifts
+
     real(8), allocatable    :: band(:,:,:)        ! energy(nband,ik,ispin)
     real(8), allocatable    :: band_dk(:,:,:,:)   ! d/dk_i band(nband,ik,ispin)
     real(8), allocatable    :: band_d2k(:,:,:,:)  ! d2/(dk_i dk_j) band(nband,ik,ispin)

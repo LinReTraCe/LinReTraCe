@@ -219,8 +219,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
 
   ! ENERGIES & DERIVATIVES
-  allocate(edisp%band_original(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  allocate(edisp%band_file(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
   if (edisp%lDerivatives) then
     allocate(edisp%band_dk(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
@@ -230,7 +229,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/energies", drank2arr)
-    edisp%band_original(:,:,1)     = drank2arr
+    edisp%band_file(:,:,1)     = drank2arr
     deallocate(drank2arr)
     if (edisp%lDerivatives) then
       call hdf5_read_data(ifile, "/derivatives",   drank3arr)
@@ -247,10 +246,10 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   else if (edisp%ispin == 2) then
     call hdf5_read_data(ifile, "/up/energies", drank2arr)
-    edisp%band_original(:,:,1)     = drank2arr
+    edisp%band_file(:,:,1)     = drank2arr
     deallocate(drank2arr)
     call hdf5_read_data(ifile, "/dn/energies", drank2arr)
-    edisp%band_original(:,:,2)     = drank2arr
+    edisp%band_file(:,:,2)     = drank2arr
     deallocate(drank2arr)
 
     if (edisp%lDerivatives) then
@@ -366,27 +365,19 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
+  edisp%lBandShift = .false.
   if (edisp%iSpin == 1) then
     if (hdf5_dataset_exists(ifile, "/step/000001/bandshift")) then
       edisp%lBandShift = .true.
-      if (.not. allocated(edisp%band_shift)) then
-        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
-        edisp%band_shift = 0.d0
-      endif
-    else
-       edisp%lBandShift = .false.
     endif
-
   else if (edisp%iSpin == 2) then
     if (hdf5_dataset_exists(ifile, "/up/step/000001/bandshift")) then
       edisp%lBandShift = .true.
-      if (.not. allocated(edisp%band_shift)) then
-        allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
-        edisp%band_shift = 0.d0
-      endif
-    else
-      edisp%lBandShift = .false.
     endif
+  endif
+
+  if (edisp%lBandShift) then
+    allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
   endif
 
   pot%mumin = minval(pot%MM)
@@ -756,14 +747,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
       sct%gam(:,:,1) = darr2_1
       sct%zqp(:,:,1) = darr2_2
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3 ! there might be scissors applied before hand
+        edisp%band_shift(:,:,1) = darr2_3
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
         sct%gam(iband,:,1) = darr2_1(1,:)
         sct%zqp(iband,:,1) = darr2_2(1,:)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,1) = edisp%band_shift(iband,:,1) + darr2_3(1,:)
+          edisp%band_shift(iband,:,1) = darr2_3(1,:)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
@@ -771,19 +762,15 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
         sct%gam(:,ik,1) = darr2_1(:,1)
         sct%zqp(:,ik,1) = darr2_2(:,1)
         if (edisp%lBandShift) then
-          edisp%band_shift(:,ik,1) = edisp%band_shift(:,ik,1) + darr2_3(:,1)
+          edisp%band_shift(:,ik,1) = darr2_3(:,1)
         endif
       enddo
     else
       sct%gam(:,:,1) = darr2_1(1,1)
       sct%zqp(:,:,1) = darr2_2(1,1)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3(1,1)
+        edisp%band_shift(:,:,1) = darr2_3(1,1)
       endif
-    endif
-
-    if (edisp%lBandShift) then
-      edisp%band = edisp%band_original + edisp%band_shift
     endif
 
     if (allocated(darr2_1)) deallocate(darr2_1)
@@ -807,14 +794,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
       sct%gam(:,:,1) = darr2_1
       sct%zqp(:,:,1) = darr2_2
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3 ! there might be scissors applied before hand
+        edisp%band_shift(:,:,1) = darr2_3
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
         sct%gam(iband,:,1) = darr2_1(1,:)
         sct%zqp(iband,:,1) = darr2_2(1,:)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,1) = edisp%band_shift(iband,:,1) + darr2_3(1,:)
+          edisp%band_shift(iband,:,1) = darr2_3(1,:)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
@@ -822,14 +809,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
         sct%gam(:,ik,1) = darr2_1(:,1)
         sct%zqp(:,ik,1) = darr2_2(:,1)
         if (edisp%lBandShift) then
-          edisp%band_shift(:,ik,1) = edisp%band_shift(:,ik,1) + darr2_3(:,1)
+          edisp%band_shift(:,ik,1) = darr2_3(:,1)
         endif
       enddo
     else
       sct%gam(:,:,1) = darr2_1(1,1)
       sct%zqp(:,:,1) = darr2_2(1,1)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = edisp%band_shift(:,:,1) + darr2_3(1,1)
+        edisp%band_shift(:,:,1) = darr2_3(1,1)
       endif
     endif
 
@@ -848,14 +835,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
       sct%gam(:,:,2) = darr2_1
       sct%zqp(:,:,2) = darr2_2
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,2) = edisp%band_shift(:,:,2) + darr2_3 ! there might be scissors applied before hand
+        edisp%band_shift(:,:,2) = darr2_3
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
         sct%gam(iband,:,2) = darr2_1(1,:)
         sct%zqp(iband,:,2) = darr2_2(1,:)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,2) = edisp%band_shift(iband,:,2) + darr2_3(1,:)
+          edisp%band_shift(iband,:,2) = darr2_3(1,:)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
@@ -863,14 +850,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
         sct%gam(:,ik,2) = darr2_1(:,1)
         sct%zqp(:,ik,2) = darr2_2(:,1)
         if (edisp%lBandShift) then
-          edisp%band_shift(:,ik,2) = edisp%band_shift(:,ik,2) + darr2_3(:,1)
+          edisp%band_shift(:,ik,2) = darr2_3(:,1)
         endif
       enddo
     else
       sct%gam(:,:,2) = darr2_1(1,1)
       sct%zqp(:,:,2) = darr2_2(1,1)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,2) = edisp%band_shift(:,:,2) + darr2_3(1,1)
+        edisp%band_shift(:,:,2) = darr2_3(1,1)
       endif
     endif
 
@@ -878,16 +865,16 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
     if (allocated(darr2_2)) deallocate(darr2_2)
     if (allocated(darr2_3)) deallocate(darr2_3)
 
-    if (edisp%lBandShift) then
-      edisp%band = edisp%band_original + edisp%band_shift
-    endif
-
   endif
 
+  ! apply the shift
+  if (edisp%lBandShift) then
+    edisp%band = edisp%band_file + edisp%band_shift
+  endif
+
+  ! add possible impurity offsets
   sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
   sct%gam = sct%gam * sct%zqp    ! convention
-
-  ! sct%gam = sct%gam * sct%zqp + sct%gamimp    ! convention
 
 end subroutine
 

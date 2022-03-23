@@ -142,22 +142,17 @@ program main
   gap_file = edisp%gap
   gapped_file = edisp%gapped_complete
 
+  ! apply scissors here
+  ! this has to be saved in the band_file variable
+  ! since it is reused if we apply possible band_shifts
   if (algo%lScissors) then
     do is=1,edisp%ispin
-      edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
-      edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
+      edisp%band_file(edisp%conductionBand(is):, :, is) = &
+      edisp%band_file(edisp%conductionBand(is):, :, is) + edisp%scissors(is)
     enddo
-    edisp%band = edisp%band_original + edisp%band_shift
-  else
-    edisp%band = edisp%band_original
   endif
-  if (.not. edisp%lBandShift) then
-    ! we do the above shift once and then leave edisp%band unchanged
-    ! for bandshifts : we have to reapply the scissors + band_shifts for every point in the
-    ! temp/mu loop
-    deallocate(edisp%band_original)
-    deallocate(edisp%band_shift)
-  endif
+  edisp%band = edisp%band_file
+
   if (algo%lRedoMudft) then
     ! redo the DFT mu calculation -  if we apply a scissor operator or change the electron occupation
     ! redefine mu and adjust flags / gap sizes etc
@@ -291,7 +286,9 @@ program main
     pot%occ = 0.d0
   endif
 
-
+  if (.not. edisp%lBandShift) then
+    deallocate(edisp%band_file)
+  endif
 
   ! allocate the arrays once outside of the main (temperature) loop
   if (algo%lIntrabandQuantities) then
@@ -504,18 +501,8 @@ program main
     ! define scattering rates and quasi particle weights
     ! for the current temperature
     if (algo%lScatteringFile) then
-      ! as mentioned above
-      ! apply the scissors:
-      if (algo%lScissors .and. edisp%lBandShift) then
-        edisp%band_shift = 0.d0
-        do is=1,edisp%ispin
-          edisp%band_shift(:edisp%valenceBand(is), :, is)    = 0.d0
-          edisp%band_shift(edisp%conductionBand(is):, :, is) = edisp%scissors(is)
-        enddo
-      endif
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
-      ! this are in ADDITION to the scissors
       call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
     else if (algo%lTMODE .and. algo%lScatteringText) then
       sct%gam = sct%gamtext(iT)
