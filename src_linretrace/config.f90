@@ -31,7 +31,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   integer :: er
 
   real(8), allocatable :: impurityinfo(:)
-  character(len=256), allocatable :: rootmethod(:)
   character(len=256), allocatable :: impdescription(:)
   character(len=256), allocatable :: imptype(:)
   character(len=256), allocatable :: dictionary(:)
@@ -40,6 +39,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   real(8) :: floattemp
 
   logical :: found
+  logical :: impfound
 
   if (iargc() .ne. 1) then
     call stop_with_message(stderr, 'The program has to be executed with exactly one argument. (Name of config file)')
@@ -374,7 +374,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         allocate(imp%Degeneracy(imp%nimp))
         allocate(imp%Bandwidth(imp%nimp))
         allocate(imp%Bandtype(imp%nimp))
-        allocate(imp%Bandcutoff(imp%nimp))
         allocate(imp%Band(imp%nimp))
       else if (imp%nimp == 0) then
         algo%lImpurities = .false.
@@ -446,16 +445,19 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         call stop_with_message(stderr, 'Impurities group not found')
       endif
 
-      allocate(impdescription(0:3))
-      impdescription(0) = 'Absolute'
-      impdescription(1) = 'Valence'
-      impdescription(2) = 'Conduction'
-      impdescription(3) = 'Percentage'
-      allocate(imptype(0:3))
-      imptype(0) = 'box'
-      imptype(1) = 'lorentzian'
-      imptype(2) = 'gaussian'
+      allocate(impdescription(4))
+      impdescription(1) = 'Absolute'
+      impdescription(2) = 'Valence'
+      impdescription(3) = 'Conduction'
+      impdescription(4) = 'Percentage'
+      allocate(imptype(7))
+      imptype(1) = 'box'
+      imptype(2) = 'triangle'
       imptype(3) = 'halfcircle'
+      imptype(4) = 'sine'
+      imptype(5) = 'sine2'
+      imptype(6) = 'sine3'
+      imptype(7) = 'sine4'
 
       do iimp=1,imp%nimp
         write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
@@ -465,30 +467,34 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         endif
 
         !--------------------------------------------------------------------------------
-        allocate(dictionary(7))
+        allocate(dictionary(6))
         dictionary(1) = 'Absolute'
         dictionary(2) = 'Valence'
         dictionary(3) = 'Conduction'
         dictionary(4) = 'Percentage'
         dictionary(5) = 'Bandtype'
         dictionary(6) = 'Bandwidth'
-        dictionary(7) = 'Bandcutoff'
         call spell_check(subsubsearch_start,subsubsearch_end, '[TempMode] [[Impurities]] '//str_imp, dictionary, er, erstr)
         deallocate(dictionary)
         if (er /= 0) call stop_with_message(stdout, erstr)
         !--------------------------------------------------------------------------------
 
-        do i=0,3
+        impfound = .false.
+        do i=1,4
           call floatn_find(impdescription(i), impurityinfo, subsubsearch_start, subsubsearch_end, found)
           if (.not. found) then
             cycle
           endif
-          imp%inputtype(iimp) = i
-          exit
+          if (.not. impfound) then
+            imp%inputtype(iimp) = i
+            impfound = .true.
+          else
+            call stop_with_message(stderr, 'More than one impurity Description found in '//str_imp)
+          endif
         enddo
 
         ! if we didn't find an identifier
-        if (.not. found) then
+        if (.not. impfound) then
           call stop_with_message(stderr, 'Valid impurity Description not found in '//str_imp)
         endif
 
@@ -507,12 +513,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
         call string_find('Bandtype', str_temp, subsubsearch_start, subsubsearch_end, found)
         if (.not. found) then
-          imp%Bandtype(iimp) = 0 ! box
+          imp%Bandtype(iimp) = 0
         else
           imp%Bandtype(iimp) = -1
-          do i=0,3
+          do i=1,7
             if (index(trim(imptype(i)),to_lower(trim(str_temp))) .ne. 0) then
               imp%Bandtype(iimp) = i
+              exit ! so sine does not find sine2 and sine3 ...
             endif
           enddo
           if (imp%Bandtype(iimp) == -1) then
@@ -520,21 +527,12 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           endif
         endif
 
-        call float_find('Bandcutoff', imp%Bandcutoff(iimp), subsubsearch_start, subsubsearch_end, found)
-        if (.not. found) then
-          imp%Bandcutoff(iimp) = 1.d0 ! one standard deviation
-        else
-          if (imp%Bandcutoff(iimp) <= 0.d0) then
-            imp%Bandcutoff(iimp) = 1.d0
-          endif
-        endif
-
         ! the saved information
         nshape = shape(impurityinfo)
 
-        if (imp%inputtype(iimp) == 0) then
+        if (imp%inputtype(iimp) == 1) then
           if (nshape(1) /= 4) then
-            call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters')
+            call stop_with_message(stderr, 'Absolute impurity description has exactly 4 parameters in '//str_imp)
           else
             imp%inputspin(iimp) = 1 ! default to spin up
             ! we don't really need a spin descprtion because this is an absolute energy level
@@ -542,19 +540,38 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         else
           if (nshape(1) == 4) then
             imp%inputspin(iimp) = 1 ! default to spin up
-          else if (nshape(1) == 5) then
-            imp%inputspin(iimp) = impurityinfo(5)
-          else
-            call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters')
+          else if (nshape(1) /= 5) then
+            call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters in '//str_imp)
           endif
         endif
 
         if (abs(impurityinfo(1)) == 1.d0) then
           imp%Dopant(iimp)     = impurityinfo(1) ! +1 (donor) ; -1 (acceptor)
         else
-          call stop_with_message(stderr, 'Dopant description is either +1 or -1')
+          call stop_with_message(stderr, 'Dopant description is either +1 or -1 in '//str_imp)
         endif
-        imp%Density(iimp)    = impurityinfo(2) ! density / unit cell  < 1
+
+        if (impurityinfo(2) < 0.d0) then
+          call stop_with_message(stderr, 'Density description must be > 0 in '//str_imp)
+        endif
+
+        if (impurityinfo(4) < 0.d0) then
+          call stop_with_message(stderr, 'Degeneracy description must be > 0 in '//str_imp)
+        endif
+
+        if (abs(nint(impurityinfo(4)) - impurityinfo(4)) > 1e-6) then
+          call stop_with_message(stderr, 'Degeneracy description must be integer in '//str_imp)
+        endif
+
+        if ((nshape(1) == 5)) then
+          if (impurityinfo(5) == 1.d0 .or. impurityinfo(5) == 2.d0) then
+            imp%inputspin(iimp) = nint(impurityinfo(5))
+          else
+            call stop_with_message(stderr, 'Spin description must be either 1 or 2 in '//str_imp)
+          endif
+        endif
+
+        imp%Density(iimp)    = impurityinfo(2) ! density / unit cell
         imp%Energy(iimp)     = impurityinfo(3) ! energylevel [eV]
         imp%Degeneracy(iimp) = impurityinfo(4) ! degeneracy g
         deallocate(impurityinfo)

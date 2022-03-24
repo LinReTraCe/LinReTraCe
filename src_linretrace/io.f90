@@ -116,9 +116,9 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
-      if (edisp%ispin == 1 .and. imp%inputspin(iimp) /= 1.d0) then
+      if (edisp%ispin == 1 .and. imp%inputspin(iimp) /= 1) then
         call stop_with_message(stderr, 'Error: Spin type must be 1')
-      else if (edisp%ispin == 2 .and. .not. (imp%inputspin(iimp) == 1.d0 .or. imp%inputspin(iimp) == 2.d0)) then
+      else if (edisp%ispin == 2 .and. .not. (imp%inputspin(iimp) == 1 .or. imp%inputspin(iimp) == 2)) then
         call stop_with_message(stderr, 'Error: Spin type must be 1 or 2')
       endif
 
@@ -222,7 +222,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
   allocate(edisp%band_file(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
   if (edisp%lDerivatives) then
-    allocate(edisp%band_dk(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
+    allocate(edisp%band_dk(3, edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(edisp%band_d2k(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
     allocate(edisp%MBoptdiag(3, 3, 3, edisp%nband_max, kmesh%nkp, edisp%ispin))
   endif
@@ -289,12 +289,12 @@ subroutine set_impurities(edisp, imp)
   ! now that we have all the information we can adjust the energies of the impurity levels
   do iimp = 1, imp%nimp
     select case (imp%inputtype(iimp))
-      ! case 0 -> already absolute
-      case (1) ! relative upwards shift from top of valence band
+      ! case 1 -> already absolute
+      case (2) ! relative upwards shift from top of valence band
         imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
-      case (2) ! relative downwards shift from bottom of conduction band
+      case (3) ! relative downwards shift from bottom of conduction band
         imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
-      case (3) ! percentage gap shift from top of valence band
+      case (4) ! percentage gap shift from top of valence band
         imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
                          + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
     end select

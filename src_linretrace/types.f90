@@ -111,18 +111,15 @@ module Mtypes
   type impurity
     integer :: nimp                          ! number of impurities
     integer, allocatable :: inputtype(:)     ! how the energy is provided
+      ! 1: absolute
+      ! 2: relative from top of the valence band (+ -> higher)
+      ! 3: relative from bottom of conduction band (+ -> lower)
+      ! 4: percentage of gap -> added to the top of the valence band
     integer, allocatable :: inputspin(:)
-      ! 0: absolute
-      ! 1: relative from top of the valence band (+ -> higher)
-      ! 2: relative from bottom of conduction band (+ -> lower)
-      ! 3: percentage of gap -> added to the top of the valence band
     logical, allocatable :: Band(:) ! True if band - False if Level
     real(8), allocatable :: Bandwidth(:)
     integer, allocatable :: Bandtype(:)
-      ! 0: Box
-      ! 1: Lorentzian
-      ! 2: Gaussian
-    real(8), allocatable :: Bandcutoff(:) ! in multiples of bandwidth, i.e. sigma or gamma
+      ! 1: Box , 2: Triangle, 3: Halfcircle, 4: Sine, 5: Sine^2 6: Sine^3, 7: Sine^4
 
     real(8), allocatable :: Dopant(:)
     real(8), allocatable :: Density(:)

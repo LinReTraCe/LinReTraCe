@@ -80,10 +80,10 @@ function to_lower(strIn) result(strOut)
 
   do i = 1, len(strIn)
     j = iachar(strIn(i:i))
-    if (j>= iachar("a") .and. j<=iachar("z") ) then
-      strOut(i:i) = strIn(i:i)
-    else
+    if (j>= iachar("A") .and. j<=iachar("Z") ) then
       strOut(i:i) = achar(iachar(strIn(i:i))+32)
+    else
+      strOut(i:i) = strIn(i:i)
     end if
   end do
 end function to_lower

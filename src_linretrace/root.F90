@@ -953,70 +953,16 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   real(16), allocatable :: occupation(:,:,:)
 
   allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
-  ingap = .false.
-
-  if (.not. ingap) then
-    do is = 1,edisp%ispin
-      do ik = ikstr, ikend
-        do iband=1,edisp%nband_max
-          ! directly call the specific fermi function in order to avoid unnecessary many
-          ! vtable look-ups
-          occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-          occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weightQ(ik)
-
-          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
-
-          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
-        enddo
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occupation(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weightQ(ik)
       enddo
     enddo
-    occ_loc = sum(occupation)
-
-    do iband=1,edisp%nband_max
-      if (abs(2.q0 - sum(electrons(iband,:,:))) /= 2.q0) then! significant digits
-        locecc = 0.q0
-      else
-        locecc = sum(electrons(iband,:,:))
-      endif
-      if (abs(2.q0 - sum(holes(iband,:,:))) /= 2.q0) then! significant digits
-        lochole = 0.q0
-      else
-        lochole = sum(holes(iband,:,:))
-      endif
-      ! write(*,*) iband, sum(electrons(iband,:,:)), sum(holes(iband,:,:))
-    enddo
-  else
-    allocate(electrons(edisp%nband_max, ikstr:ikend, edisp%ispin))
-    allocate(holes(edisp%nband_max, ikstr:ikend, edisp%ispin))
-    electrons = 0.q0
-    holes = 0.q0
-    do is = 1,edisp%ispin
-      do ik = ikstr, ikend
-        do iband=1,edisp%nband_max
-          electrons(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-          electrons(iband,ik,is) = electrons(iband,ik,is) * kmesh%weightQ(ik)
-
-          holes(iband,ik,is) = omfermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-          holes(iband,ik,is) = holes(iband,ik,is) * kmesh%weightQ(ik)
-        enddo
-      enddo
-    enddo
-
-    ! do iband=1,edisp%nband_max
-    !   write(*,*) iband, sum(occupation(iband,:,:))
-    ! enddo
-    occ_loc = sum(electrons) - sum(holes)
-    ! write(*,*) mu, sum(electrons), sum(holes)
-    occ_loc = occ_loc + int(sum(occupation))
-    ! write(*,*) mu, occ_loc
-    deallocate(electrons)
-    deallocate(holes)
-  endif
+  enddo
+  occ_loc = sum(occupation)
 
   deallocate(occupation)
 
@@ -1146,9 +1092,7 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
   type(runinfo)         :: info
 
   integer :: ii, iimp
-  integer :: ibound
   real(8) :: densii, eneii
-  real(8) :: dist
 
   occimp = 0.d0
 
@@ -1161,37 +1105,40 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
       occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
         / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     else
-      if (imp%Bandtype(iimp) == 0) then ! box
-        densii = imp%Density(iimp) / 1001.d0
-        do ii=-500,500
-          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-          occimp = occimp + imp%Dopant(iimp)*densii &
-            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
-      else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
-                                             ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.d0 + 1) !5001.d0
-        ibound = int(imp%Bandcutoff(iimp) * 500.d0)
-        do ii=-ibound,ibound ! 2500,2500 ! we go to +- 2.5 * Gamma
-          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-          dist   = 1.d0/pi * 0.5d0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5d0 * imp%Bandwidth(iimp))**2 )
+      do ii=-500,500 ! this stays hard coded
 
-          occimp = occimp + imp%Dopant(iimp)*densii*dist &
-            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
+        ! we segment the interval into 1001 levels
+        eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
 
-      else if (imp%Bandtype(iimp) == 2) then ! Gaussian
+        ! we weigh the point according to the given shape
+        select case (imp%Bandtype(iimp))
+          case (1) ! box
+            densii = imp%Density(iimp) / 1001.d0
+          case (2) ! triangle
+            densii = imp%Density(iimp) * (500-abs(ii)) / 250.d0 &
+                                         / 1000.d0
+          case (3) ! half circle
+            densii = imp%Density(iimp) * sqrt(1.d0 - (abs(ii)/500.d0)) * pi / 2.d0 &
+                                         / 1047.16860575166042800611134879043d0
+          case (4) ! cosine
+            densii = imp%Density(iimp) * cos(ii/500.d0 * pi / 2.d0) &
+                                         / 636.619248768719616210088408079917d0
+          case (5) ! cosine^2
+            densii = imp%Density(iimp) * cos(ii/500.d0 * pi / 2.d0)**2.d0 &
+                                         / 500.d0
+          case (6) ! cosine^3
+            densii = imp%Density(iimp) * cos(ii/500.d0 * pi / 2.d0)**3.d0 &
+                                         / 424.413181578904334542728254502383d0
+          case (7) ! cosine^4
+            densii = imp%Density(iimp) * cos(ii/500.d0 * pi / 2.d0)**4.d0 &
+                                         / 375.d0
+        end select
+        ! the additional factors at the end were set such that the sum sum_ii densii = density
 
-        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.d0 + 1) !10001.d0
-        ibound = int(imp%Bandcutoff(iimp) * 500.d0)
-        do ii=-ibound,ibound ! 5000,5000 ! we go to +- 2.5 * sigma
-          eneii  = imp%Energy(iimp) + ii/1000.d0 * imp%Bandwidth(iimp)
-          dist   = 1.d0/(imp%Bandwidth(iimp) * sqrt(2.d0 * pi)) * exp(-0.5d0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
-          occimp = occimp + imp%Dopant(iimp)*densii*dist &
-            / (1.d0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
-
-      endif
+        ! and finally simply add the contribution
+        occimp = occimp + imp%Dopant(iimp)*densii &
+          / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-eneii)))
+      enddo
     endif
   enddo
 
@@ -1204,9 +1151,7 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
   type(runinfo)         :: info
 
   integer :: ii, iimp
-  integer :: ibound
   real(16) :: densii, eneii
-  real(16) :: dist
 
   occimp = 0.q0
 
@@ -1219,37 +1164,40 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
       occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
         / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
     else
-      if (imp%Bandtype(iimp) == 0) then ! box
-        densii = imp%Density(iimp) / 1001.q0
-        do ii=-500,500
-          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-          occimp = occimp + imp%Dopant(iimp)*densii &
-            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
-      else if (imp%Bandtype(iimp) == 1) then ! Lorentzian
-                                             ! 1/pi 0.5 Gamma / ((x-xo)**2 + (0.5*Gamma)**2 )
-        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.q0 + 1) !5001.d0
-        ibound = int(imp%Bandcutoff(iimp) * 500.q0)
-        do ii=-ibound, ibound ! -2500,2500 ! we go to +- 2.5 * Gamma
-          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-          dist   = 1.q0/piQ * 0.5q0 * imp%Bandwidth(iimp) / ((eneii - imp%Energy(iimp))**2 + (0.5q0 * imp%Bandwidth(iimp))**2 )
+      do ii=-500,500 ! this stays hard coded
 
-          occimp = occimp + imp%Dopant(iimp)*densii*dist &
-            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
+        ! we segment the interval into 1001 levels
+        eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
 
-      else if (imp%Bandtype(iimp) == 2) then ! Gaussian
+        ! we weigh the point according to the given shape
+        select case (imp%Bandtype(iimp))
+          case (1) ! box
+            densii = imp%Density(iimp) / 1001.q0
+          case (2) ! triangle
+            densii = imp%Density(iimp) * (500-abs(ii)) / 250.q0 &
+                                         / 1000.q0
+          case (3) ! half circle
+            densii = imp%Density(iimp) * sqrt(1.q0 - (abs(ii)/500.q0)) * pi / 2.q0 &
+                                         / 1047.16860575166042800611134879043q0
+          case (4) ! cosine
+            densii = imp%Density(iimp) * cos(ii/500.q0 * pi / 2.q0) &
+                                         / 636.619248768719616210088408079917q0
+          case (5) ! cosine^2
+            densii = imp%Density(iimp) * cos(ii/500.q0 * pi / 2.q0)**2.q0 &
+                                         / 500.q0
+          case (6) ! cosine^3
+            densii = imp%Density(iimp) * cos(ii/500.q0 * pi / 2.q0)**3.q0 &
+                                         / 424.413181578904334542728254502383q0
+          case (7) ! cosine^4
+            densii = imp%Density(iimp) * cos(ii/500.q0 * pi / 2.q0)**4.q0 &
+                                         / 375.q0
+        end select
+        ! the additional factors at the end were set such that the sum sum_ii densii = density
 
-        densii = imp%Density(iimp) / (2*imp%Bandcutoff(iimp) * 1000.q0 + 1) !10001.d0
-        ibound = int(imp%Bandcutoff(iimp) * 500.q0)
-        do ii=-ibound,ibound ! 5000,5000 ! we go to +- 2.5 * sigma
-          eneii  = imp%Energy(iimp) + ii/1000.q0 * imp%Bandwidth(iimp)
-          dist   = 1.q0/(imp%Bandwidth(iimp) * sqrt(2.q0 * piQ)) * exp(-0.5q0 * ((eneii - imp%Energy(iimp))/imp%Bandwidth(iimp))**2)
-          occimp = occimp + imp%Dopant(iimp)*densii*dist &
-            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
-        enddo
-
-      endif
+        ! and finally simply add the contribution
+        occimp = occimp + imp%Dopant(iimp)*densii &
+          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+      enddo
     endif
   enddo
 
