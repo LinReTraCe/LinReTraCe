@@ -1125,8 +1125,8 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
             densii = imp%Density(iimp) * (500-abs(ii)) / 250.d0 &
                                          / 1000.d0
           case (3) ! half circle
-            densii = imp%Density(iimp) * sqrt(1.d0 - (abs(ii)/500.d0)) * pi / 2.d0 &
-                                         / 1047.16860575166042800611134879043d0
+            densii = imp%Density(iimp) * sqrt(1.d0 - (ii/500.d0)**2.d0) &
+                                         / 785.371869250535197031882735354341d0
           case (4) ! cosine
             densii = imp%Density(iimp) * cos(ii/500.d0 * pi / 2.d0) &
                                          / 636.619248768719616210088408079917d0
@@ -1184,9 +1184,9 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
             densii = imp%Density(iimp) * (500-abs(ii)) / 250.q0 &
                                          / 1000.q0
           case (3) ! half circle
-            densii = imp%Density(iimp) * sqrt(1.q0 - (abs(ii)/500.q0)) * pi / 2.q0 &
-                                         / 1047.16860575166042800611134879043q0
-          case (4) ! cosine
+            densii = imp%Density(iimp) * sqrt(1.q0 - (ii/500.q0)**2.d0) &
+                                         / 785.371869250535197031882735354341q0
+          case (4) ! cosine .. we call it sine in the config
             densii = imp%Density(iimp) * cos(ii/500.q0 * pi / 2.q0) &
                                          / 636.619248768719616210088408079917q0
           case (5) ! cosine^2
