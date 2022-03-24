@@ -385,31 +385,21 @@ program main
       endif
     endif
     write(stdout,*)
-    write(stdout,*) 'CONFIG'
+    write(stdout,*) 'CHEMICAL POTENTIAL'
     if (algo%lTMODE) then
       if (algo%muSearch) then
         if (algo%muFermi) then
-          write(stdout,*) '  chemical potential via: Fermi function'
+          write(stdout,*) '  via: Fermi function'
         else
-          write(stdout,*) '  chemical potential via: Digamma function'
+          write(stdout,*) '  via: Digamma function'
         endif
       else
         if (algo%lOldmu) then
-          write(stdout,*) '  chemical potential: from file: ', trim(adjustl(algo%old_output_file))
+          write(stdout,*) '  from file: ', trim(adjustl(algo%old_output_file))
         else
-          write(stdout,*) '  chemical potential: constant: ', pot%MM(1)
+          write(stdout,*) '  constant: ', pot%MM(1)
         endif
       endif
-    endif
-    if (algo%lScatteringFile) then
-      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
-      write(stdout,*) '  additional impurity offset: ', sct%gamimp
-    else if (algo%lScatteringText) then
-      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
-      write(stdout,*) '  additional impurity offset: ', sct%gamimp
-    else
-      write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
-      write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
     endif
     if (algo%lImpurities) then
       write(stdout,*) '  impurity levels: ', imp%nimp
@@ -425,6 +415,18 @@ program main
             iimp, string, imp%Density(iimp), &
             imp%Energy(iimp), int(imp%Degeneracy(iimp)), imp%Bandwidth(iimp)
       enddo
+    endif
+    write(stdout,*)
+    write(stdout,*) 'SCATTERING'
+    if (algo%lScatteringFile) then
+      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
+      write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    else if (algo%lScatteringText) then
+      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
+      write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    else
+      write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
+      write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
     endif
     write(stdout,*)
     write(stdout,*) 'OUTPUT'
