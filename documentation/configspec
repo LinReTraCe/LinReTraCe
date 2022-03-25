@@ -54,22 +54,28 @@ Conduction = (default = None)                           # relative downwards shi
 Percentage = (default = None)                           # relative position inside the gap
 # Valence Conduction and Percentage only work for a gapped system
 
-# Absolute -- irrespective of spins
+# Absolute :
 # 4 numbers:    +1(donor)/-1(acceptor) density energy degeneracy
-# Valence Conduction Percentage
+
+# Valence Conduction Percentage :
 # 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
-# 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2(spin)
+# 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2 (spin)
 # if no spin is provided default to spin up
 # energy shifts are applied after adjusting the bandgap!
 
-# example donor
-# Conduction = +1 1e-8 0.02 1
-# example acceptor for spin down
-# Valence    = -1 1e-5 0.01 2 2
+# density : [per unit cell]
+# energy : [eV] or 0<p<1 for Percentage
 
-Bandtype   = (default = '')                             # 'Box', 'Lorentzian', 'Gaussian'
-Bandwidth  = (default = 0)                              # Bandwidth / Sigma in [eV] for the provided Bandtype
-Bandcutoff = (default = '1')                            # Energy cutoff for Lorentzian and Gaussian, in terms of bandwidth
+# example donor near conduction band
+# Conduction = +1 1e-8 0.02 1
+# example acceptor for spin down near valence band
+# Valence    = -1 1e-5 0.01 1 2
+# example donor level in the center of the band
+# Percentage = +1 1e-3 0.5 2
+
+Bandtype   = (default = '')                             # box, triangle, halfcircle, sine, sine2, sine3, sine4
+Bandwidth  = (default = 0)                              # Bandwidth in [eV] for the provided Bandtype
+                                                        # symmetric around given energy
 
 [[[2]]]
 ... # as many as there are NImp supplied
