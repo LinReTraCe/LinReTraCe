@@ -113,7 +113,9 @@ if __name__ == '__main__':
         if args.plot:
           plt.title(inpobj.fname)
           plt.show()
-    except BaseException as s:
+      else:
+        raise IOError('lrtc input file command not recognized')
+    except BaseException as e:
       error('\nERROR: '+str(e)+'\n')
 
     sys.exit(0)
