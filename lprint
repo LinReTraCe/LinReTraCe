@@ -89,7 +89,7 @@ if __name__ == '__main__':
     inpobj = LRTCinput(args.file)
   except IOError as e1:
     try:
-      outobj = LRTCoutput(args.file, dp=args.double)
+      outobj = LRTCoutput(args.file, altaxis=args.axis, dp=args.double)
     except IOError as e2:
       error('\n'+str(e1)+'\n'+str(e2))
 
@@ -134,6 +134,7 @@ if __name__ == '__main__':
           broadening = float(args.output[1])
           outobj.outputDOS(args.plot, broadening)
       else:
+        ''' response / quantity plotting / output '''
         if cmdlength == 1:
           outobj.outputData(cmd, args.imag, args.plot, args.diag, args.axis)
         else:
@@ -162,7 +163,16 @@ if __name__ == '__main__':
                 except:
                   break
 
-            outobj.outputData(icmd, args.imag, args.plot, args.diag, args.axis, *add_arguments)
+            outobj.outputData(icmd, args.imag, args.plot, args.diag, *add_arguments)
+
+        ''' finally, do some decorating '''
+        if args.plot:
+          plt.xlabel(outobj.axislatex, fontsize=14)
+          if outobj.mode == 'mu':
+            if args.axis:
+              plt.axvline(x=0, ls='--', color='gray') # carrier concentration are differences to 0
+            else:
+              plt.axvline(x=outobj.mudft, ls='--', color='gray', label=r'$\mu_{\mathrm{DFT}}$') # fermi level
         try:
           if outobj.mode == 'temp' and cmd == 'mu'  and args.plot:
             plt.axhline(y=outobj.mudft, ls='--', color='black', label=r'$\mu_{\mathrm{DFT}}$')

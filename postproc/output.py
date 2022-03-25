@@ -26,7 +26,7 @@ class LRTCoutput(object):
   saveData purely saves the requested data in the data dictionary
   while outputData additionally outputs said data either to stdout or plots it via matplotlib
   '''
-  def __init__(self, fname, dp=None):
+  def __init__(self, fname, altaxis=False, dp=None):
     self.fname    = fname.strip()
     self.datasets = OrderedDict({})
     self.owned    = OrderedDict({})
@@ -38,7 +38,7 @@ class LRTCoutput(object):
       self.quad = not dp # overwrite quad if wanted
       print('#\n#   DEBUG: USING DOUBLE PRECISION DATA')
 
-    self._get_axis()        # T / beta / mu / carrier axis
+    self._get_axis(altaxis) # get T / beta / mu / carrier axis, set the wanted one to self.axis
     self._defineDicts()     # define all possible response datasets internally
     self._retrieve_groups() # define available response datasets + spin
 
@@ -331,7 +331,7 @@ class LRTCoutput(object):
 
 
 
-  def outputData(self, command, imag=False, plot=False, diag=False, altaxis=False, *args):
+  def outputData(self, command, imag=False, plot=False, diag=False, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -344,32 +344,6 @@ class LRTCoutput(object):
 
     self.saveData(command, diag, *args)
     self.headerwritten = False
-
-    if self.mode == 'temp':
-      if altaxis:
-        axis = self.data['invtemp']
-        axisname = 'beta'
-        axisunit = '[eV^{-1}]'
-        axislatex = r'$\beta$ [eV$^{-1}$]'
-      else:
-        axis = self.data['temp']
-        axisname = 'T'
-        axisunit = '[K]'
-        axislatex = r'$T$ [K]'
-    elif self.mode == 'mu':
-      if altaxis:
-        axis = self.data['carrier']
-        axisname = 'n'
-        axisunit = '[cm^{-3}]'
-        axislatex = r'$n$ [cm$^{-3}$]'
-      else:
-        axis = self.data['mu']
-        axisname = 'mu'
-        axisunit = '[eV]'
-        axislatex = r'$\mu$ [eV]'
-    else:
-      raise ValueError('no properly defined x-axis to plot')
-
 
     response = self.owned[command][3]
     magnetic = self.owned[command][4]
@@ -444,36 +418,36 @@ class LRTCoutput(object):
 
 
               if plot:
-                plt.plot(axis, outarray.real, label='{}.real [{}]'.format(command, icombdescr))
-                if imag: plt.plot(axis, outarray.imag, label='{}.imag [{}]'.format(command, icombdescr))
+                plt.plot(self.axis, outarray.real, label='{}.real [{}]'.format(command, icombdescr))
+                if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}]'.format(command, icombdescr))
               else:
                 if idir3 is None:
                   auxarray = np.zeros((self.nT,3), dtype=np.int)
                   auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1], dtype=np.int)
 
                   if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i', \
                                header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2'.format \
-                               (axisname,axisunit,command))
+                               (self.axisname,self.axisunit,command))
                     self.headerwritten = True
 
                   else:
-                    np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
                 else:
                   auxarray = np.zeros((self.nT,4), dtype=np.int)
                   auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=np.int)
 
                   if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
                                header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3'.format \
-                               (axisname,axisunit,command))
+                               (self.axisname,self.axisunit,command))
                     self.headerwritten = True
 
                   else:
-                    np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
 
               # we have plotted it now, now break the idir3 loop
@@ -483,18 +457,10 @@ class LRTCoutput(object):
     else:
       outarray = self.data[command]
       if plot:
-        plt.plot(axis, outarray, label='{}'.format(command))
+        plt.plot(self.axis, outarray, label='{}'.format(command))
       else:
-        np.savetxt(self.textpipe, np.hstack((axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
-        (axisname,axisunit, self.owned[command][1]))
-
-    if plot:
-      plt.xlabel(axislatex, fontsize=14)
-      if self.mode == 'mu':
-        if altaxis:
-          plt.axvline(x=0, ls='--', color='gray') # carrier concentration are differences to 0
-        else:
-          plt.axvline(x=self.mudft, ls='--', color='gray', label=r'$\mu_{\mathrm{DFT}}$') # fermi level
+        np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
+        (self.axisname,self.axisunit, self.owned[command][1]))
 
 
   def outputList(self, full=False):
@@ -754,7 +720,7 @@ class LRTCoutput(object):
     except:
       raise IOError('Provided file is not an LRTC output file.')
 
-  def _get_axis(self):
+  def _get_axis(self, altaxis):
     '''
     Get the temperature and inverse temperature axis
     Also save the number of temperature steps
@@ -766,6 +732,31 @@ class LRTCoutput(object):
       self.mu      = h5['.quantities/mu'][()]
       self.mudft   = h5['.quantities/mudft'][()]
       self.nT      = self.temp.shape[0]
+
+    if self.mode == 'temp':
+      if altaxis:
+        self.axis = self.invtemp
+        self.axisname = 'beta'
+        self.axisunit = '[eV^{-1}]'
+        self.axislatex = r'$\beta$ [eV$^{-1}$]'
+      else:
+        self.axis = self.temp
+        self.axisname = 'T'
+        self.axisunit = '[K]'
+        self.axislatex = r'$T$ [K]'
+    elif self.mode == 'mu':
+      if altaxis:
+        self.axis = self.carrier
+        self.axisname = 'n'
+        self.axisunit = '[cm^{-3}]'
+        self.axislatex = r'$n$ [cm$^{-3}$]'
+      else:
+        self.axis = self.mu
+        self.axisname = 'mu'
+        self.axisunit = '[eV]'
+        self.axislatex = r'$\mu$ [eV]'
+    else:
+      raise ValueError('no properly defined x-axis to plot')
 
   def outputDOS(self, plot, broadening=0.02):
     '''
