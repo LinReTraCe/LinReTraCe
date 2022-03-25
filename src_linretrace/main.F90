@@ -384,9 +384,9 @@ program main
       write(stdout,*) '  new mu:            ', pot%mu_dft
       endif
     endif
-    write(stdout,*)
-    write(stdout,*) 'CHEMICAL POTENTIAL'
     if (algo%lTMODE) then
+      write(stdout,*)
+      write(stdout,*) 'CHEMICAL POTENTIAL'
       if (algo%muSearch) then
         if (algo%muFermi) then
           write(stdout,*) '  via: Fermi function'
