@@ -33,6 +33,7 @@ import structure.symmetries.OH
 
 from   structure import es
 from   structure.aux import levicivita
+from   structure.aux import progressBar
 
 # python 2 & 3 compatible usage of abstract base classes
 if sys.version_info >= (3, 4):
@@ -468,7 +469,7 @@ class tightbinding(Model):
       logger.info('Generating irreducible kpoints:')
 
       for ik in range(self.nkp):
-        es.ElectronicStructure.progressBar(ik+1,self.nkp,status='k-points')
+        progressBar(ik+1,self.nkp,status='k-points')
 
         if unique[ik] == 0: continue # skip if we already went there via symmetry
         irrk += 1    # new point -> increase irreducible counter
@@ -634,7 +635,7 @@ class tightbinding(Model):
       logger.info('Symmetrizing optical elements')
 
       for ikp in range(self.nkp):
-        es.ElectronicStructure.progressBar(ikp+1,self.nkp,status='k-points')
+        progressBar(ikp+1,self.nkp,status='k-points')
 
         vel     = self.velocities[0][ikp,:,:]
         cur     = self.curvatures[0][ikp,:,:]

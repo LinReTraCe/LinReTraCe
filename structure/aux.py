@@ -1,3 +1,8 @@
+#! /usr/bin/env python
+
+from __future__ import print_function, division, absolute_import
+import sys
+
 def levicivita(a,b,c):
   '''
   levi civity tensor hard coded for python input in range [0,1,2]
@@ -18,6 +23,20 @@ def levicivita(a,b,c):
   if a==3:
     if b==1: return 1  # 312
     else: return -1    # 321
+
+# The MIT License (MIT)
+# Copyright (c) 2016 Vladimir Ignatev
+# https://gist.github.com/vladignatyev/06860ec2040cb497f0f3
+def progressBar(count, total, status='', prefix=''):
+  bar_len = 60
+  filled_len = int(round(bar_len * count / float(total)))
+  percents = round(100.0 * count / float(total), 1)
+  bar = '=' * filled_len + '-' * (bar_len - filled_len)
+  sys.stdout.write('{} [{}] {}{} ... {}\r'.format(prefix, bar, percents, '%', status))
+  sys.stdout.flush()
+  if count == total:
+    sys.stdout.write('\n')
+    sys.stdout.flush()
 
 
 if __name__ == '__main__':

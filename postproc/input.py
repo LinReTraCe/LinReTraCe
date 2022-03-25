@@ -13,6 +13,7 @@ with warnings.catch_warnings():
   import h5py
 
 from structure import es
+from structure.dos import calcDOS
 
 class LRTCinput(object):
   '''
@@ -127,15 +128,15 @@ class LRTCinput(object):
       if spins==1:
         ene = h5['energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxis, dos, nos = LRTCinput.calcDOS(ene, weights, gamma=broadening)
+        dosaxis, dos, nos = calcDOS(ene, weights, gamma=broadening, windowsize=1.1)
         del ene
       else:
         eneup = h5['up/energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxisup, dosup, nosup = LRTCinput.calcDOS(eneup, weights, gamma=broadening)
+        dosaxisup, dosup, nosup = calcDOS(eneup, weights, gamma=broadening, windowsize=1.1)
         del eneup
         enedn = h5['dn/energies'][()]
-        dosaxisdn, dosdn, nosdn = LRTCinput.calcDOS(enedn, weights, gamma=broadening)
+        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, gamma=broadening, windowsize=1.1)
         del enedn
 
       if plot:
@@ -178,27 +179,3 @@ class LRTCinput(object):
                      header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
 
     print('') # empty line before next CLI input
-
-  @staticmethod
-  def calcDOS(energies, weights, windowsize=1.4, npoints=1000, gamma=0.02):
-    # first we find the energy interval
-    globmin = np.min(energies)
-    globmax = np.max(energies)
-
-    if windowsize < 1:
-      windowsize = 1
-    increase = (windowsize-1)/2.
-
-    # extend it a bit outwards
-    interval = globmax-globmin
-    globmin -= interval*increase
-    globmax += interval*increase
-
-    dosaxis = np.linspace(globmin,globmax,npoints)
-
-    dosresolved = es.ElectronicStructure.Lorentzian(dosaxis[None,None,:],energies[:,:,None],gamma)
-    dos = np.sum(dosresolved*weights[:,None,None],axis=(0,1))
-
-    nosresolved = es.ElectronicStructure.IntLorentzian(dosaxis[None,None,:],energies[:,:,None],gamma)
-    nos = np.sum(nosresolved*weights[:,None,None],axis=(0,1))
-    return dosaxis, dos, nos

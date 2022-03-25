@@ -7,6 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import numpy as np
+
 import BoltzTraP2.dft as BTP
 import BoltzTraP2.bandlib as BL
 import BoltzTraP2.io as IO
@@ -14,6 +15,8 @@ from BoltzTraP2 import sphere
 from BoltzTraP2 import fite
 from BoltzTraP2 import serialization
 from BoltzTraP2.misc import ffloat
+
+from structure.aux import progressBar
 
 try:
   import ase.spacegroup
@@ -333,7 +336,7 @@ class BTPInterpolation(object):
       opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
 
       for ikp in range(nkp):
-        es.ElectronicStructure.progressBar(ikp+1,nkp, status='k-points', prefix=prefix)
+        progressBar(ikp+1,nkp, status='k-points', prefix=prefix)
 
 
         vel     = self.velocities[ispin][ikp,:,:] # nbands, 3

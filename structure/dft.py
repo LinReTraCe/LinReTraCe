@@ -14,6 +14,8 @@ if sys.version_info >= (3, 4):
 else:
   ABC = abc.ABCMeta('ABC', (), {})
 
+from structure.aux import progressBar
+
 import scipy.optimize
 import numpy as np
 
@@ -525,7 +527,7 @@ class w2kcalculation(DFTcalculation):
 
           for ikp in range(self.nkp):
             if logger.getEffectiveLevel() in [logging.DEBUG,logging.INFO]:
-              ElectronicStructure.progressBar(ikp+1,self.nkp, status='k-points')
+              progressBar(ikp+1,self.nkp, status='k-points')
             # temp = mlist.readline().split() # read the KP: line
             temp = mlist.readline()
 
