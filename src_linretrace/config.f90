@@ -627,6 +627,13 @@ subroutine check_files(algo)
     endif
   endif
 
+  if (algo%lOldmuText) then
+    inquire (file=trim(adjustl(algo%input_mu_text)), exist=there)
+    if (.not. there) then
+      call stop_with_message(stderr, "Can not find the OldOutputText file")
+    endif
+  endif
+
 end subroutine check_files
 
 end module Mconfig
