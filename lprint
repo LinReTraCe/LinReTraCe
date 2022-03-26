@@ -138,7 +138,7 @@ if __name__ == '__main__':
       else:
         ''' response / quantity plotting / output '''
         if cmdlength == 1:
-          outobj.outputData(cmd, args.imag, args.plot, args.diag, args.axis)
+          outobj.outputData(cmd, args.imag, args.plot, args.diag)
         else:
           # we iterate through the list and check the following arguments
           for i,icmd in enumerate(args.output):

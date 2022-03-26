@@ -1006,7 +1006,7 @@ subroutine read_muT_text(temp, inputmu, mu)
   ! now we read this string array into the according data arrays
 
   do i=1,temp%nT
-    read(file_save(i),*) mu(i)
+    read(file_save(i),*) fdum1, mu(i)
   enddo
 
 end subroutine

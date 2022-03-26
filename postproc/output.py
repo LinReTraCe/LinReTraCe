@@ -46,6 +46,7 @@ class LRTCoutput(object):
       self.textpipe = sys.stdout.buffer
     else:
       self.textpipe = sys.stdout
+    sys.stdout.flush()      # so all the output afterwards comes after ther information
 
   def __repr__(self):
     return ('LRTCoutput(fname={0.fname!r})'.format(self))
