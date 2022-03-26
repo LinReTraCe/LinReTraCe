@@ -77,7 +77,7 @@ def main_mumode():
   ''' create output file '''
   scatobj.createOutput('scattering_file.hdf5')
 
-def main_kdependence():
+def main_momentum_dependence():
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
   nt = 100 # steps
@@ -99,7 +99,33 @@ def main_kdependence():
   scatobj.defineScatteringRates(gamma)
   scatobj.createOutput('scattering_file.hdf5')
 
-def main_epsdependence():
+def main_energy_direct_dependence():
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+  nt = 100 # steps
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
+
+  ''' get energy grid and dft mu '''
+  energies = scatobj.getEnergies()  # shape: spins, nkp, bands
+  mudft    = scatobj.mudft
+
+  ''' define gamma(spin,nkp,band) ... temperature independent
+      if we have a direct dependence gamma(k) ~ energy(k)
+      we can simply use the direct dependence '''
+  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma[0,...]  = (energies-mudft)**2. / 10000.
+  gamma[1:,...] = gamma[0,...]
+
+  ''' truncate below 1e-10 eV '''
+  gamma[gamma<1e-10] = 1e-10
+
+  scatobj.defineScatteringRates(gamma)
+  scatobj.createOutput('scattering_file.hdf5')
+
+def main_energy_generic_dependence():
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
   nt = 100 # steps
@@ -116,10 +142,11 @@ def main_epsdependence():
   enemin = energies.min()
   enemax = energies.max()
   print('min energy: {}\nmax energy: {}'.format(enemin,enemax))
-  interval = enemax-enemin
-  eneaxis = np.linspace(enemin-interval*0.025,enemax+interval*0.025,5001)
+  eneaxis = np.linspace(enemin,enemax,5001)
 
-  ''' define gamma(energy) '''
+  ''' define generic gamma(energy)
+      this method is necessary when the dependence is not direct
+      but indirect via a generic distribution Gamma(epsilon) '''
   gammaeps = (eneaxis-mudft)**2 / 10000.
 
   try:
@@ -129,7 +156,7 @@ def main_epsdependence():
   except:
     pass
 
-  ''' get the mapping spin,nkp,band <-> energy '''
+  ''' get the mapping eps(spin,nkp,band) <-> axis element '''
   where = np.argmin(np.abs(energies[None,...] - eneaxis[:,None,None,None]), axis=0)
 
   ''' define gamma(spin,nkp,band) ... temperature independent '''
