@@ -6,12 +6,6 @@ import abc
 import logging
 logger = logging.getLogger(__name__)
 
-# python 2 & 3 compatible usage of abstract base classes
-if sys.version_info >= (3, 4):
-  ABC = abc.ABC
-else:
-  ABC = abc.ABCMeta('ABC', (), {})
-
 import scipy.optimize
 import numpy as np
 
@@ -25,12 +19,16 @@ class Converged(Exception):
     super(Converged, self).__init__(self)
     self.mu = mu
 
-class ElectronicStructure(ABC):
+class ElectronicStructure(object):
   '''
-  Abstract Base class for electronic structures (DFTcalculation and all models).
+  Parent class for all electronic structures.
   Here we define all the common elements:
-  Number of k-points, multiplicity, weights, etc.
-  and define common methods.
+  Number of spins, k-points, multiplicity, weights, etc.
+  This class provides the internal methods to find the 'DFT' mu, i.e.
+  the chemical potential for T=0: _calcFermiLevel(mu=None)
+
+  Before using the output functino h5out in inout.py this must be called
+  in order to set the required internal variables that are output
   '''
 
   def __init__(self):
@@ -43,11 +41,11 @@ class ElectronicStructure(ABC):
     self.multiplicity   = None # multiplicity of the k-points
     self.weights        = None # weights of the k-points
     self.weightsum      = 0    # sum of the weights
-    self.kpoints        = None # list of the k-points
+    self.kpoints        = None # list of the k-points ... shape [nkp,3] float64
     self.irreducible    = False# irreducible or reducible k-grid
 
     self.spins          = 1    # number of spins we are considering
-    self.vol            = 0    # volume of the unit cell
+    self.vol            = 0    # volume of the unit cell in AA^3
     self.charge         = 0    # charge in the given bands
     self.mu             = 0    # chemical potential
 
@@ -60,13 +58,13 @@ class ElectronicStructure(ABC):
     self.dims           = np.array([False,False,False]) # valid dimension, i.e. k_i > 1
 
     # information about bands
-    self.energies       = []   # list for energy arrays
+    self.energies       = []   # list entries for energies elements are the respective spins
+                               # entries themselves are shape [nkp,bands] float64
     self.energyBandMax  = 0    # band maximum for energies
 
     # information about optical elements
-    self.optic          = False
-    self.opticfull      = False
-    self.opticdiag      = False
+    self.opticfull      = False # full optical elements (inter+intra)
+    self.opticdiag      = False # intra band optical elements
     self.opticalMoments = []   # list for full optical elements
     self.opticalDiag    = []   # list for band-diagonal optical elements
     self.opticalBandMin = 0    # band interval minimum for optical elements

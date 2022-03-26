@@ -51,7 +51,6 @@ class Model(ElectronicStructure, ABC):
   def __init__(self, nkx, nky, nkz):
     super(Model, self).__init__()
 
-    self.optic          = False
     self.opticdiag      = True
     self.opticfull      = False
 
@@ -78,6 +77,10 @@ class Model(ElectronicStructure, ABC):
 
   @abc.abstractmethod
   def computeData(self):
+    '''
+    Abstract method which is always called when computing the
+    electronic structure and optical elements of the model
+    '''
     pass
 
   def _defineDimension(self):
