@@ -110,6 +110,8 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
   enddo
 
   ! Adjust the flags
+  edisp%gap_min = 0.d0
+  edisp%gapped_complete = .false.
   if (edisp%ispin == 1) then
     if (edisp%gapped(1) .eqv. .true.) then
       edisp%gapped_complete = .true.
@@ -122,9 +124,6 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
       edisp%gap_min = minval(edisp%ene_conductionBand) - maxval(edisp%ene_valenceBand)
       mu = (minval(edisp%ene_conductionBand) + maxval(edisp%ene_valenceBand)) / 2.d0
     endif
-  else
-    edisp%gap_min = 0.d0
-    edisp%gapped_complete = .false.
   endif
 
   pot%mu_dft = mu ! finally, save it into the data structure

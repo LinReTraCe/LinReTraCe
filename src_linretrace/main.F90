@@ -511,6 +511,11 @@ program main
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
       call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      ! in case we have band shifts we might open or close the DFT gap
+      ! for that reason : redo the mudft calculation and set the flags for each step
+      ! if (algo%lTMODE .and. edisp%lBandShift) then
+      !   call find_mu_DFT(edisp,kmesh,pot)
+      ! endif
     else if (algo%lTMODE .and. algo%lScatteringText) then
       sct%gam = sct%gamtext(iT)
       sct%zqp = sct%zqptext(iT)
