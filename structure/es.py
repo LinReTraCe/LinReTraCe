@@ -6,6 +6,12 @@ import abc
 import logging
 logger = logging.getLogger(__name__)
 
+# python 2 & 3 compatible usage of abstract base classes
+if sys.version_info >= (3, 4):
+  ABC = abc.ABC
+else:
+  ABC = abc.ABCMeta('ABC', (), {})
+
 import scipy.optimize
 import numpy as np
 
@@ -19,15 +25,15 @@ class Converged(Exception):
     super(Converged, self).__init__(self)
     self.mu = mu
 
-class ElectronicStructure(object):
+class ElectronicStructure(ABC):
   '''
-  Parent class for all electronic structures.
+  Abstract Parent class for all electronic structures.
   Here we define all the common elements:
   Number of spins, k-points, multiplicity, weights, etc.
+
   This class provides the internal methods to find the 'DFT' mu, i.e.
   the chemical potential for T=0: _calcFermiLevel(mu=None)
-
-  Before using the output functino h5out in inout.py this must be called
+  Before using the output function h5out in inout.py this must be called
   in order to set the required internal variables that are output
   '''
 
@@ -67,6 +73,7 @@ class ElectronicStructure(object):
     self.opticdiag      = False # intra band optical elements
     self.opticalMoments = []   # list for full optical elements
     self.opticalDiag    = []   # list for band-diagonal optical elements
+    self.BopticalDiag   = []   # list for band-diagonal magnetic optical elements
     self.opticalBandMin = 0    # band interval minimum for optical elements
     self.opticalBandMax = 0    # band interval maximum for optical elements
 
