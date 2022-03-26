@@ -72,6 +72,8 @@ class LRTCscat(object):
     self.betas = 1.0/(self.temps * kB) # beta interval on eV^-1
     self.mus = np.ones_like(self.temps, dtype=np.float64) * self.mudft
 
+    return self.temps
+
   def defineChemicalPotentials(self, temp, mumin, mumax, nmu, mlog=False, muabs=False):
     '''
         Define temperature which to run on and
@@ -101,6 +103,8 @@ class LRTCscat(object):
 
     self.temps = np.ones_like(self.mus, dtype=np.float64) * temp
     self.betas = 1.0/(self.temps * kB) # beta interval on eV^-1
+
+    return self.mus
 
   def defineScatteringRates(self, scattering, qpweight=None, bandshift=None):
     '''

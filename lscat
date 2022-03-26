@@ -12,51 +12,32 @@ from  scattering.inout import LRTCscat
 
 '''
 lscat: user script to create more elaborate scattering data
-
-ways to include scattering data
-1. simplistic user input via config file:
-   Z(T), gamma(T) in form of a polynomial -> "ScatteringCoefficients", "QuasiParticleCoefficients"
-
-2. simplistic user input via text file
-   Z(T), gamma(T) as columns -> "ScatteringText"
-
-3. gamma(T) with arbitrary dependencies (spin, momentum, band)
-   use _this_ script and manipulate the generated arrays before they get saved
-
 '''
 
 __author__     = 'Matthias Pickem'
 __maintainer__ = 'Matthias Pickem'
 __email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.2'
+__version__    = '0.4'
 __status__     = 'Dev'
 __license__    = 'GPLv3'
 __credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
 
 
-def main_temp():
+def main_tempmode():
   ''' load LRTC energy file '''
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
 
   ''' define temperature grid in Kelvin - logarithmic steps or linear steps'''
   nt = 100 # steps
-  scatobj.defineTemperatures(tmin = 10, \
-                             tmax = 300, \
-                             nt   = nt, \
-                             tlog = True)
-
-  ''' get momentum grid : kpoints are on range [0,1) defined'''
-  kgrid = scatobj.getMomentumGrid() # shape: nkp, 3
-  print(kgrid)
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
 
   ''' create scattering numpy array '''
-  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
-
-  ''' create functional dependency for all temperatures, spins and bands '''
-  gamma[...] = np.sum(np.sin(kgrid*2*np.pi)**2,axis=1)[None,None,:,None]
-  gamma /= 3000.
-  gamma[gamma<1e-7] = 1e-7 # introduce scattering cut-off
+  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma *= 1e-7
 
   ''' load the array into the instantiated object '''
   scatobj.defineScatteringRates(gamma)
@@ -64,32 +45,70 @@ def main_temp():
   ''' create output file '''
   scatobj.createOutput('scattering_file.hdf5')
 
-def main_temp_nokdependence():
+
+def main_mumode():
+  ''' load LRTC energy file '''
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+
+  ''' define chemical potential grid in eV
+      if muabs: take the values as they are
+      if not muabs: interpret them as difference to mu_DFT '''
+  nt = 100 # steps
+  mus = scatobj.defineChemicalPotentials(temp = 300, \
+                                         mumin = -3, \
+                                         mumax = +3, \
+                                         nmu   = nt, \
+                                         muabs = False)
+
+  ''' create scattering numpy array unit: eV '''
+  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma *= 1e-7
+
+  ''' create quasi particle weight numpy array: range (0,1] '''
+  qpweight = np.ones_like(gamma, dtype=np.float64)
+  qpweight *= 0.5 # Z = 0.5 throughout
+
+  ''' load the array into the instantiated object '''
+  scatobj.defineScatteringRates(scattering = gamma, \
+                                qpweight   = qpweight, \
+                                bandshift  = None)
+
+  ''' create output file '''
+  scatobj.createOutput('scattering_file.hdf5')
+
+def main_kdependence():
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
   nt = 100 # steps
-  scatobj.defineTemperatures(tmin = 10, \
-                             tmax = 300, \
-                             nt   = nt, \
-                             tlog = True)
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
 
-  ''' OVERWRITE the number of k-points -> no k-dependence '''
-  nkp = 1
+  ''' get momentum grid '''
+  kgrid = scatobj.getMomentumGrid() # shape: nkp, 3
 
-  gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
-  gamma *= 1e-3
+  ''' create functional dependency for all temperatures, spins and bands '''
+  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
+  gammak = np.sum(np.sin(kgrid*2*np.pi)**2,axis=1)
+  gamma[...] = gammak[None,None,:,None]
+  gamma /= 3000.
+  gamma[gamma<1e-10] = 1e-10 # introduce scattering cut-off
+
   scatobj.defineScatteringRates(gamma)
   scatobj.createOutput('scattering_file.hdf5')
 
-def main_temp_epsdependence():
+def main_epsdependence():
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
   nt = 100 # steps
-  scatobj.defineTemperatures(tmin = 10, \
-                             tmax = 300, \
-                             nt   = nt, \
-                             tlog = True)
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
 
+  ''' get energy grid and dft mu '''
   energies = scatobj.getEnergies()  # shape: spins, nkp, bands
   mudft    = scatobj.mudft
 
@@ -98,7 +117,7 @@ def main_temp_epsdependence():
   enemax = energies.max()
   print('min energy: {}\nmax energy: {}'.format(enemin,enemax))
   interval = enemax-enemin
-  eneaxis = np.linspace(enemin-interval*0.025,enemax+interval*0.025,1000)
+  eneaxis = np.linspace(enemin-interval*0.025,enemax+interval*0.025,5001)
 
   ''' define gamma(energy) '''
   gammaeps = (eneaxis-mudft)**2 / 10000.
@@ -124,38 +143,44 @@ def main_temp_epsdependence():
   scatobj.defineScatteringRates(gamma)
   scatobj.createOutput('scattering_file.hdf5')
 
-def main_mu():
-
-  ''' load LRTC energy file '''
+def main_banddependence():
   scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
   spins, nkp, nbands = scatobj.getDependencies()
-
-  ''' define chemical potential grid in eV
-      if muabs: take the values as they are
-      if not muabs: interpret them as difference to mu_DFT '''
   nt = 100 # steps
-  scatobj.defineChemicalPotentials(temp = 300, \
-                                   mumin = -3, \
-                                   mumax = +3, \
-                                   nmu   = nt, \
-                                   muabs = False)
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
 
-  ''' create scattering numpy array unit: eV '''
+  ''' scattering that is k-independent
+      nkp <- 1  ... removes k-dependence (saves storage)
+      first three bands different to the rest '''
+  nkp = 1
   gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
-  gamma *= 1e-5
+  gamma[:,:,:,:3] = 1e-5
+  gamma[:,:,:,3:] = 3e-5
 
-  ''' create quasi particle weight numpy array: range (0,1] '''
-  qpweight = np.ones_like(gamma, dtype=np.float64)
-  qpweight *= 0.5 # Z = 0.5 throughout
-
-  ''' load the array into the instantiated object '''
-  scatobj.defineScatteringRates(scattering = gamma, \
-                                qpweight   = qpweight, \
-                                bandshift  = None)
-
-  ''' create output file '''
+  scatobj.defineScatteringRates(gamma)
   scatobj.createOutput('scattering_file.hdf5')
 
+def main_tempddependence():
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+  nt = 100 # steps
+  temps = scatobj.defineTemperatures(tmin = 10, \
+                                     tmax = 300, \
+                                     nt   = nt, \
+                                     tlog = True)
+
+  ''' define temperature dependence
+      remove all momentum and band dependence '''
+  nkp = nbands = 1
+  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
+  gammaT = 1e-8 + 1e-10 * temps
+  gamma[...] = gammaT[:,None,None,None]
+
+  scatobj.defineScatteringRates(gamma)
+  scatobj.createOutput('scattering_file.hdf5')
 
 def setLogger():
   ''' some logging '''
