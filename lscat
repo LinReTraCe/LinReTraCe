@@ -81,6 +81,49 @@ def main_temp_nokdependence():
   scatobj.defineScatteringRates(gamma)
   scatobj.createOutput('scattering_file.hdf5')
 
+def main_temp_epsdependence():
+  scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+  spins, nkp, nbands = scatobj.getDependencies()
+  nt = 100 # steps
+  scatobj.defineTemperatures(tmin = 10, \
+                             tmax = 300, \
+                             nt   = nt, \
+                             tlog = True)
+
+  energies = scatobj.getEnergies()  # shape: spins, nkp, bands
+  mudft    = scatobj.mudft
+
+  ''' define energy range '''
+  enemin = energies.min()
+  enemax = energies.max()
+  print('min energy: {}\nmax energy: {}'.format(enemin,enemax))
+  interval = enemax-enemin
+  eneaxis = np.linspace(enemin-interval*0.025,enemax+interval*0.025,1000)
+
+  ''' define gamma(energy) '''
+  gammaeps = (eneaxis-mudft)**2 / 10000.
+
+  try:
+    import matplotlib.pyplot
+    plt.plot(eneaxis,gammaeps)
+    plt.show()
+  except:
+    pass
+
+  ''' get the mapping spin,nkp,band <-> energy '''
+  where = np.argmin(np.abs(energies[None,...] - eneaxis[:,None,None,None]), axis=0)
+
+  ''' define gamma(spin,nkp,band) ... temperature independent '''
+  gamma = np.zeros((nt, spins, nkp, nbands), dtype=np.float64)
+  gamma[0,...]  = gammaeps[where]
+  gamma[1:,...] = gamma[0,...]
+
+  ''' truncate below 1e-10 eV '''
+  gamma[gamma<1e-10] = 1e-10
+
+  scatobj.defineScatteringRates(gamma)
+  scatobj.createOutput('scattering_file.hdf5')
+
 def main_mu():
 
   ''' load LRTC energy file '''
@@ -132,5 +175,5 @@ def setLogger():
 
 if __name__ == '__main__':
   logger = setLogger()
-  logger.warning('lscat only serves illustrative purposes.')
+  logger.warning('lscat only serves illustrative purposes (code snippets).')
   logger.warning('Copy lscat_template in your working directory and adjust for your purposes.\n\n')

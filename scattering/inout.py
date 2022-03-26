@@ -132,6 +132,9 @@ class LRTCscat(object):
     except:
       raise IOError('Scattering array shape mismatch')
 
+    if np.any(self.scattering < 1e-14):
+      logger.warning('\n\nScattering rates below 10^{-14} eV detected.\nPlease introduce cutoff to avod numberical problems.\n\n')
+
     try:
       if qpweight is not None:
         assert(self.qpweight.shape == self.scattering.shape)
