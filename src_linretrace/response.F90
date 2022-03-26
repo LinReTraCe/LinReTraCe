@@ -1687,7 +1687,8 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ ! this is the occupation
+        elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ &
+          * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ ! this is the occupation
         holes = 1.q0 - elecs ! should be enough accuracy
 
         if (algo%lTMODE) then

@@ -1045,8 +1045,8 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
       do ik = ikstr, ikend
         do iband=1,edisp%nband_max
           ! only calculate the '0th' polygamma function
-          psikern = 1.q0/piQ * aimag(wpsipghp(0.5q0 + info%betaQ/2.q0/piQ * \
-                             (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)),0))
+          psikern = 1.q0/piQ * aimag(wpsipghp(0.5q0 + info%betaQ/2.q0/piQ &
+                             * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)),0))
           elec = 0.5q0 - psikern
           hole = 0.5q0 + psikern
           ! here we take the smaller of the two quantities

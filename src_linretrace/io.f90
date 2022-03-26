@@ -331,7 +331,7 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
 
   call hdf5_read_data(ifile, "/.quantities/tempmode",  ltemp)
 
-  if (algo%lTMODE /= ltemp) then
+  if (algo%lTMODE .neqv. ltemp) then
     call stop_with_message(stderr, "Scattering File mode does not coincide with Config file mode")
   endif
 
@@ -489,7 +489,7 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
   do i=1,temp%nT
-    read(file_save(i),'(3F)') temp%TT(i), sct%gamtext(i), sct%zqptext(i)
+    read(file_save(i),*) temp%TT(i), sct%gamtext(i), sct%zqptext(i)
   enddo
   temp%tmin = minval(temp%TT)
   temp%tmax = maxval(temp%TT)
@@ -1006,7 +1006,7 @@ subroutine read_muT_text(temp, inputmu, mu)
   ! now we read this string array into the according data arrays
 
   do i=1,temp%nT
-    read(file_save(i),'(1F)') mu(i)
+    read(file_save(i),*) mu(i)
   enddo
 
 end subroutine
