@@ -513,12 +513,17 @@ program main
       ! in case we have band shifts we might open or close the DFT gap
       ! for that reason : redo the mudft calculation and set the flags for each step
       ! also change the algorithm if necessary to speed things up / make things more robust
+      ! but only when there is no debugstring overwriting it
       if (algo%lTMODE .and. edisp%lBandShift) then
         call find_mu_DFT(edisp,kmesh,pot)
-        if (algo%muFermi .and. edisp%gapped_complete) then
-          algo%rootMethod = 3
-        else
-          algo%rootMethod = 2
+        if (.not. (algo%ldebug .and. ((index(algo%dbgstr,"Bisection") .ne. 0) .or. &
+                                      (index(algo%dbgstr,"Ridders") .ne. 0) .or. &
+                                      (index(algo%dbgstr,"Secant") .ne. 0)))) then
+          if (algo%muFermi .and. edisp%gapped_complete) then
+            algo%rootMethod = 3
+          else
+            algo%rootMethod = 2
+          endif
         endif
       endif
     else if (algo%lTMODE .and. algo%lScatteringText) then
