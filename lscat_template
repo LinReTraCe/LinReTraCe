@@ -8,7 +8,7 @@ import numpy as np
 import h5py
 
 ''' insert the linretrace path here to get access to the LRTCscat class '''
-sys.path.insert(0,'~/linretrace')
+sys.path.insert(0,'/home/user/linretrace')
 from  scattering.inout import LRTCscat
 
 ''' define object via lrtc energy file '''
@@ -56,7 +56,7 @@ scatobj.defineTemperatures(tmin = 10, \
 ''' define Gamma, Z and energy shift dependence '''
 gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
 gamma *= 1e-3
-qpweight = np_ones_like(gamma, dtype=np.float64)
+qpweight = np.ones_like(gamma, dtype=np.float64)
 bandshift = np.zeros_like(gamma, dtype=np.float64)
 
 ''' create output.
