@@ -110,23 +110,6 @@ program main
     edisp%doping = edisp%doping * 1.d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
   endif
 
-  if (algo%muFermi .and. edisp%gapped_complete) then
-    algo%rootMethod = 3
-  else
-    algo%rootMethod = 2
-  endif
-
-  ! debug strings to overwrite the standard behavior
-  if (algo%ldebug) then
-    if (index(algo%dbgstr,"Bisection") .ne. 0) then
-      algo%rootMethod = 3
-    else if (index(algo%dbgstr,"Ridders") .ne. 0) then
-      algo%rootMethod = 2
-    else if (index(algo%dbgstr,"Secant") .ne. 0) then
-      algo%rootMethod = 0
-    endif
-  endif
-
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -136,7 +119,6 @@ program main
      call mpi_barrier(mpi_comm_world, mpierr)
   endif
 #endif
-
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
@@ -160,6 +142,23 @@ program main
   else
     ! use the value from the energy file
     pot%mu_dft = pot%mu_dft_file
+  endif
+
+  if (algo%muFermi .and. edisp%gapped_complete) then
+    algo%rootMethod = 3
+  else
+    algo%rootMethod = 2
+  endif
+
+  ! debug strings to overwrite the standard behavior
+  if (algo%ldebug) then
+    if (index(algo%dbgstr,"Bisection") .ne. 0) then
+      algo%rootMethod = 3
+    else if (index(algo%dbgstr,"Ridders") .ne. 0) then
+      algo%rootMethod = 2
+    else if (index(algo%dbgstr,"Secant") .ne. 0) then
+      algo%rootMethod = 0
+    endif
   endif
 
   if (algo%lImpurities) then
@@ -513,9 +512,15 @@ program main
       call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
       ! in case we have band shifts we might open or close the DFT gap
       ! for that reason : redo the mudft calculation and set the flags for each step
-      ! if (algo%lTMODE .and. edisp%lBandShift) then
-      !   call find_mu_DFT(edisp,kmesh,pot)
-      ! endif
+      ! also change the algorithm if necessary to speed things up / make things more robust
+      if (algo%lTMODE .and. edisp%lBandShift) then
+        call find_mu_DFT(edisp,kmesh,pot)
+        if (algo%muFermi .and. edisp%gapped_complete) then
+          algo%rootMethod = 3
+        else
+          algo%rootMethod = 2
+        endif
+      endif
     else if (algo%lTMODE .and. algo%lScatteringText) then
       sct%gam = sct%gamtext(iT)
       sct%zqp = sct%zqptext(iT)
