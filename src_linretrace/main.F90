@@ -171,10 +171,9 @@ program main
     if (algo%lScatteringFile) then
       ! at this point we just extract the temperature ranges
       ! and check wether bandshifts exist
-      ! the scattering rates then gets loaded for each temperature-point
       call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
-    ! else if (algo%lScatteringText) then
-    !   call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
+    else if (algo%lScatteringText) then
+      call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
     else
       if (temp%nT .gt. 1) then
         if (temp%tlogarithmic) then
@@ -421,11 +420,11 @@ program main
     write(stdout,*)
     write(stdout,*) 'SCATTERING'
     if (algo%lScatteringFile) then
-      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
+      write(stdout,*) '  HDF5 scattering-file: ', trim(algo%input_scattering_hdf5)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
-    ! else if (algo%lScatteringText) then
-    !   write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
-    !   write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    else if (algo%lScatteringText) then
+      write(stdout,*) '  TEXT scattering-file: ', trim(algo%input_scattering_text)
+      write(stdout,*) '  additional impurity offset: ', sct%gamimp
     else
       if (edisp%ispin == 1) then
         write(stdout,*) '  scattering coefficients: ', sct%gamcoeff(1,:)
@@ -545,14 +544,16 @@ program main
           endif
         endif
       endif
-    ! else if (algo%lTMODE .and. algo%lScatteringText) then
-    !   sct%gam = sct%gamtext(iT)
-    !   sct%zqp = sct%zqptext(iT)
-    !   if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
-    !     call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
-    !     sct%zqp = 1.d0
-    !   endif
-    !   sct%gam = sct%zqp * sct%gam
+    else if (algo%lTMODE .and. algo%lScatteringText) then
+      do is=1,edisp%ispin
+        sct%gam(:,:,is) = sct%gamtext(iT,is)
+        sct%zqp(:,:,is) = sct%zqptext(iT,is)
+        if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
+          call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
+          sct%zqp(:,:,is) = 1.d0
+        endif
+      enddo
+      sct%gam = sct%zqp * sct%gam
     else ! this is entered for both the MuMode and the TempMode
       ! here we are wasting memory however
       ! otherwise we would have to write every single response twice

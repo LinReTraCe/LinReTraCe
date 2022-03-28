@@ -117,7 +117,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lQuad                 = .true.
 
   algo%lScatteringFile = .false.
-  ! algo%lScatteringText = .false.
+  algo%lScatteringText = .false.
 
   algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
@@ -401,20 +401,20 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     !--------------------------------------------------------------------------------
-    allocate(dictionary(12))
+    allocate(dictionary(13))
     dictionary(1) = 'ScatteringFile'
-    ! dictionary(2) = 'ScatteringText'
-    dictionary(2) = 'ScatteringImpurity'
-    dictionary(3) = 'TMinimum'
-    dictionary(4) = 'TMaximum'
-    dictionary(5) = 'TPoints'
-    dictionary(6) = 'TLogarithmic'
-    dictionary(7) = 'ScatteringCoefficients'
-    dictionary(8) = 'UpScatteringCoefficients'
-    dictionary(9) = 'DnScatteringCoefficients'
-    dictionary(10)= 'QuasiParticleCoefficients'
-    dictionary(11)= 'UpQuasiParticleCoefficients'
-    dictionary(12)= 'DnQuasiParticleCoefficients'
+    dictionary(2) = 'ScatteringText'
+    dictionary(3) = 'ScatteringImpurity'
+    dictionary(4) = 'TMinimum'
+    dictionary(5) = 'TMaximum'
+    dictionary(6) = 'TPoints'
+    dictionary(7) = 'TLogarithmic'
+    dictionary(8) = 'ScatteringCoefficients'
+    dictionary(9) = 'UpScatteringCoefficients'
+    dictionary(10)= 'DnScatteringCoefficients'
+    dictionary(11)= 'QuasiParticleCoefficients'
+    dictionary(12)= 'UpQuasiParticleCoefficients'
+    dictionary(13)= 'DnQuasiParticleCoefficients'
     call spell_check(subsearch_start,subsearch_end, '[TempMode] [[Scattering]]', dictionary, er, erstr)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
@@ -427,17 +427,21 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%lScatteringFile = .false.
     endif
 
-    if (.not. algo%lScatteringFile) then
-      ! call string_find('ScatteringText', algo%input_scattering_text, subsearch_start, subsearch_end, found)
-      ! if (found) then
-      !   algo%lScatteringText = .true.
-      ! else
-      !   algo%lScatteringText = .false.
-      ! endif
-        call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
-        if (found) call stop_with_message(stderr, 'ScatteringImpurity is only valid in combination with ScatteringFile')
+    call string_find('ScatteringText', algo%input_scattering_text, subsearch_start, subsearch_end, found)
+    if (found) then
+      algo%lScatteringText = .true.
+    else
+      algo%lScatteringText = .false.
+    endif
 
-      ! if (.not. algo%lScatteringText) then
+    if (algo%lScatteringFile .and. algo%lScatteringText) then
+      call stop_with_message(stdout, 'Provide either ScatteringFile OR ScatteringText')
+    endif
+
+    if (.not. (algo%lScatteringFile .or. algo%lScatteringText)) then
+        call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+        if (found) call stop_with_message(stderr, 'ScatteringImpurity is only valid in combination with ScatteringFile or ScatteringText')
+
         call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
         call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
@@ -507,7 +511,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           sct%zqpcoeff(2,:size(floatntemp)) = floatntemp
           deallocate(floatntemp)
         endif
-      ! endif
 
       edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
@@ -688,12 +691,12 @@ subroutine check_files(algo)
     endif
   endif
 
-  ! if (algo%lScatteringText) then
-  !   inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
-  !   if (.not. there) then
-  !     call stop_with_message(stderr, "Can not find the ScatteringText")
-  !   endif
-  ! endif
+  if (algo%lScatteringText) then
+    inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
+    if (.not. there) then
+      call stop_with_message(stderr, "Can not find the ScatteringText")
+    endif
+  endif
 
   if (algo%lOldmu) then
     inquire (file=trim(adjustl(algo%old_output_file)), exist=there)
