@@ -614,13 +614,18 @@ program main
       pot%MM(iStep) = real(pot%QMM(iStep),8)
     endif
 
+    ! after this step the mu stays for the evaluation -> save it
+    ! all the response routines then access it via the runinfo data structure
+    info%mu  = pot%MM(iStep)
+    info%muQ = pot%QMM(iStep)
+
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
-      call calc_total_energy_fermi(pot%QMM(iStep), energy(iStep), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_fermi(pot%QMM(iStep), electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_fermi(energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_fermi(electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
     else
-      call calc_total_energy_digamma(pot%QMM(iStep), energy(iStep), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_digamma(pot%QMM(iStep), electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_digamma(energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_digamma(electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (algo%lTMODE .and. algo%lImpurities) then
@@ -644,7 +649,7 @@ program main
     ! once and use it later for all the different response types
     if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
       if (algo%lQuad) then
-        call calc_polygamma(PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
+        call calc_polygamma(PolyGammaQ, edisp, sct, kmesh, algo, info)
         call initialize_response(algo, qresp_intra)
         if (algo%lInterBandQuantities) then
           call initialize_response(algo, qresp_inter)
@@ -656,7 +661,7 @@ program main
           endif
         endif
       else
-        call calc_polygamma(PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
+        call calc_polygamma(PolyGamma, edisp, sct, kmesh, algo, info)
         ! initialize the already allocated arrays to 0
         if (algo%lIntraBandQuantities) then
           call initialize_response(algo, resp_intra)
@@ -683,30 +688,30 @@ program main
       if (algo%lQuad) then
         ! quad precision routines
         if (algo%lIntrabandQuantities) then
-          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
+          call response_intra_km_Q(qresp_intra, PolyGammaQ, edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
+            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
         endif
         if (algo%lInterBandQuantities) then
-          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
+          call response_inter_km_Q(qresp_inter, PolyGammaQ, edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
         endif
       else
         ! double precision routines
         if (algo%lIntrabandQuantities) then
-          call response_intra_km(resp_intra,  PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
+          call response_intra_km(resp_intra,  PolyGamma, edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iStep), edisp, sct, kmesh, algo, info)
+            call response_intra_Boltzmann_km(resp_intra_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
         endif
 
         if (algo%lInterbandquantities) then
-          call response_inter_km(resp_inter, PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
+          call response_inter_km(resp_inter, PolyGamma, edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iStep), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km(resp_inter_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
         endif
       endif
@@ -750,7 +755,7 @@ program main
     ! output the renormalized energies defined by Z*(ek - mu)
     ! for each temperature point
     if (myid.eq.master .and. algo%lEnergyOutput) then
-      call output_energies(pot%MM(iStep), algo, edisp,kmesh,sct,info) ! double is good enough here
+      call output_energies(algo, edisp, kmesh, sct, info)
     endif
 
     call cpu_time(tfinish)

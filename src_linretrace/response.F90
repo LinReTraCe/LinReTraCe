@@ -66,9 +66,8 @@ subroutine initresp_qp (algo, qresp)
   endif
 end subroutine initresp_qp
 
-subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in)  :: mu
   type (response_dp)   :: resp
 
   type(energydisp)     :: edisp
@@ -82,7 +81,7 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)
 
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
                                - real(PolyGamma(2,:,info%ik,:)) * info%beta2p*sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
@@ -176,9 +175,8 @@ subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine response_intra_km
 
-subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
   type (response_dp)  :: resp
 
   type(energydisp)    :: edisp
@@ -217,7 +215,7 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
@@ -393,9 +391,8 @@ subroutine response_inter_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_km
 
-subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
+subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
   type (response_dp)      :: resp
 
   type(energydisp)    :: edisp
@@ -415,7 +412,7 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)
 
   ! asymptotic term in the Gamma-> 0 limit
   ! the polygamma2fermi already contains the pi^2 / 2
@@ -468,9 +465,8 @@ subroutine response_intra_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine response_intra_Boltzmann_km
 
-subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info)
+subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   implicit none
-  real(16), intent(in)  :: mu
   type (response_qp)    :: resp
 
   type(energydisp)      :: edisp
@@ -488,7 +484,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%muQ)
 
   ! asymptotic term in the Gamma-> 0 limit
   ! the polygamma2fermi already contains the pi^2 / 2
@@ -541,9 +537,8 @@ subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
 end subroutine response_intra_Boltzmann_km_Q
 
-subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
+subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
   type (response_dp)  :: resp
 
   type(energydisp)    :: edisp
@@ -578,7 +573,7 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
@@ -705,9 +700,8 @@ subroutine response_inter_Boltzmann_km(resp, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_Boltzmann_km
 
-subroutine response_inter_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info)
+subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   implicit none
-  real(16), intent(in) :: mu
   type (response_qp)   :: resp
 
   type(energydisp)     :: edisp
@@ -740,7 +734,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info
 
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%muQ)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max
@@ -1465,7 +1459,7 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   endif
 end subroutine qpresp_alloc
 
-subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine calc_polygamma_D(PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type(algorithm)  :: algo
   type(energydisp) :: edisp
@@ -1473,7 +1467,6 @@ subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   type(scattering) :: sct
   type(runinfo)    :: info
 
-  real(8), intent(in) :: mu
   complex(8) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   complex(8), external :: wpsipg
@@ -1485,7 +1478,7 @@ subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   to_evaluate = 0.5d0 + info%beta2p * &
                 (sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
                  + ci*sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
-                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - mu))
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%mu))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
@@ -1501,7 +1494,7 @@ subroutine calc_polygamma_D(PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_polygamma_D
 
-subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine calc_polygamma_Q(PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type(algorithm)  :: algo
   type(energydisp) :: edisp
@@ -1509,7 +1502,6 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   type(scattering) :: sct
   type(runinfo)    :: info
 
-  real(16), intent(in) :: mu
   complex(16) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   complex(16), external :: wpsipghp
@@ -1521,7 +1513,7 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   to_evaluate = 0.5q0 + info%beta2pQ * &
                 (sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
                  + ciQ*sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
-                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - mu))
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%muQ))
 
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
@@ -1537,8 +1529,7 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_polygamma_Q
 
-subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
-  real(16), intent(in)  :: mu
+subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: energy_tot
 
   type(energydisp) :: edisp
@@ -1563,9 +1554,9 @@ subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, alg
 
   ! for the occupation
   to_evaluate = 0.5q0 + info%beta2pQ * &
-                (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+                (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - info%muQ))
   ! energy contribution : occupation * energy of this occupation
-  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - mu)
+  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - info%muQ)
 
   ! evaluate the function
   do is = 1,edisp%ispin
@@ -1603,8 +1594,7 @@ subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, alg
 
 end subroutine
 
-subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
-  real(16), intent(in) :: mu
+subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: energy_tot
 
   type(energydisp) :: edisp
@@ -1624,13 +1614,13 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
   allocate(energy(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   ! energy contribution : occupation * energy of this occupation
-  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - mu)
+  energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - info%muQ)
 
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        energy(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)   ! occupation
+        energy(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-info%muQ), info%betaQ)   ! occupation
         energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weightQ(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
       enddo
     enddo
@@ -1660,8 +1650,7 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
 
 end subroutine
 
-subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
-  real(16), intent(in) :: mu
+subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
 
@@ -1695,7 +1684,7 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
         elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ &
-          * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ ! this is the occupation
+          * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - info%muQ)),0))/piQ ! this is the occupation
         holes = 1.q0 - elecs ! should be enough accuracy
 
         if (algo%lTMODE) then
@@ -1736,8 +1725,7 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
 
 end subroutine
 
-subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
-  real(16), intent(in) :: mu
+subroutine calc_elecholes_fermi(electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
 
@@ -1770,8 +1758,8 @@ subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, km
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        elecs = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        holes = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        elecs = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-info%muQ), info%betaQ)
+        holes = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-info%muQ), info%betaQ)
 
         if (algo%lTMODE) then
           if (edisp%gapped(is)) then
@@ -1810,9 +1798,8 @@ subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, km
 
 end subroutine
 
-subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
-  real(16), intent(in)  :: mu
   type (response_qp)    :: resp
 
   type(energydisp)      :: edisp
@@ -1826,7 +1813,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%muQ)
 
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
                                - real(PolyGamma(2,:,info%ik,:)) * info%beta2pQ*sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
@@ -1919,9 +1906,8 @@ subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
 end subroutine response_intra_km_Q
 
-subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
+subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
-  real(16), intent(in) :: mu
   type (response_qp)   :: resp
 
   type(energydisp)     :: edisp
@@ -1959,7 +1945,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
   ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) &
-          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - mu)
+          * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%muQ)
 
   do iband1 = edisp%nbopt_min, edisp%nbopt_max
     do iband2 = edisp%nbopt_min, edisp%nbopt_max

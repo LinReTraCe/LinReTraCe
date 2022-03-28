@@ -714,7 +714,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
 
 end subroutine
 
-subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
+subroutine output_energies(algo, edisp, kmesh, sct, info)
   implicit none
   type(algorithm)  :: algo
   type(energydisp) :: edisp
@@ -722,15 +722,13 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
   type(scattering) :: sct
   type(runinfo)    :: info
 
-  real(8), intent(in) :: mu
-
   integer(hid_t)     :: ifile
   real(8), allocatable :: enrgy(:,:,:)
   character(len=128) :: string
 
   allocate(enrgy(edisp%nband_max,kmesh%nkp,edisp%ispin))
 
-  enrgy = sct%zqp * (edisp%band - mu)
+  enrgy = sct%zqp * (edisp%band - info%mu)
 
   write(string,'(I6.6,"/energies")') info%iStep
   call hdf5_open_file(algo%output_file, ifile)
