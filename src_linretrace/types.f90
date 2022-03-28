@@ -22,7 +22,7 @@ module Mtypes
     logical :: lOldmuText     ! mus from text file?
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
     logical :: lScatteringFile       ! do we get the scattering information from another file (hdf5)
-    logical :: lScatteringText       ! do we get the scattering information from a text file
+    ! logical :: lScatteringText       ! do we get the scattering information from a text file
     logical :: lInterBandQuantities  ! calc inter band response
     logical :: lIntraBandQuantities  ! calc intra band response
     logical :: lEnergyOutput  ! output renormalized energies
@@ -188,12 +188,12 @@ module Mtypes
 
   type scattering
     ! scattering rates and quasiparticle weights
-    real(8), allocatable :: gamcoeff(:)
-    real(8), allocatable :: zqpcoeff(:)
-    real(8), allocatable :: gamtext(:)
-    real(8), allocatable :: zqptext(:)
-    real(8), allocatable :: gam(:,:,:) ! same as band
-    real(8), allocatable :: zqp(:,:,:) ! same as band
+    real(8), allocatable :: gamcoeff(:,:) ! coeff spin
+    real(8), allocatable :: zqpcoeff(:,:) ! coeff spin
+    ! real(8), allocatable :: gamtext(:)
+    ! real(8), allocatable :: zqptext(:)
+    real(8), allocatable :: gam(:,:,:) ! (nband,ik,ispin)
+    real(8), allocatable :: zqp(:,:,:) ! (nband,ik,ispin)
     real(8)              :: gamimp   ! additional additivie impurity term
   end type
 

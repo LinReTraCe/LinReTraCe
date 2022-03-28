@@ -123,6 +123,9 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
           h5out['.bands/opticalBandMax']  = escalc.opticalBandMax
       else:
         if ispin == 0: # only warn once
+          # alibi variable so no errors occur
+          h5out['.bands/opticalBandMin']  = 0
+          h5out['.bands/opticalBandMax']  = 0
           logger.critical('No optical elements available. Use band interpolation (--interp) or provide them (--optic).')
           logger.critical('Output file WILL NOT WORK with linretrace.\n')
 

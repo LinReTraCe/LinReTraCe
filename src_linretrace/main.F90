@@ -89,7 +89,8 @@ program main
 
   call hdf5_init()
   ! read the energies, derivatives, diagonal optical elements
-  call read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
+  ! + crosscheck config input (mainly spin dependencies)
+  call read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
 
   ! quick checks if run-options are in agreement with provided data
   if (algo%lBfield .and. .not. edisp%lDerivatives) then
@@ -172,8 +173,8 @@ program main
       ! and check wether bandshifts exist
       ! the scattering rates then gets loaded for each temperature-point
       call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
-    else if (algo%lScatteringText) then
-      call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
+    ! else if (algo%lScatteringText) then
+    !   call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
     else
       if (temp%nT .gt. 1) then
         if (temp%tlogarithmic) then
@@ -322,7 +323,9 @@ program main
         call allocate_response(algo, edisp, temp, qresp_inter_Boltzmann)
       endif
     endif
-    allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    if (algo%lIntrabandQuantities .or. algo%lInterbandQuantities) then
+      allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    endif
   endif
 
   call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
@@ -420,12 +423,19 @@ program main
     if (algo%lScatteringFile) then
       write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_hdf5)
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
-    else if (algo%lScatteringText) then
-      write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
-      write(stdout,*) '  additional impurity offset: ', sct%gamimp
+    ! else if (algo%lScatteringText) then
+    !   write(stdout,*) '  scattering-file: ', trim(algo%input_scattering_text)
+    !   write(stdout,*) '  additional impurity offset: ', sct%gamimp
     else
-      write(stdout,*) '  scattering coefficients: ', sct%gamcoeff
-      write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff
+      if (edisp%ispin == 1) then
+        write(stdout,*) '  scattering coefficients: ', sct%gamcoeff(1,:)
+        write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff(1,:)
+      else
+        write(stdout,*) '  UP scattering coefficients: ', sct%gamcoeff(1,:)
+        write(stdout,*) '  DN scattering coefficients: ', sct%gamcoeff(2,:)
+        write(stdout,*) '  UP quasi particle weight coefficients: ', sct%zqpcoeff(1,:)
+        write(stdout,*) '  DN quasi particle weight coefficients: ', sct%zqpcoeff(2,:)
+      endif
     endif
     write(stdout,*)
     write(stdout,*) 'OUTPUT'
@@ -535,29 +545,31 @@ program main
           endif
         endif
       endif
-    else if (algo%lTMODE .and. algo%lScatteringText) then
-      sct%gam = sct%gamtext(iT)
-      sct%zqp = sct%zqptext(iT)
-      if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
-        call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
-        sct%zqp = 1.d0
-      endif
-      sct%gam = sct%zqp * sct%gam
+    ! else if (algo%lTMODE .and. algo%lScatteringText) then
+    !   sct%gam = sct%gamtext(iT)
+    !   sct%zqp = sct%zqptext(iT)
+    !   if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
+    !     call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
+    !     sct%zqp = 1.d0
+    !   endif
+    !   sct%gam = sct%zqp * sct%gam
     else ! this is entered for both the MuMode and the TempMode
       ! here we are wasting memory however
       ! otherwise we would have to write every single response twice
       sct%gam = 0.d0
       sct%zqp = 0.d0
-      do ig=1,size(sct%gamcoeff)
-         sct%gam = sct%gam + sct%gamcoeff(ig)*(temp%TT(iT)**(ig-1))
+      do is=1,edisp%ispin
+        do ig=1,size(sct%gamcoeff,dim=2)
+           sct%gam(:,:,is) = sct%gam(:,:,is) + sct%gamcoeff(is,ig)*(temp%TT(iT)**(ig-1))
+        enddo
+        do ig=1,size(sct%zqpcoeff,dim=2)
+           sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(is,ig)*(temp%TT(iT)**(ig-1))
+        enddo
+        if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
+          call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
+          sct%zqp(:,:,is) = 1.d0
+        endif
       enddo
-      do ig=1,size(sct%zqpcoeff)
-         sct%zqp = sct%zqp + sct%zqpcoeff(ig)*(temp%TT(iT)**(ig-1))
-      enddo
-      if (sct%zqp(1,1,1) > 1.d0) then ! since its a constant array
-        call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
-        sct%zqp = 1.d0
-      endif
       sct%gam = sct%zqp * sct%gam  ! convention we use
     endif
 
@@ -627,18 +639,31 @@ program main
     ! once and use it later for all the different response types
     if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
       call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
-    endif
-
-    if (algo%lQuad) then
-      call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
-      call initialize_response(algo, qresp_intra)
-      if (algo%lInterBandQuantities) then
-        call initialize_response(algo, qresp_inter)
+      ! initialize the already allocated arrays to 0
+      if (algo%lIntraBandQuantities) then
+        call initialize_response(algo, resp_intra)
+        if(algo%lBoltzmann) then
+          call initialize_response(algo, resp_intra_Boltzmann)
+        endif
       endif
-      if (algo%lBoltzmann) then
-        call initialize_response(algo, qresp_intra_Boltzmann)
+      if (algo%lInterBandQuantities) then
+        call initialize_response(algo, resp_inter)
+        if (algo%lBoltzmann) then
+          call initialize_response(algo, resp_inter_Boltzmann)
+        endif
+      endif
+
+      if (algo%lQuad) then
+        call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        call initialize_response(algo, qresp_intra)
         if (algo%lInterBandQuantities) then
-          call initialize_response(algo, qresp_inter_Boltzmann)
+          call initialize_response(algo, qresp_inter)
+        endif
+        if (algo%lBoltzmann) then
+          call initialize_response(algo, qresp_intra_Boltzmann)
+          if (algo%lInterBandQuantities) then
+            call initialize_response(algo, qresp_inter_Boltzmann)
+          endif
         endif
       endif
     endif
@@ -646,22 +671,6 @@ program main
     call cpu_time(tfinish)
     timings(3) = timings(3) + (tfinish - tstart)
     tstart = tfinish
-
-
-
-    ! initialize the already allocated arrays to 0
-    if (algo%lIntraBandQuantities) then
-      call initialize_response(algo, resp_intra)
-      if(algo%lBoltzmann) then
-        call initialize_response(algo, resp_intra_Boltzmann)
-      endif
-    endif
-    if (algo%lInterBandQuantities) then
-      call initialize_response(algo, resp_inter)
-      if (algo%lBoltzmann) then
-        call initialize_response(algo, resp_inter_Boltzmann)
-      endif
-    endif
 
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend

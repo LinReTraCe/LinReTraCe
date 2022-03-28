@@ -8,17 +8,19 @@ module Mio
 
 contains
 
-subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
+subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   implicit none
   type(algorithm)      :: algo
   type(kpointmesh)     :: kmesh
   type(energydisp)     :: edisp
+  type(scattering)     :: sct
   type(potential)      :: pot
   type(impurity)       :: imp
 
   integer(hid_t)       :: ifile
   integer              :: i, is, locderivatives, iimp, ik
-  integer              :: nshape(1)
+  integer              :: n1shape(1)
+  integer              :: n2shape(2)
 
   integer, allocatable :: irank1arr(:)
   real(8), allocatable :: drank1arr(:)
@@ -132,10 +134,41 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
     enddo
   endif
 
+  if (.not. algo%lScatteringFile) then
+    if ( edisp%ispin==2 .and. size(sct%gamcoeff,dim=1)==1 ) then
+      ! increase the spin axis by one
+      n2shape = shape(sct%gamcoeff)
+      allocate(drank2arr(1,n2shape(2)))
+      drank2arr(:,:) = sct%gamcoeff
+      deallocate(sct%gamcoeff)
+      allocate(sct%gamcoeff(2,n2shape(2)))
+      sct%gamcoeff(1,:) = drank2arr(1,:)
+      sct%gamcoeff(2,:) = drank2arr(1,:)
+      deallocate(drank2arr)
+    endif
+    if ( edisp%ispin==1 .and. size(sct%gamcoeff,dim=1)==2) then
+      call stop_with_message(stderr, 'Error: Provided Scattering rates do not match system (one spin type)')
+    endif
+    if ( edisp%ispin==2 .and. size(sct%zqpcoeff,dim=1)==1 ) then
+      ! increase the spin axis by one
+      n2shape = shape(sct%zqpcoeff)
+      allocate(drank2arr(1,n2shape(2)))
+      drank2arr(:,:) = sct%zqpcoeff
+      deallocate(sct%zqpcoeff)
+      allocate(sct%zqpcoeff(2,n2shape(2)))
+      sct%zqpcoeff(1,:) = drank2arr(1,:)
+      sct%zqpcoeff(2,:) = drank2arr(1,:)
+      deallocate(drank2arr)
+    endif
+    if ( edisp%ispin==1 .and. size(sct%zqpcoeff,dim=1)==2) then
+      call stop_with_message(stderr, 'Error: Provided QuasiParticle weights do not match system (one spin type)')
+    endif
+  endif
+
   if (algo%lScissors) then
     ! check for inconsitencies
-    nshape = shape(edisp%scissors)
-    if (nshape(1) /= edisp%iSpin) then
+    n1shape = shape(edisp%scissors)
+    if (n1shape(1) /= edisp%iSpin) then
       call stop_with_message(stderr, 'Must have as many scissor parameters as spins')
     endif
 
@@ -391,117 +424,117 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
 
 end subroutine
 
-subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
-  implicit none
-  type(algorithm)              :: algo
-  type(kpointmesh)             :: kmesh
-  type(energydisp)             :: edisp
-  type(scattering)             :: sct
-  type(temperature)            :: temp
+! subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, temp)
+!   implicit none
+!   type(algorithm)              :: algo
+!   type(kpointmesh)             :: kmesh
+!   type(energydisp)             :: edisp
+!   type(scattering)             :: sct
+!   type(temperature)            :: temp
 
-  character(len=256) :: str_temp
-  integer            :: kpoints
-  integer            :: nbands
-  integer            :: iT, ik, i,j
-  integer            :: lines
-  integer            :: stat
-  integer            :: empty, pst
-  integer            :: cnt
-  real(8), allocatable            :: float_array(:)
-  character(len=256), allocatable :: file_temp(:), file_save(:)
-  character(len=1)                :: cmnt = '#'
-  character(len=1)                :: sprt = ' '
-  real(8) :: fdum1, fdum2
-
-
-  open(unit=10,file=trim(algo%input_scattering_text),action='read',iostat=stat)
-  if (stat .ne. 0) then
-    call stop_with_message(stderr, 'ScatteringText Input file cannot be opened') ! send to stderr
-  endif
-
-  ! line counting
-  lines=0
-  read_count: do
-    read(10,'(A)',END=200) str_temp ! read whole line as string, doesnt skip empty lines
-    lines=lines+1
-  enddo read_count
+!   character(len=256) :: str_temp
+!   integer            :: kpoints
+!   integer            :: nbands
+!   integer            :: iT, ik, i,j
+!   integer            :: lines
+!   integer            :: stat
+!   integer            :: empty, pst
+!   integer            :: cnt
+!   real(8), allocatable            :: float_array(:)
+!   character(len=256), allocatable :: file_temp(:), file_save(:)
+!   character(len=1)                :: cmnt = '#'
+!   character(len=1)                :: sprt = ' '
+!   real(8) :: fdum1, fdum2
 
 
-  200 continue
-  rewind 10
+!   open(unit=10,file=trim(algo%input_scattering_text),action='read',iostat=stat)
+!   if (stat .ne. 0) then
+!     call stop_with_message(stderr, 'ScatteringText Input file cannot be opened') ! send to stderr
+!   endif
 
-  allocate(file_temp(lines))
-
-  ! remove empty lines and comment strings
-  empty=0
-  read_temp: do i=1,lines
-    read(10,'(A)') str_temp
-      str_temp = trim(adjustl(str_temp))
-      pst=scan(str_temp,cmnt) ! find out possible comment symbol
-      if (pst .eq. 1) then ! whole line is commented
-        file_temp(i) = ''
-      elseif (pst .eq. 0) then ! no comment symbol found
-        file_temp(i) = str_temp
-      else  ! getting left side of comment
-        file_temp(i) = trim(str_temp(1:pst-1))
-      endif
-
-      if (len_trim(file_temp(i)) .eq. 0) then ! filter out empty lines
-        empty=empty+1
-      endif
-  enddo read_temp
-
-  ! rewrite everything to a new clean string array
-  allocate(file_save(lines-empty))
-  j=1
-  read_save: do i=1,lines
-    if(len_trim(file_temp(i)) .ne. 0) then
-      file_save(j)=file_temp(i)
-      j=j+1
-    endif
-  enddo read_save
-  deallocate(file_temp)
-
-  lines=lines-empty
-  close(unit=10)
+!   ! line counting
+!   lines=0
+!   read_count: do
+!     read(10,'(A)',END=200) str_temp ! read whole line as string, doesnt skip empty lines
+!     lines=lines+1
+!   enddo read_count
 
 
-  ! check if data has right amount of columns via first row
-  cnt = 0
-  str_temp = file_save(1)
-  do
-    pst=scan(str_temp,sprt)
-    if (pst == 1) then ! we find the empty space in an empty string at the first position
-      exit
-    else
-      cnt = cnt + 1
-      str_temp = trim(adjustl(str_temp(pst+1:)))
-    endif
-  enddo
+!   200 continue
+!   rewind 10
 
-  if (cnt /= 3) then
-    call stop_with_message(stderr, 'Error: ScatteringText file does not have correct number of columns')
-  endif
+!   allocate(file_temp(lines))
 
-  ! now we read this string array into the according data arrays
-  temp%nT = lines
-  allocate(temp%TT(temp%nT))
-  allocate(temp%BB(temp%nT))
-  allocate(sct%gamtext(temp%nT))
-  allocate(sct%zqptext(temp%nT))
-  allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+!   ! remove empty lines and comment strings
+!   empty=0
+!   read_temp: do i=1,lines
+!     read(10,'(A)') str_temp
+!       str_temp = trim(adjustl(str_temp))
+!       pst=scan(str_temp,cmnt) ! find out possible comment symbol
+!       if (pst .eq. 1) then ! whole line is commented
+!         file_temp(i) = ''
+!       elseif (pst .eq. 0) then ! no comment symbol found
+!         file_temp(i) = str_temp
+!       else  ! getting left side of comment
+!         file_temp(i) = trim(str_temp(1:pst-1))
+!       endif
 
-  do i=1,temp%nT
-    read(file_save(i),*) temp%TT(i), sct%gamtext(i), sct%zqptext(i)
-  enddo
-  temp%tmin = minval(temp%TT)
-  temp%tmax = maxval(temp%TT)
-  temp%BB = 1.d0/(temp%TT * kB)
+!       if (len_trim(file_temp(i)) .eq. 0) then ! filter out empty lines
+!         empty=empty+1
+!       endif
+!   enddo read_temp
 
-  sct%gamtext = sct%gamtext + sct%gamimp
+!   ! rewrite everything to a new clean string array
+!   allocate(file_save(lines-empty))
+!   j=1
+!   read_save: do i=1,lines
+!     if(len_trim(file_temp(i)) .ne. 0) then
+!       file_save(j)=file_temp(i)
+!       j=j+1
+!     endif
+!   enddo read_save
+!   deallocate(file_temp)
 
-end subroutine
+!   lines=lines-empty
+!   close(unit=10)
+
+
+!   ! check if data has right amount of columns via first row
+!   cnt = 0
+!   str_temp = file_save(1)
+!   do
+!     pst=scan(str_temp,sprt)
+!     if (pst == 1) then ! we find the empty space in an empty string at the first position
+!       exit
+!     else
+!       cnt = cnt + 1
+!       str_temp = trim(adjustl(str_temp(pst+1:)))
+!     endif
+!   enddo
+
+!   if (cnt /= 3) then
+!     call stop_with_message(stderr, 'Error: ScatteringText file does not have correct number of columns')
+!   endif
+
+!   ! now we read this string array into the according data arrays
+!   temp%nT = lines
+!   allocate(temp%TT(temp%nT))
+!   allocate(temp%BB(temp%nT))
+!   allocate(sct%gamtext(temp%nT))
+!   allocate(sct%zqptext(temp%nT))
+!   allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
+!   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+
+!   do i=1,temp%nT
+!     read(file_save(i),*) temp%TT(i), sct%gamtext(i), sct%zqptext(i)
+!   enddo
+!   temp%tmin = minval(temp%TT)
+!   temp%tmax = maxval(temp%TT)
+!   temp%BB = 1.d0/(temp%TT * kB)
+
+!   sct%gamtext = sct%gamtext + sct%gamimp
+
+! end subroutine
 
 subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   implicit none
@@ -533,7 +566,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'oldmu', algo%lOldmu)
   call hdf5_write_attribute(ifile, '.config', 'oldmutext', algo%lOldmuText)
   call hdf5_write_attribute(ifile, '.config', 'scatteringfile', algo%lScatteringFile)
-  call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
+  ! call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
   call hdf5_write_attribute(ifile, '.config', 'interbandquantities', algo%lInterBandQuantities)
   call hdf5_write_attribute(ifile, '.config', 'intrabandquantities', algo%lIntraBandQuantities)
   call hdf5_write_attribute(ifile, '.config', 'fulloutput', algo%fullOutput)
@@ -547,11 +580,11 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   else
     call hdf5_write_attribute(ifile, '.config', 'input_scattering_hdf5', trim(algo%input_scattering_hdf5))
   endif
-  if (len(trim(algo%input_scattering_text)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', trim(algo%input_scattering_text))
-  endif
+  ! if (len(trim(algo%input_scattering_text)) == 0) then
+  !   call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', "-")
+  ! else
+  !   call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', trim(algo%input_scattering_text))
+  ! endif
   if (len(trim(algo%old_output_file)) == 0) then
     call hdf5_write_attribute(ifile, '.config', 'old_output_file', "-")
   else
@@ -575,15 +608,15 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   if (allocated(sct%zqpcoeff)) then
     call hdf5_write_data(ifile, '.scattering/zqpcoeff', sct%zqpcoeff)
   endif
-  if (allocated(sct%gamtext)) then
-    call hdf5_write_data(ifile, '.scattering/gamtext', sct%gamtext)
-  endif
-  if (allocated(sct%zqptext)) then
-    call hdf5_write_data(ifile, '.scattering/zqptext', sct%zqptext)
-  endif
-  if (algo%lScatteringFile .or. algo%lScatteringText) then
-    call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
-  endif
+  ! if (allocated(sct%gamtext)) then
+  !   call hdf5_write_data(ifile, '.scattering/gamtext', sct%gamtext)
+  ! endif
+  ! if (allocated(sct%zqptext)) then
+  !   call hdf5_write_data(ifile, '.scattering/zqptext', sct%zqptext)
+  ! endif
+  ! if (algo%lScatteringFile .or. algo%lScatteringText) then
+  !   call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
+  ! endif
 
   call hdf5_write_data(ifile, ".quantities/ispin", edisp%ispin)
   call hdf5_write_data(ifile, ".quantities/charge", edisp%nelect) ! this might have been changed by config

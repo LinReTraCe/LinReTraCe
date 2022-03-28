@@ -37,7 +37,9 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   character(len=256), allocatable :: outputmethod(:)
   character(len=256) :: erstr
   integer :: nshape(1)
+  integer :: nmaxshape
   real(8) :: floattemp
+  real(8), allocatable :: floatntemp(:)
 
   logical :: found
   logical :: impfound
@@ -115,7 +117,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lQuad                 = .true.
 
   algo%lScatteringFile = .false.
-  algo%lScatteringText = .false.
+  ! algo%lScatteringText = .false.
 
   algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
@@ -298,14 +300,23 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       ! with respect to Fermi level at given Temperature
       ! shift afterwards
 
-      call float_find('ScatteringRate', floattemp, subsearch_start, subsearch_end, found)
+      call floatn_find('ScatteringRate', floatntemp, subsearch_start, subsearch_end, found)
       if (.not. found) call stop_with_message(stderr, 'ScatteringRate in MuMode group not found')
-      allocate(sct%gamcoeff(1))
-      sct%gamcoeff(1) = floattemp
-      call float_find('QuasiParticleWeight', floattemp, subsearch_start, subsearch_end, found)
+      if (size(floatntemp) < 1 .or. size(floatntemp) > 2) then
+        call stop_with_message(stderr, 'ScatteringRate in MuMode group must have 1 or 2 elements')
+      endif
+      allocate(sct%gamcoeff(size(floatntemp), 1))
+      sct%gamcoeff(:,1) = floatntemp
+      deallocate(floatntemp)
+
+      call floatn_find('QuasiParticleWeight', floatntemp, subsearch_start, subsearch_end, found)
       if (.not. found) call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group not found')
-      allocate(sct%zqpcoeff(1))
-      sct%zqpcoeff(1) = floattemp
+      if (size(floatntemp) < 1 .or. size(floatntemp) > 2) then
+        call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group must have 1 or 2 elements')
+      endif
+      allocate(sct%zqpcoeff(size(floatntemp), 1))
+      sct%zqpcoeff(:,1) = floatntemp
+      deallocate(floatntemp)
 
       edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
@@ -390,16 +401,20 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     !--------------------------------------------------------------------------------
-    allocate(dictionary(9))
+    allocate(dictionary(12))
     dictionary(1) = 'ScatteringFile'
-    dictionary(2) = 'ScatteringText'
-    dictionary(3) = 'ScatteringImpurity'
-    dictionary(4) = 'TMinimum'
-    dictionary(5) = 'TMaximum'
-    dictionary(6) = 'TPoints'
-    dictionary(7) = 'TLogarithmic'
-    dictionary(8) = 'ScatteringCoefficients'
-    dictionary(9) = 'QuasiParticleCoefficients'
+    ! dictionary(2) = 'ScatteringText'
+    dictionary(2) = 'ScatteringImpurity'
+    dictionary(3) = 'TMinimum'
+    dictionary(4) = 'TMaximum'
+    dictionary(5) = 'TPoints'
+    dictionary(6) = 'TLogarithmic'
+    dictionary(7) = 'ScatteringCoefficients'
+    dictionary(8) = 'UpScatteringCoefficients'
+    dictionary(9) = 'DnScatteringCoefficients'
+    dictionary(10)= 'QuasiParticleCoefficients'
+    dictionary(11)= 'UpQuasiParticleCoefficients'
+    dictionary(12)= 'DnQuasiParticleCoefficients'
     call spell_check(subsearch_start,subsearch_end, '[TempMode] [[Scattering]]', dictionary, er, erstr)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
@@ -413,14 +428,16 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     if (.not. algo%lScatteringFile) then
-      call string_find('ScatteringText', algo%input_scattering_text, subsearch_start, subsearch_end, found)
-      if (found) then
-        algo%lScatteringText = .true.
-      else
-        algo%lScatteringText = .false.
-      endif
+      ! call string_find('ScatteringText', algo%input_scattering_text, subsearch_start, subsearch_end, found)
+      ! if (found) then
+      !   algo%lScatteringText = .true.
+      ! else
+      !   algo%lScatteringText = .false.
+      ! endif
+        call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+        if (found) call stop_with_message(stderr, 'ScatteringImpurity is only valid in combination with ScatteringFile')
 
-      if (.not. algo%lScatteringText) then
+      ! if (.not. algo%lScatteringText) then
         call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
         call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
@@ -428,11 +445,69 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         call int_find('TPoints', temp%nT, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
         call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
-        call floatn_find('ScatteringCoefficients', sct%gamcoeff, search_start, search_end, found)
-        if (.not. found) call stop_with_message(stderr, 'ScatteringCoefficients in Scattering group not found')
-        call floatn_find('QuasiParticleCoefficients', sct%zqpcoeff, search_start, search_end, found)
-        if (.not. found) call stop_with_message(stderr, 'QuasiParticleCoefficients in Scattering group not found')
-      endif
+        call floatn_find('ScatteringCoefficients', floatntemp, search_start, search_end, found)
+        if (found) then
+          allocate(sct%gamcoeff(1,size(floatntemp)))
+          sct%gamcoeff(1,:) = floatntemp
+          deallocate(floatntemp)
+          call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, 'ScatteringCoefficients and UpScatteringCoefficients found in [TempMode][[Scattering]]')
+          call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, 'ScatteringCoefficients and DnScatteringCoefficients found in [TempMode][[Scattering]]')
+        else
+          ! check validity .. and maximal entries
+          call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
+          if (.not. found) call stop_with_message(stderr, 'No valid Scattering Description found in [TempMode][[Scattering]]')
+          nmaxshape = size(floatntemp)
+          deallocate(floatntemp)
+          call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
+          if (.not. found) call stop_with_message(stderr, 'No valid Scattering Description found in [TempMode][[Scattering]]')
+          if (size(floatntemp) > nmaxshape) then
+            nmaxshape = nshape(1)
+          endif
+          deallocate(floatntemp)
+          ! load them into the allocated array
+          allocate(sct%gamcoeff(2,nmaxshape))
+          sct%gamcoeff = 0.0
+          call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
+          sct%gamcoeff(1,:size(floatntemp)) = floatntemp
+          deallocate(floatntemp)
+          call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
+          sct%gamcoeff(2,:size(floatntemp)) = floatntemp
+          deallocate(floatntemp)
+        endif
+        call floatn_find('QuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+        if (found) then
+          allocate(sct%zqpcoeff(1,size(floatntemp)))
+          sct%zqpcoeff(1,:) = floatntemp
+          deallocate(floatntemp)
+          call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, 'QuasiParticleCoefficients and UpQuasiParticleCoefficients found in [TempMode][[Scattering]]')
+          call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, 'QuasiParticleCoefficients and DnQuasiParticleCoefficients found in [TempMode][[Scattering]]')
+        else
+          ! check validity .. and maximal entries
+          call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          if (.not. found) call stop_with_message(stderr, 'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
+          nmaxshape = size(floatntemp)
+          deallocate(floatntemp)
+          call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          if (.not. found) call stop_with_message(stderr, 'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
+          if (size(floatntemp) > nmaxshape) then
+            nmaxshape = nshape(1)
+          endif
+          deallocate(floatntemp)
+          ! load them into the allocated array
+          allocate(sct%zqpcoeff(2,nmaxshape))
+          sct%zqpcoeff = 0.0
+          call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          sct%zqpcoeff(1,:size(floatntemp)) = floatntemp
+          deallocate(floatntemp)
+          call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
+          sct%zqpcoeff(2,:size(floatntemp)) = floatntemp
+          deallocate(floatntemp)
+        endif
+      ! endif
 
       edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
@@ -460,7 +535,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       imptype(7) = 'sine4'
 
       do iimp=1,imp%nimp
-        write(str_imp,'(A2,I1,A2)') '[[[',iimp,']]]'
+        write(str_imp,'(A3,I1,A3)') '[[[',iimp,']]]'
         call subsubgroup_find(str_imp, subsearch_start, subsearch_end, subsubsearch_start, subsubsearch_end)
         if (subsubsearch_start .le. 0) then
           call stop_with_message(stderr, 'Impurity sub group not found: '//str_imp)
@@ -613,12 +688,12 @@ subroutine check_files(algo)
     endif
   endif
 
-  if (algo%lScatteringText) then
-    inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
-    if (.not. there) then
-      call stop_with_message(stderr, "Can not find the ScatteringText")
-    endif
-  endif
+  ! if (algo%lScatteringText) then
+  !   inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
+  !   if (.not. there) then
+  !     call stop_with_message(stderr, "Can not find the ScatteringText")
+  !   endif
+  ! endif
 
   if (algo%lOldmu) then
     inquire (file=trim(adjustl(algo%old_output_file)), exist=there)

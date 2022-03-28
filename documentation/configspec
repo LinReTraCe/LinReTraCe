@@ -37,12 +37,18 @@ ScatteringImpurity = (default = 0)                      # in combination with Sc
 # we can supply a temperature range (in Kelvin)
 # and a polynomial for the scattering rate
 # and the quasi particle weights
-TMinimum                  = (default = None)
-TMaximum                  = (default = None)
-TPoints                   = (default = None)
-TLogarithmic              = (default = F)
-ScatteringCoefficients    = (default = None)
-QuasiParticleCoefficients = (default = None)
+TMinimum                    = (default = None)
+TMaximum                    = (default = None)
+TPoints                     = (default = None)
+TLogarithmic                = (default = F)
+
+ScatteringCoefficients      = (default = None)          # polynimals a + b * T + c * T**2 ... [a,b,c,...]
+UpScatteringCoefficients    = (default = None)          # if one wants to differentiate between up and dn spin
+DnScatteringCoefficients    = (default = None)          # use either ScatteringCoefficients or Up+Dn ScatteringCoefficients
+
+QuasiParticleCoefficients   = (default = None)          # same as ScatteringCoefficients
+UpQuasiParticleCoefficients = (default = None)
+DnQuasiParticleCoefficients = (default = None)
 ________________________________________________________________________________
 
 [[Impurities]]
@@ -95,8 +101,8 @@ MuMaximum           = (default = None)                  # difference to DFT chem
 MuPoints            = (default = None)
 MLogarithmic        = (default = F)
 
-ScatteringRate      = (default = None)                  # in eV^-1
 QuasiParticleWeight = (default = None)                  # in range 0 - 1
+QuasiParticleWeight = (default = None)                  # one or two numbers (0...1)
 
 ________________________________________________________________________________
 [Debug]
