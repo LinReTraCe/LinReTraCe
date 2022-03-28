@@ -1082,7 +1082,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   endif
 
   ! conductivity and seebeck coefficient without B-field
-  if (algo%lFullOutput) then
+  if (algo%fullOutput > 0) then
     ! we gather all the data at the master node and write it to hdf5
     if (myid .eq. master) then
       allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
@@ -1234,7 +1234,7 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
 
   if (lBoutput) then
-    if (algo%lFullOutput) then
+    if (algo%fullOutput > 0) then
       if (myid .eq. master) then
         allocate(resp%sB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
         if (lshift) allocate(sB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))

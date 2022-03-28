@@ -16,6 +16,7 @@ module Mtypes
                               ! this requires the existance of the band derivatives
 
     integer :: rootMethod     ! numerical method to find the chemical potential
+    integer :: fullOutput     ! output full response -- 0:none - 1:full - 2:ksum - 3:bsum
     logical :: muSearch       ! mu fixed or find mu?
     logical :: lOldmu         ! mus from old run?
     logical :: lOldmuText     ! mus from text file?
@@ -24,7 +25,6 @@ module Mtypes
     logical :: lScatteringText       ! do we get the scattering information from a text file
     logical :: lInterBandQuantities  ! calc inter band response
     logical :: lIntraBandQuantities  ! calc intra band response
-    logical :: lFullOutput    ! output full response dependency
     logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response
     logical :: lBoltzmannFermi! calc boltzmann response with Fermi function or PolyGamma

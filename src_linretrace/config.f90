@@ -34,6 +34,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   character(len=256), allocatable :: impdescription(:)
   character(len=256), allocatable :: imptype(:)
   character(len=256), allocatable :: dictionary(:)
+  character(len=256), allocatable :: outputmethod(:)
   character(len=256) :: erstr
   integer :: nshape(1)
   real(8) :: floattemp
@@ -124,7 +125,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
   algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann ans psi1 approx
-  algo%lFullOutput    = .false.
+  algo%fullOutput     = 0 ! disabled
   sct%gamimp          = 0.d0
   imp%nimp            = 0
 
@@ -163,7 +164,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(11) = 'Boltzmann'
   dictionary(12) = 'BFieldMode'
   dictionary(13) = 'FermiOccupation'
-  ! dictionary(14) = 'RootMethod'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -196,7 +196,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
 
-  call bool_find('FullOutput', algo%lFullOutput, search_start, search_end, found)
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
   ! call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
@@ -224,24 +223,25 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
   endif
 
-  ! dont let user dictate root method
-  ! allocate(rootmethod(0:3))
-  ! rootmethod(0) = 'secant'
-  ! rootmethod(1) = 'linint'
-  ! rootmethod(2) = 'ridders'
-  ! rootmethod(3) = 'bisection'
-  ! call string_find('RootMethod', str_temp, search_start, search_end, found)
-  ! if (found) then
-  !   algo%rootMethod = -1
-  !   do i=0,3
-  !     if (index(trim(rootmethod(i)),to_lower(trim(str_temp))) .ne. 0) then
-  !       algo%rootMethod = i
-  !     endif
-  !   enddo
-  !   if (algo%rootMethod == -1) then
-  !     call stop_with_message(stderr, 'RootMethod Description not available')
-  !   endif
-  ! endif
+  allocate(outputmethod(3))
+  outputmethod(1) = 'full'
+  outputmethod(2) = 'ksum'
+  outputmethod(3) = 'bsum'
+  call string_find('FullOutput', str_temp, search_start, search_end, found)
+  if (found) then
+    algo%fullOutput = -1
+    do i=1,3
+      if (index(trim(outputmethod(i)),to_lower(trim(str_temp))) .ne. 0) then
+        algo%fullOutput = i
+      endif
+    enddo
+    if (algo%fullOutput == -1) then
+      call stop_with_message(stderr, 'FullOutput Description not available')
+    endif
+  else
+    algo%fullOutput = 0
+  endif
+  deallocate(outputmethod)
 
 
   if (algo%lMUMODE) then

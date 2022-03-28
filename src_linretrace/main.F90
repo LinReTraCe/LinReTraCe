@@ -430,7 +430,16 @@ program main
     write(stdout,*)
     write(stdout,*) 'OUTPUT'
     write(stdout,*) '  output-file: ', trim(algo%output_file)
-    write(stdout,*) '  full output: ', algo%lFullOutput
+    select case (algo%fulloutput)
+      case (0)
+        write(stdout,*) '  full output: false'
+      case (1)
+        write(stdout,*) '  full output: full dependence'
+      case (2)
+        write(stdout,*) '  full output: momentum summation'
+      case (3)
+        write(stdout,*) '  full output: band summation'
+    end select
     write(stdout,*)
     if (algo%lTMODE) then
     write(stdout,*) 'TEMPERATURE MODE'
