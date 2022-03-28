@@ -363,10 +363,6 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
     enddo
   enddo
 
-  ! TODO: FIX THIS
-  ! i.e. we save all this data to python
-  ! that means an implicit transposition takes place
-  ! i.e. we either hav eto treat all of this the other way around
   if (edisp%iOptical > 3) then
     do iband = edisp%nbopt_min, edisp%nbopt_max
       resp%s_full(2,1,iband,:,info%ik) = conjg(resp%s_full(1,2,iband,:,info%ik))
@@ -1734,10 +1730,6 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
     enddo
   enddo
 
-  ! TODO: FIX THIS
-  ! i.e. we save all this data to python
-  ! that means an implicit transposition takes place
-  ! i.e. we either hav eto treat all of this the other way around
   if (edisp%iOptical > 3) then
     do iband = edisp%nbopt_min, edisp%nbopt_max
       resp%s_full(2,1,iband,:,info%ik) = conjg(resp%s_full(1,2,iband,:,info%ik))

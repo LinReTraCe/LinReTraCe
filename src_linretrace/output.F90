@@ -820,18 +820,33 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   logical :: lBoutput
 
   character(len=128) :: string
+  character(len=5)   :: sumstyle
   integer(hid_t)     :: ifile
 
+  ! partial sums
+  complex(16), allocatable :: s_partial_sum(:,:,:,:,:)
+  complex(16), allocatable :: sB_partial_sum(:,:,:,:,:,:)
+  complex(16), allocatable :: a_partial_sum(:,:,:,:,:)
+  complex(16), allocatable :: aB_partial_sum(:,:,:,:,:,:)
+  complex(16), allocatable :: x_partial_sum(:,:,:,:,:)
+  complex(16), allocatable :: xB_partial_sum(:,:,:,:,:,:)
+
+  ! partial sums
+  complex(8), allocatable :: s_partial_sum_dp(:,:,:,:,:)
+  complex(8), allocatable :: sB_partial_sum_dp(:,:,:,:,:,:)
+  complex(8), allocatable :: a_partial_sum_dp(:,:,:,:,:)
+  complex(8), allocatable :: aB_partial_sum_dp(:,:,:,:,:,:)
+  complex(8), allocatable :: x_partial_sum_dp(:,:,:,:,:)
+  complex(8), allocatable :: xB_partial_sum_dp(:,:,:,:,:,:)
 
   ! gather arrays for MPI
-  complex(16), allocatable :: s_gather(:,:,:,:,:)
-  complex(16), allocatable :: sB_gather(:,:,:,:,:,:)
-  complex(16), allocatable :: a_gather(:,:,:,:,:)
-  complex(16), allocatable :: aB_gather(:,:,:,:,:,:)
-  complex(16), allocatable :: x_gather(:,:,:,:,:)
-  complex(16), allocatable :: xB_gather(:,:,:,:,:,:)
+  complex(8), allocatable :: s_gather(:,:,:,:,:)
+  complex(8), allocatable :: sB_gather(:,:,:,:,:,:)
+  complex(8), allocatable :: a_gather(:,:,:,:,:)
+  complex(8), allocatable :: aB_gather(:,:,:,:,:,:)
+  complex(8), allocatable :: x_gather(:,:,:,:,:)
+  complex(8), allocatable :: xB_gather(:,:,:,:,:,:)
 
-  ! this sucks
   ! quadruple response s/a/x array
   real(16), allocatable :: qrsarr(:,:,:) ! to collect the data
   real(16), allocatable :: qraarr(:,:,:)
@@ -848,9 +863,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   real(16), allocatable :: qiaarrB(:,:,:,:)
   real(16), allocatable :: qixarrB(:,:,:,:)
 
-  ! double complex (z) array
-  complex(8),  allocatable :: zdarr(:,:,:) ! for output
-  complex(8),  allocatable :: zdarrB(:,:,:,:) ! for output
+  ! quad gather for partial momentum summation
+  real(16), allocatable :: qrksumarr(:,:,:,:,:)
+  real(16), allocatable :: qiksumarr(:,:,:,:,:)
+  real(16), allocatable :: qrksumarrB(:,:,:,:,:,:)
+  real(16), allocatable :: qiksumarrB(:,:,:,:,:,:)
 
   integer :: iband, ik, is
   integer :: ii, ij
@@ -861,8 +878,6 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   allocate(qisarr(3,3,edisp%ispin))
   allocate(qiaarr(3,3,edisp%ispin))
   allocate(qixarr(3,3,edisp%ispin))
-
-  allocate(zdarr(3,3,edisp%ispin))
 
   ! we need these switches since the interband quantities
   ! do not have these arrays
@@ -887,12 +902,287 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
     allocate(qisarrB(3,3,3,edisp%ispin))
     allocate(qiaarrB(3,3,3,edisp%ispin))
     allocate(qixarrB(3,3,3,edisp%ispin))
-
-    allocate(zdarrB(3,3,3,edisp%ispin))
   endif
 
   if (myid.eq.master) then
     call hdf5_open_file(algo%output_file, ifile)
+  endif
+
+  ! conductivity and seebeck coefficient without B-field
+  if (algo%fullOutput > 0) then
+    ! L11
+    select case (algo%fullOutput)
+      case (1) ! full
+        sumstyle = '/full'
+        allocate(s_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+      case (2) ! ksum
+        sumstyle = '/ksum'
+        allocate(s_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(s_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+      case (3) ! bsum
+        sumstyle = '/bsum'
+        allocate(s_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
+        allocate(s_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+    end select
+    s_partial_sum = 0.q0
+    s_partial_sum_dp = 0.d0
+    select case (algo%fullOutput)
+      case (1) ! shift the optical range into the full energy band range
+        s_partial_sum_dp(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+            resp%s_full * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (2) ! shift optical range + momentum sum
+        do ik=ikstr,ikend
+          s_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                s_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                resp%s_full(:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+        enddo
+        s_partial_sum = s_partial_sum * piQ * ( echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (3) ! band sum
+        do iband=edisp%nbopt_min,edisp%nbopt_max
+          s_partial_sum(:,:,1,:,:) = &
+                s_partial_sum(:,:,1,:,:) + resp%s_full(:,:,iband,:,:)
+        enddo
+        s_partial_sum_dp = s_partial_sum * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+        deallocate(s_partial_sum)
+    end select
+    ! note that I put the unit factors to get the most out of the accuracy
+
+    if (myid .eq. master) then
+      select case (algo%fullOutput)
+        case (1)
+          allocate(s_gather(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+        case (2)
+          allocate(s_gather(3,3,edisp%nband_max,edisp%ispin,1))
+        case (3)
+          allocate(s_gather(3,3,1,edisp%ispin,kmesh%nkp))
+      end select
+    else
+      allocate(s_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    select case (algo%fullOutput)
+      case (1)
+        call MPI_gatherv(s_partial_sum_dp,(ikend-ikstr+1)*9*edisp%nband_max*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, s_gather, rcounts*9*edisp%nband_max*edisp%ispin, &
+                         displs*9*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+      case (2)
+        allocate(qrksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(qiksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        qrksumarr = 0.q0
+        qiksumarr = 0.q0
+        ! we want to keep the k-sum accuracy over all cores
+        do ii=1,3
+          do ij=1,3
+            do iband=1,edisp%nband_max
+              do is=1,edisp%ispin
+                call mpi_reduce_quad(real(s_partial_sum(ii,ij,iband,is,1)),qrksumarr(ii,ij,iband,is,1))
+                call mpi_reduce_quad(aimag(s_partial_sum(ii,ij,iband,is,1)),qiksumarr(ii,ij,iband,is,1))
+              enddo
+            enddo
+          enddo
+        enddo
+        s_gather = cmplx(real(qrksumarr,8),real(qiksumarr,8))
+        deallocate(qrksumarr)
+        deallocate(qiksumarr)
+      case (3)
+        call MPI_gatherv(s_partial_sum_dp,(ikend-ikstr+1)*9*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, s_gather, rcounts*9*edisp%ispin, &
+                         displs*9*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+    end select
+#else
+    s_gather = s_partial_sum_dp
+#endif
+    deallocate(s_partial_sum_dp)
+
+
+    ! L12
+    select case (algo%fullOutput)
+      case (1) ! full
+        allocate(a_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+      case (2) ! ksum
+        allocate(a_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(a_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+      case (3) ! bsum
+        allocate(a_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
+        allocate(a_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+    end select
+    a_partial_sum = 0.q0
+    a_partial_sum_dp = 0.d0
+    select case (algo%fullOutput)
+      case (1) ! shift the optical range into the full energy band range
+        a_partial_sum_dp(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+            resp%a_full * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (2) ! shift optical range + momentum sum
+        do ik=ikstr,ikend
+          a_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                a_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                resp%a_full(:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+        enddo
+        a_partial_sum = a_partial_sum * piQ * ( echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (3) ! band sum
+        do iband=edisp%nbopt_min,edisp%nbopt_max
+          a_partial_sum(:,:,1,:,:) = &
+                a_partial_sum(:,:,1,:,:) + resp%a_full(:,:,iband,:,:)
+        enddo
+        a_partial_sum_dp = a_partial_sum * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+        deallocate(a_partial_sum)
+    end select
+    ! note that I put the unit factors to get the most out of the accuracy
+
+    if (myid .eq. master) then
+      select case (algo%fullOutput)
+        case (1)
+          allocate(a_gather(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+        case (2)
+          allocate(a_gather(3,3,edisp%nband_max,edisp%ispin,1))
+        case (3)
+          allocate(a_gather(3,3,1,edisp%ispin,kmesh%nkp))
+      end select
+    else
+      allocate(a_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    select case (algo%fullOutput)
+      case (1)
+        call MPI_gatherv(a_partial_sum_dp,(ikend-ikstr+1)*9*edisp%nband_max*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, a_gather, rcounts*9*edisp%nband_max*edisp%ispin, &
+                         displs*9*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+      case (2)
+        allocate(qrksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(qiksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        qrksumarr = 0.q0
+        qiksumarr = 0.q0
+        ! we want to keep the k-sum accuracy over all cores
+        do ii=1,3
+          do ij=1,3
+            do iband=1,edisp%nband_max
+              do is=1,edisp%ispin
+                call mpi_reduce_quad(real(a_partial_sum(ii,ij,iband,is,1)),qrksumarr(ii,ij,iband,is,1))
+                call mpi_reduce_quad(aimag(a_partial_sum(ii,ij,iband,is,1)),qiksumarr(ii,ij,iband,is,1))
+              enddo
+            enddo
+          enddo
+        enddo
+        a_gather = cmplx(real(qrksumarr,8),real(qiksumarr,8))
+        deallocate(qrksumarr)
+        deallocate(qiksumarr)
+      case (3)
+        call MPI_gatherv(a_partial_sum_dp,(ikend-ikstr+1)*9*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, a_gather, rcounts*9*edisp%ispin, &
+                         displs*9*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+    end select
+#else
+    a_gather = a_partial_sum_dp
+#endif
+    deallocate(a_partial_sum_dp)
+
+
+    ! L12
+    select case (algo%fullOutput)
+      case (1) ! full
+        allocate(x_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+      case (2) ! ksum
+        allocate(x_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(x_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+      case (3) ! bsum
+        allocate(x_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
+        allocate(x_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+    end select
+    x_partial_sum = 0.q0
+    x_partial_sum_dp = 0.d0
+    select case (algo%fullOutput)
+      case (1) ! shift the optical range into the full energy band range
+        x_partial_sum_dp(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+            resp%x_full * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (2) ! shift optical range + momentum sum
+        do ik=ikstr,ikend
+          x_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                x_partial_sum(:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                resp%x_full(:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+        enddo
+        x_partial_sum = x_partial_sum * piQ * ( echarge / (kmesh%vol * hbarevs)) * 1.q10
+      case (3) ! band sum
+        do iband=edisp%nbopt_min,edisp%nbopt_max
+          x_partial_sum(:,:,1,:,:) = &
+                x_partial_sum(:,:,1,:,:) + resp%x_full(:,:,iband,:,:)
+        enddo
+        x_partial_sum_dp = x_partial_sum * piQ * (echarge / (kmesh%vol * hbarevs)) * 1.q10
+        deallocate(x_partial_sum)
+    end select
+    ! note that I put the unit factors to get the most out of the accuracy
+
+    if (myid .eq. master) then
+      select case (algo%fullOutput)
+        case (1)
+          allocate(x_gather(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+        case (2)
+          allocate(x_gather(3,3,edisp%nband_max,edisp%ispin,1))
+        case (3)
+          allocate(x_gather(3,3,1,edisp%ispin,kmesh%nkp))
+      end select
+    else
+      allocate(x_gather(1,1,1,1,1))
+    endif
+#ifdef MPI
+    select case (algo%fullOutput)
+      case (1)
+        call MPI_gatherv(x_partial_sum_dp,(ikend-ikstr+1)*9*edisp%nband_max*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, x_gather, rcounts*9*edisp%nband_max*edisp%ispin, &
+                         displs*9*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+      case (2)
+        allocate(qrksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        allocate(qiksumarr(3,3,edisp%nband_max,edisp%ispin,1))
+        qrksumarr = 0.q0
+        qiksumarr = 0.q0
+        ! we want to keep the k-sum accuracy over all cores
+        do ii=1,3
+          do ij=1,3
+            do iband=1,edisp%nband_max
+              do is=1,edisp%ispin
+                call mpi_reduce_quad(real(x_partial_sum(ii,ij,iband,is,1)),qrksumarr(ii,ij,iband,is,1))
+                call mpi_reduce_quad(aimag(x_partial_sum(ii,ij,iband,is,1)),qiksumarr(ii,ij,iband,is,1))
+              enddo
+            enddo
+          enddo
+        enddo
+        x_gather = cmplx(real(qrksumarr,8),real(qiksumarr,8))
+        deallocate(qrksumarr)
+        deallocate(qiksumarr)
+      case (3)
+        call MPI_gatherv(x_partial_sum_dp,(ikend-ikstr+1)*9*edisp%ispin, &
+                         MPI_DOUBLE_COMPLEX, x_gather, rcounts*9*edisp%ispin, &
+                         displs*9*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                         MPI_COMM_WORLD, mpierr)
+    end select
+#else
+    x_gather = x_partial_sum_dp
+#endif
+    deallocate(x_partial_sum_dp)
+
+
+    if (myid .eq. master) then
+      write(string,'(I6.6)') info%iStep
+      string = 'step/' // trim(string) // "/L11/" // trim(adjustl(gname)) // sumstyle
+      call hdf5_write_data(ifile, string, s_gather)
+
+      write(string,'(I6.6)') info%iStep
+      string = 'step/' // trim(string) // "/L12/" // trim(adjustl(gname)) // sumstyle
+      call hdf5_write_data(ifile, string, a_gather)
+
+      write(string,'(I6.6)') info%iStep
+      string = 'step/' // trim(string) // "/L22/" // trim(adjustl(gname)) // sumstyle
+      call hdf5_write_data(ifile, string, x_gather)
+    endif
+
+    deallocate(s_gather)
+    deallocate(a_gather)
+    deallocate(x_gather)
+  ! full output end ... this is always for each T-point
   endif
 
   ! perform a local summation
@@ -912,7 +1202,6 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   qisarr = 0.q0
   qiaarr = 0.q0
   qixarr = 0.q0
-  zdarr = 0.d0
 #ifdef MPI
   do ii=1,3
     do ij=1,3
@@ -946,15 +1235,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   qrxarr = qrxarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
   qixarr = qixarr * piQ * ( echarge / (kmesh%vol*hbarevs)) * 1.q10
 
-  ! should work=?
   if (myid .eq. master) then
     ! gather the data in the arrays
-    zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-    resp%s_sum_range(:,:,:,info%iStep) = zdarr
-    zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-    resp%a_sum_range(:,:,:,info%iStep) = zdarr
-    zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-    resp%x_sum_range(:,:,:,info%iStep) = zdarr
+    resp%s_sum_range(:,:,:,info%iStep) = cmplx(real(qrsarr,8),real(qisarr,8))
+    resp%a_sum_range(:,:,:,info%iStep) = cmplx(real(qraarr,8),real(qiaarr,8))
+    resp%x_sum_range(:,:,:,info%iStep) = cmplx(real(qrxarr,8),real(qixarr,8))
 
     ! output at the last temperature step
     if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
@@ -968,6 +1253,301 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   endif
 
   if (lBoutput) then
+    if (algo%fullOutput > 0) then
+
+      ! L11M
+      select case (algo%fullOutput)
+        case (1) ! full
+          sumstyle = '/full'
+          allocate(sB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+        case (2) ! ksum
+          sumstyle = '/ksum'
+          allocate(sB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(sB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+        case (3) ! bsum
+          sumstyle = '/bsum'
+          allocate(sB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
+          allocate(sB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+      end select
+      sB_partial_sum = 0.q0
+      sB_partial_sum_dp = 0.d0
+      select case (algo%fullOutput)
+        case (1) ! shift the optical range into the full energy band range
+          sB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+              resp%sB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (2) ! shift optical range + momentum sum
+          do ik=ikstr,ikend
+            sB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                  sB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                  resp%sB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+          enddo
+          sB_partial_sum = sB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (3) ! band sum
+          do iband=edisp%nbopt_min,edisp%nbopt_max
+            sB_partial_sum(:,:,:,1,:,:) = &
+                  sB_partial_sum(:,:,:,1,:,:) + resp%sB_full(:,:,:,iband,:,:)
+          enddo
+          sB_partial_sum_dp = sB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+          deallocate(sB_partial_sum)
+      end select
+      ! note that I put the unit factors to get the most out of the accuracy
+
+      if (myid .eq. master) then
+        select case (algo%fullOutput)
+          case (1)
+            allocate(sB_gather(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+          case (2)
+            allocate(sB_gather(3,3,3,edisp%nband_max,edisp%ispin,1))
+          case (3)
+            allocate(sB_gather(3,3,3,1,edisp%ispin,kmesh%nkp))
+        end select
+      else
+        allocate(sB_gather(1,1,1,1,1,1))
+      endif
+#ifdef MPI
+      select case (algo%fullOutput)
+        case (1)
+          call MPI_gatherv(sB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%nband_max*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, sB_gather, rcounts*27*edisp%nband_max*edisp%ispin, &
+                           displs*27*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+        case (2)
+          allocate(qrksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(qiksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          qrksumarrB = 0.q0
+          qiksumarrB = 0.q0
+          ! we want to keep the k-sum accuracy over all cores
+          do ii=1,3
+            do ij=1,3
+              do ik=1,3
+                do iband=1,edisp%nband_max
+                  do is=1,edisp%ispin
+                    call mpi_reduce_quad(real(sB_partial_sum(ii,ij,ik,iband,is,1)),qrksumarrB(ii,ij,ik,iband,is,1))
+                    call mpi_reduce_quad(aimag(sB_partial_sum(ii,ij,ik,iband,is,1)),qiksumarrB(ii,ij,ik,iband,is,1))
+                  enddo
+                enddo
+              enddo
+            enddo
+          enddo
+          sB_gather = cmplx(real(qrksumarrB,8),real(qiksumarrB,8))
+          deallocate(qrksumarrB)
+          deallocate(qiksumarrB)
+        case (3)
+          call MPI_gatherv(sB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, sB_gather, rcounts*27*edisp%ispin, &
+                           displs*27*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+      end select
+#else
+      sB_gather = sB_partial_sum_dp
+#endif
+      deallocate(sB_partial_sum_dp)
+
+
+      ! L12M
+      select case (algo%fullOutput)
+        case (1) ! full
+          sumstyle = '/full'
+          allocate(aB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+        case (2) ! ksum
+          sumstyle = '/ksum'
+          allocate(aB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(aB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+        case (3) ! bsum
+          sumstyle = '/bsum'
+          allocate(aB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
+          allocate(aB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+      end select
+      aB_partial_sum = 0.q0
+      aB_partial_sum_dp = 0.d0
+      select case (algo%fullOutput)
+        case (1) ! shift the optical range into the full energy band range
+          aB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+              resp%aB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (2) ! shift optical range + momentum sum
+          do ik=ikstr,ikend
+            aB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                  aB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                  resp%aB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+          enddo
+          aB_partial_sum = aB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (3) ! band sum
+          do iband=edisp%nbopt_min,edisp%nbopt_max
+            aB_partial_sum(:,:,:,1,:,:) = &
+                  aB_partial_sum(:,:,:,1,:,:) + resp%aB_full(:,:,:,iband,:,:)
+          enddo
+          aB_partial_sum_dp = aB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+          deallocate(aB_partial_sum)
+      end select
+      ! note that I put the unit factors to get the most out of the accuracy
+
+      if (myid .eq. master) then
+        select case (algo%fullOutput)
+          case (1)
+            allocate(aB_gather(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+          case (2)
+            allocate(aB_gather(3,3,3,edisp%nband_max,edisp%ispin,1))
+          case (3)
+            allocate(aB_gather(3,3,3,1,edisp%ispin,kmesh%nkp))
+        end select
+      else
+        allocate(aB_gather(1,1,1,1,1,1))
+      endif
+#ifdef MPI
+      select case (algo%fullOutput)
+        case (1)
+          call MPI_gatherv(aB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%nband_max*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, aB_gather, rcounts*27*edisp%nband_max*edisp%ispin, &
+                           displs*27*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+        case (2)
+          allocate(qrksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(qiksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          qrksumarrB = 0.q0
+          qiksumarrB = 0.q0
+          ! we want to keep the k-sum accuracy over all cores
+          do ii=1,3
+            do ij=1,3
+              do ik=1,3
+                do iband=1,edisp%nband_max
+                  do is=1,edisp%ispin
+                    call mpi_reduce_quad(real(aB_partial_sum(ii,ij,ik,iband,is,1)),qrksumarrB(ii,ij,ik,iband,is,1))
+                    call mpi_reduce_quad(aimag(aB_partial_sum(ii,ij,ik,iband,is,1)),qiksumarrB(ii,ij,ik,iband,is,1))
+                  enddo
+                enddo
+              enddo
+            enddo
+          enddo
+          aB_gather = cmplx(real(qrksumarrB,8),real(qiksumarrB,8))
+          deallocate(qrksumarrB)
+          deallocate(qiksumarrB)
+        case (3)
+          call MPI_gatherv(aB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, aB_gather, rcounts*27*edisp%ispin, &
+                           displs*27*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+      end select
+#else
+      aB_gather = aB_partial_sum_dp
+#endif
+      deallocate(aB_partial_sum_dp)
+
+      ! L22M
+      select case (algo%fullOutput)
+        case (1) ! full
+          sumstyle = '/full'
+          allocate(xB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
+        case (2) ! ksum
+          sumstyle = '/ksum'
+          allocate(xB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(xB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+        case (3) ! bsum
+          sumstyle = '/bsum'
+          allocate(xB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
+          allocate(xB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+      end select
+      xB_partial_sum = 0.q0
+      xB_partial_sum_dp = 0.d0
+      select case (algo%fullOutput)
+        case (1) ! shift the optical range into the full energy band range
+          xB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
+              resp%xB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (2) ! shift optical range + momentum sum
+          do ik=ikstr,ikend
+            xB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
+                  xB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) + &
+                  resp%xB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
+          enddo
+          xB_partial_sum = xB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+        case (3) ! band sum
+          do iband=edisp%nbopt_min,edisp%nbopt_max
+            xB_partial_sum(:,:,:,1,:,:) = &
+                  xB_partial_sum(:,:,:,1,:,:) + resp%xB_full(:,:,:,iband,:,:)
+          enddo
+          xB_partial_sum_dp = xB_partial_sum &
+              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+          deallocate(xB_partial_sum)
+      end select
+      ! note that I put the unit factors to get the most out of the accuracy
+
+      if (myid .eq. master) then
+        select case (algo%fullOutput)
+          case (1)
+            allocate(xB_gather(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
+          case (2)
+            allocate(xB_gather(3,3,3,edisp%nband_max,edisp%ispin,1))
+          case (3)
+            allocate(xB_gather(3,3,3,1,edisp%ispin,kmesh%nkp))
+        end select
+      else
+        allocate(xB_gather(1,1,1,1,1,1))
+      endif
+#ifdef MPI
+      select case (algo%fullOutput)
+        case (1)
+          call MPI_gatherv(xB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%nband_max*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, xB_gather, rcounts*27*edisp%nband_max*edisp%ispin, &
+                           displs*27*edisp%nband_max*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+        case (2)
+          allocate(qrksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          allocate(qiksumarrB(3,3,3,edisp%nband_max,edisp%ispin,1))
+          qrksumarrB = 0.q0
+          qiksumarrB = 0.q0
+          ! we want to keep the k-sum accuracy over all cores
+          do ii=1,3
+            do ij=1,3
+              do ik=1,3
+                do iband=1,edisp%nband_max
+                  do is=1,edisp%ispin
+                    call mpi_reduce_quad(real(xB_partial_sum(ii,ij,ik,iband,is,1)),qrksumarrB(ii,ij,ik,iband,is,1))
+                    call mpi_reduce_quad(aimag(xB_partial_sum(ii,ij,ik,iband,is,1)),qiksumarrB(ii,ij,ik,iband,is,1))
+                  enddo
+                enddo
+              enddo
+            enddo
+          enddo
+          xB_gather = cmplx(real(qrksumarrB,8),real(qiksumarrB,8))
+          deallocate(qrksumarrB)
+          deallocate(qiksumarrB)
+        case (3)
+          call MPI_gatherv(xB_partial_sum_dp,(ikend-ikstr+1)*27*edisp%ispin, &
+                           MPI_DOUBLE_COMPLEX, xB_gather, rcounts*27*edisp%ispin, &
+                           displs*27*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
+                           MPI_COMM_WORLD, mpierr)
+      end select
+#else
+      xB_gather = xB_partial_sum_dp
+#endif
+      deallocate(xB_partial_sum_dp)
+
+
+      if (myid .eq. master) then
+        write(string,'(I6.6)') info%iStep
+        string = 'step/' // trim(string) // "/L11M/" // trim(adjustl(gname)) // sumstyle
+        call hdf5_write_data(ifile, string, sB_gather)
+
+        write(string,'(I6.6)') info%iStep
+        string = 'step/' // trim(string) // "/L12M/" // trim(adjustl(gname)) // sumstyle
+        call hdf5_write_data(ifile, string, aB_gather)
+
+        write(string,'(I6.6)') info%iStep
+        string = 'step/' // trim(string) // "/L22M/" // trim(adjustl(gname)) // sumstyle
+        call hdf5_write_data(ifile, string, xB_gather)
+
+      endif
+
+      deallocate(sB_gather)
+      deallocate(aB_gather)
+      deallocate(xB_gather)
+    endif ! full output
+
+    ! perform a local summation
     do ik = ikstr,ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
         resp%sB_sum(:,:,:,:) = resp%sB_sum(:,:,:,:) + resp%sB_full(:,:,:,iband,:,ik) * kmesh%weightQ(ik)
@@ -983,7 +1563,6 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
     qisarrB = 0.q0
     qiaarrB = 0.q0
     qixarrB = 0.q0
-    zdarrB = 0.d0
 #ifdef MPI
     do ii=1,3
       do ij=1,3
@@ -1022,12 +1601,9 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
     ! should work=?
     if (myid .eq. master) then
       ! gather the data in the arrays
-      zdarrB = cmplx(real(qrsarrB,8),real(qisarrB,8))
-      resp%sB_sum_range(:,:,:,:,info%iStep) = zdarrB
-      zdarrB = cmplx(real(qraarrB,8),real(qiaarrB,8))
-      resp%aB_sum_range(:,:,:,:,info%iStep) = zdarrB
-      zdarrB = cmplx(real(qrxarrB,8),real(qixarrB,8))
-      resp%xB_sum_range(:,:,:,:,info%iStep) = zdarrB
+      resp%sB_sum_range(:,:,:,:,info%iStep) = cmplx(real(qrsarrB,8),real(qisarrB,8))
+      resp%aB_sum_range(:,:,:,:,info%iStep) = cmplx(real(qraarrB,8),real(qiaarrB,8))
+      resp%xB_sum_range(:,:,:,:,info%iStep) = cmplx(real(qrxarrB,8),real(qixarrB,8))
 
       ! output at the last temperature step
       if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
@@ -1046,8 +1622,6 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
     deallocate(qisarrB)
     deallocate(qiaarrB)
     deallocate(qixarrB)
-
-    deallocate(zdarrB)
   endif ! Boutput
 
   if (myid.eq.master) then
@@ -1060,7 +1634,6 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   deallocate(qisarr)
   deallocate(qiaarr)
   deallocate(qixarr)
-  deallocate(zdarr)
 
 end subroutine
 
