@@ -34,9 +34,6 @@ class LRTCoutput(object):
     self.dataspinsum = None
 
     self._parse()        # runmode, quad, dimensions
-    if dp:
-      self.quad = not dp # overwrite quad if wanted
-      print('#\n#   DEBUG: USING DOUBLE PRECISION DATA')
 
     self._get_axis(altaxis) # get T / beta / mu / carrier axis, set the wanted one to self.axis
     self._defineDicts()     # define all possible response datasets internally
@@ -104,8 +101,6 @@ class LRTCoutput(object):
     self.datasets.update({'imp':        (True, '.quantities/imp_contribution', 'Thermally activated impurity electrons',     False, False)})
 
 
-    quadprefix = 'Quad' if self.quad else ''
-
     # 'raw' Onsager coefficients
     for iL, unit in zip(['L11','L12','L22'],['V/(A*m)','A/m', 'V*A/m']):
       for ii in ['inter','intra']:
@@ -113,7 +108,7 @@ class LRTCoutput(object):
           for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
             key = '{}{}-{}{}'.format(iL,iM,ii,iB) # L11M-intraBoltz
             if key[-1] == '-': key = key[:-1]
-            internalpath = '{}{}/{}{}{}/sum'.format(iL,iM,ii,quadprefix,iBdescr.strip())
+            internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip())
             description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
@@ -709,9 +704,6 @@ class LRTCoutput(object):
         print('#   Using file:', self.fname)
         print('#   Detected run mode:', self.mode)
 
-        self.quad = hfi['.config'].attrs['quad']
-        if self.quad:
-          print('#   Detected Quad Precision')
         self.spins = hfi['.quantities/ispin'][()]
         self.ndim = hfi['.unitcell/ndim'][()]
         self.dims = hfi['.unitcell/dims'][()]

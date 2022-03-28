@@ -363,7 +363,7 @@ end subroutine find_mu_DFT
 subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
-  real(8), intent(inout)        :: mu
+  real(16), intent(inout)       :: mu
   real(16), intent(in)          :: dev         ! allowed deviation
   real(16), intent(out)         :: target_zero ! actual deviation
   integer, intent(out)          :: niitact
@@ -378,7 +378,7 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
 
   ! local variables
   logical  :: refine_abort
-  real(16) :: mu_qp, mu_refine
+  real(16) :: mu_refine
   real(16) target_zero1, target_zero2
   real(16) test_up, test_dn
   real(16) mu1, mu2, dmu
@@ -422,14 +422,12 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
        call stop_with_message(stderr, "Root-finding method not properly defined")
   end select
 
-  mu_qp = real(mu,16) ! save into a local qp number
-
 ! deviation from set particle number with initial mu
-  call ndeviation(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+  call ndeviation(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
   target_zero2=target_zero1
-  mu1=mu_qp
-  mu2=mu_qp
+  mu1=mu
+  mu2=mu
 
   do while (target_zero2.gt.0.q0)
      mu2=mu2+0.5q0
@@ -445,15 +443,15 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
   if (lsecant) then
   !Secant root finding
     do iit=1,niit0
-       mu_qp=mu1-target_zero1*mu2/(target_zero2-target_zero1)+target_zero1*mu1/(target_zero2-target_zero1)
-       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
+       mu=mu1-target_zero1*mu2/(target_zero2-target_zero1)+target_zero1*mu1/(target_zero2-target_zero1)
+       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
-          mu1=mu_qp
+          mu1=mu
           target_zero1=target_zero
        else
-          mu2=mu_qp
+          mu2=mu
           target_zero2=target_zero
        endif
     enddo
@@ -504,7 +502,7 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
  400 if (j == maxiter) write(*,*) 'Ridders seach might not have converged'
 
      ! save the values of the intersection
-     mu_qp = P(4)
+     mu = P(4)
      niitact = j
      niit0   = maxiter
      target_zero = F(4)
@@ -512,15 +510,15 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
   elseif(lbisec) then
     ! Bisection root finding
     do iit=1,niit0
-       mu_qp = (mu1+mu2)/2.q0
-       call ndeviation(mu_qp, target_zero, edisp, sct, kmesh, imp, algo, info)
+       mu = (mu1+mu2)/2.q0
+       call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev) exit
        if (target_zero.gt.0.q0) then
-          mu1=mu_qp
+          mu1=mu
           target_zero1=target_zero
        else
-          mu2=mu_qp
+          mu2=mu
           target_zero2=target_zero
        endif
     enddo
@@ -529,28 +527,24 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
 
   ! hard temperature cutoff relative to band gap size
   if (info%Temp < edisp%gap_min*300) then
-    call occ_refine(mu_qp, target_zero1, edisp, sct, kmesh, imp, algo, info)
+    call occ_refine(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
     ! do not enter refinement algorithm if this value is too large
     if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
-      mu = real(mu_qp, 8)
       return
     endif
     if (.not. algo%muFermi .and. abs(target_zero1) > 1d-16) then
-      mu = real(mu_qp, 8)
       return
     endif
     ! refinement
-    call find_mu_refine(mu_qp, mu_refine, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
+    call find_mu_refine(mu, mu_refine, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
     if (.not. refine_abort) then
       ! if the algorithm is not aborted due to numerical problems at the refinmenet stage
-      mu = real(mu_refine, 8)
+      mu = mu_refine
       return
     endif
     niitact = niitQ+1 ! notify main ! this number triggers the dmu/dT calculation in main.F90
   endif
-
-  mu = real(mu_qp, 8)
 
 end subroutine find_mu
 
@@ -1092,10 +1086,10 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 end subroutine occ_refine
 
 subroutine occ_impurity_D(occimp, mu, imp, info)
-  real(8), intent(in)   :: mu
+  real(8), intent(in)    :: mu
   real(8), intent(inout) :: occimp
-  type(impurity)        :: imp
-  type(runinfo)         :: info
+  type(impurity)         :: imp
+  type(runinfo)          :: info
 
   integer :: ii, iimp
   real(8) :: densii, eneii
@@ -1151,10 +1145,10 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
 end subroutine occ_impurity_D
 
 subroutine occ_impurity_Q(occimp, mu, imp, info)
-  real(16), intent(in)   :: mu
+  real(16), intent(in)    :: mu
   real(16), intent(inout) :: occimp
-  type(impurity)        :: imp
-  type(runinfo)         :: info
+  type(impurity)          :: imp
+  type(runinfo)           :: info
 
   integer :: ii, iimp
   real(16) :: densii, eneii

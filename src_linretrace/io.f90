@@ -396,6 +396,9 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   call hdf5_read_data(ifile, "/.quantities/betaAxis", temp%BB)
 
   call hdf5_read_data(ifile, "/.quantities/muAxis", pot%MM)
+  allocate(pot%QMM(temp%nT))
+  pot%QMM = pot%MM
+
 
   ! scattering rates
   ! and quasi particle renormalizations

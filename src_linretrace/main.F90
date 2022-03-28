@@ -53,10 +53,10 @@ program main
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
-  real(8), allocatable :: energy(:) ! total energy
-  real(8), allocatable :: carrier(:) ! carrier concentration
+  real(8), allocatable :: energy(:)    ! total energy
+  real(8), allocatable :: carrier(:)   ! carrier concentration
   real(8), allocatable :: electrons(:) ! thermally activated electrons w.r.t chemical potential
-  real(8), allocatable :: holes(:) ! thermally activated holes w.r.t chemical potential
+  real(8), allocatable :: holes(:)     ! thermally activated holes w.r.t chemical potential
   real(8), allocatable :: imp_contribution(:)
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
@@ -212,22 +212,27 @@ program main
     electrons = 0.d0
     imp_contribution = 0.d0
     holes = 0.d0
-    if (.not. allocated(pot%MM)) allocate(pot%MM(pot%nMu))
+    if (.not. allocated(pot%MM))  allocate(pot%MM(pot%nMu))
+    if (.not. allocated(pot%QMM)) allocate(pot%QMM(pot%nMu))
     allocate(pot%occ(pot%nMu))
     pot%occ = 0.d0
 
     if (algo%muSearch) then
-      pot%MM = pot%mu_dft ! initialize MM array with DFT mu (energy file)
+      pot%MM  = pot%mu_dft ! initialize MM array with DFT mu (energy file)
+      pot%QMM = pot%mu_dft
     else
-      pot%MM = pot%mu_config ! use fixed config mu for all points (config file)
+      pot%MM  = pot%mu_config ! use fixed config mu for all points (config file)
+      pot%QMM = pot%mu_config
     endif
 
     if (algo%lOldmu) then
-      call read_muT_hdf5(temp, algo%old_output_file, pot%MM)
+      call read_muT_hdf5(temp, algo%old_output_file, pot%MM) ! this is saved in double
+      pot%QMM = pot%MM
     endif
 
     if (algo%lOldmuText) then
-      call read_muT_text(temp, algo%input_mu_text, pot%MM)
+      call read_muT_text(temp, algo%input_mu_text, pot%MM)   ! this usually comes from lprint -> double
+      pot%QMM = pot%MM
     endif
   endif
 
@@ -242,6 +247,7 @@ program main
       allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
       allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
       allocate(pot%MM(pot%nMu))
+      allocate(pot%QMM(pot%nMu))
       temp%TT = temp%temp
       temp%BB = 1.d0/(temp%temp * kB)
 
@@ -261,13 +267,14 @@ program main
 
       if (pot%mlogarithmic) then
         do imu=1,pot%nMu
-           pot%MM(imu)=pot%Mumin * pot%dMu**(real(imu-1,8))
+           pot%QMM(imu)=pot%Mumin * pot%dMu**(real(imu-1,16))
         enddo
       else
         do imu=1,pot%nMu
-           pot%MM(imu)=real(imu-1,8)*pot%dMu+pot%MuMin
+           pot%QMM(imu)=real(imu-1,16)*pot%dMu+pot%MuMin
         enddo
       endif
+      pot%MM = real(pot%QMM,8)
     endif
 
 
@@ -289,26 +296,17 @@ program main
     deallocate(edisp%band_file)
   endif
 
-  ! allocate the arrays once outside of the main (temperature) loop
-  if (algo%lIntrabandQuantities) then
-    call allocate_response(algo, edisp, temp, resp_intra)
-    if (algo%lBoltzmann) then
-      call allocate_response(algo, edisp, temp, resp_intra_Boltzmann)
-    endif
-  endif
-  if (algo%lInterbandquantities) then
-    call allocate_response(algo, edisp, temp, resp_inter)
-    if (algo%lBoltzmann) then
-      call allocate_response(algo, edisp, temp, resp_inter_Boltzmann)
-    endif
-  endif
-
 
   ! for the responses we need psi_1, psi_2 and psi_3
   if (algo%lIntrabandQuantities .or. algo%lInterbandQuantities) then
-    allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    if (algo%lQuad) then
+      allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    else
+      allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    endif
   endif
 
+  ! allocate the arrays once outside of the main (temperature) loop
   if (algo%lQuad) then
     if (algo%lIntrabandQuantities) then
       call allocate_response(algo, edisp, temp, qresp_intra)
@@ -322,8 +320,18 @@ program main
         call allocate_response(algo, edisp, temp, qresp_inter_Boltzmann)
       endif
     endif
-    if (algo%lIntrabandQuantities .or. algo%lInterbandQuantities) then
-      allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  else
+    if (algo%lIntrabandQuantities) then
+      call allocate_response(algo, edisp, temp, resp_intra)
+      if (algo%lBoltzmann) then
+        call allocate_response(algo, edisp, temp, resp_intra_Boltzmann)
+      endif
+    endif
+    if (algo%lInterbandquantities) then
+      call allocate_response(algo, edisp, temp, resp_inter)
+      if (algo%lBoltzmann) then
+        call allocate_response(algo, edisp, temp, resp_inter_Boltzmann)
+      endif
     endif
   endif
 
@@ -581,16 +589,16 @@ program main
 
       ! initialize the new chemical potential
       if (iT /= iTstart) then
-        pot%MM(iT) = pot%MM(iT-iTstep) ! we initialize it to the value from the previous iteration
-                                       ! this does nothing if mu is constant
+        pot%QMM(iT) = pot%QMM(iT-iTstep) ! we initialize it to the value from the previous iteration
+                                         ! this does nothing if mu is constant
       endif
 
       call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
-        call find_mu(pot%MM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        call find_mu(pot%QMM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       else
-        call find_mu(pot%MM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        call find_mu(pot%QMM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
 
       if (niitact > niitQ) then
@@ -598,38 +606,41 @@ program main
           call stop_with_message(stderr, 'ERROR: Cannot determine mu')
         else if (iTstep == (-1) .and. iT <= iTstart-2) then
           call log_master(stdout, 'Warning: mu determination aborted, using dMu/dT')
-          pot%MM(iT) = pot%MM(iT+1) + (pot%MM(iT+2)-pot%MM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
+          pot%QMM(iT) = pot%QMM(iT+1) + (pot%QMM(iT+2)-pot%QMM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
                                       (temp%TT(iT)-temp%TT(iT+1))
         else
           call log_master(stdout, 'Warning: mu determination aborted, mu from previous step')
-          pot%MM(iT) = pot%MM(iT-iTstep)
+          pot%QMM(iT) = pot%QMM(iT-iTstep)
         endif
       endif
 
       call cpu_time(tfinish)
       timings(2) = timings(2) + (tfinish - tstart)
       tstart = tfinish
+
+      pot%MM(iT) = real(pot%QMM(iT),8)
     endif
 
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
-      call calc_total_energy_fermi(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_fermi(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_fermi(pot%QMM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_fermi(pot%QMM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     else
-      call calc_total_energy_digamma(pot%MM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_digamma(pot%MM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_digamma(pot%QMM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_digamma(pot%QMM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (algo%lTMODE .and. algo%lImpurities) then
-      call occ_impurity(imp_contribution(iT), pot%MM(iT), imp, info)
+      call occ_impurity(ndevactQ, pot%QMM(iT), imp, info)
+      imp_contribution(iT) = real(ndevactQ, 8)
     endif
 
     ! calculates the difference to the demanded electron number
-    call ndeviation_D(pot%MM(iT), pot%occ(iT), edisp, sct, kmesh, imp, algo, info)
+    call ndeviation_Q(pot%QMM(iT), ndevactQ, edisp, sct, kmesh, imp, algo, info)
     ! deviation rescaled to volume is the carrier concentration
-    carrier(iT) = -pot%occ(iT) / kmesh%vol * 1e24 ! 1 / A**3 -> 1 / cm**3
+    carrier(iT) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
-    pot%occ(iT) = edisp%nelect - pot%occ(iT)
+    pot%occ(iT) = edisp%nelect - real(ndevactQ,8)
 
     if (myid.eq.master) then
       write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iT), niitact
@@ -639,23 +650,8 @@ program main
     ! for all optical bands, spins and each core's kpoints
     ! once and use it later for all the different response types
     if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
-      call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
-      ! initialize the already allocated arrays to 0
-      if (algo%lIntraBandQuantities) then
-        call initialize_response(algo, resp_intra)
-        if(algo%lBoltzmann) then
-          call initialize_response(algo, resp_intra_Boltzmann)
-        endif
-      endif
-      if (algo%lInterBandQuantities) then
-        call initialize_response(algo, resp_inter)
-        if (algo%lBoltzmann) then
-          call initialize_response(algo, resp_inter_Boltzmann)
-        endif
-      endif
-
       if (algo%lQuad) then
-        call calc_polygamma(PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        call calc_polygamma(PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
         call initialize_response(algo, qresp_intra)
         if (algo%lInterBandQuantities) then
           call initialize_response(algo, qresp_inter)
@@ -664,6 +660,21 @@ program main
           call initialize_response(algo, qresp_intra_Boltzmann)
           if (algo%lInterBandQuantities) then
             call initialize_response(algo, qresp_inter_Boltzmann)
+          endif
+        endif
+      else
+        call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        ! initialize the already allocated arrays to 0
+        if (algo%lIntraBandQuantities) then
+          call initialize_response(algo, resp_intra)
+          if(algo%lBoltzmann) then
+            call initialize_response(algo, resp_intra_Boltzmann)
+          endif
+        endif
+        if (algo%lInterBandQuantities) then
+          call initialize_response(algo, resp_inter)
+          if (algo%lBoltzmann) then
+            call initialize_response(algo, resp_inter_Boltzmann)
           endif
         endif
       endif
@@ -676,34 +687,33 @@ program main
     ! do the k-point loop and calculate the response
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-
-      ! double precision routines
-      if (algo%lIntrabandQuantities) then
-        call response_intra_km(resp_intra,  PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
-        if (algo%lBoltzmann) then
-          call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
-        endif
-      endif
-
-      if (algo%lInterbandquantities) then
-        call response_inter_km(resp_inter, PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
-        if (algo%lBoltzmann) then
-          call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
-        endif
-      endif
-
-      ! quad precision routines
       if (algo%lQuad) then
+        ! quad precision routines
         if (algo%lIntrabandQuantities) then
-          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%QMM(iT), edisp, sct, kmesh, algo, info)
           endif
         endif
         if (algo%lInterBandQuantities) then
-          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+          endif
+        endif
+      else
+        ! double precision routines
+        if (algo%lIntrabandQuantities) then
+          call response_intra_km(resp_intra,  PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          if (algo%lBoltzmann) then
+            call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          endif
+        endif
+
+        if (algo%lInterbandquantities) then
+          call response_inter_km(resp_inter, PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          if (algo%lBoltzmann) then
+            call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
           endif
         endif
       endif
@@ -715,32 +725,31 @@ program main
 
     ! output the response
     ! this subroutines include the summations necessary
-    if (algo%lIntrabandQuantities) then
-      call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
-      if (algo%lBoltzmann) then
-        call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
-      endif
-    endif
-    if (algo%lInterbandQuantities) then
-      ! here we don't have the Bfield quantities ... no optical elements yet
-      call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
-      if (algo%lBoltzmann) then
-        call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
-      endif
-    endif
-
     if (algo%lQuad) then
       if (algo%lIntrabandQuantities) then
-        call response_h5_output_Q(qresp_intra, "intraQuad", edisp, algo, info, temp, kmesh)
+        call response_h5_output_Q(qresp_intra, "intra", edisp, algo, info, temp, kmesh)
         if (algo%lBoltzmann) then
-          call response_h5_output_Q(qresp_intra_Boltzmann, "intraQuadBoltzmann", edisp, algo, info, temp, kmesh)
+          call response_h5_output_Q(qresp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
         endif
       endif
-
       if (algo%lInterbandQuantities) then
-        call response_h5_output_Q(qresp_inter, "interQuad", edisp, algo, info, temp, kmesh, .false.)
+        call response_h5_output_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
         if (algo%lBoltzmann) then
-          call response_h5_output_Q(qresp_inter_Boltzmann, "interQuadBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call response_h5_output_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+        endif
+      endif
+    else
+      if (algo%lIntrabandQuantities) then
+        call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
+        if (algo%lBoltzmann) then
+          call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+        endif
+      endif
+      if (algo%lInterbandQuantities) then
+        ! here we don't have the Bfield quantities ... no optical elements yet
+        call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+        if (algo%lBoltzmann) then
+          call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
         endif
       endif
     endif
@@ -748,7 +757,7 @@ program main
     ! output the renormalized energies defined by Z*(ek - mu)
     ! for each temperature point
     if (myid.eq.master .and. algo%lEnergyOutput) then
-      call output_energies(pot%MM(iT), algo, edisp,kmesh,sct,info)
+      call output_energies(pot%MM(iT), algo, edisp,kmesh,sct,info) ! double is good enough here
     endif
 
     call cpu_time(tfinish)

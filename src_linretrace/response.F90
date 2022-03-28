@@ -68,17 +68,16 @@ end subroutine initresp_qp
 
 subroutine response_intra_km(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
-  type (response_dp)  :: resp
+  real(8), intent(in)  :: mu
+  type (response_dp)   :: resp
 
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
+  type(energydisp)     :: edisp
+  type(scattering)     :: sct
+  type(kpointmesh)     :: kmesh
+  type(algorithm)      :: algo
+  type(runinfo)        :: info
 
-  complex(8)          :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
-
+  complex(8)           :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
   real(8), allocatable :: enrgy(:,:)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
@@ -471,14 +470,14 @@ end subroutine response_intra_Boltzmann_km
 
 subroutine response_intra_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
-  type (response_qp)      :: resp
+  real(16), intent(in)  :: mu
+  type (response_qp)    :: resp
 
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
+  type(energydisp)      :: edisp
+  type(scattering)      :: sct
+  type(kpointmesh)      :: kmesh
+  type(algorithm)       :: algo
+  type(runinfo)         :: info
 
   real(16), allocatable :: enrgy(:,:)
 
@@ -708,14 +707,14 @@ end subroutine response_inter_Boltzmann_km
 
 subroutine response_inter_Boltzmann_km_Q(resp, mu, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
-  type (response_qp)  :: resp
+  real(16), intent(in) :: mu
+  type (response_qp)   :: resp
 
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
+  type(energydisp)     :: edisp
+  type(scattering)     :: sct
+  type(kpointmesh)     :: kmesh
+  type(algorithm)      :: algo
+  type(runinfo)        :: info
 
   real(16), allocatable :: enrgy(:,:)
   real(16), allocatable :: enrgydiff(:)
@@ -1506,7 +1505,7 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
   type(scattering) :: sct
   type(runinfo)    :: info
 
-  real(8), intent(in) :: mu
+  real(16), intent(in) :: mu
   complex(16) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   complex(16), external :: wpsipghp
@@ -1535,7 +1534,7 @@ subroutine calc_polygamma_Q(PolyGamma, mu, edisp, sct, kmesh, algo, info)
 end subroutine calc_polygamma_Q
 
 subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
-  real(8), intent(in)  :: mu
+  real(16), intent(in)  :: mu
   real(8), intent(out) :: energy_tot
 
   type(energydisp) :: edisp
@@ -1546,21 +1545,21 @@ subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, alg
   type(runinfo)    :: info
   !local variables
 
-  real(8) :: energy_loc
+  real(16) :: energy_loc, energy_sum
   integer :: is, ik, iband, iimp
-  complex(8), allocatable :: to_evaluate(:,:,:)
-  real(8), allocatable    :: energy_post_factor(:,:,:)
-  real(8), allocatable    :: energy(:,:,:)
+  complex(16), allocatable :: to_evaluate(:,:,:)
+  real(16), allocatable    :: energy_post_factor(:,:,:)
+  real(16), allocatable    :: energy(:,:,:)
   !external variables
-  complex(8), external :: wpsipg
+  complex(16), external :: wpsipghp
 
   allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(energy_post_factor(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(energy(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   ! for the occupation
-  to_evaluate = 0.5d0 + info%beta2p * &
-                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
+  to_evaluate = 0.5q0 + info%beta2pQ * &
+                (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
   ! energy contribution : occupation * energy of this occupation
   energy_post_factor = sct%zqp(:,ikstr:ikend,:) * (edisp%band(:,ikstr:ikend,:) - mu)
 
@@ -1568,8 +1567,8 @@ subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, alg
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        energy(iband,ik,is) = 0.5d0 + aimag(wpsipg(to_evaluate(iband,ik,is),0))/pi ! this is the occupation
-        energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weight(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
+        energy(iband,ik,is) = 0.5q0 + aimag(wpsipghp(to_evaluate(iband,ik,is),0))/piQ ! this is the occupation
+        energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weightQ(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
       enddo
     enddo
   enddo
@@ -1578,26 +1577,30 @@ subroutine calc_total_energy_digamma(mu, energy_tot, edisp, sct, kmesh, imp, alg
   deallocate(energy_post_factor)
   energy_loc = sum(energy)
   deallocate(energy)
+  energy_sum = 0.q0
 
 #ifdef MPI
-  call MPI_ALLREDUCE(energy_loc, energy_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  call mpi_reduce_quad(energy_sum, energy_loc)
 #else
-  energy_tot = energy_loc
+  energy_sum = energy_loc
 #endif
 
+  energy_tot = real(energy_sum,8)
+  return
+
   ! if we have impurity levels add their energy contribution here
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
-        * imp%Energy(iimp)
-    enddo
-  endif
+  ! if (algo%lImpurities) then
+  !   do iimp = 1,imp%nimp
+  !     energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+  !       / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
+  !       * imp%Energy(iimp)
+  !   enddo
+  ! endif
 
 end subroutine
 
 subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo, info)
-  real(8), intent(in)  :: mu
+  real(16), intent(in) :: mu
   real(8), intent(out) :: energy_tot
 
   type(energydisp) :: edisp
@@ -1608,12 +1611,10 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
   type(runinfo)    :: info
   !local variables
 
-  real(8) :: energy_loc
+  real(16) :: energy_loc, energy_sum
   integer :: is, ik, iband, iimp
-  real(8), allocatable    :: energy_post_factor(:,:,:)
-  real(8), allocatable    :: energy(:,:,:)
-  !external variables
-  complex(8), external :: wpsipg
+  real(16), allocatable    :: energy_post_factor(:,:,:)
+  real(16), allocatable    :: energy(:,:,:)
 
   allocate(energy_post_factor(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(energy(edisp%nband_max, ikstr:ikend, edisp%ispin))
@@ -1625,8 +1626,8 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        energy(iband,ik,is) = fermi_dp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)   ! occupation
-        energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weight(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
+        energy(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)   ! occupation
+        energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weightQ(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
       enddo
     enddo
   enddo
@@ -1636,24 +1637,27 @@ subroutine calc_total_energy_fermi(mu, energy_tot, edisp, sct, kmesh, imp, algo,
   deallocate(energy)
 
 #ifdef MPI
-  call MPI_ALLREDUCE(energy_loc, energy_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+  call mpi_reduce_quad(energy_sum, energy_loc)
 #else
-  energy_tot = energy_loc
+  energy_sum = energy_loc
 #endif
 
+  energy_tot = real(energy_sum,8)
+  return
+
   ! if we have impurity levels add their energy contribution here
-  if (algo%lImpurities) then
-    do iimp = 1,imp%nimp
-      energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
-        * imp%Energy(iimp)
-    enddo
-  endif
+  ! if (algo%lImpurities) then
+  !   do iimp = 1,imp%nimp
+  !     energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
+  !       / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
+  !       * imp%Energy(iimp)
+  !   enddo
+  ! endif
 
 end subroutine
 
 subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
-  real(8), intent(in)  :: mu
+  real(16), intent(in) :: mu
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
 
@@ -1677,7 +1681,6 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
   real(16) :: holesmpi
 
   !external variables
-  complex(8), external :: wpsipg
   complex(16), external :: wpsipghp
 
   ! evaluate the function
@@ -1730,7 +1733,7 @@ subroutine calc_elecholes_digamma(mu, electrons_total, holes_total, edisp, sct, 
 end subroutine
 
 subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
-  real(8), intent(in)  :: mu
+  real(16), intent(in) :: mu
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
 
@@ -1763,8 +1766,8 @@ subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, km
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        elecs = fermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        holes = omfermi_dpqp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        elecs = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
+        holes = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
 
         if (algo%lTMODE) then
           if (edisp%gapped(is)) then
@@ -1803,73 +1806,19 @@ subroutine calc_elecholes_fermi(mu, electrons_total, holes_total, edisp, sct, km
 
 end subroutine
 
-subroutine intldos(mu, dos, edisp, sct, kmesh, algo, info)
-  !passed variables
-  real(8), intent(in) :: mu
-  type(dosgrid)    :: dos
-  type(algorithm)  :: algo
-  type(energydisp) :: edisp
-  type(kpointmesh) :: kmesh
-  type(scattering) :: sct
-  type(runinfo)    :: info
-
-  !local variables
-  integer :: ee, ik, iband
-  real(8) :: eps, eta
-  real(8) :: s, dee
-  real(8), allocatable :: AA(:)
-  complex(8) :: iu, G0
-
-  real(8) :: dw = 1.d-3
-  integer :: nw
-
-  nw = int(10.d0/dw)
-
-  allocate(AA(-nw:nw))
-
-
-
-  AA = 0.0d0
-  do ee=-nw,nw
-    do ik=1,kmesh%nkp
-       do iband= 1,edisp%nband_max
-           eps =  mu - edisp%band(iband,ik,1)
-           G0 = sct%zqp(iband,ik,1) / (dw*ee + sct%zqp(iband,ik,1) * (eps + ci*sct%gam(iband,ik,1)))
-           ! A = -1/pi  Im G0
-           AA(ee) = AA(ee) - aimag(G0)*kmesh%weight(ik)
-        enddo
-     enddo
-  enddo !ee
-  AA = AA/pi
-
-  !!use trapezoidal rule to evaluate the number of electrons
-  !s=0.5d0*(AA(1)+AA(dos%nnrg))
-  !do ee=2,dos%nnrg-1
-  !   s=s+AA(ee)
-  !enddo
-
-  ! do ee=-nw,nw
-  !    write(120,'(E12.6,3x,E12.6)') dw*ee,AA(ee)
-  ! enddo
-
-  deallocate(AA)
-
-end subroutine intldos
-
 subroutine response_intra_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
-  type (response_qp)  :: resp
+  real(16), intent(in)  :: mu
+  type (response_qp)    :: resp
 
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
+  type(energydisp)      :: edisp
+  type(scattering)      :: sct
+  type(kpointmesh)      :: kmesh
+  type(algorithm)       :: algo
+  type(runinfo)         :: info
 
-  complex(16)          :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
-
-  real(8), allocatable :: enrgy(:,:)
+  complex(16)           :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+  real(16), allocatable :: enrgy(:,:)
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
@@ -1968,21 +1917,21 @@ end subroutine response_intra_km_Q
 
 subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, info)
   implicit none
-  real(8), intent(in) :: mu
-  type (response_qp)  :: resp
+  real(16), intent(in) :: mu
+  type (response_qp)   :: resp
 
-  type(energydisp)    :: edisp
-  type(scattering)    :: sct
-  type(kpointmesh)    :: kmesh
-  type(algorithm)     :: algo
-  type(runinfo)       :: info
+  type(energydisp)     :: edisp
+  type(scattering)     :: sct
+  type(kpointmesh)     :: kmesh
+  type(algorithm)      :: algo
+  type(runinfo)        :: info
 
-  complex(16)         :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+  complex(16)          :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   ! these stay double precision .. because we read them from files
-  real(8), allocatable :: enrgy(:,:)
-  real(8), allocatable :: enrgydiff(:)
-  real(8), allocatable :: gamdiff(:)
+  real(16), allocatable :: enrgy(:,:)
+  real(16), allocatable :: enrgydiff(:)
+  real(16), allocatable :: gamdiff(:)
 
   complex(16) :: calc_sigma
   complex(16) :: calc_alpha
@@ -2016,7 +1965,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, mu, edisp, sct, kmesh, algo, inf
 
       do is = 1,edisp%ispin
 
-        if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
+        if ((abs(enrgydiff(is)) .lt. 1q-6) .and. (abs(gamdiff(is)) .lt. 1q-6)) then
 
           ! use the intra-band limit .....
           calc_sigma  = real(PolyGamma(1,iband1,info%ik,is)) &
