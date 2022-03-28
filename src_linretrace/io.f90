@@ -116,13 +116,17 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, pot, imp)
 
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
-      if (edisp%ispin == 1 .and. imp%inputspin(iimp) /= 1) then
-        call stop_with_message(stderr, 'Error: Spin type must be 1')
-      else if (edisp%ispin == 2 .and. .not. (imp%inputspin(iimp) == 1 .or. imp%inputspin(iimp) == 2)) then
+      ! coming from the config file we might have 0 1 or 2 -> set to 1 for internal access
+      if (edisp%ispin == 1) then
+        imp%inputspin(iimp) = 1
+      endif
+
+      ! we have to explicitly provide the spin
+      if (edisp%ispin == 2 .and. .not. (imp%inputspin(iimp) == 1 .or. imp%inputspin(iimp) == 2)) then
         call stop_with_message(stderr, 'Error: Spin type must be 1 or 2')
       endif
 
-      if ((imp%inputtype(iimp) > 0) .and. (edisp%gapped(imp%inputspin(iimp)) .eqv. .false.)) then
+      if ((imp%inputtype(iimp) > 1) .and. (edisp%gapped(imp%inputspin(iimp)) .eqv. .false.)) then
         call stop_with_message(stderr, 'Error: Relative impurity position not available in gapless system')
       endif
     enddo

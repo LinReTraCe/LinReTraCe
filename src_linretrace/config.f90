@@ -539,7 +539,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           endif
         else
           if (nshape(1) == 4) then
-            imp%inputspin(iimp) = 1 ! default to spin up
+            imp%inputspin(iimp) = 0
           else if (nshape(1) /= 5) then
             call stop_with_message(stderr, 'Relative impurity description have 4 or 5 parameters in '//str_imp)
           endif
