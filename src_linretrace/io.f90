@@ -390,13 +390,13 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   ! temperature grid ... already pre-computated
   call hdf5_read_data(ifile, "/.quantities/Tmin", temp%Tmin)
   call hdf5_read_data(ifile, "/.quantities/Tmax", temp%Tmax)
-  call hdf5_read_data(ifile, "/.quantities/nT",   temp%nT)
+  call hdf5_read_data(ifile, "/.quantities/nT",   algo%steps)
 
   call hdf5_read_data(ifile, "/.quantities/tempAxis", temp%TT)
   call hdf5_read_data(ifile, "/.quantities/betaAxis", temp%BB)
 
   call hdf5_read_data(ifile, "/.quantities/muAxis", pot%MM)
-  allocate(pot%QMM(temp%nT))
+  allocate(pot%QMM(algo%steps))
   pot%QMM = pot%MM
 
 
@@ -524,20 +524,20 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
   endif
 
   ! now we read this string array into the according data arrays
-  temp%nT = lines
-  allocate(temp%TT(temp%nT))
-  allocate(temp%BB(temp%nT))
-  allocate(sct%gamtext(temp%nT, edisp%ispin))
-  allocate(sct%zqptext(temp%nT, edisp%ispin))
+  algo%steps = lines
+  allocate(temp%TT(algo%steps))
+  allocate(temp%BB(algo%steps))
+  allocate(sct%gamtext(algo%steps, edisp%ispin))
+  allocate(sct%zqptext(algo%steps, edisp%ispin))
   allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
   allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
   if (cnt == 3) then
-    do i=1,temp%nT
+    do i=1,algo%steps
       read(file_save(i),*) temp%TT(i), sct%gamtext(i,1), sct%zqptext(i,1)
     enddo
   else
-    do i=1,temp%nT
+    do i=1,algo%steps
       read(file_save(i),*) temp%TT(i), sct%gamtext(i,1), sct%gamtext(i,2), sct%zqptext(i,1), sct%zqptext(i,2)
     enddo
   endif
@@ -591,6 +591,8 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'energyOutput', algo%lEnergyOutput)
   call hdf5_write_attribute(ifile, '.config', 'boltzmann', algo%lBoltzmann)
   call hdf5_write_attribute(ifile, '.config', 'scissors', algo%lScissors)
+  call hdf5_write_attribute(ifile, '.config', 'steps', algo%steps)
+  call hdf5_write_attribute(ifile, '.config', 'steps_dir', algo%step_dir)
   call hdf5_write_attribute(ifile, '.config', 'impurities', algo%lImpurities)
   call hdf5_write_attribute(ifile, '.config', 'input_energies', trim(algo%input_energies))
   if (len(trim(algo%input_scattering_hdf5)) == 0) then
@@ -730,11 +732,11 @@ subroutine output_energies(mu, algo, edisp, kmesh, sct, info)
 
   enrgy = sct%zqp * (edisp%band - mu)
 
-  write(string,'(I6.6,"/energies")') info%iT
+  write(string,'(I6.6,"/energies")') info%iStep
   call hdf5_open_file(algo%output_file, ifile)
   call hdf5_write_data(ifile, string, enrgy)
 
-  write(string,'(I6.6)') info%iT
+  write(string,'(I6.6)') info%iStep
   call hdf5_write_attribute(ifile, string, "temperature", info%temp)
   call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
 
@@ -787,14 +789,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
   deallocate(hdf5shape)
 
   if (edisp%ispin == 1) then
-    write(string,'("step/",I6.6,"/scatrate")') info%iT
+    write(string,'("step/",I6.6,"/scatrate")') info%iStep
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("step/",I6.6,"/qpweight")') info%iT
+    write(string,'("step/",I6.6,"/qpweight")') info%iStep
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("step/",I6.6,"/bandshift")') info%iT
+      write(string,'("step/",I6.6,"/bandshift")') info%iStep
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
@@ -834,14 +836,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
 
   else
 
-    write(string,'("up/step/",I6.6,"/scatrate")') info%iT
+    write(string,'("up/step/",I6.6,"/scatrate")') info%iStep
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("up/step/",I6.6,"/qpweight")') info%iT
+    write(string,'("up/step/",I6.6,"/qpweight")') info%iStep
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("up/step/",I6.6,"/bandshift")') info%iT
+      write(string,'("up/step/",I6.6,"/bandshift")') info%iStep
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
@@ -875,14 +877,14 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
       endif
     endif
 
-    write(string,'("dn/step/",I6.6,"/scatrate")') info%iT
+    write(string,'("dn/step/",I6.6,"/scatrate")') info%iStep
     call hdf5_read_data(ifile, string, darr2_1)
 
-    write(string,'("dn/step/",I6.6,"/qpweight")') info%iT
+    write(string,'("dn/step/",I6.6,"/qpweight")') info%iStep
     call hdf5_read_data(ifile, string, darr2_2)
 
     if (edisp%lBandShift) then
-      write(string,'("dn/step/",I6.6,"/bandshift")') info%iT
+      write(string,'("dn/step/",I6.6,"/bandshift")') info%iStep
       call hdf5_read_data(ifile, string, darr2_3)
     endif
 
@@ -963,22 +965,22 @@ subroutine read_optical_elements(ifile, edisp, sct, info)
 
 end subroutine
 
-subroutine read_muT_hdf5(temp, oldoutput, mu)
+subroutine read_muT_hdf5(algo, temp, mu)
   implicit none
+  type(algorithm)   :: algo
   type(temperature) :: temp
-  character(len=*)  :: oldoutput
-  real(8)           :: mu(temp%nT)
+  real(8)           :: mu(algo%steps)
 
   integer(hid_t)       :: ifile
   real(8), allocatable :: mutemp(:)
   integer              :: shapemu(1)
 
-  call hdf5_open_file(oldoutput, ifile, rdonly=.true.)
+  call hdf5_open_file(algo%old_output_file, ifile, rdonly=.true.)
   call hdf5_read_data(ifile, '.quantities/mu', mutemp)
 
   shapemu = shape(mutemp)
 
-  if (.not. (temp%nT == shapemu(1))) then
+  if (.not. (algo%steps == shapemu(1))) then
     call stop_with_message(stdout, 'chemical potential array from old file does not match user input')
   endif
 
@@ -988,11 +990,11 @@ subroutine read_muT_hdf5(temp, oldoutput, mu)
 
 end subroutine read_muT_hdf5
 
-subroutine read_muT_text(temp, inputmu, mu)
+subroutine read_muT_text(algo, temp, mu)
   implicit none
+  type(algorithm)   :: algo
   type(temperature) :: temp
-  character(len=*)  :: inputmu
-  real(8)           :: mu(temp%nT)
+  real(8)           :: mu(algo%steps)
 
   character(len=256) :: str_temp
   integer            :: i,j
@@ -1004,7 +1006,7 @@ subroutine read_muT_text(temp, inputmu, mu)
   real(8) :: fdum1, fdum2
 
 
-  open(unit=10,file=trim(inputmu),action='read',iostat=stat)
+  open(unit=10,file=trim(algo%input_mu_text),action='read',iostat=stat)
   if (stat .ne. 0) then
     call stop_with_message(stderr, 'ScatteringText Input file cannot be opened') ! send to stderr
   endif
@@ -1055,12 +1057,12 @@ subroutine read_muT_text(temp, inputmu, mu)
   lines=lines-empty
   close(unit=10)
 
-  if (lines /= temp%nT) then
+  if (lines /= algo%steps) then
     call stop_with_message(stderr, 'Error: Number of provided mu values does not coincide with temp grid')
   endif
   ! now we read this string array into the according data arrays
 
-  do i=1,temp%nT
+  do i=1,algo%steps
     read(file_save(i),*) fdum1, mu(i)
   enddo
 

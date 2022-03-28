@@ -34,6 +34,10 @@ module Mtypes
     logical :: lRedoMudft     ! flag to recalculate the provided dft chemical potential
     logical :: lDoping        ! include doping
 
+    integer :: steps          ! number of steps
+    integer :: step_dir       ! step direction
+                              ! +1 [1...steps] -- -1 [steps...1]
+
     character(len=256) :: input_energies
     character(len=256) :: input_scattering_hdf5
     character(len=256) :: input_scattering_text
@@ -141,24 +145,20 @@ module Mtypes
 
   type temperature
     logical :: tlogarithmic        ! logarithmic steps
-    integer :: nT                  ! number of points in the temperature window
-    integer :: Tstep               ! +1 or -1
     real(8) :: Tmin                ! bottom of the temperature window
     real(8) :: Tmax                ! top of the temperature window
     real(8) :: dT                  ! temperature spacing
     real(8), allocatable :: TT(:)  ! temperature grid [K]
     real(8), allocatable :: BB(:)  ! inverse temperature grid [eV]
 
-    real(8) :: temp                ! temporary variable
+    real(8) :: temp_config         ! temperature provided by config file
   end type
 
   type potential
-    logical :: mlogarithmic         ! logarithmic steps
-    integer :: nMu
-    integer :: Mustep
-    real(8) :: MuMin
-    real(8) :: MuMax
-    real(8) :: dMu
+    logical  :: mlogarithmic         ! logarithmic steps
+    real(8)  :: MuMin
+    real(8)  :: MuMax
+    real(16) :: dMu
     real(8), allocatable  :: MM(:)  ! mu array
     real(16), allocatable :: QMM(:) ! same mu array in quad precision
     real(8), allocatable  :: occ(:) ! corresponding occupation
@@ -170,17 +170,18 @@ module Mtypes
 
   type runinfo
     ! information about the current status of the run
-    ! i.e. current temperature, and k-point
-    integer  :: iT
-    real(8)  :: Temp
+
+    integer  :: iStep ! current step number
+
+    real(8)  :: Temp  ! current temperature
     real(8)  :: beta
     real(8)  :: beta2p
 
-    real(16) :: TempQ
+    real(16) :: TempQ ! current temperature quad
     real(16) :: betaQ
     real(16) :: beta2pQ
 
-    real(8)  :: mu
+    real(8)  :: mu    ! current chemical potential
     real(16) :: muQ
 
     integer  :: ik
@@ -205,14 +206,6 @@ module Mtypes
     complex(8), allocatable :: aB_full(:,:,:,:,:,:)
     complex(8), allocatable :: x_full(:,:,:,:,:)
     complex(8), allocatable :: xB_full(:,:,:,:,:,:)
-
-    ! gather arrays for MPI
-    complex(8), allocatable :: s_gather(:,:,:,:,:)
-    complex(8), allocatable :: sB_gather(:,:,:,:,:,:)
-    complex(8), allocatable :: a_gather(:,:,:,:,:)
-    complex(8), allocatable :: aB_gather(:,:,:,:,:,:)
-    complex(8), allocatable :: x_gather(:,:,:,:,:)
-    complex(8), allocatable :: xB_gather(:,:,:,:,:,:)
 
     ! total band and k-summation
     complex(8), allocatable :: s_sum(:,:,:)
@@ -239,14 +232,6 @@ module Mtypes
     complex(16), allocatable :: aB_full(:,:,:,:,:,:)
     complex(16), allocatable :: x_full(:,:,:,:,:)
     complex(16), allocatable :: xB_full(:,:,:,:,:,:)
-
-    ! gather arrays for MPI
-    complex(16), allocatable :: s_gather(:,:,:,:,:)
-    complex(16), allocatable :: sB_gather(:,:,:,:,:,:)
-    complex(16), allocatable :: a_gather(:,:,:,:,:)
-    complex(16), allocatable :: aB_gather(:,:,:,:,:,:)
-    complex(16), allocatable :: x_gather(:,:,:,:,:)
-    complex(16), allocatable :: xB_gather(:,:,:,:,:,:)
 
     ! band and k-summation
     complex(16), allocatable :: s_sum(:,:,:)

@@ -1049,12 +1049,16 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
   integer :: iband, ik
 
-  ! purely for output purposes
-  ! we get the responses on the optical ranges
-  ! we shift them onto the full energy range
-  ! to avoid confusion when handling full output arrays
-  ! for the time being this remains an internal switch
-  logical :: lshift = .true. ! shift output to energy range
+  logical :: lshift = .true.
+
+  ! gather arrays for MPI
+  complex(8), allocatable :: s_gather(:,:,:,:,:)
+  complex(8), allocatable :: sB_gather(:,:,:,:,:,:)
+  complex(8), allocatable :: a_gather(:,:,:,:,:)
+  complex(8), allocatable :: aB_gather(:,:,:,:,:,:)
+  complex(8), allocatable :: x_gather(:,:,:,:,:)
+  complex(8), allocatable :: xB_gather(:,:,:,:,:,:)
+
   complex(8),  allocatable :: s_shift_array(:,:,:,:,:)
   complex(8),  allocatable :: a_shift_array(:,:,:,:,:)
   complex(8),  allocatable :: x_shift_array(:,:,:,:,:)
@@ -1084,90 +1088,90 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   if (algo%fullOutput > 0) then
     ! we gather all the data at the master node and write it to hdf5
     if (myid .eq. master) then
-      allocate(resp%s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      allocate(s_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       if (lshift) allocate(s_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
-      allocate(resp%s_gather(1,1,1,1,1))
+      allocate(s_gather(1,1,1,1,1))
     endif
 #ifdef MPI
     call MPI_gatherv(resp%s_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     MPI_DOUBLE_COMPLEX, resp%s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, s_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                      displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                      MPI_COMM_WORLD, mpierr)
 #else
-    resp%s_gather = resp%s_full
+    s_gather = resp%s_full
 #endif
 
     if (myid .eq. master) then
-      allocate(resp%a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      allocate(a_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       if (lshift) allocate(a_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
-      allocate(resp%a_gather(1,1,1,1,1))
+      allocate(a_gather(1,1,1,1,1))
     endif
 #ifdef MPI
     call MPI_gatherv(resp%a_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     MPI_DOUBLE_COMPLEX, resp%a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, a_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                      displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                      MPI_COMM_WORLD, mpierr)
 #else
-    resp%a_gather = resp%a_full
+    a_gather = resp%a_full
 #endif
 
     if (myid .eq. master) then
-      allocate(resp%x_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+      allocate(x_gather(3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
       if (lshift) allocate(x_shift_array(3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
     else
-      allocate(resp%x_gather(1,1,1,1,1))
+      allocate(x_gather(1,1,1,1,1))
     endif
 #ifdef MPI
     call MPI_gatherv(resp%x_full,(ikend-ikstr+1)*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                     MPI_DOUBLE_COMPLEX, resp%x_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                     MPI_DOUBLE_COMPLEX, x_gather, rcounts*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                      displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                      MPI_COMM_WORLD, mpierr)
 #else
-    resp%x_gather = resp%x_full
+    x_gather = resp%x_full
 #endif
 
-    resp%s_gather = resp%s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> 1/(Ohm*m) = A / (V * m)
-    resp%a_gather = resp%a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> A / m
-    resp%x_gather = resp%x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> VA / m
+    s_gather = s_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> 1/(Ohm*m) = A / (V * m)
+    a_gather = a_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> A / m
+    x_gather = x_gather * pi * ( echarge / (kmesh%vol*hbarevs)) * 1.d10 ! -> VA / m
 
     if (lshift) then
       ! shift onto full range
-      s_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%s_gather
-      a_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%a_gather
-      x_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%x_gather
+      s_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = s_gather
+      a_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = a_gather
+      x_shift_array(:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = x_gather
     endif
 
     if (myid .eq. master) then
-      write(string,'(I6.6)') info%iT
+      write(string,'(I6.6)') info%iStep
       string = trim(string) // "/L11/" // trim(adjustl(gname)) // "/full"
       if (lshift) then
         call hdf5_write_data(ifile, string, s_shift_array)
       else
-        call hdf5_write_data(ifile, string, resp%s_gather)
+        call hdf5_write_data(ifile, string, s_gather)
       endif
 
-      write(string,'(I6.6)') info%iT
+      write(string,'(I6.6)') info%iStep
       string = trim(string) // "/L12/" // trim(adjustl(gname)) // "/full"
       if (lshift) then
         call hdf5_write_data(ifile, string, a_shift_array)
       else
-        call hdf5_write_data(ifile, string, resp%a_gather)
+        call hdf5_write_data(ifile, string, a_gather)
       endif
 
-      write(string,'(I6.6)') info%iT
+      write(string,'(I6.6)') info%iStep
       string = trim(string) // "/L22/" // trim(adjustl(gname)) // "/full"
       if (lshift) then
         call hdf5_write_data(ifile, string, x_shift_array)
       else
-        call hdf5_write_data(ifile, string, resp%x_gather)
+        call hdf5_write_data(ifile, string, x_gather)
       endif
     endif
 
-    deallocate(resp%s_gather)
-    deallocate(resp%a_gather)
-    deallocate(resp%x_gather)
+    deallocate(s_gather)
+    deallocate(a_gather)
+    deallocate(x_gather)
     if (myid.eq.master .and. lshift) then
       deallocate(s_shift_array)
       deallocate(a_shift_array)
@@ -1216,12 +1220,12 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
   if (myid .eq. master) then
     ! gather the data in the arrays
-    resp%s_sum_range(:,:,:,info%iT) = resp%s_sum
-    resp%a_sum_range(:,:,:,info%iT) = resp%a_sum
-    resp%x_sum_range(:,:,:,info%iT) = resp%x_sum
+    resp%s_sum_range(:,:,:,info%iStep) = resp%s_sum
+    resp%a_sum_range(:,:,:,info%iStep) = resp%a_sum
+    resp%x_sum_range(:,:,:,info%iStep) = resp%x_sum
 
     ! output at the last temperature step
-    if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+    if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
       string = "/L11/" // trim(adjustl(gname)) // "/sum"
       call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L12/" // trim(adjustl(gname)) // "/sum"
@@ -1235,90 +1239,90 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
   if (lBoutput) then
     if (algo%fullOutput > 0) then
       if (myid .eq. master) then
-        allocate(resp%sB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(sB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
         if (lshift) allocate(sB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%sB_gather(1,1,1,1,1,1))
+        allocate(sB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
       call MPI_gatherv(resp%sB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%sB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, sB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
-      resp%sB_gather = resp%sB_full
+      sB_gather = resp%sB_full
 #endif
 
       if (myid .eq. master) then
-        allocate(resp%aB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(aB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
         if (lshift) allocate(aB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%aB_gather(1,1,1,1,1,1))
+        allocate(aB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
       call MPI_gatherv(resp%aB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%aB_gather, rcounts*29*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, aB_gather, rcounts*29*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
-      resp%aB_gather = resp%aB_full
+      aB_gather = resp%aB_full
 #endif
 
       if (myid .eq. master) then
-        allocate(resp%xB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
+        allocate(xB_gather(3,3,3,edisp%nbopt_min:edisp%nbopt_max,edisp%ispin,kmesh%nkp))
         if (lshift) allocate(xB_shift_array(3,3,3,edisp%nband_max,edisp%ispin,kmesh%nkp))
       else
-        allocate(resp%xB_gather(1,1,1,1,1,1))
+        allocate(xB_gather(1,1,1,1,1,1))
       endif
 #ifdef MPI
       call MPI_gatherv(resp%xB_full,(ikend-ikstr+1)*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
-                       MPI_DOUBLE_COMPLEX, resp%xB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
+                       MPI_DOUBLE_COMPLEX, xB_gather, rcounts*27*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, &
                        displs*9*(edisp%nbopt_max-edisp%nbopt_min+1)*edisp%ispin, MPI_DOUBLE_COMPLEX, master, &
                        MPI_COMM_WORLD, mpierr)
 #else
-      resp%xB_gather = resp%xB_full
+      xB_gather = resp%xB_full
 #endif
 
-      resp%sB_gather = resp%sB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
-      resp%aB_gather = resp%aB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
-      resp%xB_gather = resp%xB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
+      sB_gather = sB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+      aB_gather = aB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
+      xB_gather = xB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
 
       if (lshift) then
-        sB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%sB_gather
-        aB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%aB_gather
-        xB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = resp%xB_gather
+        sB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = sB_gather
+        aB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = aB_gather
+        xB_shift_array(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = xB_gather
       endif
 
       if (myid .eq. master) then
-        write(string,'(I6.6)') info%iT
+        write(string,'(I6.6)') info%iStep
         string = trim(string) // "/L11M/" // trim(adjustl(gname)) // "/full"
         if (lshift) then
           call hdf5_write_data(ifile, string, sB_shift_array)
         else
-          call hdf5_write_data(ifile, string, resp%sB_gather)
+          call hdf5_write_data(ifile, string, sB_gather)
         endif
 
-        write(string,'(I6.6)') info%iT
+        write(string,'(I6.6)') info%iStep
         string = trim(string) // "/L12M/" // trim(adjustl(gname)) // "/full"
         if (lshift) then
           call hdf5_write_data(ifile, string, aB_shift_array)
         else
-          call hdf5_write_data(ifile, string, resp%aB_gather)
+          call hdf5_write_data(ifile, string, aB_gather)
         endif
 
-        write(string,'(I6.6)') info%iT
+        write(string,'(I6.6)') info%iStep
         string = trim(string) // "/L22M/" // trim(adjustl(gname)) // "/full"
         if (lshift) then
           call hdf5_write_data(ifile, string, xB_shift_array)
         else
-          call hdf5_write_data(ifile, string, resp%xB_gather)
+          call hdf5_write_data(ifile, string, xB_gather)
         endif
 
       endif
 
-      deallocate(resp%sB_gather)
-      deallocate(resp%aB_gather)
-      deallocate(resp%xB_gather)
+      deallocate(sB_gather)
+      deallocate(aB_gather)
+      deallocate(xB_gather)
       if (myid.eq.master .and. lshift) then
         deallocate(sB_shift_array)
         deallocate(aB_shift_array)
@@ -1363,12 +1367,12 @@ subroutine response_h5_output(resp, gname, edisp, algo, info, temp, kmesh, lBfie
 
     if (myid .eq. master) then
       ! gather the data in the arrays
-      resp%sB_sum_range(:,:,:,:,info%iT) = resp%sB_sum
-      resp%aB_sum_range(:,:,:,:,info%iT) = resp%aB_sum
-      resp%xB_sum_range(:,:,:,:,info%iT) = resp%xB_sum
+      resp%sB_sum_range(:,:,:,:,info%iStep) = resp%sB_sum
+      resp%aB_sum_range(:,:,:,:,info%iStep) = resp%aB_sum
+      resp%xB_sum_range(:,:,:,:,info%iStep) = resp%xB_sum
 
       ! output at the last temperature step
-      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+      if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
         string = "/L11M/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%sB_sum_range)
         string = "/L12M/" // trim(adjustl(gname)) // "/sum"
@@ -1401,9 +1405,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   allocate(dpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid.eq.master) then
-    allocate(dpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
-    allocate(dpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(dpresp%s_sum_range(3,3,edisp%iSpin,algo%steps))
+    allocate(dpresp%a_sum_range(3,3,edisp%iSpin,algo%steps))
+    allocate(dpresp%x_sum_range(3,3,edisp%iSpin,algo%steps))
   endif
 
 
@@ -1416,9 +1420,9 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
     allocate(dpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid.eq.master) then
-      allocate(dpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
-      allocate(dpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(dpresp%sB_sum_range(3,3,3,edisp%iSpin,algo%steps))
+      allocate(dpresp%aB_sum_range(3,3,3,edisp%iSpin,algo%steps))
+      allocate(dpresp%xB_sum_range(3,3,3,edisp%iSpin,algo%steps))
     endif
   endif
 
@@ -1440,9 +1444,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   allocate(qpresp%x_sum(3,3,edisp%iSpin))
 
   if (myid .eq. master) then
-    allocate(qpresp%s_sum_range(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%a_sum_range(3,3,edisp%iSpin,temp%nT))
-    allocate(qpresp%x_sum_range(3,3,edisp%iSpin,temp%nT))
+    allocate(qpresp%s_sum_range(3,3,edisp%iSpin,algo%steps))
+    allocate(qpresp%a_sum_range(3,3,edisp%iSpin,algo%steps))
+    allocate(qpresp%x_sum_range(3,3,edisp%iSpin,algo%steps))
   endif
 
   if (algo%lBfield) then
@@ -1454,9 +1458,9 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
     allocate(qpresp%xB_sum(3,3,3,edisp%iSpin))
 
     if (myid .eq. master) then
-      allocate(qpresp%sB_sum_range(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%aB_sum_range(3,3,3,edisp%iSpin,temp%nT))
-      allocate(qpresp%xB_sum_range(3,3,3,edisp%iSpin,temp%nT))
+      allocate(qpresp%sB_sum_range(3,3,3,edisp%iSpin,algo%steps))
+      allocate(qpresp%aB_sum_range(3,3,3,edisp%iSpin,algo%steps))
+      allocate(qpresp%xB_sum_range(3,3,3,edisp%iSpin,algo%steps))
     endif
   endif
 end subroutine qpresp_alloc
@@ -2227,6 +2231,15 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   character(len=128) :: string
   integer(hid_t)     :: ifile
 
+
+  ! gather arrays for MPI
+  complex(16), allocatable :: s_gather(:,:,:,:,:)
+  complex(16), allocatable :: sB_gather(:,:,:,:,:,:)
+  complex(16), allocatable :: a_gather(:,:,:,:,:)
+  complex(16), allocatable :: aB_gather(:,:,:,:,:,:)
+  complex(16), allocatable :: x_gather(:,:,:,:,:)
+  complex(16), allocatable :: xB_gather(:,:,:,:,:,:)
+
   ! this sucks
   ! quadruple response s/a/x array
   real(16), allocatable :: qrsarr(:,:,:) ! to collect the data
@@ -2346,14 +2359,14 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
   if (myid .eq. master) then
     ! gather the data in the arrays
     zdarr = cmplx(real(qrsarr,8),real(qisarr,8))
-    resp%s_sum_range(:,:,:,info%iT) = zdarr
+    resp%s_sum_range(:,:,:,info%iStep) = zdarr
     zdarr = cmplx(real(qraarr,8),real(qiaarr,8))
-    resp%a_sum_range(:,:,:,info%iT) = zdarr
+    resp%a_sum_range(:,:,:,info%iStep) = zdarr
     zdarr = cmplx(real(qrxarr,8),real(qixarr,8))
-    resp%x_sum_range(:,:,:,info%iT) = zdarr
+    resp%x_sum_range(:,:,:,info%iStep) = zdarr
 
     ! output at the last temperature step
-    if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+    if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
       string = "/L11/" // trim(adjustl(gname)) // "/sum"
       call hdf5_write_data(ifile, string, resp%s_sum_range)
       string = "/L12/" // trim(adjustl(gname)) // "/sum"
@@ -2419,14 +2432,14 @@ subroutine response_h5_output_Q(resp, gname, edisp, algo, info, temp, kmesh, lBf
     if (myid .eq. master) then
       ! gather the data in the arrays
       zdarrB = cmplx(real(qrsarrB,8),real(qisarrB,8))
-      resp%sB_sum_range(:,:,:,:,info%iT) = zdarrB
+      resp%sB_sum_range(:,:,:,:,info%iStep) = zdarrB
       zdarrB = cmplx(real(qraarrB,8),real(qiaarrB,8))
-      resp%aB_sum_range(:,:,:,:,info%iT) = zdarrB
+      resp%aB_sum_range(:,:,:,:,info%iStep) = zdarrB
       zdarrB = cmplx(real(qrxarrB,8),real(qixarrB,8))
-      resp%xB_sum_range(:,:,:,:,info%iT) = zdarrB
+      resp%xB_sum_range(:,:,:,:,info%iStep) = zdarrB
 
       ! output at the last temperature step
-      if ((temp%Tstep==1 .and. info%iT==temp%nT) .or. (temp%Tstep==-1 .and. info%iT==1)) then
+      if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
         string = "/L11M/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%sB_sum_range)
         string = "/L12M/" // trim(adjustl(gname)) // "/sum"

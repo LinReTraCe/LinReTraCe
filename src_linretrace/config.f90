@@ -131,8 +131,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   sct%gamimp          = 0.d0
   imp%nimp            = 0
 
-  pot%nMu             = 100
-
   temp%tlogarithmic   = .false.
   pot%mlogarithmic    = .false.
 
@@ -284,10 +282,10 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     if (.not. algo%lScatteringFile) then
-      call int_find('MuPoints', pot%nMu, subsearch_start, subsearch_end, found)
+      call int_find('MuPoints', algo%steps, subsearch_start, subsearch_end, found)
       if (.not. found) call stop_with_message(stderr, 'MuPoints in MuMode group not found')
       call bool_find('MLogarithmic', pot%mlogarithmic, search_start, search_end, found)
-      call float_find('Temperature', temp%temp, subsearch_start, subsearch_end, found)
+      call float_find('Temperature', temp%temp_config, subsearch_start, subsearch_end, found)
       if (.not. found) call stop_with_message(stderr, 'Temperature in MuMode group not found')
       call float_find('MuMinimum', pot%MuMin, subsearch_start, subsearch_end, found)
       if (.not. found) call stop_with_message(stderr, 'MuMinimum in MuMode group not found')
@@ -446,7 +444,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
         call float_find('TMaximum', temp%Tmax, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TMaximum in Scattering group not found')
-        call int_find('TPoints', temp%nT, search_start, search_end, found)
+        call int_find('TPoints', algo%steps, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TPoints in Scattering group not found')
         call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
         call floatn_find('ScatteringCoefficients', floatntemp, search_start, search_end, found)

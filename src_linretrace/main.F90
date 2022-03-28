@@ -36,18 +36,15 @@ program main
   integer(hid_t)    :: ifile_output
 
 
-  integer :: is, ig, iT, ik, iband, iimp, imu
+  integer :: is, ig, iT, ik, iimp, imu
   integer :: niitact
-  integer :: iTstart, iTend, iTstep
-  logical :: igap
-  real(8) :: mu_test
-  real(8) :: maxgap
+  integer :: iStart, iEnd, iStep
   real(8) :: ndevact
   real(16):: ndevactQ
 
   character(len=128) :: string
   real(8) :: tstart, tfinish, timings(5)
-  real(8) :: time, maxtime
+  real(8) :: time
   real(8), allocatable :: gap_file(:)
   logical :: gapped_file
 
@@ -175,46 +172,45 @@ program main
     else if (algo%lScatteringText) then
       call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
     else
-      if (temp%nT .gt. 1) then
+      if (algo%steps .gt. 1) then
         if (temp%tlogarithmic) then
-          temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(temp%nT-1)) ! logarithmic step
+          temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(algo%steps-1)) ! logarithmic step
         else
-          temp%dT = (temp%Tmax-temp%Tmin)/dble(temp%nT-1) ! linear step
+          temp%dT = (temp%Tmax-temp%Tmin)/dble(algo%steps-1) ! linear step
         endif
       else
         temp%dT = 0 ! 0/0 ...
       endif
-      allocate(temp%TT(temp%nT))
-      allocate(temp%BB(temp%nT))
+      allocate(temp%TT(algo%steps))
+      allocate(temp%BB(algo%steps))
       allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
       allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
 
       ! define Temperature grid
       if (temp%tlogarithmic) then
-        do iT=1,temp%nT
+        do iT=1,algo%steps
            temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
         enddo
       else
-        do iT=1,temp%nT
+        do iT=1,algo%steps
            temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
         enddo
       endif
       temp%BB = 1.d0/(temp%TT * kB)
     endif
-    pot%nMu = temp%nT
 
-    allocate(energy(temp%nT))
-    allocate(carrier(temp%nT))
-    allocate(electrons(temp%nT))
-    allocate(holes(temp%nT))
-    allocate(imp_contribution(temp%nT))
+    allocate(energy(algo%steps))
+    allocate(carrier(algo%steps))
+    allocate(electrons(algo%steps))
+    allocate(holes(algo%steps))
+    allocate(imp_contribution(algo%steps))
     energy = 0.d0
     electrons = 0.d0
     imp_contribution = 0.d0
     holes = 0.d0
-    if (.not. allocated(pot%MM))  allocate(pot%MM(pot%nMu))
-    if (.not. allocated(pot%QMM)) allocate(pot%QMM(pot%nMu))
-    allocate(pot%occ(pot%nMu))
+    if (.not. allocated(pot%MM))  allocate(pot%MM(algo%steps))
+    if (.not. allocated(pot%QMM)) allocate(pot%QMM(algo%steps))
+    allocate(pot%occ(algo%steps))
     pot%occ = 0.d0
 
     if (algo%muSearch) then
@@ -226,12 +222,12 @@ program main
     endif
 
     if (algo%lOldmu) then
-      call read_muT_hdf5(temp, algo%old_output_file, pot%MM) ! this is saved in double
+      call read_muT_hdf5(algo, temp, pot%MM) ! this is saved in double
       pot%QMM = pot%MM
     endif
 
     if (algo%lOldmuText) then
-      call read_muT_text(temp, algo%input_mu_text, pot%MM)   ! this usually comes from lprint -> double
+      call read_muT_text(algo, temp, pot%MM)   ! this usually comes from lprint -> double
       pot%QMM = pot%MM
     endif
   endif
@@ -241,36 +237,35 @@ program main
       call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else
       ! construct mu grid
-      temp%nT = pot%nMu
-      allocate(temp%TT(pot%nMu))
-      allocate(temp%BB(pot%nMu))
+      allocate(temp%TT(algo%steps))
+      allocate(temp%BB(algo%steps))
       allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
       allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
-      allocate(pot%MM(pot%nMu))
-      allocate(pot%QMM(pot%nMu))
-      temp%TT = temp%temp
-      temp%BB = 1.d0/(temp%temp * kB)
+      allocate(pot%MM(algo%steps))
+      allocate(pot%QMM(algo%steps))
+      temp%TT = temp%temp_config
+      temp%BB = 1.d0/(temp%temp_config * kB)
 
       ! shift
       pot%MuMin = pot%MuMin + pot%mu_dft
       pot%MuMax = pot%MuMax + pot%mu_dft
       ! define Chemical potential grid
-      if (pot%nMu .gt. 1) then
+      if (algo%steps .gt. 1) then
         if (pot%mlogarithmic) then
-          pot%dMu= (pot%Mumax/pot%Mumin) ** (1.d0 / dble(pot%nMu -1))
+          pot%dMu= (pot%Mumax/pot%Mumin) ** (1.q0 / real((algo%steps -1),16))
         else
-          pot%dMu= (pot%Mumax-pot%Mumin)/dble(pot%nMu-1)
+          pot%dMu= (pot%Mumax-pot%Mumin)/real((algo%steps-1),16)
         endif
       else
-        pot%dMu = 0
+        pot%dMu = 0.q0
       endif
 
       if (pot%mlogarithmic) then
-        do imu=1,pot%nMu
+        do imu=1,algo%steps
            pot%QMM(imu)=pot%Mumin * pot%dMu**(real(imu-1,16))
         enddo
       else
-        do imu=1,pot%nMu
+        do imu=1,algo%steps
            pot%QMM(imu)=real(imu-1,16)*pot%dMu+pot%MuMin
         enddo
       endif
@@ -278,12 +273,12 @@ program main
     endif
 
 
-    allocate(energy(pot%nMu))
-    allocate(electrons(pot%nMu))
-    allocate(carrier(temp%nT))
-    allocate(holes(pot%nMu))
-    allocate(imp_contribution(pot%nMu))
-    allocate(pot%occ(pot%nMu))
+    allocate(energy(algo%steps))
+    allocate(electrons(algo%steps))
+    allocate(carrier(algo%steps))
+    allocate(holes(algo%steps))
+    allocate(imp_contribution(algo%steps))
+    allocate(pot%occ(algo%steps))
     carrier = 0.d0
     energy = 0.d0
     electrons = 0.d0
@@ -463,14 +458,14 @@ program main
     write(stdout,*) '  Temperature range:'
     write(stdout,*) '  Tmin: ', temp%Tmin
     write(stdout,*) '  Tmax: ', temp%Tmax
-    write(stdout,*) '  Temperature points: ', temp%nT
+    write(stdout,*) '  Temperature points: ', algo%steps
     else if (algo%lMUMODE) then
     write(stdout,*) 'MU MODE'
     write(stdout,*) '  Temperature: ', temp%TT(1)
     write(stdout,*) '  Chemical Potential range:'
     write(stdout,*) '  Mumin: ', pot%Mumin
     write(stdout,*) '  Mumax: ', pot%Mumax
-    write(stdout,*) '  Chemical Potential points:   ', pot%nMu
+    write(stdout,*) '  Chemical Potential points:   ', algo%steps
     endif
     write(stdout,*)
     write(stdout,*) 'TRANSPORT RESPONSES'
@@ -508,27 +503,25 @@ program main
   ! MAIN LOOP
   if (algo%lTMODE  .and. .not. (algo%lDebug .and. (index(algo%dbgstr,"LoopReverse") .ne. 0)) .or. &
      (algo%lMUMODE .and. algo%lDebug .and. (index(algo%dbgstr,"LoopReverse") .ne. 0))) then
-    iTstart = temp%nT
-    iTend   = 1
-    iTstep  = -1
+    iStart = algo%steps
+    iEnd   = 1
+    algo%step_dir  = -1
   else
-    iTstart = 1
-    iTend   = temp%nT
-    iTstep  = 1
+    iStart = 1
+    iEnd   = algo%steps
+    algo%step_dir  = +1
   endif
 
-  temp%Tstep = iTstep
-
-  do iT=iTstart,iTend,iTstep
+  do iStep=iStart,iEnd,algo%step_dir
     ! run time information
-    info%iT = iT
-    info%Temp=temp%TT(iT)
-    info%beta=1.d0/(kB*info%Temp)
-    info%beta2p=info%beta/(2.d0*pi)
+    info%iStep   = iStep
+    info%Temp    = temp%TT(iStep)
+    info%beta    = 1.d0/(kB*info%Temp)
+    info%beta2p  = info%beta/(2.d0*pi)
 
-    info%TempQ=real(info%Temp,16)
-    info%betaQ=1.q0/(kB*info%TempQ)
-    info%beta2pQ=info%betaQ/(2.q0*piQ)
+    info%TempQ   = real(info%Temp,16)
+    info%betaQ   = 1.q0/(kB*info%TempQ)
+    info%beta2pQ = info%betaQ/(2.q0*piQ)
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature
@@ -554,8 +547,8 @@ program main
       endif
     else if (algo%lTMODE .and. algo%lScatteringText) then
       do is=1,edisp%ispin
-        sct%gam(:,:,is) = sct%gamtext(iT,is)
-        sct%zqp(:,:,is) = sct%zqptext(iT,is)
+        sct%gam(:,:,is) = sct%gamtext(iStep,is)
+        sct%zqp(:,:,is) = sct%zqptext(iStep,is)
         if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'ERROR: Zqp is bigger than 1 ... truncating to 1')
           sct%zqp(:,:,is) = 1.d0
@@ -569,10 +562,10 @@ program main
       sct%zqp = 0.d0
       do is=1,edisp%ispin
         do ig=1,size(sct%gamcoeff,dim=2)
-           sct%gam(:,:,is) = sct%gam(:,:,is) + sct%gamcoeff(is,ig)*(temp%TT(iT)**(ig-1))
+           sct%gam(:,:,is) = sct%gam(:,:,is) + sct%gamcoeff(is,ig)*(temp%TT(iStep)**(ig-1))
         enddo
         do ig=1,size(sct%zqpcoeff,dim=2)
-           sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(is,ig)*(temp%TT(iT)**(ig-1))
+           sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(is,ig)*(temp%TT(iStep)**(ig-1))
         enddo
         if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
@@ -588,29 +581,29 @@ program main
     if (algo%lTMODE .and. algo%muSearch) then
 
       ! initialize the new chemical potential
-      if (iT /= iTstart) then
-        pot%QMM(iT) = pot%QMM(iT-iTstep) ! we initialize it to the value from the previous iteration
+      if (iStep /= iStart) then
+        pot%QMM(iStep) = pot%QMM(iStep-algo%step_dir) ! we initialize it to the value from the previous iteration
                                          ! this does nothing if mu is constant
       endif
 
       call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
-        call find_mu(pot%QMM(iT),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        call find_mu(pot%QMM(iStep),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       else
-        call find_mu(pot%QMM(iT),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
+        call find_mu(pot%QMM(iStep),ndevQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
       endif
 
       if (niitact > niitQ) then
-        if (iT == iTstart) then
+        if (iStep == iStart) then
           call stop_with_message(stderr, 'ERROR: Cannot determine mu')
-        else if (iTstep == (-1) .and. iT <= iTstart-2) then
+        else if (algo%step_dir == (-1) .and. iStep <= iStart-2) then
           call log_master(stdout, 'Warning: mu determination aborted, using dMu/dT')
-          pot%QMM(iT) = pot%QMM(iT+1) + (pot%QMM(iT+2)-pot%QMM(iT+1))/(temp%TT(iT+2)-temp%TT(iT+1)) * &
-                                      (temp%TT(iT)-temp%TT(iT+1))
+          pot%QMM(iStep) = pot%QMM(iStep+1) + (pot%QMM(iStep+2)-pot%QMM(iStep+1))/(temp%TT(iStep+2)-temp%TT(iStep+1)) * &
+                                      (temp%TT(iStep)-temp%TT(iStep+1))
         else
           call log_master(stdout, 'Warning: mu determination aborted, mu from previous step')
-          pot%QMM(iT) = pot%QMM(iT-iTstep)
+          pot%QMM(iStep) = pot%QMM(iStep-algo%step_dir)
         endif
       endif
 
@@ -618,32 +611,32 @@ program main
       timings(2) = timings(2) + (tfinish - tstart)
       tstart = tfinish
 
-      pot%MM(iT) = real(pot%QMM(iT),8)
+      pot%MM(iStep) = real(pot%QMM(iStep),8)
     endif
 
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
-      call calc_total_energy_fermi(pot%QMM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_fermi(pot%QMM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_fermi(pot%QMM(iStep), energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_fermi(pot%QMM(iStep), electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
     else
-      call calc_total_energy_digamma(pot%QMM(iT), energy(iT), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_digamma(pot%QMM(iT), electrons(iT), holes(iT), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_digamma(pot%QMM(iStep), energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_digamma(pot%QMM(iStep), electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (algo%lTMODE .and. algo%lImpurities) then
-      call occ_impurity(ndevactQ, pot%QMM(iT), imp, info)
-      imp_contribution(iT) = real(ndevactQ, 8)
+      call occ_impurity(ndevactQ, pot%QMM(iStep), imp, info)
+      imp_contribution(iStep) = real(ndevactQ, 8)
     endif
 
     ! calculates the difference to the demanded electron number
-    call ndeviation_Q(pot%QMM(iT), ndevactQ, edisp, sct, kmesh, imp, algo, info)
+    call ndeviation_Q(pot%QMM(iStep), ndevactQ, edisp, sct, kmesh, imp, algo, info)
     ! deviation rescaled to volume is the carrier concentration
-    carrier(iT) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
+    carrier(iStep) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
-    pot%occ(iT) = edisp%nelect - real(ndevactQ,8)
+    pot%occ(iStep) = edisp%nelect - real(ndevactQ,8)
 
     if (myid.eq.master) then
-      write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iT), niitact
+      write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iStep), niitact
     endif
 
     ! calculate the polygamma function (1...3)
@@ -651,7 +644,7 @@ program main
     ! once and use it later for all the different response types
     if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
       if (algo%lQuad) then
-        call calc_polygamma(PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+        call calc_polygamma(PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
         call initialize_response(algo, qresp_intra)
         if (algo%lInterBandQuantities) then
           call initialize_response(algo, qresp_inter)
@@ -663,7 +656,7 @@ program main
           endif
         endif
       else
-        call calc_polygamma(PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+        call calc_polygamma(PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
         ! initialize the already allocated arrays to 0
         if (algo%lIntraBandQuantities) then
           call initialize_response(algo, resp_intra)
@@ -690,30 +683,30 @@ program main
       if (algo%lQuad) then
         ! quad precision routines
         if (algo%lIntrabandQuantities) then
-          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+          call response_intra_km_Q(qresp_intra, PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+            call response_intra_Boltzmann_km_Q(qresp_intra_Boltzmann, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
           endif
         endif
         if (algo%lInterBandQuantities) then
-          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+          call response_inter_km_Q(qresp_inter, PolyGammaQ, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%QMM(iT), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, pot%QMM(iStep), edisp, sct, kmesh, algo, info)
           endif
         endif
       else
         ! double precision routines
         if (algo%lIntrabandQuantities) then
-          call response_intra_km(resp_intra,  PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          call response_intra_km(resp_intra,  PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+            call response_intra_Boltzmann_km(resp_intra_Boltzmann, pot%MM(iStep), edisp, sct, kmesh, algo, info)
           endif
         endif
 
         if (algo%lInterbandquantities) then
-          call response_inter_km(resp_inter, PolyGamma, pot%MM(iT), edisp, sct, kmesh, algo, info)
+          call response_inter_km(resp_inter, PolyGamma, pot%MM(iStep), edisp, sct, kmesh, algo, info)
           if (algo%lBoltzmann) then
-            call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iT), edisp, sct, kmesh, algo, info)
+            call response_inter_Boltzmann_km(resp_inter_Boltzmann, pot%MM(iStep), edisp, sct, kmesh, algo, info)
           endif
         endif
       endif
@@ -757,14 +750,14 @@ program main
     ! output the renormalized energies defined by Z*(ek - mu)
     ! for each temperature point
     if (myid.eq.master .and. algo%lEnergyOutput) then
-      call output_energies(pot%MM(iT), algo, edisp,kmesh,sct,info) ! double is good enough here
+      call output_energies(pot%MM(iStep), algo, edisp,kmesh,sct,info) ! double is good enough here
     endif
 
     call cpu_time(tfinish)
     timings(5) = timings(5) + (tfinish - tstart)
     tstart = tfinish
 
-  enddo ! end of the outer temperature loop
+  enddo ! end of the outer temperature / chemical potential loop
 
   if (allocated(edisp%Mopt)) deallocate(edisp%Mopt)
 
