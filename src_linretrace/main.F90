@@ -5,7 +5,8 @@ program main
   use Mtypes
   use Mmpi_org
   use Mconfig
-  use Mio
+  use Minput
+  use Moutput
   use Mresponse
   use hdf5_wrapper
   use hdf5
@@ -160,7 +161,19 @@ program main
   endif
 
   if (algo%lImpurities) then
-    call set_impurities(edisp,imp) ! set the impurity positions according to possible reshaped band structure
+    ! now that we have all the information we can adjust the energies of the impurity levels
+    do iimp = 1, imp%nimp
+      select case (imp%inputtype(iimp))
+        ! case 1 -> already absolute
+        case (2) ! relative upwards shift from top of valence band
+          imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
+        case (3) ! relative downwards shift from bottom of conduction band
+          imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
+        case (4) ! percentage gap shift from top of valence band
+          imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
+                           + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
+      end select
+    enddo
   endif
 
   if (algo%lTMODE) then
@@ -725,29 +738,29 @@ program main
     ! this subroutines include the summations necessary
     if (algo%lQuad) then
       if (algo%lIntrabandQuantities) then
-        call response_h5_output_Q(qresp_intra, "intra", edisp, algo, info, temp, kmesh)
+        call output_response_Q(qresp_intra, "intra", edisp, algo, info, temp, kmesh)
         if (algo%lBoltzmann) then
-          call response_h5_output_Q(qresp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+          call output_response_Q(qresp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
         endif
       endif
       if (algo%lInterbandQuantities) then
-        call response_h5_output_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+        call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
         if (algo%lBoltzmann) then
-          call response_h5_output_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
         endif
       endif
     else
       if (algo%lIntrabandQuantities) then
-        call response_h5_output(resp_intra, "intra", edisp, algo, info, temp, kmesh)
+        call output_response_D(resp_intra, "intra", edisp, algo, info, temp, kmesh)
         if (algo%lBoltzmann) then
-          call response_h5_output(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
+          call output_response_D(resp_intra_Boltzmann, "intraBoltzmann", edisp, algo, info, temp, kmesh)
         endif
       endif
       if (algo%lInterbandQuantities) then
         ! here we don't have the Bfield quantities ... no optical elements yet
-        call response_h5_output(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+        call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
         if (algo%lBoltzmann) then
-          call response_h5_output(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
         endif
       endif
     endif

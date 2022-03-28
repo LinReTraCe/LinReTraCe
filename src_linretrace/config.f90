@@ -114,7 +114,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lBField               = .false.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
-  algo%lQuad                 = .true.
+  algo%lQuad                 = .false.
 
   algo%lScatteringFile = .false.
   algo%lScatteringText = .false.

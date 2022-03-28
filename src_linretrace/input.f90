@@ -1,4 +1,4 @@
-module Mio
+module Minput
   use Mparams
   use Mtypes
   use Maux
@@ -316,29 +316,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
 
 end subroutine
 
-subroutine set_impurities(edisp, imp)
-  implicit none
-  type(energydisp) :: edisp
-  type(impurity)   :: imp
-
-  integer :: iimp
-
-  ! now that we have all the information we can adjust the energies of the impurity levels
-  do iimp = 1, imp%nimp
-    select case (imp%inputtype(iimp))
-      ! case 1 -> already absolute
-      case (2) ! relative upwards shift from top of valence band
-        imp%Energy(iimp) = imp%Energy(iimp) + edisp%ene_valenceBand(imp%inputspin(iimp))
-      case (3) ! relative downwards shift from bottom of conduction band
-        imp%Energy(iimp) = -imp%Energy(iimp) + edisp%ene_conductionBand(imp%inputspin(iimp))
-      case (4) ! percentage gap shift from top of valence band
-        imp%Energy(iimp) = edisp%ene_valenceBand(imp%inputspin(iimp)) &
-                         + edisp%gap(imp%inputspin(iimp)) * imp%Energy(iimp)
-    end select
-  enddo
-
-end subroutine
-
 subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
@@ -551,196 +528,6 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
   temp%BB = 1.d0/(temp%TT * kB)
 
   sct%gamtext = sct%gamtext + sct%gamimp
-
-end subroutine
-
-subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
-  implicit none
-  type(algorithm)   :: algo
-  type(runinfo)     :: info
-  type(potential)   :: pot
-  type(temperature) :: temp
-  type(kpointmesh)  :: kmesh
-  type(energydisp)  :: edisp
-  type(scattering)  :: sct
-  type(impurity)    :: imp
-
-  character(len=256) :: string
-  integer(hid_t)     :: ifile
-  integer            :: iimp
-
-  call hdf5_open_file(algo%output_file, ifile)
-
-  call hdf5_create_group(ifile, '.config')
-  call hdf5_write_attribute(ifile, '.config', 'tmode', algo%lTMODE)
-  call hdf5_write_attribute(ifile, '.config', 'mumode',algo%lMUMODE)
-  call hdf5_write_attribute(ifile, '.config', 'doping',algo%ldoping)
-  call hdf5_write_attribute(ifile, '.config', 'quad',algo%lQuad)
-  call hdf5_write_attribute(ifile, '.config', 'debug', algo%lDebug)
-  call hdf5_write_attribute(ifile, '.config', 'bfield', algo%lBfield)
-  call hdf5_write_attribute(ifile, '.config', 'rootmethod', algo%rootMethod)
-  call hdf5_write_attribute(ifile, '.config', 'musearch', algo%muSearch)
-  call hdf5_write_attribute(ifile, '.config', 'mufermi', algo%muFermi)
-  call hdf5_write_attribute(ifile, '.config', 'oldmu', algo%lOldmu)
-  call hdf5_write_attribute(ifile, '.config', 'oldmutext', algo%lOldmuText)
-  call hdf5_write_attribute(ifile, '.config', 'scatteringfile', algo%lScatteringFile)
-  call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
-  call hdf5_write_attribute(ifile, '.config', 'interbandquantities', algo%lInterBandQuantities)
-  call hdf5_write_attribute(ifile, '.config', 'intrabandquantities', algo%lIntraBandQuantities)
-  call hdf5_write_attribute(ifile, '.config', 'fulloutput', algo%fullOutput)
-  call hdf5_write_attribute(ifile, '.config', 'energyOutput', algo%lEnergyOutput)
-  call hdf5_write_attribute(ifile, '.config', 'boltzmann', algo%lBoltzmann)
-  call hdf5_write_attribute(ifile, '.config', 'scissors', algo%lScissors)
-  call hdf5_write_attribute(ifile, '.config', 'steps', algo%steps)
-  call hdf5_write_attribute(ifile, '.config', 'steps_dir', algo%step_dir)
-  call hdf5_write_attribute(ifile, '.config', 'impurities', algo%lImpurities)
-  call hdf5_write_attribute(ifile, '.config', 'input_energies', trim(algo%input_energies))
-  if (len(trim(algo%input_scattering_hdf5)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_hdf5', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_hdf5', trim(algo%input_scattering_hdf5))
-  endif
-  if (len(trim(algo%input_scattering_text)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', trim(algo%input_scattering_text))
-  endif
-  if (len(trim(algo%old_output_file)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'old_output_file', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'old_output_file', trim(algo%old_output_file))
-  endif
-  if (len(trim(algo%input_mu_text)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'input_mu_text', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'input_mu_text', trim(algo%input_mu_text))
-  endif
-  if (len(trim(algo%dbgstr)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'dbgstr', "-")
-  else
-    call hdf5_write_attribute(ifile, '.config', 'dbgstr', trim(algo%dbgstr))
-  endif
-
-  call hdf5_create_group(ifile, '.scattering')
-  if (allocated(sct%gamcoeff)) then
-    call hdf5_write_data(ifile, '.scattering/gamcoeff', sct%gamcoeff)
-  endif
-  if (allocated(sct%zqpcoeff)) then
-    call hdf5_write_data(ifile, '.scattering/zqpcoeff', sct%zqpcoeff)
-  endif
-  if (allocated(sct%gamtext)) then
-    call hdf5_write_data(ifile, '.scattering/gamtext', sct%gamtext)
-  endif
-  if (allocated(sct%zqptext)) then
-    call hdf5_write_data(ifile, '.scattering/zqptext', sct%zqptext)
-  endif
-  if (algo%lScatteringFile .or. algo%lScatteringText) then
-    call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
-  endif
-
-  call hdf5_write_data(ifile, ".quantities/ispin", edisp%ispin)
-  call hdf5_write_data(ifile, ".quantities/charge", edisp%nelect) ! this might have been changed by config
-  call hdf5_write_data(ifile, ".quantities/doping", edisp%doping)
-  call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)    ! this also might have changed
-  call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
-  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
-  call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
-  if (algo%lTMODE) then
-    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'temp')
-  else if (algo%lMUMODE) then
-    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'mu')
-  endif
-  call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
-
-  ! output bandgap information to have access to it
-  ! in the general output file
-  if (edisp%ispin == 1) then
-    call hdf5_write_data(ifile, "/.quantities/bandgap/gapped", edisp%gapped(1))
-    if (edisp%gapped(1)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/gapsize", edisp%gap(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_vband", edisp%ene_valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/cband", edisp%conductionBand(1))
-    endif
-  else
-    call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapped", edisp%gapped(1))
-    if (edisp%gapped(1)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/cband", edisp%conductionBand(1))
-    endif
-
-    call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapped", edisp%gapped(2))
-    if (edisp%gapped(2)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapsize", edisp%gap(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/cband", edisp%conductionBand(1))
-    endif
-  endif
-
-  call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
-  if (algo%lImpurities) then
-    do iimp = 1, imp%nimp
-      write(string,'("/.quantities/impurities/imp-",I3.3,"/energy")') iimp
-      call hdf5_write_data(ifile, string, imp%Energy(iimp))
-      write(string,'("/.quantities/impurities/imp-",I3.3,"/density")') iimp
-      call hdf5_write_data(ifile, string, imp%Density(iimp))
-      write(string,'("/.quantities/impurities/imp-",I3.3,"/degeneracy")') iimp
-      call hdf5_write_data(ifile, string, imp%Degeneracy(iimp))
-      write(string,'("/.quantities/impurities/imp-",I3.3,"/dopant")') iimp
-      call hdf5_write_data(ifile, string, imp%Dopant(iimp))
-      write(string,'("/.quantities/impurities/imp-",I3.3,"/width")') iimp
-      call hdf5_write_data(ifile, string, imp%Bandwidth(iimp))
-    enddo
-  endif
-
-  call hdf5_write_data(ifile, "/.unitcell/dims", kmesh%dims)
-  call hdf5_write_data(ifile, "/.unitcell/ndim", kmesh%ndim)
-  call hdf5_write_data(ifile, "/.unitcell/vol",  kmesh%vol)
-
-  if (edisp%ispin == 1) then
-    call hdf5_write_data(ifile, "/.energies", edisp%band(:,:,1))
-  else
-    call hdf5_write_data(ifile, "/.energies/up", edisp%band(:,:,1))
-    call hdf5_write_data(ifile, "/.energies/dn", edisp%band(:,:,2))
-  endif
-
-  call hdf5_close_file(ifile)
-
-end subroutine
-
-subroutine output_energies(algo, edisp, kmesh, sct, info)
-  implicit none
-  type(algorithm)  :: algo
-  type(energydisp) :: edisp
-  type(kpointmesh) :: kmesh
-  type(scattering) :: sct
-  type(runinfo)    :: info
-
-  integer(hid_t)     :: ifile
-  real(8), allocatable :: enrgy(:,:,:)
-  character(len=128) :: string
-
-  allocate(enrgy(edisp%nband_max,kmesh%nkp,edisp%ispin))
-
-  enrgy = sct%zqp * (edisp%band - info%mu)
-
-  write(string,'(I6.6,"/energies")') info%iStep
-  call hdf5_open_file(algo%output_file, ifile)
-  call hdf5_write_data(ifile, string, enrgy)
-
-  write(string,'(I6.6)') info%iStep
-  call hdf5_write_attribute(ifile, string, "temperature", info%temp)
-  call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
-
-  call hdf5_close_file(ifile)
-
-  deallocate(enrgy)
 
 end subroutine
 
@@ -1066,4 +853,4 @@ subroutine read_muT_text(algo, temp, mu)
 
 end subroutine
 
-end module Mio
+end module Minput

@@ -11,7 +11,7 @@ ElectronOccupation = (default = -1)                     # Adjust system charge .
 FullOutput         = (default = F)                      # output band- and k-resolved response quantities
                                                         # this data only stems from the double precision responses
 EnergyOutput       = (default = F)                      # output renormalized bands
-QuadResponse       = (default = T)                      # calculate quad precision responses
+QuadResponse       = (default = F)                      # calculate quad precision responses
 Interband          = (default = T)                      # calculate Interband quantities
 Intraband          = (default = T)                      # calculate Intraband quantities
 Boltzmann          = (default = T)                      # calculate Boltzmann approximation to inter and/or intra
