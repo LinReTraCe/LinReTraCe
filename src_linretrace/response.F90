@@ -1218,15 +1218,6 @@ subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, i
   energy_tot = real(energy_sum,8)
   return
 
-  ! if we have impurity levels add their energy contribution here
-  ! if (algo%lImpurities) then
-  !   do iimp = 1,imp%nimp
-  !     energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-  !       / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
-  !       * imp%Energy(iimp)
-  !   enddo
-  ! endif
-
 end subroutine
 
 subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, info)
@@ -1273,15 +1264,6 @@ subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, inf
 
   energy_tot = real(energy_sum,8)
   return
-
-  ! if we have impurity levels add their energy contribution here
-  ! if (algo%lImpurities) then
-  !   do iimp = 1,imp%nimp
-  !     energy_tot = energy_tot - imp%Dopant(iimp)*imp%Density(iimp) &
-  !       / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp)))) &
-  !       * imp%Energy(iimp)
-  !   enddo
-  ! endif
 
 end subroutine
 

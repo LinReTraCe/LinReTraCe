@@ -51,11 +51,13 @@ program main
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
-  real(8), allocatable :: energy(:)    ! total energy
-  real(8), allocatable :: carrier(:)   ! carrier concentration
-  real(8), allocatable :: electrons(:) ! thermally activated electrons w.r.t chemical potential
-  real(8), allocatable :: holes(:)     ! thermally activated holes w.r.t chemical potential
-  real(8), allocatable :: imp_contribution(:)
+  real(8), allocatable :: total_energy(:)          ! total energy
+  real(8), allocatable :: carrier_concentration(:) ! carrier concentration = difference to nominal filling in cm-3
+  real(8), allocatable :: activated_electrons(:)   ! thermally activated electrons (in gapped system: electrons in all conduction bands)
+  real(8), allocatable :: activated_holes(:)       ! thermally activated holes (in gapped systems: holes in all valence bands)
+  real(8), allocatable :: impurity_contribution(:) ! impurity contribution to the filling
+                                                   ! in normal system: charge - ( occupation - donor_imp + acceptor_imp - doping ) = 0
+                                                   ! in gapped system: activated_electrons - activated_holes - donor_imp + acceptor_imp - doping = 0
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
@@ -212,15 +214,16 @@ program main
       temp%BB = 1.d0/(temp%TT * kB)
     endif
 
-    allocate(energy(algo%steps))
-    allocate(carrier(algo%steps))
-    allocate(electrons(algo%steps))
-    allocate(holes(algo%steps))
-    allocate(imp_contribution(algo%steps))
-    energy = 0.d0
-    electrons = 0.d0
-    imp_contribution = 0.d0
-    holes = 0.d0
+    allocate(total_energy(algo%steps))
+    allocate(carrier_concentration(algo%steps))
+    allocate(activated_electrons(algo%steps))
+    allocate(activated_holes(algo%steps))
+    allocate(impurity_contribution(algo%steps))
+    total_energy          = 0.d0
+    carrier_concentration = 0.d0
+    activated_electrons   = 0.d0
+    activated_holes       = 0.d0
+    impurity_contribution = 0.d0
     if (.not. allocated(pot%MM))  allocate(pot%MM(algo%steps))
     if (.not. allocated(pot%QMM)) allocate(pot%QMM(algo%steps))
     allocate(pot%occ(algo%steps))
@@ -286,18 +289,18 @@ program main
     endif
 
 
-    allocate(energy(algo%steps))
-    allocate(electrons(algo%steps))
-    allocate(carrier(algo%steps))
-    allocate(holes(algo%steps))
-    allocate(imp_contribution(algo%steps))
+    allocate(total_energy(algo%steps))
+    allocate(activated_electrons(algo%steps))
+    allocate(activated_holes(algo%steps))
+    allocate(carrier_concentration(algo%steps))
+    allocate(impurity_contribution(algo%steps))
     allocate(pot%occ(algo%steps))
-    carrier = 0.d0
-    energy = 0.d0
-    electrons = 0.d0
-    holes = 0.d0
-    imp_contribution = 0.d0
-    pot%occ = 0.d0
+    total_energy          = 0.d0
+    carrier_concentration = 0.d0
+    activated_electrons   = 0.d0
+    activated_holes       = 0.d0
+    impurity_contribution = 0.d0
+    pot%occ               = 0.d0
   endif
 
   if (.not. edisp%lBandShift) then
@@ -634,22 +637,24 @@ program main
 
     ! calculating total energy according to the occuption above
     if (algo%muFermi) then
-      call calc_total_energy_fermi(energy(iStep), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_fermi(electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_fermi(total_energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_fermi(activated_electrons(iStep), activated_holes(iStep), &
+                                edisp, sct, kmesh, imp, algo, info)
     else
-      call calc_total_energy_digamma(energy(iStep), edisp, sct, kmesh, imp, algo, info)
-      call calc_elecholes_digamma(electrons(iStep), holes(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_total_energy_digamma(total_energy(iStep), edisp, sct, kmesh, imp, algo, info)
+      call calc_elecholes_digamma(activated_electrons(iStep), activated_holes(iStep), &
+                                  edisp, sct, kmesh, imp, algo, info)
     endif
 
     if (algo%lTMODE .and. algo%lImpurities) then
       call occ_impurity(ndevactQ, pot%QMM(iStep), imp, info)
-      imp_contribution(iStep) = real(ndevactQ, 8)
+      impurity_contribution(iStep) = real(ndevactQ, 8)
     endif
 
     ! calculates the difference to the demanded electron number
     call ndeviation_Q(pot%QMM(iStep), ndevactQ, edisp, sct, kmesh, imp, algo, info)
     ! deviation rescaled to volume is the carrier concentration
-    carrier(iStep) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
+    carrier_concentration(iStep) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
     pot%occ(iStep) = edisp%nelect - real(ndevactQ,8)
 
@@ -783,12 +788,12 @@ program main
     call hdf5_open_file(algo%output_file, ifile_output)
     call hdf5_write_data(ifile_output, '.quantities/mu', pot%MM)
     call hdf5_write_data(ifile_output, '.quantities/occupation', pot%occ)
-    call hdf5_write_data(ifile_output, '.quantities/carrier', carrier)
-    call hdf5_write_data(ifile_output, '.quantities/energy', energy)
-    call hdf5_write_data(ifile_output, '.quantities/electrons', electrons)
-    call hdf5_write_data(ifile_output, '.quantities/holes', holes)
+    call hdf5_write_data(ifile_output, '.quantities/carrier', carrier_concentration)
+    call hdf5_write_data(ifile_output, '.quantities/energy', total_energy)
+    call hdf5_write_data(ifile_output, '.quantities/electrons', activated_electrons)
+    call hdf5_write_data(ifile_output, '.quantities/holes', activated_holes)
     if (algo%lImpurities) then
-      call hdf5_write_data(ifile_output, '.quantities/imp_contribution', imp_contribution)
+      call hdf5_write_data(ifile_output, '.quantities/imp_contribution', impurity_contribution)
     endif
     call hdf5_close_file(ifile_output)
   endif

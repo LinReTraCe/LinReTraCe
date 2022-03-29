@@ -190,6 +190,7 @@ subroutine output_energies(algo, edisp, kmesh, sct, info)
   write(string,'(I6.6)') info%iStep
   call hdf5_write_attribute(ifile, string, "temperature", info%temp)
   call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
+  call hdf5_write_attribute(ifile, string, "chemicalpotential", info%mu)
 
   call hdf5_close_file(ifile)
 
