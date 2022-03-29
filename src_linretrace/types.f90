@@ -155,6 +155,7 @@ module Mtypes
   end type
 
   type potential
+    logical  :: mabsolute            ! absolute values from input
     logical  :: mlogarithmic         ! logarithmic steps
     real(8)  :: MuMin
     real(8)  :: MuMax

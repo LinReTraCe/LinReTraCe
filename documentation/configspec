@@ -1,108 +1,115 @@
 ________________________________________________________________________________
 [General]
-EnergyFile         = (default='')                       # LRTC energy (input) file
-OutputFile         = (default='lrtc-date-time.hdf5')    # Output file name - does not create folders
+EnergyFile         = (default = None)                  # LRTC energy (input) file
+OutputFile         = (default = 'lrtc-date-time.hdf5') # Output file name - does not create folders
 
-RunMode            = (default='')                       # 'temp' or 'mu'
-Bandgap            = (default = None)                   # Adjust Bandgap - one or two numbers
-ElectronOccupation = (default = -1)                     # Adjust system charge ... After the Bandgap adjustment
-                                                        # Do not use this option to 'dope' the system with minimal charge
-                                                        # use [TempMode] 'Doping' instead
-FullOutput         = (default = F)                      # output band- and k-resolved response quantities
-                                                        # this data only stems from the double precision responses
-EnergyOutput       = (default = F)                      # output renormalized bands
-QuadResponse       = (default = F)                      # calculate quad precision responses
-Interband          = (default = T)                      # calculate Interband quantities
-Intraband          = (default = T)                      # calculate Intraband quantities
-Boltzmann          = (default = T)                      # calculate Boltzmann approximation to inter and/or intra
-BFieldMode         = (default = F)                      # calculate magnetic Intraband quantities
-FermiOccupation    = (default = T)                      # True: Fermi function to determine occupation
-                                                        # False: Digamma function to determine occupation
-                                                        # Affects chemical potential, carrier concentration and energies
+RunMode            = (default = None)                  # temp or mu
+Bandgap            = (default = None)                  # Adjust Bandgap - one or two numbers (spins)
+ElectronOccupation = (default = None)                  # Adjust system charge ... After the Bandgap adjustment
+                                                       # Do not use this option to 'dope' the system with minimal charge
+                                                       # use [TempMode] 'Doping' instead
+
+FullOutput         = (default = None)                  # full: output momentum and band resolved responses
+                                                       # ksum: output momentum summed, band resolved responses
+                                                       # bsum: output momentum resolved, band summed responses
+EnergyOutput       = (default = F)                     # output renomralized, momentum and band resolved energy array for each step
+QuadResponse       = (default = F)                     # calculate quad precision responses
+Interband          = (default = T)                     # calculate Interband quantities
+Intraband          = (default = T)                     # calculate Intraband quantities
+Boltzmann          = (default = T)                     # calculate Boltzmann approximation to inter and/or intra
+BFieldMode         = (default = F)                     # calculate magnetic Intraband quantities
+FermiOccupation    = (default = T)                     # T: Fermi function to determine occupation
+                                                       # F: Digamma function to determine occupation
+                                                       # Affects chemical potential, carrier concentration and total energies
 
 ________________________________________________________________________________
-[TempMode]      # RunMode = temp
-ChemicalPotential  = (default = 0)                      # Fix Chemical potential for all temperatures
-OldOutput          = (default = None)                   # Use chemical potentials from old OutputFile
-OldOutputText      = (default = None)                   # Use chemical potentials from text file
-NImp               = (default = 0)                      # number of additional impurity levels
-Doping             = (default = 0)                      # Additional doping [cm-3]
+[TempMode]                                             # RunMode = temp
+ChemicalPotential  = (default = None)                  # Fix Chemical potential for all temperatures
+OldOutput          = (default = None)                  # Use chemical potentials from old OutputFile
+OldOutputText      = (default = None)                  # Use chemical potentials from text file (compatible with lprint mu)
+NImp               = (default = 0)                     # number of additional impurity levels
+Doping             = (default = 0)                     # Additional doping [cm-3]
 
 [[Scattering]]
-ScatteringFile     = (default = '')                     # if existent use all the quantities from this HDF5 file only
-ScatteringText     = (default = '')                     # if existent use all the quantities from this TEXT file only
-ScatteringImpurity = (default = 0)                      # in combination with ScatteringFile or ScatterintText
-                                                        # adds an additional constant scattering rate
-# if we do NOT have a Scattering file
-# we can supply a temperature range (in Kelvin)
-# and a polynomial for the scattering rate
-# and the quasi particle weights
-TMinimum                    = (default = None)
-TMaximum                    = (default = None)
-TPoints                     = (default = None)
-TLogarithmic                = (default = F)
+ScatteringFile     = (default = None)                  # if existent use all the quantities from this HDF5 file only
+ScatteringText     = (default = None)                  # if existent use all the quantities from this TEXT file only
+ScatteringImpurity = (default = 0)                     # in combination with ScatteringFile or ScatterintText
+                                                       # adds an additional constant scattering rate
 
-ScatteringCoefficients      = (default = None)          # polynimals a + b * T + c * T**2 ... [a,b,c,...]
-UpScatteringCoefficients    = (default = None)          # if one wants to differentiate between up and dn spin
-DnScatteringCoefficients    = (default = None)          # use either ScatteringCoefficients or Up+Dn ScatteringCoefficients
+                                                       # if we do NOT have a Scattering file we can supply a temperature range [K]
+                                                       # and a polynomial for the scattering rate and the quasi particle weights
+                                                       # all (default = None) values are mandatory
+TMinimum                    = (default = None)         # temperature minimum
+TMaximum                    = (default = None)         # temperature maximum
+TPoints                     = (default = None)         # number of temperature points
+TLogarithmic                = (default = F)            # F: linear spacing -- T: logarithmic spacing
 
-QuasiParticleCoefficients   = (default = None)          # same as ScatteringCoefficients
-UpQuasiParticleCoefficients = (default = None)
+ScatteringCoefficients      = (default = None)         # n numbers separated by spaces : a b c
+                                                       # representing the polynimal a + b * T + c * T**2
+UpScatteringCoefficients    = (default = None)         # if one wants to differentiate between up and dn spin
+DnScatteringCoefficients    = (default = None)         # use either ScatteringCoefficients or Up+Dn ScatteringCoefficients
+
+QuasiParticleCoefficients   = (default = None)         # same as ScatteringCoefficients
+UpQuasiParticleCoefficients = (default = None)         # must be a value between 0 and 1 for all temperature points
 DnQuasiParticleCoefficients = (default = None)
 ________________________________________________________________________________
 
 [[Impurities]]
-[[[1]]]
-# Provide one of the following four keywords:
-Absolute   = (default = None)                           # energy is absolute in [eV]
-Valence    = (default = None)                           # relative upwards shift from top of valence band [eV]
-Conduction = (default = None)                           # relative downwards shift from bottom of conduction band [eV]
-Percentage = (default = None)                           # relative position inside the gap
-# Valence Conduction and Percentage only work for a gapped system
+[[[1]]]                                                # as many as provided in [TempMode] NImp
+                                                       # Provide _one_ of the following four keywords:
+Absolute   = (default = None)                          # energy is absolute in [eV]
+Valence    = (default = None)                          # relative upwards shift from top of valence band [eV]
+Conduction = (default = None)                          # relative downwards shift from bottom of conduction band [eV]
+Percentage = (default = None)                          # relative position inside the gap
+                                                       # Valence Conduction and Percentage only work for a gapped system
 
-# Absolute :
-# 4 numbers:    +1(donor)/-1(acceptor) density energy degeneracy
+                                                       # Absolute :
+                                                       # 4 numbers:    +1(donor)/-1(acceptor) density energy degeneracy
 
-# Valence Conduction Percentage :
-# 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
-# 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2 (spin)
-# if no spin is provided default to spin up
-# energy shifts are applied after adjusting the bandgap!
+                                                       # Valence Conduction Percentage :
+                                                       # 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
+                                                       # 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2(spin)
 
-# density : [per unit cell]
-# energy : [eV] or 0<p<1 for Percentage
+                                                       # density : [per unit cell]
+                                                       # energy : [eV] or 0<p<1 for Percentage
+                                                       # energy shifts are applied after adjusting the bandgap!
 
-# example donor near conduction band
-# Conduction = +1 1e-8 0.02 1
-# example acceptor for spin down near valence band
-# Valence    = -1 1e-5 0.01 1 2
-# example donor level in the center of the band
-# Percentage = +1 1e-3 0.5 2
+                                                       # example donor 20meV below conduction band
+                                                       # Conduction = +1 1e-8 0.02 1
+                                                       # example acceptor 10meV above valence band of spin down
+                                                       # Valence    = -1 1e-5 0.01 1 2
+                                                       # example donor level in the center of the band
+                                                       # Percentage = +1 1e-3 0.5 2
 
-Bandtype   = (default = '')                             # box, triangle, halfcircle, sine, sine2, sine3, sine4
-Bandwidth  = (default = 0)                              # Bandwidth in [eV] for the provided Bandtype
-                                                        # symmetric around given energy
+Bandtype   = (default = None)                          # box, triangle, halfcircle, sine, sine2, sine3, sine4
+Bandwidth  = (default = 0)                             # Bandwidth in [eV] for the provided Bandtype
+                                                       # symmetric around given energy
 
 [[[2]]]
-... # as many as there are NImp supplied
-# these shifts are applied AFTER the application of scissors
-
+...
 
 ________________________________________________________________________________
-[MuMode]       # RunMode = mu
+[MuMode]                                               # RunMode = mu
 [[Scattering]]
-ScatteringFile      = (default = '')                    # if existent use all the quantities from this HDF5 file only
-ScatteringImpurity  = (default = 0)                     # in combination with Scattering File
-                                                        # adds an additional constant scattering rate
+ScatteringFile      = (default = None)                 # if existent use all the quantities from this HDF5 file only
+ScatteringImpurity  = (default = 0)                    # in combination with Scattering File
+                                                       # adds an additional constant scattering rate
 
-Temperature         = (default = None)                  # in Kelvin
-MuMinimum           = (default = None)                  # difference to DFT chemical potential
-MuMaximum           = (default = None)                  # difference to DFT chemical potential
-MuPoints            = (default = None)
-MLogarithmic        = (default = F)
+                                                       # if we do NOT have a Scattering file
+                                                       # we can supply a chemical potential range [eV]
+                                                       # for a temperature, scattering rate and quasi particle weight
+                                                       # all (default = None) values are mandatory
 
-QuasiParticleWeight = (default = None)                  # in range 0 - 1
-QuasiParticleWeight = (default = None)                  # one or two numbers (0...1)
+Temperature         = (default = None)                 # in Kelvin
+MuMinimum           = (default = None)                 # chemical potential minimum
+MuMaximum           = (default = None)                 # chemical potential maximum
+MuPoints            = (default = None)                 # number of chemical potential points
+MuLogarithmic       = (default = F)                    # F: linear spacing - T: logarithnmic spacing
+MuAbsolute          = (default = F)                    # F: mupoints relative to DFT mu
+                                                       # T: mupoints in absolute values
+
+QuasiParticleWeight = (default = None)                 # as many numbers as spins
+ScatteringRate      = (default = None)                 # as many numbers as spins
 
 ________________________________________________________________________________
 [Debug]

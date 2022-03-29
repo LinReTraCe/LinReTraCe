@@ -267,8 +267,10 @@ program main
       temp%BB = 1.d0/(temp%temp_config * kB)
 
       ! shift
-      pot%MuMin = pot%MuMin + pot%mu_dft
-      pot%MuMax = pot%MuMax + pot%mu_dft
+      if (.not. pot%mabsolute) then
+        pot%MuMin = pot%MuMin + pot%mu_dft
+        pot%MuMax = pot%MuMax + pot%mu_dft
+      endif
       ! define Chemical potential grid
       if (algo%steps .gt. 1) then
         if (pot%mlogarithmic) then
