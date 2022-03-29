@@ -13,9 +13,9 @@ module Mfermi
   end interface omfermi
 
   ! fermi - 1/2
-  interface fermi2
+  interface fermimhalf
     module procedure fermi2_dp, fermi2_qp, fermi2_dpqp, fermi2_qpdp
-  end interface fermi2
+  end interface fermimhalf
 
   interface polygamma2fermi
     module procedure polygamma2fermi_dp, polygamma2fermi_qp
@@ -134,9 +134,12 @@ module Mfermi
 
 !________________________________________________________
 
-  ! these functions represent the analytical limit of
-  ! lim Gamma-> 0     Re[psi_1[0.5 + beta/2pi * (Gamma + i*a)]]
+  ! these functions represent the leading term of the limit Gamma-> 0
   ! used in the Boltzmann regime equations
+  !
+  ! Re[psi_1[0.5 + beta/2pi * (i*a)]] == -d/deps fermi * 2 pi**2 / beta
+  ! -d/deps = beta / 4 / cosh(beta * eps / 2)**2
+  ! -> Re[psi_1[0.5 + beta/2pi * (i*a)]] ==  pi**2 / 2 / cosh(beta * eps / 2)**2
   pure elemental function polygamma2fermi_dp(eps,beta)
     implicit none
     real(8), intent(in) :: eps,beta
