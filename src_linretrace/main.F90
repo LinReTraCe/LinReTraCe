@@ -42,6 +42,7 @@ program main
   integer :: iStart, iEnd, iStep
   real(8) :: ndevact
   real(16):: ndevactQ
+  real(16):: ndevQ1, ndevQ2
 
   character(len=128) :: string
   real(8) :: tstart, tfinish, timings(5)
@@ -55,6 +56,7 @@ program main
   real(8), allocatable :: carrier_concentration(:) ! carrier concentration = difference to nominal filling in cm-3
   real(8), allocatable :: activated_electrons(:)   ! thermally activated electrons (in gapped system: electrons in all conduction bands)
   real(8), allocatable :: activated_holes(:)       ! thermally activated holes (in gapped systems: holes in all valence bands)
+  real(8), allocatable :: doping_contribution(:)   ! doping contribution to the filling
   real(8), allocatable :: impurity_contribution(:) ! impurity contribution to the filling
                                                    ! in normal system: charge - ( occupation - donor_imp + acceptor_imp - doping ) = 0
                                                    ! in gapped system: activated_electrons - activated_holes - donor_imp + acceptor_imp - doping = 0
@@ -218,11 +220,13 @@ program main
     allocate(carrier_concentration(algo%steps))
     allocate(activated_electrons(algo%steps))
     allocate(activated_holes(algo%steps))
+    allocate(doping_contribution(algo%steps))
     allocate(impurity_contribution(algo%steps))
     total_energy          = 0.d0
     carrier_concentration = 0.d0
     activated_electrons   = 0.d0
     activated_holes       = 0.d0
+    doping_contribution   = 0.d0
     impurity_contribution = 0.d0
     if (.not. allocated(pot%MM))  allocate(pot%MM(algo%steps))
     if (.not. allocated(pot%QMM)) allocate(pot%QMM(algo%steps))
@@ -293,14 +297,20 @@ program main
     allocate(activated_electrons(algo%steps))
     allocate(activated_holes(algo%steps))
     allocate(carrier_concentration(algo%steps))
+    allocate(doping_contribution(algo%steps))
     allocate(impurity_contribution(algo%steps))
     allocate(pot%occ(algo%steps))
     total_energy          = 0.d0
     carrier_concentration = 0.d0
     activated_electrons   = 0.d0
     activated_holes       = 0.d0
+    doping_contribution   = 0.d0
     impurity_contribution = 0.d0
     pot%occ               = 0.d0
+  endif
+
+  if (algo%ldoping) then
+    doping_contribution = edisp%doping
   endif
 
   if (.not. edisp%lBandShift) then
@@ -646,17 +656,25 @@ program main
                                   edisp, sct, kmesh, imp, algo, info)
     endif
 
-    if (algo%lTMODE .and. algo%lImpurities) then
-      call occ_impurity(ndevactQ, pot%QMM(iStep), imp, info)
-      impurity_contribution(iStep) = real(ndevactQ, 8)
-    endif
-
     ! calculates the difference to the demanded electron number
-    call ndeviation_Q(pot%QMM(iStep), ndevactQ, edisp, sct, kmesh, imp, algo, info)
-    ! deviation rescaled to volume is the carrier concentration
-    carrier_concentration(iStep) = -real(ndevactQ / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
+    !  === N - occupation + impurity_contribution + doping
+    call ndeviation_Q(pot%QMM(iStep), ndevQ1, edisp, sct, kmesh, imp, algo, info)
+
+    ! calculate the impurity contribution
+    if (algo%lTMODE .and. algo%lImpurities) then
+      call occ_impurity(ndevQ2, pot%QMM(iStep), imp, info)
+      impurity_contribution(iStep) = real(ndevQ2, 8)
+      ndevQ1 = ndevQ1 - ndevQ2
+      ! now: N - occupation + doping
+    endif
+    if (algo%lTMODE .and. algo%ldoping ) then
+      ndevQ1 = ndevQ1 - edisp%doping
+      ! now: N - occupation
+    endif
+    ! (N-occupation) rescaled to volume is the carrier concentration
+    carrier_concentration(iStep) = -real(ndevQ1 / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
-    pot%occ(iStep) = edisp%nelect - real(ndevactQ,8)
+    pot%occ(iStep) = edisp%nelect - real(ndevQ1,8)
 
     if (myid.eq.master) then
       write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iStep), niitact
@@ -794,6 +812,9 @@ program main
     call hdf5_write_data(ifile_output, '.quantities/holes', activated_holes)
     if (algo%lImpurities) then
       call hdf5_write_data(ifile_output, '.quantities/imp_contribution', impurity_contribution)
+    endif
+    if (algo%ldoping) then
+      call hdf5_write_data(ifile_output, '.quantities/doping_contribution', doping_contribution)
     endif
     call hdf5_close_file(ifile_output)
   endif

@@ -91,14 +91,15 @@ class LRTCoutput(object):
     # 'raw' direct quantities
     # dos is only listed here so the 'list' command shows is, we use a different method to calculate it
 
-    self.datasets.update({'dos':        (True, '.energies',                    'Density of States',                          False, False)})
-    self.datasets.update({'energy':     (True, '.quantities/energy',           'Total of energy of the system [eV]',         False, False)})
-    self.datasets.update({'mu':         (True, '.quantities/mu',               'Chemical potential [eV]',                    False, False)})
-    self.datasets.update({'occupation': (True, '.quantities/occupation',       'Total occupation in the system',             False, False)})
-    self.datasets.update({'carrier':    (True, '.quantities/carrier',          'Carrier concentration in the system w.r.t. neutral charge [cm^-3]', False, False)})
-    self.datasets.update({'electrons':  (True, '.quantities/electrons',        'Thermally activated electrons',              False, False)})
-    self.datasets.update({'holes':      (True, '.quantities/holes',            'Thermally activated holes',                  False, False)})
-    self.datasets.update({'imp':        (True, '.quantities/imp_contribution', 'Thermally activated impurity electrons',     False, False)})
+    self.datasets.update({'dos':        (True, '.energies',                       'Density of States',                                                 False, False)})
+    self.datasets.update({'energy':     (True, '.quantities/energy',              'Total of energy of the system [eV]',                                False, False)})
+    self.datasets.update({'mu':         (True, '.quantities/mu',                  'Chemical potential [eV]',                                           False, False)})
+    self.datasets.update({'occupation': (True, '.quantities/occupation',          'Total occupation in the system',                                    False, False)})
+    self.datasets.update({'carrier':    (True, '.quantities/carrier',             'Carrier concentration in the system w.r.t. neutral charge [cm^-3]', False, False)})
+    self.datasets.update({'electrons':  (True, '.quantities/electrons',           'Thermally activated electrons',                                     False, False)})
+    self.datasets.update({'holes':      (True, '.quantities/holes',               'Thermally activated holes',                                         False, False)})
+    self.datasets.update({'impurity':   (True, '.quantities/imp_contribution',    'Thermally activated impurity electrons',                            False, False)})
+    self.datasets.update({'doping':     (True, '.quantities/doping_contribution', 'Additional system doping',                                          False, False)})
 
 
     # 'raw' Onsager coefficients
