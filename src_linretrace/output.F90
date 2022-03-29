@@ -92,48 +92,58 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
     call hdf5_write_data(ifile, '.scattering/gamimp', sct%gamimp)
   endif
 
-  call hdf5_write_data(ifile, ".quantities/ispin", edisp%ispin)
-  call hdf5_write_data(ifile, ".quantities/charge", edisp%nelect) ! this might have been changed by config
-  call hdf5_write_data(ifile, ".quantities/doping", edisp%doping)
-  call hdf5_write_data(ifile, '.quantities/mudft', pot%mu_dft)    ! this also might have changed
-  call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
-  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
-  call hdf5_write_data(ifile, '.quantities/weights',  kmesh%weight)
-  if (algo%lTMODE) then
-    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'temp')
-  else if (algo%lMUMODE) then
-    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'mu')
+  call hdf5_write_data(ifile, ".structure/ispin",   edisp%ispin)
+  call hdf5_write_data(ifile, ".structure/charge",  edisp%nelect) ! this might have been changed by config
+  call hdf5_write_data(ifile, '.structure/mudft',   pot%mu_dft)    ! this also might have changed
+  call hdf5_write_data(ifile, '.structure/nkp',     kmesh%nkp)
+  call hdf5_write_data(ifile, '.structure/weights', kmesh%weight)
+
+  if (edisp%ispin == 1) then
+    call hdf5_write_data(ifile, "/.structure/energies", edisp%band(:,:,1))
+  else
+    call hdf5_write_data(ifile, "/.structure/energies/up", edisp%band(:,:,1))
+    call hdf5_write_data(ifile, "/.structure/energies/dn", edisp%band(:,:,2))
   endif
 
   ! output bandgap information to have access to it
   ! in the general output file
   if (edisp%ispin == 1) then
-    call hdf5_write_data(ifile, "/.quantities/bandgap/gapped", edisp%gapped(1))
+    call hdf5_write_data(ifile, "/.structure/bandgap/gapped", edisp%gapped(1))
     if (edisp%gapped(1)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/gapsize", edisp%gap(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_vband", edisp%ene_valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/ene_cband", edisp%ene_conductionBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/cband", edisp%conductionBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/ene_cband", edisp%ene_conductionBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/cband", edisp%conductionBand(1))
     endif
   else
-    call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapped", edisp%gapped(1))
+    call hdf5_write_data(ifile, "/.structure/bandgap/up/gapped", edisp%gapped(1))
     if (edisp%gapped(1)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/gapsize", edisp%gap(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/up/cband", edisp%conductionBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/up/gapsize", edisp%gap(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/up/ene_vband", edisp%ene_valenceBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/up/ene_cband", edisp%ene_conductionBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/up/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/up/cband", edisp%conductionBand(1))
     endif
 
-    call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapped", edisp%gapped(2))
+    call hdf5_write_data(ifile, "/.structure/bandgap/dn/gapped", edisp%gapped(2))
     if (edisp%gapped(2)) then
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/gapsize", edisp%gap(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/vband", edisp%valenceBand(1))
-      call hdf5_write_data(ifile, "/.quantities/bandgap/dn/cband", edisp%conductionBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/dn/gapsize", edisp%gap(2))
+      call hdf5_write_data(ifile, "/.structure/bandgap/dn/ene_vband", edisp%ene_valenceBand(2))
+      call hdf5_write_data(ifile, "/.structure/bandgap/dn/ene_cband", edisp%ene_conductionBand(2))
+      call hdf5_write_data(ifile, "/.structure/bandgap/dn/vband", edisp%valenceBand(1))
+      call hdf5_write_data(ifile, "/.structure/bandgap/dn/cband", edisp%conductionBand(1))
     endif
+  endif
+
+  call hdf5_write_data(ifile, ".quantities/doping", edisp%doping)
+  call hdf5_write_data(ifile, '.quantities/tempAxis', temp%TT)
+  call hdf5_write_data(ifile, '.quantities/betaAxis', temp%BB)
+
+  if (algo%lTMODE) then
+    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'temp')
+  else if (algo%lMUMODE) then
+    call hdf5_write_attribute(ifile, '.quantities', 'mode', 'mu')
   endif
 
   call hdf5_write_data(ifile, "/.quantities/impurities/nimp", imp%nimp)
@@ -155,13 +165,6 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_data(ifile, "/.unitcell/dims", kmesh%dims)
   call hdf5_write_data(ifile, "/.unitcell/ndim", kmesh%ndim)
   call hdf5_write_data(ifile, "/.unitcell/vol",  kmesh%vol)
-
-  if (edisp%ispin == 1) then
-    call hdf5_write_data(ifile, "/.energies", edisp%band(:,:,1))
-  else
-    call hdf5_write_data(ifile, "/.energies/up", edisp%band(:,:,1))
-    call hdf5_write_data(ifile, "/.energies/dn", edisp%band(:,:,2))
-  endif
 
   call hdf5_close_file(ifile)
 

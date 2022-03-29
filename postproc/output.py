@@ -91,7 +91,7 @@ class LRTCoutput(object):
     # 'raw' direct quantities
     # dos is only listed here so the 'list' command shows is, we use a different method to calculate it
 
-    self.datasets.update({'dos':        (True, '.energies',                       'Density of States',                                                 False, False)})
+    self.datasets.update({'dos':        (True, '.structure/energies',             'Density of States',                                                 False, False)})
     self.datasets.update({'energy':     (True, '.quantities/energy',              'Total of energy of the system [eV]',                                False, False)})
     self.datasets.update({'mu':         (True, '.quantities/mu',                  'Chemical potential [eV]',                                           False, False)})
     self.datasets.update({'occupation': (True, '.quantities/occupation',          'Total occupation in the system',                                    False, False)})
@@ -275,11 +275,11 @@ class LRTCoutput(object):
           else:
             prefix = '/dn'
 
-        gapped = h5['.quantities/bandgap'+prefix+'/gapped'][()]
+        gapped = h5['.structure/bandgap'+prefix+'/gapped'][()]
 
         if gapped:
-          enev.append(h5['.quantities/bandgap'+prefix+'/ene_vband'][()])
-          enec.append(h5['.quantities/bandgap'+prefix+'/ene_cband'][()])
+          enev.append(h5['.structure/bandgap'+prefix+'/ene_vband'][()])
+          enec.append(h5['.structure/bandgap'+prefix+'/ene_cband'][()])
         else:
           fullgap = False
           enev.append(np.nan)
@@ -518,21 +518,21 @@ class LRTCoutput(object):
 
       if self.spins == 1:
         try:
-          gapped = h5['.quantities/bandgap/gapped'][()]
-          gap    = h5['.quantities/bandgap/gapsize'][()]
+          gapped = h5['.structure/bandgap/gapped'][()]
+          gap    = h5['.structure/bandgap/gapsize'][()]
           print('gap [eV]:',gap)
         except:
           print('no gap')
       else:
         try:
-          gappedup = h5['.quantities/bandgap/up/gapped'][()]
-          gapup    = h5['.quantities/bandgap/up/gapsize'][()]
+          gappedup = h5['.structure/bandgap/up/gapped'][()]
+          gapup    = h5['.structure/bandgap/up/gapsize'][()]
           print('up: gap [eV]:',gapup)
         except:
           print('up: no gap')
         try:
-          gappeddn = h5['.quantities/bandgap/up/gapped'][()]
-          gapdn    = h5['.quantities/bandgap/dn/gapsize'][()]
+          gappeddn = h5['.structure/bandgap/up/gapped'][()]
+          gapdn    = h5['.structure/bandgap/dn/gapsize'][()]
           print('dn: gap [eV]:',gapdn)
         except:
           print('dn: no gap')
@@ -704,7 +704,7 @@ class LRTCoutput(object):
         print('#   Using file:', self.fname)
         print('#   Detected run mode:', self.mode)
 
-        self.spins = hfi['.quantities/ispin'][()]
+        self.spins = hfi['.structure/ispin'][()]
         self.ndim = hfi['.unitcell/ndim'][()]
         self.dims = hfi['.unitcell/dims'][()]
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
@@ -723,7 +723,7 @@ class LRTCoutput(object):
       self.invtemp = h5['.quantities/betaAxis'][()]
       self.carrier = h5['.quantities/carrier'][()]
       self.mu      = h5['.quantities/mu'][()]
-      self.mudft   = h5['.quantities/mudft'][()]
+      self.mudft   = h5['.structure/mudft'][()]
       self.nT      = self.temp.shape[0]
 
     if self.mode == 'temp':
@@ -759,19 +759,19 @@ class LRTCoutput(object):
     import matplotlib.pyplot as plt
 
     with h5py.File(self.fname,'r') as h5:
-      mu  = h5['.quantities/mudft'][()]
-      spins = h5['.quantities/ispin'][()]
-      weights = h5['.quantities/weights'][()]
+      mu  = h5['.structure/mudft'][()]
+      spins = h5['.structure/ispin'][()]
+      weights = h5['.structure/weights'][()]
 
       if spins==1:
-        ene = h5['.energies'][()]
+        ene = h5['.structure/energies'][()]
         dosaxis, dos, nos = calcDOS(ene, weights, gamma=broadening, windowsize=1.1)
         del ene
       else:
-        eneup = h5['.energies/up'][()]
+        eneup = h5['.structure/energies/up'][()]
         dosaxisup, dosup, nosup = calcDOS(eneup, weights, gamma=broadening, windowsize=1.1)
         del eneup
-        enedn = h5['.energies/dn'][()]
+        enedn = h5['.structure/energies/dn'][()]
         dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, gamma=broadening, windowsize=1.1)
         del enedn
 
