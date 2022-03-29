@@ -398,6 +398,7 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
   real(16) :: F(4)
   real(16) :: P(4)
   real(16) :: s
+  real(8)  :: sctmin
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
   ! Bisection
@@ -525,10 +526,18 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
     niitact = iit
   endif
 
-  ! hard temperature cutoff relative to band gap size
-  if (info%Temp < edisp%gap_min*300) then
-    call occ_refine(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
+  if ( (algo%ldebug .and. (index(algo%dbgstr,"NoRefine") .ne. 0)) ) then
+    return
+  endif
 
+  sctmin = minval(sct%gam)
+  ! hard temperature cutoff relative to band gap size for fermi function
+  ! scattering rate and temperature cutoff for digamma function
+  if ( (algo%ldebug .and. (index(algo%dbgstr,"AlwaysRefine") .ne. 0)) .or. &
+       (algo%muFermi .and. (info%Temp < edisp%gap_min*300)) .or. &
+       (.not. algo%muFermi .and. (sctmin < 3d-10 * edisp%gap_min) .and. (info%Temp < edisp%gap_min*400)) ) then
+
+    call occ_refine(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
     ! do not enter refinement algorithm if this value is too large
     if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
       return

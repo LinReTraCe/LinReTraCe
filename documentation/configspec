@@ -116,8 +116,10 @@ ________________________________________________________________________________
 Debug string here (one line)
 
 Debug options:
-  Mpi:         Output MPI information
-  LoopReverse: Reverse the internal temp/mu loop
-  Bisection:   Always perform root finding with bisection (slower but numerically robust)
-  Ridders:     Always perform root finding with Ridders algorithm
-  Secant:      Always perform root finding with secant algorithm
+  Mpi:               Output MPI information
+  LoopReverse:       Reverse the internal temp/mu loop
+  Bisection:         Always perform root finding with bisection (slower but numerically robust)
+  Ridders:           Always perform root finding with Ridders algorithm
+  Secant:            Always perform root finding with secant algorithm
+  NoRefine:          Never compute the chemical potential with the help of the refinement algorithm
+  AlwaysRefine:      No temperature cutoff for Refinement procedure

@@ -72,8 +72,8 @@ mu_arr = np.array(mu_arr)
 ''' this format can be used as OldMuText '''
 np.savetxt('mu_psi.txt', np.hstack((TT[:,None],mu_arr[::-1,None])))
 plt.plot(TT,mu_arr[::-1])
+plt.axhline(y=mudft,color='gray', lw=1, zorder=0)
 if gapped:
-  plt.axhline(y=mudft,color='gray', lw=1, zorder=0)
   plt.axhline(y=ene_cband,color='black', lw=2, zorder=0)
   plt.axhline(y=ene_vband,color='black', lw=2, zorder=0)
 plt.show()
