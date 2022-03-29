@@ -1304,13 +1304,11 @@ subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmes
           * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - info%muQ)),0))/piQ ! this is the occupation
         holes = 1.q0 - elecs ! should be enough accuracy
 
-        if (algo%lTMODE) then
-          if (edisp%gapped(is)) then
-            if (iband <= edisp%valenceBand(is)) then
-              holessum = holessum + holes * kmesh%weightQ(ik)
-            else if (iband >= edisp%conductionBand(is)) then
-              elecssum = elecssum + elecs * kmesh%weightQ(ik)
-            endif
+        if (algo%lTMODE .and. edisp%gapped(is)) then
+          if (iband <= edisp%valenceBand(is)) then
+            holessum = holessum + holes * kmesh%weightQ(ik)
+          else if (iband >= edisp%conductionBand(is)) then
+            elecssum = elecssum + elecs * kmesh%weightQ(ik)
           endif
         else
           if (elecs < holes) then
@@ -1378,13 +1376,11 @@ subroutine calc_elecholes_fermi(electrons_total, holes_total, edisp, sct, kmesh,
         elecs = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-info%muQ), info%betaQ)
         holes = omfermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-info%muQ), info%betaQ)
 
-        if (algo%lTMODE) then
-          if (edisp%gapped(is)) then
-            if (iband <= edisp%valenceBand(is)) then
-              holessum = holessum + holes * kmesh%weightQ(ik)
-            else if (iband >= edisp%conductionBand(is)) then
-              elecssum = elecssum + elecs * kmesh%weightQ(ik)
-            endif
+        if (algo%lTMODE .and. edisp%gapped(is)) then
+          if (iband <= edisp%valenceBand(is)) then
+            holessum = holessum + holes * kmesh%weightQ(ik)
+          else if (iband >= edisp%conductionBand(is)) then
+            elecssum = elecssum + elecs * kmesh%weightQ(ik)
           endif
         else
           if (elecs < holes) then
