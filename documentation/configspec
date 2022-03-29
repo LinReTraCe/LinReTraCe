@@ -25,8 +25,8 @@ FermiOccupation    = (default = T)                     # T: Fermi function to de
 ________________________________________________________________________________
 [TempMode]                                             # RunMode = temp
 ChemicalPotential  = (default = None)                  # Fix Chemical potential for all temperatures
-OldMu              = (default = None)                  # Use chemical potentials from old OutputFile
-OldMutText         = (default = None)                  # Use chemical potentials from text file (compatible with lprint mu)
+OldMuHdf5          = (default = None)                  # Use chemical potentials from old OutputFile
+OldMuText          = (default = None)                  # Use chemical potentials from text file (compatible with lprint mu)
 NImp               = (default = 0)                     # number of additional impurity levels
 Doping             = (default = 0)                     # Additional doping [cm-3]
 

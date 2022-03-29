@@ -109,8 +109,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_energies        = ''
   algo%input_scattering_hdf5 = ''
   algo%input_scattering_text = ''
-  algo%input_mu_text = ''
-  algo%old_output_file       = ''
+  algo%input_mu_text         = ''
+  algo%input_mu_hdf5         = ''
   algo%lBField               = .false.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
@@ -339,7 +339,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     !--------------------------------------------------------------------------------
     allocate(dictionary(5))
     dictionary(1) = 'ChemicalPotential'
-    dictionary(2) = 'OldMu'
+    dictionary(2) = 'OldMuHdf5'
     dictionary(3) = 'OldMuText'
     dictionary(4) = 'NImp'
     dictionary(5) = 'Doping'
@@ -355,15 +355,15 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .true.
     endif
 
-    call string_find('OldMu', algo%old_output_file, search_start, search_end, found)
+    call string_find('OldMuHdf5', algo%input_mu_hdf5, search_start, search_end, found)
     if (found) then
-      algo%lOldmu   = .true.
+      algo%lOldmuHdf5   = .true.
       algo%muSearch = .false. !overwrite the previous option
     else
-      algo%lOldmu = .false.
+      algo%lOldmuHdf5 = .false.
     endif
 
-    if (.not. algo%lOldmu) then
+    if (.not. algo%lOldmuHdf5) then
       call string_find('OldMuText', algo%input_mu_text, search_start, search_end, found)
       if (found) then
         algo%lOldmuText   = .true.
@@ -707,34 +707,34 @@ subroutine check_files(algo)
 
   inquire (file=trim(adjustl(algo%input_energies)), exist=there)
   if (.not. there) then
-    call stop_with_message(stderr, "Can not find the EnergyFile")
+    call stop_with_message(stderr, "Can not find the 'EnergyFile' file")
   endif
 
   if (algo%lScatteringFile) then
     inquire (file=trim(adjustl(algo%input_scattering_hdf5)), exist=there)
     if (.not. there) then
-      call stop_with_message(stderr, "Can not find the ScatteringFile")
+      call stop_with_message(stderr, "Can not find the 'ScatteringFile' file")
     endif
   endif
 
   if (algo%lScatteringText) then
     inquire (file=trim(adjustl(algo%input_scattering_text)), exist=there)
     if (.not. there) then
-      call stop_with_message(stderr, "Can not find the ScatteringText")
+      call stop_with_message(stderr, "Can not find the 'ScatteringText' file")
     endif
   endif
 
-  if (algo%lOldmu) then
-    inquire (file=trim(adjustl(algo%old_output_file)), exist=there)
+  if (algo%lOldmuHdf5) then
+    inquire (file=trim(adjustl(algo%input_mu_hdf5)), exist=there)
     if (.not. there) then
-      call stop_with_message(stderr, "Can not find the OldOutput file")
+      call stop_with_message(stderr, "Can not find the 'OldMuHdf5' file")
     endif
   endif
 
   if (algo%lOldmuText) then
     inquire (file=trim(adjustl(algo%input_mu_text)), exist=there)
     if (.not. there) then
-      call stop_with_message(stderr, "Can not find the OldOutputText file")
+      call stop_with_message(stderr, "Can not find the 'OldMuText' file")
     endif
   endif
 

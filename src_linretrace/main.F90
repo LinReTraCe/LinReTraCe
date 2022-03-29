@@ -241,7 +241,7 @@ program main
       pot%QMM = pot%mu_config
     endif
 
-    if (algo%lOldmu) then
+    if (algo%lOldmuHdf5) then
       call read_muT_hdf5(algo, temp, pot%MM) ! this is saved in double
       pot%QMM = pot%MM
     endif
@@ -426,8 +426,10 @@ program main
           write(stdout,*) '  via: Digamma function'
         endif
       else
-        if (algo%lOldmu) then
-          write(stdout,*) '  from file: ', trim(adjustl(algo%old_output_file))
+        if (algo%lOldmuHdf5) then
+          write(stdout,*) '  from hdf5 file: ', trim(adjustl(algo%input_mu_hdf5))
+        else if (algo%lOldmuText) then
+          write(stdout,*) '  from text file: ', trim(adjustl(algo%input_mu_text))
         else
           write(stdout,*) '  constant: ', pot%MM(1)
         endif

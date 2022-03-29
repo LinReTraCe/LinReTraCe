@@ -35,7 +35,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'rootmethod', algo%rootMethod)
   call hdf5_write_attribute(ifile, '.config', 'musearch', algo%muSearch)
   call hdf5_write_attribute(ifile, '.config', 'mufermi', algo%muFermi)
-  call hdf5_write_attribute(ifile, '.config', 'oldmu', algo%lOldmu)
+  call hdf5_write_attribute(ifile, '.config', 'oldmuhdf5', algo%lOldmuHdf5)
   call hdf5_write_attribute(ifile, '.config', 'oldmutext', algo%lOldmuText)
   call hdf5_write_attribute(ifile, '.config', 'scatteringfile', algo%lScatteringFile)
   call hdf5_write_attribute(ifile, '.config', 'scatteringtext', algo%lScatteringText)
@@ -59,10 +59,10 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   else
     call hdf5_write_attribute(ifile, '.config', 'input_scattering_text', trim(algo%input_scattering_text))
   endif
-  if (len(trim(algo%old_output_file)) == 0) then
-    call hdf5_write_attribute(ifile, '.config', 'old_output_file', "-")
+  if (len(trim(algo%input_mu_hdf5)) == 0) then
+    call hdf5_write_attribute(ifile, '.config', 'input_mu_hdf5', "-")
   else
-    call hdf5_write_attribute(ifile, '.config', 'old_output_file', trim(algo%old_output_file))
+    call hdf5_write_attribute(ifile, '.config', 'input_mu_hdf5', trim(algo%input_mu_hdf5))
   endif
   if (len(trim(algo%input_mu_text)) == 0) then
     call hdf5_write_attribute(ifile, '.config', 'input_mu_text', "-")

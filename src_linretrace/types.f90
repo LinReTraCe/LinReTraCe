@@ -18,8 +18,8 @@ module Mtypes
     integer :: rootMethod     ! numerical method to find the chemical potential
     integer :: fullOutput     ! output full response -- 0:none - 1:full - 2:ksum - 3:bsum
     logical :: muSearch       ! mu fixed or find mu?
-    logical :: lOldmu         ! mus from old run?
-    logical :: lOldmuText     ! mus from text file?
+    logical :: lOldmuHdf5     ! mus from old run
+    logical :: lOldmuText     ! mus from text file (lprint or the same format)
     logical :: muFermi               ! calculate the occupation with fermi functions instead of digamma functions
     logical :: lScatteringFile       ! do we get the scattering information from another file (hdf5)
     logical :: lScatteringText       ! do we get the scattering information from a text file
@@ -42,7 +42,7 @@ module Mtypes
     character(len=256) :: input_scattering_hdf5
     character(len=256) :: input_scattering_text
     character(len=256) :: output_file
-    character(len=256) :: old_output_file
+    character(len=256) :: input_mu_hdf5
     character(len=256) :: input_mu_text
     character(len=256) :: dbgstr
   end type

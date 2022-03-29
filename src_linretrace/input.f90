@@ -760,7 +760,7 @@ subroutine read_muT_hdf5(algo, temp, mu)
   real(8), allocatable :: mutemp(:)
   integer              :: shapemu(1)
 
-  call hdf5_open_file(algo%old_output_file, ifile, rdonly=.true.)
+  call hdf5_open_file(algo%input_mu_hdf5, ifile, rdonly=.true.)
   call hdf5_read_data(ifile, '.quantities/mu', mutemp)
 
   shapemu = shape(mutemp)
