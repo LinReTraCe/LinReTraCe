@@ -515,12 +515,6 @@ program main
     write(stdout,*) 'Temperature[K], invTemperature[1/eV], chemicalPotential[eV], rootFindingSteps'
   endif
 
-  if (myid .eq. master) then
-    call hdf5_create_file(algo%output_file)
-    call output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
-  endif
-
-
   call cpu_time(tfinish)
   timings(1) = timings(1) + (tfinish - tstart)
   tstart = tfinish
@@ -528,7 +522,6 @@ program main
 #ifdef MPI
   call mpi_barrier(mpi_comm_world, mpierr)
 #endif
-
 
   ! MAIN LOOP
   if (algo%lTMODE  .and. .not. (algo%lDebug .and. (index(algo%dbgstr,"LoopReverse") .ne. 0)) .or. &
@@ -541,6 +534,12 @@ program main
     iEnd   = algo%steps
     algo%step_dir  = +1
   endif
+
+  if (myid .eq. master) then
+    call hdf5_create_file(algo%output_file)
+    call output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
+  endif
+
 
   do iStep=iStart,iEnd,algo%step_dir
     ! run time information

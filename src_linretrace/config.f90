@@ -126,7 +126,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
-  algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann ans psi1 approx
+  algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann and psi1 approx
   algo%fullOutput     = 0 ! disabled
   sct%gamimp          = 0.d0
   imp%nimp            = 0

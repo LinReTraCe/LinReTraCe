@@ -46,7 +46,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'boltzmann', algo%lBoltzmann)
   call hdf5_write_attribute(ifile, '.config', 'scissors', algo%lScissors)
   call hdf5_write_attribute(ifile, '.config', 'steps', algo%steps)
-  call hdf5_write_attribute(ifile, '.config', 'steps_dir', algo%step_dir)
+  call hdf5_write_attribute(ifile, '.config', 'step_dir', algo%step_dir)
   call hdf5_write_attribute(ifile, '.config', 'impurities', algo%lImpurities)
   call hdf5_write_attribute(ifile, '.config', 'input_energies', trim(algo%input_energies))
   if (len(trim(algo%input_scattering_hdf5)) == 0) then
