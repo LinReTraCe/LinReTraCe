@@ -339,8 +339,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     !--------------------------------------------------------------------------------
     allocate(dictionary(5))
     dictionary(1) = 'ChemicalPotential'
-    dictionary(2) = 'OldOutput'
-    dictionary(3) = 'OldOutputText'
+    dictionary(2) = 'OldMu'
+    dictionary(3) = 'OldMuText'
     dictionary(4) = 'NImp'
     dictionary(5) = 'Doping'
     call spell_check(search_start,search_end, '[TempMode]', dictionary, er, erstr)
@@ -355,7 +355,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       algo%muSearch = .true.
     endif
 
-    call string_find('OldOutput', algo%old_output_file, search_start, search_end, found)
+    call string_find('OldMu', algo%old_output_file, search_start, search_end, found)
     if (found) then
       algo%lOldmu   = .true.
       algo%muSearch = .false. !overwrite the previous option
@@ -364,7 +364,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     if (.not. algo%lOldmu) then
-      call string_find('OldOutputText', algo%input_mu_text, search_start, search_end, found)
+      call string_find('OldMuText', algo%input_mu_text, search_start, search_end, found)
       if (found) then
         algo%lOldmuText   = .true.
         algo%muSearch = .false. !overwrite the previous option
