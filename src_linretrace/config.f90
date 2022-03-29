@@ -303,8 +303,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       if (size(floatntemp) < 1 .or. size(floatntemp) > 2) then
         call stop_with_message(stderr, 'ScatteringRate in MuMode group must have 1 or 2 elements')
       endif
-      allocate(sct%gamcoeff(size(floatntemp), 1))
-      sct%gamcoeff(:,1) = floatntemp
+      allocate(sct%gamcoeff(1, size(floatntemp)))
+      sct%gamcoeff(1,:) = floatntemp
       deallocate(floatntemp)
 
       call floatn_find('QuasiParticleWeight', floatntemp, subsearch_start, subsearch_end, found)
@@ -312,8 +312,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       if (size(floatntemp) < 1 .or. size(floatntemp) > 2) then
         call stop_with_message(stderr, 'QuasiParticleWeight in MuMode group must have 1 or 2 elements')
       endif
-      allocate(sct%zqpcoeff(size(floatntemp), 1))
-      sct%zqpcoeff(:,1) = floatntemp
+      allocate(sct%zqpcoeff(1, size(floatntemp)))
+      sct%zqpcoeff(1,:) = floatntemp
       deallocate(floatntemp)
 
       edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
@@ -449,8 +449,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         call bool_find('TLogarithmic', temp%tlogarithmic, search_start, search_end, found)
         call floatn_find('ScatteringCoefficients', floatntemp, search_start, search_end, found)
         if (found) then
-          allocate(sct%gamcoeff(1,size(floatntemp)))
-          sct%gamcoeff(1,:) = floatntemp
+          allocate(sct%gamcoeff(size(floatntemp), 1))
+          sct%gamcoeff(:,1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
           if (found) call stop_with_message(stderr, 'ScatteringCoefficients and UpScatteringCoefficients found in [TempMode][[Scattering]]')
@@ -469,19 +469,19 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           endif
           deallocate(floatntemp)
           ! load them into the allocated array
-          allocate(sct%gamcoeff(2,nmaxshape))
+          allocate(sct%gamcoeff(nmaxshape, 2))
           sct%gamcoeff = 0.0
           call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
-          sct%gamcoeff(1,:size(floatntemp)) = floatntemp
+          sct%gamcoeff(:size(floatntemp),1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
-          sct%gamcoeff(2,:size(floatntemp)) = floatntemp
+          sct%gamcoeff(:size(floatntemp),2) = floatntemp
           deallocate(floatntemp)
         endif
         call floatn_find('QuasiParticleCoefficients', floatntemp, search_start, search_end, found)
         if (found) then
-          allocate(sct%zqpcoeff(1,size(floatntemp)))
-          sct%zqpcoeff(1,:) = floatntemp
+          allocate(sct%zqpcoeff(size(floatntemp),1))
+          sct%zqpcoeff(:,1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
           if (found) call stop_with_message(stderr, 'QuasiParticleCoefficients and UpQuasiParticleCoefficients found in [TempMode][[Scattering]]')
@@ -500,13 +500,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           endif
           deallocate(floatntemp)
           ! load them into the allocated array
-          allocate(sct%zqpcoeff(2,nmaxshape))
+          allocate(sct%zqpcoeff(nmaxshape,2))
           sct%zqpcoeff = 0.0
           call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          sct%zqpcoeff(1,:size(floatntemp)) = floatntemp
+          sct%zqpcoeff(:size(floatntemp),1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          sct%zqpcoeff(2,:size(floatntemp)) = floatntemp
+          sct%zqpcoeff(:size(floatntemp),2) = floatntemp
           deallocate(floatntemp)
         endif
 

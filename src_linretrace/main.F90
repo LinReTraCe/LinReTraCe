@@ -443,13 +443,13 @@ program main
       write(stdout,*) '  additional impurity offset: ', sct%gamimp
     else
       if (edisp%ispin == 1) then
-        write(stdout,*) '  scattering coefficients: ', sct%gamcoeff(1,:)
-        write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff(1,:)
+        write(stdout,*) '  scattering coefficients: ', sct%gamcoeff(:,1)
+        write(stdout,*) '  quasi particle weight coefficients: ', sct%zqpcoeff(:,1)
       else
-        write(stdout,*) '  UP scattering coefficients: ', sct%gamcoeff(1,:)
-        write(stdout,*) '  DN scattering coefficients: ', sct%gamcoeff(2,:)
-        write(stdout,*) '  UP quasi particle weight coefficients: ', sct%zqpcoeff(1,:)
-        write(stdout,*) '  DN quasi particle weight coefficients: ', sct%zqpcoeff(2,:)
+        write(stdout,*) '  UP scattering coefficients: ', sct%gamcoeff(:,1)
+        write(stdout,*) '  DN scattering coefficients: ', sct%gamcoeff(:,2)
+        write(stdout,*) '  UP quasi particle weight coefficients: ', sct%zqpcoeff(:,1)
+        write(stdout,*) '  DN quasi particle weight coefficients: ', sct%zqpcoeff(:,2)
       endif
     endif
     write(stdout,*)
@@ -574,11 +574,11 @@ program main
       sct%gam = 0.d0
       sct%zqp = 0.d0
       do is=1,edisp%ispin
-        do ig=1,size(sct%gamcoeff,dim=2)
-           sct%gam(:,:,is) = sct%gam(:,:,is) + sct%gamcoeff(is,ig)*(temp%TT(iStep)**(ig-1))
+        do ig=1,size(sct%gamcoeff,dim=1)
+           sct%gam(:,:,is) = sct%gam(:,:,is) + sct%gamcoeff(ig,is)*(temp%TT(iStep)**(ig-1))
         enddo
-        do ig=1,size(sct%zqpcoeff,dim=2)
-           sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(is,ig)*(temp%TT(iStep)**(ig-1))
+        do ig=1,size(sct%zqpcoeff,dim=1)
+           sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(ig,is)*(temp%TT(iStep)**(ig-1))
         enddo
         if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')

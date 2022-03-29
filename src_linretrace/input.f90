@@ -135,32 +135,32 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   endif
 
   if (.not. algo%lScatteringFile) then
-    if ( edisp%ispin==2 .and. size(sct%gamcoeff,dim=1)==1 ) then
+    if (edisp%ispin==2 .and. size(sct%gamcoeff,dim=2)==1) then
       ! increase the spin axis by one
       n2shape = shape(sct%gamcoeff)
-      allocate(drank2arr(1,n2shape(2)))
+      allocate(drank2arr(n2shape(1),n2shape(2)))
       drank2arr(:,:) = sct%gamcoeff
       deallocate(sct%gamcoeff)
-      allocate(sct%gamcoeff(2,n2shape(2)))
-      sct%gamcoeff(1,:) = drank2arr(1,:)
-      sct%gamcoeff(2,:) = drank2arr(1,:)
+      allocate(sct%gamcoeff(n2shape(1),2))
+      sct%gamcoeff(:,1) = drank2arr(:,1)
+      sct%gamcoeff(:,2) = drank2arr(:,1)
       deallocate(drank2arr)
     endif
-    if ( edisp%ispin==1 .and. size(sct%gamcoeff,dim=1)==2) then
+    if (edisp%ispin==1 .and. size(sct%gamcoeff,dim=2)==2) then
       call stop_with_message(stderr, 'Error: Provided Scattering rates do not match system (one spin type)')
     endif
-    if ( edisp%ispin==2 .and. size(sct%zqpcoeff,dim=1)==1 ) then
+    if (edisp%ispin==2 .and. size(sct%zqpcoeff,dim=2)==1) then
       ! increase the spin axis by one
       n2shape = shape(sct%zqpcoeff)
-      allocate(drank2arr(1,n2shape(2)))
+      allocate(drank2arr(n2shape(2),n2shape(2)))
       drank2arr(:,:) = sct%zqpcoeff
       deallocate(sct%zqpcoeff)
-      allocate(sct%zqpcoeff(2,n2shape(2)))
-      sct%zqpcoeff(1,:) = drank2arr(1,:)
-      sct%zqpcoeff(2,:) = drank2arr(1,:)
+      allocate(sct%zqpcoeff(n2shape(1),2))
+      sct%zqpcoeff(:,1) = drank2arr(:,1)
+      sct%zqpcoeff(:,2) = drank2arr(:,1)
       deallocate(drank2arr)
     endif
-    if ( edisp%ispin==1 .and. size(sct%zqpcoeff,dim=1)==2) then
+    if (edisp%ispin==1 .and. size(sct%zqpcoeff,dim=2)==2) then
       call stop_with_message(stderr, 'Error: Provided QuasiParticle weights do not match system (one spin type)')
     endif
   endif
