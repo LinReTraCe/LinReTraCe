@@ -40,10 +40,7 @@ class LRTCinput(object):
     '''
     try:
       with h5py.File(self.fname,'r') as h5:
-        try:
-          ene =  h5['energies'] # check if its there
-        except:
-          eneup =  h5['up/energies'] # check if its there
+        h5.attrs['identifier'].encode('utf-8') == 'LRTCinput'
     except:
       raise IOError('Provided file is not an LRTC input file.')
 

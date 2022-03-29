@@ -447,7 +447,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
     if (.not. (algo%lScatteringFile .or. algo%lScatteringText)) then
         call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
-        if (found) call stop_with_message(stderr, 'ScatteringImpurity is only valid in combination with ScatteringFile or ScatteringText')
+        if (found) call stop_with_message(stderr, &
+                   'ScatteringImpurity is only valid in combination with ScatteringFile or ScatteringText')
 
         call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')
@@ -471,17 +472,21 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           sct%gamcoeff(:,1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
-          if (found) call stop_with_message(stderr, 'ScatteringCoefficients and UpScatteringCoefficients found in [TempMode][[Scattering]]')
+          if (found) call stop_with_message(stderr, &
+                     'ScatteringCoefficients and UpScatteringCoefficients found in [TempMode][[Scattering]]')
           call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
-          if (found) call stop_with_message(stderr, 'ScatteringCoefficients and DnScatteringCoefficients found in [TempMode][[Scattering]]')
+          if (found) call stop_with_message(stderr, &
+                     'ScatteringCoefficients and DnScatteringCoefficients found in [TempMode][[Scattering]]')
         else
           ! check validity .. and maximal entries
           call floatn_find('UpScatteringCoefficients', floatntemp, search_start, search_end, found)
-          if (.not. found) call stop_with_message(stderr, 'No valid Scattering Description found in [TempMode][[Scattering]]')
+          if (.not. found) call stop_with_message(stderr, &
+                     'No valid Scattering Description found in [TempMode][[Scattering]]')
           nmaxshape = size(floatntemp)
           deallocate(floatntemp)
           call floatn_find('DnScatteringCoefficients', floatntemp, search_start, search_end, found)
-          if (.not. found) call stop_with_message(stderr, 'No valid Scattering Description found in [TempMode][[Scattering]]')
+          if (.not. found) call stop_with_message(stderr, &
+                     'No valid Scattering Description found in [TempMode][[Scattering]]')
           if (size(floatntemp) > nmaxshape) then
             nmaxshape = nshape(1)
           endif
@@ -502,17 +507,21 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           sct%zqpcoeff(:,1) = floatntemp
           deallocate(floatntemp)
           call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          if (found) call stop_with_message(stderr, 'QuasiParticleCoefficients and UpQuasiParticleCoefficients found in [TempMode][[Scattering]]')
+          if (found) call stop_with_message(stderr, &
+                     'QuasiParticleCoefficients and UpQuasiParticleCoefficients found in [TempMode][[Scattering]]')
           call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          if (found) call stop_with_message(stderr, 'QuasiParticleCoefficients and DnQuasiParticleCoefficients found in [TempMode][[Scattering]]')
+          if (found) call stop_with_message(stderr, &
+                     'QuasiParticleCoefficients and DnQuasiParticleCoefficients found in [TempMode][[Scattering]]')
         else
           ! check validity .. and maximal entries
           call floatn_find('UpQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          if (.not. found) call stop_with_message(stderr, 'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
+          if (.not. found) call stop_with_message(stderr, &
+                     'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
           nmaxshape = size(floatntemp)
           deallocate(floatntemp)
           call floatn_find('DnQuasiParticleCoefficients', floatntemp, search_start, search_end, found)
-          if (.not. found) call stop_with_message(stderr, 'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
+          if (.not. found) call stop_with_message(stderr, &
+                     'No valid QuasiParticle Description found in [TempMode][[Scattering]]')
           if (size(floatntemp) > nmaxshape) then
             nmaxshape = nshape(1)
           endif
@@ -568,7 +577,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
         dictionary(4) = 'Percentage'
         dictionary(5) = 'Bandtype'
         dictionary(6) = 'Bandwidth'
-        call spell_check(subsubsearch_start,subsubsearch_end, '[TempMode] [[Impurities]] '//str_imp, dictionary, er, erstr)
+        call spell_check(subsubsearch_start,subsubsearch_end, &
+             '[TempMode] [[Impurities]] '//str_imp, dictionary, er, erstr)
         deallocate(dictionary)
         if (er /= 0) call stop_with_message(stdout, erstr)
         !--------------------------------------------------------------------------------

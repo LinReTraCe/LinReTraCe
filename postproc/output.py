@@ -509,7 +509,7 @@ class LRTCoutput(object):
 
       for i in self.config:
         try:
-          print('{:<22}  {}'.format(i, self.config[i].decode('utf-8'))) # byte string to string
+          print('{:<22}  {}'.format(i, self.config[i].decode("utf-8"))) # byte string to string
         except:
           print('{:<22}  {}'.format(i, self.config[i]))
 
@@ -669,8 +669,7 @@ class LRTCoutput(object):
     for fi in sortedfiles:
       try:
         with h5py.File(fi,'r') as hfi:
-          if hfi['.quantities'].attrs['identifier'].decode("utf-8") == 'LRTC':
-            # problems here will be caught by the outer try - except
+          if hfi.attrs['identifier'].decode("utf-8") == 'LRTCoutput':
             self.fname = fi
             break
           else:
@@ -696,7 +695,7 @@ class LRTCoutput(object):
       with h5py.File(self.fname,'r') as hfi:
         # we get a byte string here
         # hence we have to decode it to utf-8
-        if hfi['.quantities'].attrs['identifier'].decode("utf-8") != 'LRTC':
+        if hfi.attrs['identifier'].decode("utf-8") != 'LRTCoutput':
           raise IOError('Provided file is not an LRTC output file.')
         if hfi['.quantities'].attrs['mode'].decode("utf-8") == 'temp':
           self.mode = 'temp'

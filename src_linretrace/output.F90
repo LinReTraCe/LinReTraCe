@@ -23,6 +23,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   integer            :: iimp
 
   call hdf5_open_file(algo%output_file, ifile)
+  call hdf5_write_attribute(ifile, '/', 'identifier', 'LRTCoutput')
 
   call hdf5_create_group(ifile, '.config')
   call hdf5_write_attribute(ifile, '.config', 'tmode', algo%lTMODE)
@@ -103,7 +104,6 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   else if (algo%lMUMODE) then
     call hdf5_write_attribute(ifile, '.quantities', 'mode', 'mu')
   endif
-  call hdf5_write_attribute(ifile, '.quantities', 'identifier', 'LRTC')
 
   ! output bandgap information to have access to it
   ! in the general output file
@@ -306,10 +306,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
       case (2)
         if (myid.eq.master) then
-          call MPI_REDUCE(MPI_IN_PLACE, s_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(MPI_IN_PLACE, s_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           s_gather = s_partial_sum
         else
-          call MPI_REDUCE(s_partial_sum, s_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(s_partial_sum, s_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
         endif
       case (3)
         call MPI_gatherv(s_partial_sum,(ikend-ikstr+1)*9*edisp%ispin, &
@@ -369,10 +371,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
       case (2)
         if (myid.eq.master) then
-          call MPI_REDUCE(MPI_IN_PLACE, a_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(MPI_IN_PLACE, a_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           a_gather = a_partial_sum
         else
-          call MPI_REDUCE(a_partial_sum, a_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(a_partial_sum, a_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
         endif
       case (3)
         call MPI_gatherv(a_partial_sum,(ikend-ikstr+1)*9*edisp%ispin, &
@@ -432,10 +436,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
       case (2)
         if (myid.eq.master) then
-          call MPI_REDUCE(MPI_IN_PLACE, x_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(MPI_IN_PLACE, x_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           x_gather = x_partial_sum
         else
-          call MPI_REDUCE(x_partial_sum, x_partial_sum, 9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+          call MPI_REDUCE(x_partial_sum, x_partial_sum, &
+               9*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
         endif
       case (3)
         call MPI_gatherv(x_partial_sum,(ikend-ikstr+1)*9*edisp%ispin, &
@@ -489,20 +495,26 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   ! perform MPI summation
 #ifdef MPI
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%s_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%s_sum, resp%s_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%s_sum, resp%s_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%a_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%a_sum, resp%a_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%a_sum, resp%a_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%x_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%x_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%x_sum, resp%x_sum, 9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%x_sum, resp%x_sum, &
+         9*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 #endif
 
@@ -578,10 +590,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
         case (2)
           if (myid.eq.master) then
-            call MPI_REDUCE(MPI_IN_PLACE, sB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(MPI_IN_PLACE, sB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
             sB_gather = sB_partial_sum
           else
-            call MPI_REDUCE(sB_partial_sum, sB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(sB_partial_sum, sB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           endif
         case (3)
           call MPI_gatherv(sB_partial_sum,(ikend-ikstr+1)*27*edisp%ispin, &
@@ -641,10 +655,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
         case (2)
           if (myid.eq.master) then
-            call MPI_REDUCE(MPI_IN_PLACE, aB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(MPI_IN_PLACE, aB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
             aB_gather = aB_partial_sum
           else
-            call MPI_REDUCE(aB_partial_sum, aB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(aB_partial_sum, aB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           endif
         case (3)
           call MPI_gatherv(aB_partial_sum,(ikend-ikstr+1)*27*edisp%ispin, &
@@ -704,10 +720,12 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
         case (2)
           if (myid.eq.master) then
-            call MPI_REDUCE(MPI_IN_PLACE, xB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(MPI_IN_PLACE, xB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
             xB_gather = xB_partial_sum
           else
-            call MPI_REDUCE(xB_partial_sum, xB_partial_sum, 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+            call MPI_REDUCE(xB_partial_sum, xB_partial_sum, &
+                 27*edisp%ispin*edisp%nband_max, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
           endif
         case (3)
           call MPI_gatherv(xB_partial_sum,(ikend-ikstr+1)*27*edisp%ispin, &
@@ -757,21 +775,27 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   ! perform MPI summation
 #ifdef MPI
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%sB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%sB_sum, resp%sB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%sB_sum, resp%sB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%aB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%aB_sum, resp%aB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%aB_sum, resp%aB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 
   if (myid.eq.master) then
-    call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(MPI_IN_PLACE, resp%xB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   else
-    call MPI_REDUCE(resp%xB_sum, resp%xB_sum, 27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
+    call MPI_REDUCE(resp%xB_sum, resp%xB_sum, &
+         27*edisp%ispin, MPI_DOUBLE_COMPLEX, MPI_SUM, master, MPI_COMM_WORLD, mpierr)
   endif
 #endif
 
