@@ -430,7 +430,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
     !--------------------------------------------------------------------------------
-    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+    call float_find('ScatteringOffset', sct%gamimp, search_start, search_end, found)
     call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
     if (found) then
       algo%lScatteringFile = .true.
@@ -450,9 +450,9 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     if (.not. (algo%lScatteringFile .or. algo%lScatteringText)) then
-        call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+        call float_find('ScatteringOffset', sct%gamimp, search_start, search_end, found)
         if (found) call stop_with_message(stderr, &
-                   'ScatteringImpurity is only valid in combination with ScatteringFile or ScatteringText')
+                   'ScatteringOffset is only valid in combination with ScatteringFile or ScatteringText')
 
         call float_find('TMinimum', temp%Tmin, search_start, search_end, found)
         if (.not. found) call stop_with_message(stderr, 'TMinimum in Scattering group not found')

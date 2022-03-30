@@ -33,7 +33,7 @@ Doping             = (default = 0)                     # Additional doping [cm-3
 [[Scattering]]
 ScatteringFile     = (default = None)                  # if existent use all the quantities from this HDF5 file only
 ScatteringText     = (default = None)                  # if existent use all the quantities from this TEXT file only
-ScatteringImpurity = (default = 0)                     # in combination with ScatteringFile or ScatterintText
+ScatteringOffset   = (default = 0)                     # in combination with ScatteringFile or ScatterintText
                                                        # adds an additional constant scattering rate
 
                                                        # if we do NOT have a Scattering file we can supply a temperature range [K]
