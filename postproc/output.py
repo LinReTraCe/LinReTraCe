@@ -26,7 +26,7 @@ class LRTCoutput(object):
   saveData purely saves the requested data in the data dictionary
   while outputData additionally outputs said data either to stdout or plots it via matplotlib
   '''
-  def __init__(self, fname, altaxis=False, dp=None):
+  def __init__(self, fname, altaxis=False):
     self.fname    = fname.strip()
     self.datasets = OrderedDict({})
     self.owned    = OrderedDict({})
@@ -328,7 +328,7 @@ class LRTCoutput(object):
 
 
 
-  def outputData(self, command, imag=False, plot=False, diag=False, *args):
+  def outputData(self, command, imag=False, plot=False, diag=False, compare=False, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -415,8 +415,8 @@ class LRTCoutput(object):
 
 
               if plot:
-                plt.plot(self.axis, outarray.real, label='{}.real [{}]'.format(command, icombdescr))
-                if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}]'.format(command, icombdescr))
+                plt.plot(self.axis, outarray.real, label='{}.real [{}]{}'.format(command, icombdescr, ' - '+self.fname if compare else ''))
+                if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}]{}'.format(command, icombdescr, ' - '+self.fname if compare else ''))
               else:
                 if idir3 is None:
                   auxarray = np.zeros((self.nT,3), dtype=np.int)
@@ -454,7 +454,7 @@ class LRTCoutput(object):
     else:
       outarray = self.data[command]
       if plot:
-        plt.plot(self.axis, outarray, label='{}'.format(command))
+        plt.plot(self.axis, outarray, label='{}{}'.format(command, ' - '+self.fname if compare else ''))
       else:
         np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
         (self.axisname,self.axisunit, self.owned[command][1]))

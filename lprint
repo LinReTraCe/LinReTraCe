@@ -37,6 +37,7 @@ def parse_args(args=None):
     epilog="That's the end of the help")
   parser.add_argument('file',    help='LRTC input/output file')
   parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
+  parser.add_argument('-c', '--compare', nargs='+', help='Comparison of identical dataset from different LRTC output files')
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
   parser.add_argument('-x', '--axis', help='Use alternate axis (T -> beta or mu -> carrier)', default=False, action='store_true')
   parser.add_argument('--gap',  help='Plot the band gap in combination with mu', default=False, action='store_true')
@@ -83,13 +84,22 @@ if __name__ == '__main__':
     except ImportError:
       error('Could not import matplotlib')
 
+  if args.compare:
+    try:
+      compareobjs = []
+      compareobjs.append(LRTCoutput(args.file, altaxis=args.axis))
+      for cmpfile in args.compare:
+        compareobjs.append(LRTCoutput(cmpfile, altaxis=args.axis))
+    except Exception as e:
+      error('\n'+str(e))
+
   inpobj = outobj = None
   ''' Initiate input / output objects '''
   try:
     inpobj = LRTCinput(args.file)
   except IOError as e1:
     try:
-      outobj = LRTCoutput(args.file, altaxis=args.axis, dp=args.double)
+      outobj = LRTCoutput(args.file, altaxis=args.axis)
     except IOError as e2:
       error('\n'+str(e1)+'\n'+str(e2))
 
@@ -138,7 +148,11 @@ if __name__ == '__main__':
       else:
         ''' response / quantity plotting / output '''
         if cmdlength == 1:
-          outobj.outputData(cmd, args.imag, args.plot, args.diag)
+          if args.compare:
+            for cmpobj in compareobjs:
+              cmpobj.outputData(cmd, args.imag, args.plot, args.diag, args.compare)
+          else:
+            outobj.outputData(cmd, args.imag, args.plot, args.diag, args.compare)
         else:
           # we iterate through the list and check the following arguments
           for i,icmd in enumerate(args.output):
@@ -165,7 +179,11 @@ if __name__ == '__main__':
                 except:
                   break
 
-            outobj.outputData(icmd, args.imag, args.plot, args.diag, *add_arguments)
+            if args.compare:
+              for cmpobj in compareobjs:
+                cmpobj.outputData(icmd, args.imag, args.plot, args.diag, args.compare, *add_arguments)
+            else:
+              outobj.outputData(icmd, args.imag, args.plot, args.diag, args.compare, *add_arguments)
 
         ''' finally, do some decorating '''
         if args.plot:
@@ -185,7 +203,7 @@ if __name__ == '__main__':
 
         if args.plot:
           plt.legend(loc='best')
-          plt.title(outobj.fname)
+          if not args.compare: plt.title(outobj.fname)
           plt.show()
 
     except BaseException as e:
