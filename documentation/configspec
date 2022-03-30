@@ -55,8 +55,8 @@ DnQuasiParticleCoefficients = (default = None)
 
 EnergyCoefficients          = (default = None)         # OPTIONAL : additional energy dependence of the scattering rate - same as ScatteringCoefficients
                                                        # n numbers separated by spaces: a b c
-UpEnergyCoefficients        = (default = None)         # representing the polynimal a * (e-mu_dft) + b * (e-mu_dft)**2 + c * (e-mu_dft)**3
-DnEnergyCoefficients        = (default = None)
+UpEnergyCoefficients        = (default = None)         # representing the polynimal a * abs(e-mu_dft) + b * abs(e-mu_dft)**2 + c * abs(e-mu_dft)**3
+DnEnergyCoefficients        = (default = None)         # we ALWAYS use the absolute value (no scattering decreaess can be achieved through this option)
 
 
 ________________________________________________________________________________

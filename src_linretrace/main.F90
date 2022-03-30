@@ -608,7 +608,7 @@ program main
         endif
         if (sct%enescaling) then
           do ig=1,size(sct%enecoeff,dim=1)
-             sct%gam(:,:,is) = sct%gam(:,:,is) + sct%enecoeff(ig,is)*(edisp%band(:,:,is)-pot%mu_dft)**(ig)
+             sct%gam(:,:,is) = sct%gam(:,:,is) + sct%enecoeff(ig,is)*abs(edisp%band(:,:,is)-pot%mu_dft)**(ig)
           enddo
         endif
       enddo
