@@ -811,10 +811,6 @@ class LRTCoutput(object):
           np.savetxt(self.textpipe, np.hstack((dosaxis[:,None], dosup[:,None], dosdn[:,None], nosup[:,None], nosdn[:,None])), \
                      fmt='%25.15e %25.15e %25.15e %25.15e %25.15e', comments='', \
                      header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
-
-    if plot:
-      plt.title(self.fname)
-      plt.show()
     print('') # empty line before next CLI input
 
   def invert(self, data):

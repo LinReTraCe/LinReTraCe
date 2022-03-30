@@ -37,11 +37,11 @@ def parse_args(args=None):
     epilog="That's the end of the help")
   parser.add_argument('file',    help='LRTC input/output file')
   parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
-  parser.add_argument('-c', '--compare', nargs='+', help='Comparison of identical dataset from different LRTC output files')
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
   parser.add_argument('-x', '--axis', help='Use alternate axis (T -> beta or mu -> carrier)', default=False, action='store_true')
   parser.add_argument('--gap',  help='Plot the band gap in combination with mu', default=False, action='store_true')
-  parser.add_argument('--double', help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('-c', '--compare', nargs='+', help='Comparison of identical dataset from different LRTC output files')
+  # parser.add_argument('--pdfsave', nargs='?', help='Save the graphical plot as pdf (file name)', const='plot.pdf')
   parser.add_argument('--imag',   help=argparse.SUPPRESS, default=False, action='store_true')
   parser.add_argument('--diag',   help=argparse.SUPPRESS, default=False, action='store_true')
   parser.add_argument('--debug',  help=argparse.SUPPRESS, default=False, action='store_true')
@@ -121,6 +121,9 @@ if __name__ == '__main__':
         else:
           broadening = float(args.output[1])
           outobj.outputDOS(args.plot, broadening)
+        if args.plot:
+          plt.title(outobj.fname)
+          plt.show()
       else:
         ''' response / quantity plotting / output '''
         if cmdlength == 1:
