@@ -190,13 +190,16 @@ module Mtypes
 
   type scattering
     ! scattering rates and quasiparticle weights
-    real(8), allocatable :: gamcoeff(:,:) ! coeff spin
-    real(8), allocatable :: zqpcoeff(:,:) ! coeff spin
+    real(8), allocatable :: gamcoeff(:,:) ! coeff spin -- temperature coeffs
+    real(8), allocatable :: zqpcoeff(:,:) ! coeff spin -- temperature coeffs
+    real(8), allocatable :: enecoeff(:,:) ! coeff spin -- gamma energy coeffs
     real(8), allocatable :: gamtext(:,:)  ! step, spin
     real(8), allocatable :: zqptext(:,:)  ! step, spin
     real(8), allocatable :: gam(:,:,:) ! (nband,ik,ispin)
     real(8), allocatable :: zqp(:,:,:) ! (nband,ik,ispin)
     real(8)              :: gamimp   ! additional additivie impurity term
+
+    logical              :: enescaling
   end type
 
   type response_dp

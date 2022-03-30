@@ -129,6 +129,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann and psi1 approx
   algo%fullOutput     = 0 ! disabled
   sct%gamimp          = 0.d0
+  sct%enescaling      = .false.
   imp%nimp            = 0
 
   temp%tlogarithmic   = .false.
@@ -408,7 +409,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     !--------------------------------------------------------------------------------
-    allocate(dictionary(13))
+    allocate(dictionary(16))
     dictionary(1) = 'ScatteringFile'
     dictionary(2) = 'ScatteringText'
     dictionary(3) = 'ScatteringImpurity'
@@ -422,6 +423,9 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     dictionary(11)= 'QuasiParticleCoefficients'
     dictionary(12)= 'UpQuasiParticleCoefficients'
     dictionary(13)= 'DnQuasiParticleCoefficients'
+    dictionary(14)= 'EnergyCoefficients'
+    dictionary(15)= 'UpEnergyCoefficients'
+    dictionary(16)= 'DnEnergyCoefficients'
     call spell_check(subsearch_start,subsearch_end, '[TempMode] [[Scattering]]', dictionary, er, erstr)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
@@ -536,11 +540,54 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
           sct%zqpcoeff(:size(floatntemp),2) = floatntemp
           deallocate(floatntemp)
         endif
+        call floatn_find('EnergyCoefficients', floatntemp, search_start, search_end, found)
+        if (found) then
+          allocate(sct%enecoeff(size(floatntemp), 1))
+          sct%enecoeff(:,1) = floatntemp
+          deallocate(floatntemp)
+          call floatn_find('UpEnergyCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, &
+                     'EnergyCoefficients and UpEnergyCoefficients found in [TempMode][[Scattering]]')
+          call floatn_find('DnEnergyCoefficients', floatntemp, search_start, search_end, found)
+          if (found) call stop_with_message(stderr, &
+                     'EnergyCoefficients and DnEnergyCoefficients found in [TempMode][[Scattering]]')
+          sct%enescaling = .true.
+        else
+          ! we can have either or, these are optional keywords - just no mixing between Up/Dn and no spin dependence
+          call floatn_find('UpEnergyCoefficients', floatntemp, search_start, search_end, found)
+          nmaxshape = 0
+          if (found) then
+            sct%enescaling = .true.
+            nmaxshape = size(floatntemp)
+            deallocate(floatntemp)
+          endif
+          call floatn_find('DnEnergyCoefficients', floatntemp, search_start, search_end, found)
+          if (found) then
+            sct%enescaling = .true.
+            if (size(floatntemp) > nmaxshape) then
+              sct%enescaling = .true.
+              nmaxshape = nshape(1)
+              deallocate(floatntemp)
+            endif
+          endif
+          if (sct%enescaling) then
+            allocate(sct%enecoeff(nmaxshape, 2))
+            sct%enecoeff = 0.d0
+            call floatn_find('UpEnergyCoefficients', floatntemp, search_start, search_end, found)
+            if (found) then
+              sct%enecoeff(:size(floatntemp),1) = floatntemp
+              deallocate(floatntemp)
+            endif
+            call floatn_find('DnEnergyCoefficients', floatntemp, search_start, search_end, found)
+            if (found) then
+              sct%enecoeff(:size(floatntemp),2) = floatntemp
+              deallocate(floatntemp)
+            endif
+          endif
+        endif
 
       edisp%lBandShift = .false. ! only with scattering HDF5 File where we have full control
     endif
-
-
 
     if (algo%lImpurities) then
       call subgroup_find('[[Impurities]]', search_start, search_end, subsearch_start, subsearch_end)

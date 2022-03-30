@@ -468,6 +468,14 @@ program main
         write(stdout,*) '  UP quasi particle weight coefficients: ', sct%zqpcoeff(:,1)
         write(stdout,*) '  DN quasi particle weight coefficients: ', sct%zqpcoeff(:,2)
       endif
+      if (sct%enescaling) then
+        if (edisp%ispin == 1) then
+          write(stdout,*) '  energy (scattering) coefficients: ', sct%enecoeff(:,1)
+        else
+          write(stdout,*) '  UP energy (scattering) coefficients: ', sct%enecoeff(:,1)
+          write(stdout,*) '  DN energy (scattering) coefficients: ', sct%enecoeff(:,2)
+        endif
+      endif
     endif
     write(stdout,*)
     write(stdout,*) 'OUTPUT'
@@ -599,6 +607,11 @@ program main
         if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
           sct%zqp(:,:,is) = 1.d0
+        endif
+        if (sct%enescaling) then
+          do ig=1,size(sct%enecoeff,dim=1)
+             sct%gam(:,:,is) = sct%gam(:,:,is) + sct%enecoeff(ig,is)*(edisp%band(:,:,is)-pot%mu_dft)**(ig)
+          enddo
         endif
       enddo
       sct%gam = sct%zqp * sct%gam  ! convention we use
