@@ -49,17 +49,16 @@ class DFTcalculation(ElectronicStructure, ABC):
   These methods are all denoted with a leading underline.
   '''
 
-  def __init__(self, directory, optic):
+  def __init__(self, directory):
     super(DFTcalculation, self).__init__()
-    self.directory      = os.path.abspath(directory) # directory of our calculation
-    self.optic          = optic     # flag if we have the transition dipole moments
-    self.ortho          = False
-    self.aseobject      = None      # ase Atoms object
-    self.spacegroup     = None      # ase Spacegroup object
+    self.directory  = os.path.abspath(directory) # directory of our calculation
+    self.version    = None      # DFT version as string
 
-    if self.optic:
-      self.opticfull = True
-      self.opticdiag = True
+    self.opticfull  = False     # full optical elements (intra + inter)
+    self.opticdiag  = False     # intra optical elements
+    self.ortho      = False
+    self.aseobject  = None      # ase Atoms object
+    self.spacegroup = None      # ase Spacegroup object
 
   @abc.abstractmethod
   def readData(self):
@@ -128,10 +127,12 @@ class w2kcalculation(DFTcalculation):
   The exact energy and symmat files depend on the type of calculation.
   For this reason we can either detect the calculation (calctype=0)
   or provide the type of calculation:
-    unpolarized:      1
-    polarized:        2
-    unpolarized + LS: 3
-    polareizd + LS:   4
+    0: detect it automatically
+    1: unpolarized:
+    2: polarized:
+    3: unpolarized + SOC + inversion symmetry:
+    4: unpolarized + SOC + no inversion symmetry:
+    5: polarized + SOC:
   The optical elements (stored in case.symmat*) can either be ignored (optic=False)
   or be loaded (optic=True)
   The file beginning (case) is extracted automatically (case=None)
@@ -141,9 +142,14 @@ class w2kcalculation(DFTcalculation):
 
   def __init__(self, directory, optic=False, calctype=0, case=None, **kwargs):
     logger.info("Initializing Wien2k calculation.")
-    super(w2kcalculation, self).__init__(directory, optic)
+    super(w2kcalculation, self).__init__(directory)
+    self.optic         = optic   # exising full optical elements
     self.calctype      = calctype
     self.case          = case
+
+    if self.optic: # otherwise already set by parent class
+      self.opticdiag = True
+      self.opticfull = True
 
     self._checkDirectory()
     if self.case is None:
@@ -153,7 +159,6 @@ class w2kcalculation(DFTcalculation):
     self._defineFiles()
 
     if (self.calctype == 0): # we detect it
-      # 0 -> detect; 1 -> spin-unpolarized; 2 -> spin-polarized; 3 -> spin-orbit; 4 -> so+sp
       self._detectCalculation()
     self._checkFiles()
     logger.info("Files sucessfully loaded.")
@@ -311,8 +316,17 @@ class w2kcalculation(DFTcalculation):
     logger.info("Reading: {}".format(self.fscf))
     with open(str(self.fscf), 'r') as scf:
       for line in scf:
+        if line.startswith(':LABEL3'):
+          try:
+            self.version = line[15:26] # this stays a string
+          except:
+            pass
+          break
+    logger.info('  Wien2K version: {}'.format(self.version))
+
+    with open(str(self.fscf), 'r') as scf:
+      for line in scf:
         if line.startswith(':NOE '): # number of electrons
-          # self.charge = float(line.split()[-1])
           self.charge = float(line[38:])
           break
       else:
@@ -631,8 +645,9 @@ class vaspcalculation(DFTcalculation):
 
   def __init__(self, directory, **kwargs):
     logger.info("Initializing VASP calculation.")
-    super(vaspcalculation, self).__init__(directory, optic=False)
+    super(vaspcalculation, self).__init__(directory)
 
+    self.version = None
     self._checkDirectory() # from base class
     self._defineFiles()
     self._checkFiles()
@@ -660,6 +675,7 @@ class vaspcalculation(DFTcalculation):
   def readData(self):
     logger.info("Reading: {}".format(self.fvasprun))
     self.xmlroot = et.parse(self.fvasprun).getroot()
+    self._read_version()
     self._read_ispin()
     self._read_lnoncollinear()
     self._read_nelect()
@@ -678,6 +694,13 @@ class vaspcalculation(DFTcalculation):
       logger.info("  Cross-check: Fermi level from vasp DOS: {}".format(efer))
     except Exception:
       pass # this value is not important
+
+  def _read_version(self):
+    try:
+      self.version = self.xmlroot.find('generator/i[@name="version"]').text
+    except Exception as s:
+      pass
+    logger.info("  VASP version: {}".format(self.version))
 
   def _read_ispin(self):
     # because VASP uses an illegal output by using non-xml-conform tags with spaces in them ...
