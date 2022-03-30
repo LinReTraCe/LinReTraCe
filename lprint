@@ -84,16 +84,8 @@ if __name__ == '__main__':
     except ImportError:
       error('Could not import matplotlib')
 
-  if args.compare:
-    try:
-      compareobjs = []
-      compareobjs.append(LRTCoutput(args.file, altaxis=args.axis))
-      for cmpfile in args.compare:
-        compareobjs.append(LRTCoutput(cmpfile, altaxis=args.axis))
-    except Exception as e:
-      error('\n'+str(e))
-
   inpobj = outobj = None
+
   ''' Initiate input / output objects '''
   try:
     inpobj = LRTCinput(args.file)
@@ -103,35 +95,19 @@ if __name__ == '__main__':
     except IOError as e2:
       error('\n'+str(e1)+'\n'+str(e2))
 
+  if outobj is not None and args.compare: # restrict to outputobjects
+    try:
+      compareobjs = [outobj]
+      for cmpfile in args.compare:
+        compareobjs.append(LRTCoutput(cmpfile, altaxis=args.axis))
+    except Exception as e:
+      error('\n'+str(e))
+
   cmd = args.output[0].strip()
   cmdlength = len(args.output)
 
-  ''' Input object commands '''
-  if inpobj is not None:
-    try:
-      if cmd == 'list':
-        inpobj.outputList()
-      elif cmd == 'info':
-        inpobj.outputStructure()
-      elif cmd == 'dos':
-        if cmdlength == 1:
-          inpobj.outputDOS(args.plot)
-        else:
-          broadening = float(args.output[1])
-          inpobj.outputDOS(args.plot, broadening)
-
-        if args.plot:
-          plt.title(inpobj.fname)
-          plt.show()
-      else:
-        raise IOError('lrtc input file command not recognized')
-    except BaseException as e:
-      error('\nERROR: '+str(e)+'\n')
-
-    sys.exit(0)
-
   ''' Output object commands '''
-  if outobj is not None:
+  if args.compare or outobj is not None:
     try:
       if cmd == 'list':
         outobj.outputList(full=False)
@@ -206,5 +182,27 @@ if __name__ == '__main__':
           if not args.compare: plt.title(outobj.fname)
           plt.show()
 
+    except BaseException as e:
+      error('\nERROR: '+str(e)+'\n')
+
+  ''' Input object commands '''
+  if inpobj is not None:
+    try:
+      if cmd == 'list':
+        inpobj.outputList()
+      elif cmd == 'info':
+        inpobj.outputStructure()
+      elif cmd == 'dos':
+        if cmdlength == 1:
+          inpobj.outputDOS(args.plot)
+        else:
+          broadening = float(args.output[1])
+          inpobj.outputDOS(args.plot, broadening)
+
+        if args.plot:
+          plt.title(inpobj.fname)
+          plt.show()
+      else:
+        raise IOError('lrtc input file command not recognized')
     except BaseException as e:
       error('\nERROR: '+str(e)+'\n')

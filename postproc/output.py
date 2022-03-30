@@ -701,15 +701,13 @@ class LRTCoutput(object):
           self.mode = 'temp'
         elif hfi['.quantities'].attrs['mode'].decode("utf-8") == 'mu':
           self.mode = 'mu'
-        print('#   Using file:', self.fname)
-        print('#   Detected run mode:', self.mode)
 
         self.spins = hfi['.structure/ispin'][()]
         self.ndim = hfi['.unitcell/ndim'][()]
         self.dims = hfi['.unitcell/dims'][()]
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
         self.dimmask3 = np.logical_and(np.logical_and(self.dims[:,None], self.dims[None,:])[:,:,None], self.dims[None,None,:])
-        print('#   Detected {} dimensions: {}'.format(self.ndim, np.array(["x","y","z"])[self.dims]))
+        print('#   File: {} - Run mode: {} - {} dimensions: {}'.format(self.fname, self.mode, self.ndim, np.array(["x","y","z"])[self.dims]))
     except:
       raise IOError('Provided file is not an LRTC output file.')
 
