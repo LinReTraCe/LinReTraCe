@@ -399,6 +399,7 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
   real(16) :: P(4)
   real(16) :: s
   real(8)  :: sctmin
+  real(8)  :: gapdistance, distance_cb, distance_vb
   integer  :: maxiter ! maximum number of iterations
   logical  :: lridd   ! selects Ridders' method
   ! Bisection
@@ -530,15 +531,39 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
     return
   endif
 
-  sctmin = minval(sct%gam)
+  if ( .not. (algo%ldebug .and. (index(algo%dbgstr,"AlwaysRefine") .ne. 0)) ) then
+    sctmin = minval(sct%gam)
+    gapdistance = 0.d0 ! smalles distance to either valence or conduction band
+    if (edisp%gapped_complete) then
+      distance_cb = minval(edisp%ene_conductionBand) - mu
+      if (distance_cb < 0.d0) then
+        return ! we are outside gap
+      endif
+      gapdistance = distance_cb
+      distance_vb = mu - maxval(edisp%ene_valenceBand)
+      if (distance_vb < 0.d0) then
+        return ! we are outside gap
+      endif
+      if (distance_cb < gapdistance) then
+        gapdistance = distance_cb
+      endif
+    else
+      return ! not gapped
+    endif
+  endif
+
   ! hard temperature cutoff relative to band gap size for fermi function
   ! scattering rate and temperature cutoff for digamma function
+  ! these values here have been determined empirically
   if ( (algo%ldebug .and. (index(algo%dbgstr,"AlwaysRefine") .ne. 0)) .or. &
        (algo%muFermi .and. (info%Temp < edisp%gap_min*300)) .or. &
-       (.not. algo%muFermi .and. (sctmin < 3d-10 * edisp%gap_min) .and. (info%Temp < edisp%gap_min*400)) ) then
+       (.not. algo%muFermi .and. (sctmin < 3d-10 * edisp%gap_min) .and. (info%Temp < gapdistance*800)) ) then
 
     call occ_refine(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
     ! do not enter refinement algorithm if this value is too large
+    ! this is for security puropeses, one can somehow end up here by Debug flags
+    ! if one enters the refinement routine with larger values, a run-off to another root might happen -> avoid at all costs
+    ! so 'AlwaysRefine' is more like always refine wherever safely possible
     if (algo%muFermi .and. abs(target_zero1) > 1d-18) then
       return
     endif

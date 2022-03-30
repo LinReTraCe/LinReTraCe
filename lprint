@@ -107,7 +107,7 @@ if __name__ == '__main__':
   cmdlength = len(args.output)
 
   ''' Output object commands '''
-  if args.compare or outobj is not None:
+  if outobj is not None:
     try:
       if cmd == 'list':
         outobj.outputList(full=False)
