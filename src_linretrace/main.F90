@@ -593,8 +593,6 @@ program main
       enddo
       sct%gam = sct%zqp * sct%gam
     else ! this is entered for both the MuMode and the TempMode
-      ! here we are wasting memory however
-      ! otherwise we would have to write every single response twice
       sct%gam = 0.d0
       sct%zqp = 0.d0
       do is=1,edisp%ispin
@@ -836,13 +834,13 @@ program main
   endif
 
 
-   ! gather the timings
+  ! gather the timings
+  time = sum(timings)
 #ifdef MPI
-   time = sum(timings)
-   call MPI_allreduce(MPI_IN_PLACE, timings, size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr) ! total CPU time
-   call MPI_allreduce(MPI_IN_PLACE, time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)      ! total real time
-   timings = timings / dble(nproc)
+  call MPI_allreduce(MPI_IN_PLACE, timings, size(timings), MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, mpierr) ! total CPU time
+  call MPI_allreduce(MPI_IN_PLACE, time, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)      ! total real time
 #endif
+  timings = timings / dble(nproc)
   if (myid .eq. master) then
     write(stdout,*)
     write(stdout,*) '  Timings (average) [s]:'
