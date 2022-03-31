@@ -1210,7 +1210,7 @@ subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, i
   energy_sum = 0.q0
 
 #ifdef MPI
-  call mpi_reduce_quad(energy_sum, energy_loc)
+  call mpi_reduce_quad(energy_loc, energy_sum)
 #else
   energy_sum = energy_loc
 #endif
@@ -1257,7 +1257,7 @@ subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, inf
   deallocate(energy)
 
 #ifdef MPI
-  call mpi_reduce_quad(energy_sum, energy_loc)
+  call mpi_reduce_quad(energy_loc, energy_sum)
 #else
   energy_sum = energy_loc
 #endif
