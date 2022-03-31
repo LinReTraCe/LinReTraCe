@@ -22,13 +22,15 @@ FermiOccupation    = (default = T)                     # T: Fermi function to de
                                                        # F: Digamma function to determine occupation
                                                        # Affects chemical potential, carrier concentration and total energies
 
+NominalDoping      = (default = F)                     # T: Interpret [TempMode] 'Doping' and [[Impurities]] densities
+                                                       # as nominal doping [per unitcell] instead of volume doping [cm-3]
 ________________________________________________________________________________
 [TempMode]                                             # RunMode = temp
-ChemicalPotential  = (default = None)                  # Fix Chemical potential for all temperatures
+ConstantMu         = (default = None)                  # Fix Chemical potential for all temperatures
 OldMuHdf5          = (default = None)                  # Use chemical potentials from old OutputFile
 OldMuText          = (default = None)                  # Use chemical potentials from text file (compatible with lprint mu)
 NImp               = (default = 0)                     # number of additional impurity levels
-Doping             = (default = 0)                     # Additional doping [cm-3]
+Doping             = (default = 0)                     # Additional doping [cm-3] or [per unitcell] depending on [General] NominalDoping
 
 [[Scattering]]
 ScatteringFile     = (default = None)                  # if existent use all the quantities from this HDF5 file only
@@ -77,7 +79,7 @@ Percentage = (default = None)                          # relative position insid
                                                        # 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
                                                        # 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2(spin)
 
-                                                       # density : [cm-3]
+                                                       # density : [cm-3] or [per unitcell] depending on [General] NominalDoping
                                                        # energy : [eV] or 0<p<1 for Percentage
                                                        # energy shifts are applied after adjusting the bandgap!
 
@@ -130,4 +132,3 @@ Debug options:
   Secant:            Always perform root finding with secant algorithm
   NoRefine:          Never compute the chemical potential with the help of the refinement algorithm
   AlwaysRefine:      No temperature cutoff for Refinement procedure
-  NominalDoping:     Interpret the doping and impurity densities as nominal doping levels instead of densities

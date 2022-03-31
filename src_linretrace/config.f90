@@ -115,6 +115,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
   algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
   algo%lQuad                 = .false.
+  algo%lNominalDoping        = .false.
 
   algo%lScatteringFile = .false.
   algo%lScatteringText = .false.
@@ -126,7 +127,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
-  algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann and psi1 approx
+  algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann and psi1 approx -- keep true always
   algo%fullOutput     = 0 ! disabled
   sct%gamimp          = 0.d0
   sct%enescaling      = .false.
@@ -135,6 +136,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   temp%tlogarithmic   = .false.
   pot%mlogarithmic    = .false.
   pot%mabsolute       = .false.
+  pot%mu_config       = 0.d0
 
   edisp%doping        = 0.d0
   algo%ldoping        = .false.
@@ -152,7 +154,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   !--------------------------------------------------------------------------------
-  allocate(dictionary(13))
+  allocate(dictionary(14))
   dictionary(1) = 'EnergyFile'
   dictionary(2) = 'OutputFile'
   dictionary(3) = 'RunMode'
@@ -166,6 +168,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(11) = 'Boltzmann'
   dictionary(12) = 'BFieldMode'
   dictionary(13) = 'FermiOccupation'
+  dictionary(14) = 'NominalDoping'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -197,6 +200,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
+  call bool_find('NominalDoping', algo%lNominalDoping, search_start, search_end, found)
 
   call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
@@ -339,7 +343,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
     !--------------------------------------------------------------------------------
     allocate(dictionary(5))
-    dictionary(1) = 'ChemicalPotential'
+    dictionary(1) = 'ConstantMu'
     dictionary(2) = 'OldMuHdf5'
     dictionary(3) = 'OldMuText'
     dictionary(4) = 'NImp'
@@ -349,7 +353,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     if (er /= 0) call stop_with_message(stdout, erstr)
     !--------------------------------------------------------------------------------
 
-    call float_find('ChemicalPotential', pot%mu_config, search_start, search_end, found)
+    call float_find('ConstantMu', pot%mu_config, search_start, search_end, found)
     if (found) then
       algo%muSearch = .false.
     else

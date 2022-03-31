@@ -33,6 +33,7 @@ module Mtypes
     logical :: lQuad          ! quad precision response
     logical :: lRedoMudft     ! flag to recalculate the provided dft chemical potential
     logical :: lDoping        ! include doping
+    logical :: lNominalDoping  ! interpret the provided densities of the config file as nominal electron values
 
     integer :: steps          ! number of steps
     integer :: step_dir       ! step direction

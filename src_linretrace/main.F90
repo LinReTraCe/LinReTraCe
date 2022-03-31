@@ -109,13 +109,14 @@ program main
     call log_master(stdout, 'WARNING: Neither Intra nor Interband responses will be calculated')
   endif
 
-  if (.not. (algo%ldebug .and. (index(algo%dbgstr,"NominalDoping") .ne. 0))) then
+  if (.not. algo%lNominalDoping) then
+    ! transform the densities ( doping / impurities ) from cm-3 to electrons
     if (algo%ldoping) then
-      edisp%doping = edisp%doping * 1d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+      edisp%doping = edisp%doping * 1d-24 * kmesh%vol
     endif
     if (algo%lImpurities) then
       do iimp = 1, imp%nimp
-        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol
       enddo
     endif
   endif
@@ -244,19 +245,18 @@ program main
       pot%MM  = pot%mu_dft ! initialize MM array with DFT mu (energy file)
       pot%QMM = pot%mu_dft
     else
-      pot%MM  = pot%mu_config ! use fixed config mu for all points (config file)
-      pot%QMM = pot%mu_config
+      if (algo%lOldmuHdf5) then
+        call read_muT_hdf5(algo, temp, pot%MM) ! this is saved in double
+        pot%QMM = pot%MM
+      else if (algo%lOldmuText) then
+        call read_muT_text(algo, temp, pot%MM)   ! this usually comes from lprint -> double
+        pot%QMM = pot%MM
+      else
+        pot%MM  = pot%mu_config ! use fixed config mu for all points (config file)
+        pot%QMM = pot%mu_config
+      endif
     endif
 
-    if (algo%lOldmuHdf5) then
-      call read_muT_hdf5(algo, temp, pot%MM) ! this is saved in double
-      pot%QMM = pot%MM
-    endif
-
-    if (algo%lOldmuText) then
-      call read_muT_text(algo, temp, pot%MM)   ! this usually comes from lprint -> double
-      pot%QMM = pot%MM
-    endif
   endif
 
   if (algo%lMUMODE) then
