@@ -8,7 +8,7 @@ module Minput
 
 contains
 
-subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
+subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   implicit none
   type(algorithm)      :: algo
   type(kpointmesh)     :: kmesh
@@ -25,8 +25,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   integer, allocatable :: irank1arr(:)
   real(8), allocatable :: drank1arr(:)
   real(8), allocatable :: drank2arr(:,:)
-  real(8), allocatable :: drank3arr(:,:,:)
-  real(8), allocatable :: drank5arr(:,:,:,:,:)
 
   call hdf5_open_file(trim(adjustl(algo%input_energies)), ifile, rdonly=.true.)
 
@@ -36,12 +34,11 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
   call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
 
-  ! messy way to achieve proper quad precision in weightQ
+  ! achieve proper quad precision in weightQ
   allocate(kmesh%weightQ(kmesh%nkp))
   do ik=1,kmesh%nkp
-    kmesh%weightQ(ik) = int(kmesh%multiplicity(ik)) * int(kmesh%weightsum) / real(int(sum(kmesh%multiplicity)),16)
+    kmesh%weightQ(ik) = nint(kmesh%multiplicity(ik)) * nint(kmesh%weightsum) / real(nint(sum(kmesh%multiplicity)),16)
   enddo
-
 
   ! band information + charge
   call hdf5_read_data(ifile, "/.bands/mu",             pot%mu_dft_file)
@@ -53,7 +50,6 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
 
   ! reset electron occupation from config file if it is invalid ... earlierst point to check is here
   if (edisp%nelect_config >= kmesh%weightsum * edisp%nband_max) then ! too many electrons
-    edisp%nelect_config = -1.d0
     call stop_with_message(stderr, 'Error: Number of electrons provided is above maximum')
   endif
 
@@ -109,13 +105,19 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   endif
 
   ! check if the gap is complete
-  ! i.e. check if we are spin-dependent, that a gap exists in both spins
   edisp%gapped_complete = .true.
   do is=1,edisp%ispin
     if (.not. edisp%gapped(is)) edisp%gapped_complete = .false.
   enddo
-  edisp%gap_min = minval(edisp%gap)
 
+  ! set common band gap
+  if (edisp%gapped_complete) then
+    edisp%gap_min = minval(edisp%ene_conductionBand) - minval(edisp%ene_valenceBand)
+  else
+    edisp%gap_min = 0.d0
+  endif
+
+  ! check impurities for consistency
   if (algo%lImpurities) then
     do iimp = 1, imp%nimp
       ! coming from the config file we might have 0 1 or 2 -> set to 1 for internal access
@@ -134,6 +136,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
     enddo
   endif
 
+  ! check scattering / zqp / energy coefficient for consistency
   if (.not. algo%lScatteringFile) then
     if (edisp%ispin==2 .and. size(sct%gamcoeff,dim=2)==1) then
       ! increase the spin axis by one
@@ -185,8 +188,8 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
     endif
   endif
 
+  ! check for Bandgap inconsistency
   if (algo%lScissors) then
-    ! check for inconsitencies
     n1shape = shape(edisp%scissors)
     if (n1shape(1) /= edisp%iSpin) then
       call stop_with_message(stderr, 'Must have as many scissor parameters as spins')
@@ -206,129 +209,143 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
   call hdf5_read_data(ifile, "/.unitcell/ndim",   kmesh%ndim)
   call hdf5_read_data(ifile, "/.unitcell/dims",   kmesh%dims)
 
-  ! number of saved k-points
-  if (edisp%ispin == 2) then
-    if (hdf5_dataset_exists(ifile, "up/momentsDiagonalBfield")) then
-      edisp%lDerivatives = .true.
-    else
-      edisp%lDerivatives = .false.
+  ! transform the densities ( doping / impurities ) from cm-3 to electrons
+  if (.not. algo%lNominalDoping) then
+    if (algo%ldoping) then
+      edisp%doping = edisp%doping * 1d-24 * kmesh%vol
     endif
-  else
-    if (hdf5_dataset_exists(ifile, "momentsDiagonalBfield")) then
-      edisp%lDerivatives = .true.
-    else
-      edisp%lDerivatives = .false.
+    if (algo%lImpurities) then
+      do iimp = 1, imp%nimp
+        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol
+      enddo
     endif
   endif
 
-  ! now we load the energy data into the according arrays
-  ! please be aware here about the implicit Fortran memory transposition
-  ! which is happening when loading hdf5 files
+  ! set logical flags whether specific dataset exist in the energy file
+  edisp%lIntraMoments = .false.
+  edisp%lFullMoments = .false.
+  edisp%lBfieldMoments = .false.
 
-
-  ! LOAD THE DIAGONAL ELEMENTS -> these are always here
-  if (edisp%ispin == 2) then
-    ! get the shape for the number of optical directions
-    call hdf5_get_shape(ifile, "up/momentsDiagonal", irank1arr)
-  else
-    call hdf5_get_shape(ifile, "momentsDiagonal", irank1arr)
-  endif
-  edisp%iOptical = irank1arr(1)
-  deallocate(irank1arr)
-  allocate(edisp%MoptDiag(edisp%iOptical, edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, kmesh%nkp))
-
-  if (edisp%ispin == 2) then
-    call hdf5_read_data(ifile, "up/momentsDiagonal", drank3arr)
-    edisp%MoptDiag(:,:,1,:) = drank3arr
-    deallocate(drank3arr)
-    call hdf5_read_data(ifile, "dn/momentsDiagonal", drank3arr)
-    edisp%MoptDiag(:,:,2,:) = drank3arr
-    deallocate(drank3arr)
-  else
-    call hdf5_read_data(ifile, "momentsDiagonal", drank3arr)
-    edisp%MoptDiag(:,:,1,:) = drank3arr
-    deallocate(drank3arr)
-  endif
-
-  ! FULL ELEMENTS -> if they are here we detect it and are able to calculate inter band contributions
-  if (edisp%ispin == 2) then
-    if (hdf5_dataset_exists(ifile, "up/kPoint/0000000001/moments") .and. &
-        hdf5_dataset_exists(ifile, "dn/kPoint/0000000001/moments")) then
+  if (edisp%ispin == 1) then
+    if (.not. hdf5_dataset_exists(ifile, "/energies")) then
+      call stop_with_message(stderr, 'Could not find energies in EnergyFile')
+    endif
+    if (hdf5_dataset_exists(ifile, "/momentsDiagonal")) then
+      edisp%lIntraMoments = .true.
+      call hdf5_get_shape(ifile, "/momentsDiagonal", irank1arr)
+      edisp%iOptical = irank1arr(1) ! number of optical elements 3 6 or 9
+      deallocate(irank1arr)
+    endif
+    if (hdf5_dataset_exists(ifile, "/momentsDiagonalBfield")) then
+      edisp%lBfieldMoments = .true.
+    endif
+    if (hdf5_dataset_exists(ifile, "/kPoint/0000000001/moments")) then
       edisp%lFullMoments = .true.
-      call hdf5_get_shape(ifile, "up/kPoint/0000000001/moments", irank1arr)
-    else
-      edisp%lFullMoments = .false.
+    endif
+  else if (edisp%ispin == 2) then
+    if (.not. (hdf5_dataset_exists(ifile, "/up/energies") .and. &
+               hdf5_dataset_exists(ifile, "/dn/energies"))) then
+      call stop_with_message(stderr, 'Could not find energies in EnergyFile')
+    endif
+    if (hdf5_dataset_exists(ifile, "/up/momentsDiagonal") .and. &
+        hdf5_dataset_exists(ifile, "/dn/momentsDiagonal")) then
+      edisp%lIntraMoments = .true.
+      call hdf5_get_shape(ifile, "/up/momentsDiagonal", irank1arr)
+      edisp%iOptical = irank1arr(1) ! number of optical elements 3 6 or 9
+      deallocate(irank1arr)
+    endif
+    if (hdf5_dataset_exists(ifile, "/up/momentsDiagonalBfield") .and. &
+        hdf5_dataset_exists(ifile, "/dn/momentsDiagonalBfield")) then
+      edisp%lBfieldMoments = .true.
+    endif
+    if (hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/moments") .and. &
+        hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/moments")) then
+      edisp%lFullMoments = .true.
     endif
   else
-    if (hdf5_dataset_exists(ifile, "kPoint/0000000001/moments")) then
-      edisp%lFullMoments = .true.
-      call hdf5_get_shape(ifile, "/kPoint/0000000001/moments", irank1arr)
-    else
-      edisp%lFullMoments = .false.
-    endif
+    call stop_with_message(stderr, 'Provided number of spins in EnergyFile invalid')
   endif
 
-  ! the optical elements get loaded only for one k-point each time
-  if (edisp%lFullMoments) then
-    allocate(edisp%Moptk(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
-                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+  call hdf5_close_file(ifile)
+
+end subroutine
+
+subroutine read_energy(algo, edisp)
+  implicit none
+  type(algorithm)  :: algo
+  type(energydisp) :: edisp
+
+  integer(hid_t)   :: ifile
+  real(8), allocatable :: drank2arr(:,:)
+  real(8), allocatable :: drank3arr(:,:,:)
+  real(8), allocatable :: drank5arr(:,:,:,:,:)
+
+  allocate(edisp%band_file(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(edisp%band(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  if (edisp%lIntraMoments) then
+    allocate(edisp%MoptDiag(edisp%iOptical, edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+  endif
+  if (edisp%lBfieldMoments) then
+    allocate(edisp%MBoptdiag(3, 3, 3, edisp%nband_max, edisp%ispin, ikstr:ikend))
   endif
 
-
-  ! ENERGIES & DERIVATIVES
-  allocate(edisp%band_file(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  allocate(edisp%band(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  if (edisp%lDerivatives) then
-    allocate(edisp%band_dk(3, edisp%nband_max, kmesh%nkp, edisp%ispin))
-    allocate(edisp%band_d2k(6, edisp%nband_max, kmesh%nkp, edisp%ispin))
-    allocate(edisp%MBoptdiag(3, 3, 3, edisp%nband_max, kmesh%nkp, edisp%ispin))
-  endif
+  call hdf5_open_file(trim(adjustl(algo%input_energies)), ifile, rdonly=.true.)
 
   if (edisp%ispin == 1) then
     call hdf5_read_data(ifile, "/energies", drank2arr)
-    edisp%band_file(:,:,1)     = drank2arr
+    edisp%band_file(:,:,1)     = drank2arr(:,ikstr:ikend)
     deallocate(drank2arr)
-    if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/derivatives",   drank3arr)
-      edisp%band_dk(:,:,:,1) = drank3arr
-      deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/curvatures",  drank3arr)
-      edisp%band_d2k(:,:,:,1) = drank3arr
-      deallocate(drank3arr)
-
+    if (edisp%lBfieldMoments) then
+      ! call hdf5_read_data(ifile, "/derivatives",   drank3arr)
+      ! edisp%band_dk(:,:,:,1) = drank3arr
+      ! deallocate(drank3arr)
+      ! call hdf5_read_data(ifile, "/curvatures",  drank3arr)
+      ! edisp%band_d2k(:,:,:,1) = drank3arr
+      ! deallocate(drank3arr)
       call hdf5_read_data(ifile, "/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
+      edisp%MBoptDiag(:,:,:,:,1,:) = drank5arr(:,:,:,:,ikstr:ikend)
       deallocate(drank5arr)
     endif
-
+    if (edisp%lIntraMoments) then
+      call hdf5_read_data(ifile, "momentsDiagonal", drank3arr)
+      edisp%MoptDiag(:,:,1,:) = drank3arr(:,:,ikstr:ikend)
+      deallocate(drank3arr)
+    endif
   else if (edisp%ispin == 2) then
     call hdf5_read_data(ifile, "/up/energies", drank2arr)
-    edisp%band_file(:,:,1)     = drank2arr
+    edisp%band_file(:,:,1)     = drank2arr(:,ikstr:ikend)
     deallocate(drank2arr)
     call hdf5_read_data(ifile, "/dn/energies", drank2arr)
-    edisp%band_file(:,:,2)     = drank2arr
+    edisp%band_file(:,:,2)     = drank2arr(:,ikstr:ikend)
     deallocate(drank2arr)
 
-    if (edisp%lDerivatives) then
-      call hdf5_read_data(ifile, "/up/derivatives",  drank3arr)
-      edisp%band_dk(:,:,:,1) = drank3arr
-      deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/up/curvatures",    drank3arr)
-      edisp%band_d2k(:,:,:,1) = drank3arr
-      deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/derivatives", drank3arr)
-      edisp%band_dk(:,:,:,2) = drank3arr
-      deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/dn/curvatures",   drank3arr)
-      edisp%band_d2k(:,:,:,2) = drank3arr
-      deallocate(drank3arr)
-
+    if (edisp%lBfieldMoments) then
+      ! call hdf5_read_data(ifile, "/up/derivatives",  drank3arr)
+      ! edisp%band_dk(:,:,:,1) = drank3arr
+      ! deallocate(drank3arr)
+      ! call hdf5_read_data(ifile, "/up/curvatures",    drank3arr)
+      ! edisp%band_d2k(:,:,:,1) = drank3arr
+      ! deallocate(drank3arr)
+      ! call hdf5_read_data(ifile, "/dn/derivatives", drank3arr)
+      ! edisp%band_dk(:,:,:,2) = drank3arr
+      ! deallocate(drank3arr)
+      ! call hdf5_read_data(ifile, "/dn/curvatures",   drank3arr)
+      ! edisp%band_d2k(:,:,:,2) = drank3arr
+      ! deallocate(drank3arr)
       call hdf5_read_data(ifile, "/up/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,:,1) = drank5arr
+      edisp%MBoptDiag(:,:,:,:,1,:) = drank5arr(:,:,:,:,ikstr:ikend)
       deallocate(drank5arr)
       call hdf5_read_data(ifile, "/dn/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,:,2) = drank5arr
+      edisp%MBoptDiag(:,:,:,:,2,:) = drank5arr(:,:,:,:,ikstr:ikend)
       deallocate(drank5arr)
+    endif
+    if (edisp%lIntraMoments) then
+      call hdf5_read_data(ifile, "/up/momentsDiagonal", drank3arr)
+      edisp%MoptDiag(:,:,1,:) = drank3arr(:,:,ikstr:ikend)
+      deallocate(drank3arr)
+      call hdf5_read_data(ifile, "/dn/momentsDiagonal", drank3arr)
+      edisp%MoptDiag(:,:,2,:) = drank3arr(:,:,ikstr:ikend)
+      deallocate(drank3arr)
     endif
   endif
 
@@ -336,7 +353,7 @@ subroutine read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
 
 end subroutine
 
-subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+subroutine read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
@@ -399,8 +416,8 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
 
   ! scattering rates
   ! and quasi particle renormalizations
-  allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   edisp%lBandShift = .false.
   if (edisp%iSpin == 1) then
@@ -414,7 +431,7 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
   endif
 
   if (edisp%lBandShift) then
-    allocate(edisp%band_shift(edisp%nband_max, kmesh%nkp, edisp%iSpin))
+    allocate(edisp%band_shift(edisp%nband_max, ikstr:ikend, edisp%iSpin))
   endif
 
   pot%mumin = minval(pot%MM)
@@ -424,7 +441,7 @@ subroutine read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
 
 end subroutine
 
-subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
+subroutine read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
   type(kpointmesh)             :: kmesh
@@ -526,8 +543,8 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
   allocate(temp%BB(algo%steps))
   allocate(sct%gamtext(algo%steps, edisp%ispin))
   allocate(sct%zqptext(algo%steps, edisp%ispin))
-  allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-  allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+  allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+  allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
   if (cnt == 3) then
     do i=1,algo%steps
@@ -551,7 +568,7 @@ subroutine read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
 
 end subroutine
 
-subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
+subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
   implicit none
   integer(hid_t)   :: ifile
   type(energydisp) :: edisp
@@ -569,10 +586,6 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
   logical :: band_dependence
 
   integer, allocatable :: hdf5shape(:)
-
-  ! sanity check
-  ! call hdf5_read_data(ifile, "/.quantities/nkp",    kpoints)
-  ! call hdf5_read_data(ifile, "/.quantities/nbands", nbands)
 
   if (edisp%ispin == 1) then
     call hdf5_get_shape(ifile, "step/000001/scatrate", hdf5shape)
@@ -606,21 +619,21 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
     endif
 
     if (k_dependence .and. band_dependence) then
-      sct%gam(:,:,1) = darr2_1
-      sct%zqp(:,:,1) = darr2_2
+      sct%gam(:,:,1) = darr2_1(:,ikstr:ikend)
+      sct%zqp(:,:,1) = darr2_2(:,ikstr:ikend)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = darr2_3
+        edisp%band_shift(:,:,1) = darr2_3(:,ikstr:ikend)
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
-        sct%gam(iband,:,1) = darr2_1(1,:)
-        sct%zqp(iband,:,1) = darr2_2(1,:)
+        sct%gam(iband,:,1) = darr2_1(1,ikstr:ikend)
+        sct%zqp(iband,:,1) = darr2_2(1,ikstr:ikend)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,1) = darr2_3(1,:)
+          edisp%band_shift(iband,:,1) = darr2_3(1,ikstr:ikend)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
-      do ik=1,kmesh%nkp
+      do ik=ikstr,ikend
         sct%gam(:,ik,1) = darr2_1(:,1)
         sct%zqp(:,ik,1) = darr2_2(:,1)
         if (edisp%lBandShift) then
@@ -653,21 +666,21 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
     endif
 
     if (k_dependence .and. band_dependence) then
-      sct%gam(:,:,1) = darr2_1
-      sct%zqp(:,:,1) = darr2_2
+      sct%gam(:,:,1) = darr2_1(:,ikstr:ikend)
+      sct%zqp(:,:,1) = darr2_2(:,ikstr:ikend)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,1) = darr2_3
+        edisp%band_shift(:,:,1) = darr2_3(:,ikstr:ikend)
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
-        sct%gam(iband,:,1) = darr2_1(1,:)
-        sct%zqp(iband,:,1) = darr2_2(1,:)
+        sct%gam(iband,:,1) = darr2_1(1,ikstr:ikend)
+        sct%zqp(iband,:,1) = darr2_2(1,ikstr:ikend)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,1) = darr2_3(1,:)
+          edisp%band_shift(iband,:,1) = darr2_3(1,ikstr:ikend)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
-      do ik=1,kmesh%nkp
+      do ik=ikstr,ikend
         sct%gam(:,ik,1) = darr2_1(:,1)
         sct%zqp(:,ik,1) = darr2_2(:,1)
         if (edisp%lBandShift) then
@@ -694,21 +707,21 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
     endif
 
     if (k_dependence .and. band_dependence) then
-      sct%gam(:,:,2) = darr2_1
-      sct%zqp(:,:,2) = darr2_2
+      sct%gam(:,:,2) = darr2_1(:,ikstr:ikend)
+      sct%zqp(:,:,2) = darr2_2(:,ikstr:ikend)
       if (edisp%lBandShift) then
-        edisp%band_shift(:,:,2) = darr2_3
+        edisp%band_shift(:,:,2) = darr2_3(:,ikstr:ikend)
       endif
     else if (k_dependence .and. .not. band_dependence) then
       do iband=1,edisp%nband_max
-        sct%gam(iband,:,2) = darr2_1(1,:)
-        sct%zqp(iband,:,2) = darr2_2(1,:)
+        sct%gam(iband,:,2) = darr2_1(1,ikstr:ikend)
+        sct%zqp(iband,:,2) = darr2_2(1,ikstr:ikend)
         if (edisp%lBandShift) then
-          edisp%band_shift(iband,:,2) = darr2_3(1,:)
+          edisp%band_shift(iband,:,2) = darr2_3(1,ikstr:ikend)
         endif
       enddo
     else if (.not. k_dependence .and. band_dependence) then
-      do ik=1,kmesh%nkp
+      do ik=ikstr,ikend
         sct%gam(:,ik,2) = darr2_1(:,1)
         sct%zqp(:,ik,2) = darr2_2(:,1)
         if (edisp%lBandShift) then
@@ -740,7 +753,7 @@ subroutine read_scattering_data_hdf5(ifile, edisp, kmesh, sct, info)
 
 end subroutine
 
-subroutine read_optical_elements(ifile, edisp, sct, info)
+subroutine read_full_optical_elements(ifile, edisp, sct, info)
   implicit none
   integer(hid_t)   :: ifile
   type(energydisp) :: edisp

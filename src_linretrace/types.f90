@@ -68,9 +68,10 @@ module Mtypes
     integer :: nbopt_min                     ! number of bands (interval) included in the optical matrix elements
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
     integer :: iSpin                         ! number of spins
-    logical :: lDerivatives                  ! do we have the derivatives (band_dk, band_d2k)
     logical :: lBandShift   ! do we get band_shifts from the scattering file?
-    logical :: lFullMoments ! do we have the full optical elements (n n' dependence)
+    logical :: lFullMoments  ! do we have the full optical elements
+    logical :: lIntraMoments ! do we have the intra optical elements
+    logical :: lBfieldMoments ! do we have the magnetic intra optical elements
     integer :: iOptical     ! number of optical elements 3 6 or 9
     real(8) :: nelect_file   ! electrons given by energy file
     real(8) :: nelect_config ! number of electrons given by config file

@@ -37,7 +37,7 @@ program main
   integer(hid_t)    :: ifile_output
 
 
-  integer :: is, ig, iT, ik, iimp, imu
+  integer :: is, ig, iT, ik, iimp, imu, icore
   integer :: niitact
   integer :: iStart, iEnd, iStep
   real(8) :: ndevact
@@ -45,7 +45,7 @@ program main
   real(16):: ndevQ1, ndevQ2
 
   character(len=128) :: string
-  real(8) :: tstart, tfinish, timings(5)
+  real(8) :: tstart, tfinish, timings(6)
   real(8) :: time
   real(8), allocatable :: gap_file(:)
   logical :: gapped_file
@@ -90,13 +90,17 @@ program main
   call cpu_time(tstart) ! start timer
 
   call hdf5_init()
-  ! read the energies, derivatives, diagonal optical elements
-  ! + crosscheck config input (mainly spin dependencies)
-  call read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
+
+  ! preprocess energy file, get the scalars and see which datasets are available
+  call read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
   ! quick checks if run-options are in agreement with provided data
-  if (algo%lBfield .and. .not. edisp%lDerivatives) then
-    call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')
+  if (algo%lBfield .and. .not. edisp%lBfieldMoments) then
+    call stop_with_message(stderr, 'Bfield optical elements required for Bfield quantities')
+  endif
+
+  if (algo%lIntrabandQuantities .and. .not. edisp%lIntraMoments) then
+    call stop_with_message(stderr, 'Intraband optical elements required for Intraband quantities')
   endif
 
   if (algo%lInterbandQuantities .and. .not. edisp%lFullMoments) then
@@ -109,18 +113,6 @@ program main
     call log_master(stdout, 'WARNING: Neither Intra nor Interband responses will be calculated')
   endif
 
-  if (.not. algo%lNominalDoping) then
-    ! transform the densities ( doping / impurities ) from cm-3 to electrons
-    if (algo%ldoping) then
-      edisp%doping = edisp%doping * 1d-24 * kmesh%vol
-    endif
-    if (algo%lImpurities) then
-      do iimp = 1, imp%nimp
-        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol
-      enddo
-    endif
-  endif
-
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -130,6 +122,21 @@ program main
      call mpi_barrier(mpi_comm_world, mpierr)
   endif
 #endif
+
+  ! read the energies and diagonal optical elements
+  if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
+    do icore = 0, nproc-1
+      if (myid.eq.icore) then
+        call read_energy(algo,edisp)
+      endif
+#ifdef MPI
+      call mpi_barrier(mpi_comm_world, mpierr)
+#endif
+    enddo
+  else
+    call read_energy(algo,edisp)
+  endif
+
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
@@ -193,9 +200,9 @@ program main
     if (algo%lScatteringFile) then
       ! at this point we just extract the temperature ranges
       ! and check wether bandshifts exist
-      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else if (algo%lScatteringText) then
-      call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
     else
       if (algo%steps .gt. 1) then
         if (temp%tlogarithmic) then
@@ -208,8 +215,8 @@ program main
       endif
       allocate(temp%TT(algo%steps))
       allocate(temp%BB(algo%steps))
-      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
       ! define Temperature grid
       if (temp%tlogarithmic) then
@@ -261,13 +268,13 @@ program main
 
   if (algo%lMUMODE) then
     if (algo%lScatteringFile) then
-      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else
       ! construct mu grid
       allocate(temp%TT(algo%steps))
       allocate(temp%BB(algo%steps))
-      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
       allocate(pot%MM(algo%steps))
       allocate(pot%QMM(algo%steps))
       temp%TT = temp%temp_config
@@ -376,9 +383,11 @@ program main
   if (algo%lInterbandQuantities) then
     allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
                                        edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+    allocate(edisp%Moptk(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-      call read_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
+      call read_full_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
       edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
     enddo
     deallocate(edisp%Moptk)
@@ -406,7 +415,7 @@ program main
       if (edisp%nelect_config > 0.d0) then
       write(stdout,*) '  new electrons:     ', edisp%nelect
       endif
-      if (edisp%gapped_complete .and. (int(edisp%nelect) /= edisp%nelect)) then
+      if (edisp%gapped_complete .and. (nint(edisp%nelect) /= edisp%nelect)) then
       write(stdout,*)
       write(stdout,*) '  WARNING: Detected gapped system without integer filling. Correct input?'
       write(stdout,*)
@@ -447,14 +456,14 @@ program main
       write(stdout,*) '    _________________________________________________________________'
       write(stdout,*) '    imp  dopant      density      energy [eV]  degeneracy  width [eV]'
       do iimp = 1,imp%nimp
-        if (int(imp%Dopant(iimp)) == 1) then
+        if (nint(imp%Dopant(iimp)) == 1) then
           string = 'donor'
         else
           string = 'acceptor'
         endif
         write(stdout,'(5X,I1,4X,A8,E14.4,E13.4,I4,7X,E14.4)') &
             iimp, string, imp%Density(iimp), &
-            imp%Energy(iimp), int(imp%Degeneracy(iimp)), imp%Bandwidth(iimp)
+            imp%Energy(iimp), nint(imp%Degeneracy(iimp)), imp%Bandwidth(iimp)
       enddo
     endif
     write(stdout,*)
@@ -531,7 +540,7 @@ program main
   endif
 
   call cpu_time(tfinish)
-  timings(1) = timings(1) + (tfinish - tstart)
+  timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
   tstart = tfinish
 
 #ifdef MPI
@@ -572,7 +581,16 @@ program main
     if (algo%lScatteringFile) then
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
-      call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
+        do icore = 0, nproc-1
+          if (myid.eq.icore) then
+            call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+          endif
+          call mpi_barrier(mpi_comm_world, mpierr)
+        enddo
+      else
+        call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      endif
       ! in case we have band shifts we might open or close the DFT gap
       ! for that reason : redo the mudft calculation and set the flags for each step
       ! also change the algorithm if necessary to speed things up / make things more robust
@@ -609,7 +627,7 @@ program main
         do ig=1,size(sct%zqpcoeff,dim=1)
            sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(ig,is)*(temp%TT(iStep)**(ig-1))
         enddo
-        if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
+        if (sct%zqp(1,ikstr,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
           sct%zqp(:,:,is) = 1.d0
         endif
@@ -622,6 +640,9 @@ program main
       sct%gam = sct%zqp * sct%gam  ! convention we use
     endif
 
+    call cpu_time(tfinish)
+    timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
+    tstart = tfinish
 
     ! root finding (mu)
     niitact = 0
@@ -630,10 +651,7 @@ program main
       ! initialize the new chemical potential
       if (iStep /= iStart) then
         pot%QMM(iStep) = pot%QMM(iStep-algo%step_dir) ! we initialize it to the value from the previous iteration
-                                         ! this does nothing if mu is constant
       endif
-
-      call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
         call find_mu(pot%QMM(iStep),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
@@ -654,11 +672,11 @@ program main
         endif
       endif
 
-      call cpu_time(tfinish)
-      timings(2) = timings(2) + (tfinish - tstart)
-      tstart = tfinish
-
       pot%MM(iStep) = real(pot%QMM(iStep),8)
+
+      call cpu_time(tfinish)
+      timings(3) = timings(3) + (tfinish - tstart) ! mu search time
+      tstart = tfinish
     endif
 
     ! after this step the mu stays for the evaluation -> save it
@@ -696,6 +714,10 @@ program main
     carrier_concentration(iStep) = -real(ndevQ1 / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
     pot%occ(iStep) = edisp%nelect - real(ndevQ1,8)
+
+    call cpu_time(tfinish)
+    timings(2) = timings(2) + (tfinish - tstart) ! auxiliary functions
+    tstart = tfinish
 
     if (myid.eq.master) then
       write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iStep), niitact
@@ -736,7 +758,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(3) = timings(3) + (tfinish - tstart)
+    timings(4) = timings(4) + (tfinish - tstart) ! polygamma eval
     tstart = tfinish
 
     ! do the k-point loop and calculate the response
@@ -775,7 +797,7 @@ program main
     enddo
 
     call cpu_time(tfinish)
-    timings(4) = timings(4) + (tfinish - tstart)
+    timings(5) = timings(5) + (tfinish - tstart) ! response eval
     tstart = tfinish
 
     ! output the response
@@ -816,7 +838,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(5) = timings(5) + (tfinish - tstart)
+    timings(6) = timings(6) + (tfinish - tstart) ! mpi summation + response output
     tstart = tfinish
 
   enddo ! end of the outer temperature / chemical potential loop
@@ -840,6 +862,10 @@ program main
     call hdf5_close_file(ifile_output)
   endif
 
+  call cpu_time(tfinish)
+  timings(2) = timings(2) + (tfinish - tstart) ! auxiliary functions
+  tstart = tfinish
+
 
   ! gather the timings
   time = sum(timings)
@@ -852,10 +878,11 @@ program main
     write(stdout,*)
     write(stdout,*) '  Timings (average) [s]:'
     write(stdout,'(A21,F19.6)') '    readin + alloc:  ', timings(1)
-    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(2)
-    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(3)
-    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(4)
-    write(stdout,'(A21,F19.6)') '    mpi + summation: ', timings(5)
+    write(stdout,'(A21,F19.6)') '    auxiliary-eval:  ', timings(2)
+    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(3)
+    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(4)
+    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(5)
+    write(stdout,'(A21,F19.6)') '    mpi summation:   ', timings(6)
     write(stdout,*)
     write(stdout,'(A23,F17.6)') 'Total real time [s]:', time
     write(stdout,'(A23,F17.6)') 'Total CPU  time [s]:', sum(timings) * dble(nproc)
