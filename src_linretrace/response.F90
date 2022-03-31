@@ -951,26 +951,26 @@ subroutine response_peierls_weights(resp, edisp, info)
           if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
 
           resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
           resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
           resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
         enddo
       enddo
     enddo
 
     resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
     resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
     resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
   enddo
 
@@ -993,26 +993,26 @@ subroutine response_peierls_weights_Q(resp, edisp, info)
           if (i==1 .and. j==1 .and. k==1) cycle ! we need to keep the kernel saved
 
           resp%sB_full(k,j,i,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
           resp%aB_full(k,j,i,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
           resp%xB_full(k,j,i,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
-          * edisp%MBoptDiag(k,j,i,iband,info%ik,:)
+          * edisp%MBoptDiag(k,j,i,iband,:,info%ik)
 
         enddo
       enddo
     enddo
 
     resp%sB_full(1,1,1,iband,:,info%ik) = resp%sB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
     resp%aB_full(1,1,1,iband,:,info%ik) = resp%aB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
     resp%xB_full(1,1,1,iband,:,info%ik) = resp%xB_full(1,1,1,iband,:,info%ik) &
-    * edisp%MBoptDiag(1,1,1,iband,info%ik,:)
+    * edisp%MBoptDiag(1,1,1,iband,:,info%ik)
 
   enddo
 

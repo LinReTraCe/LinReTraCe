@@ -90,13 +90,17 @@ program main
   call cpu_time(tstart) ! start timer
 
   call hdf5_init()
-  ! read the energies, derivatives, diagonal optical elements
-  ! + crosscheck config input (mainly spin dependencies)
-  call read_preproc_energy_data(algo, kmesh, edisp, sct, pot, imp)
+
+  ! preprocess energy file, get the scalars and see which datasets are available
+  call read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
   ! quick checks if run-options are in agreement with provided data
-  if (algo%lBfield .and. .not. edisp%lDerivatives) then
-    call stop_with_message(stderr, 'Energy derivatives required for Bfield quantities')
+  if (algo%lBfield .and. .not. edisp%lBfieldMoments) then
+    call stop_with_message(stderr, 'Bfield optical elements required for Bfield quantities')
+  endif
+
+  if (algo%lIntrabandQuantities .and. .not. edisp%lIntraMoments) then
+    call stop_with_message(stderr, 'Intraband optical elements required for Intraband quantities')
   endif
 
   if (algo%lInterbandQuantities .and. .not. edisp%lFullMoments) then
@@ -109,18 +113,6 @@ program main
     call log_master(stdout, 'WARNING: Neither Intra nor Interband responses will be calculated')
   endif
 
-  if (.not. algo%lNominalDoping) then
-    ! transform the densities ( doping / impurities ) from cm-3 to electrons
-    if (algo%ldoping) then
-      edisp%doping = edisp%doping * 1d-24 * kmesh%vol
-    endif
-    if (algo%lImpurities) then
-      do iimp = 1, imp%nimp
-        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol
-      enddo
-    endif
-  endif
-
   ! distribute k-grid
   call mpi_genkstep(kmesh%nkp)
 
@@ -130,6 +122,9 @@ program main
      call mpi_barrier(mpi_comm_world, mpierr)
   endif
 #endif
+
+  ! read the energies and diagonal optical elements
+  call read_energy(algo,edisp)
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
@@ -193,9 +188,9 @@ program main
     if (algo%lScatteringFile) then
       ! at this point we just extract the temperature ranges
       ! and check wether bandshifts exist
-      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else if (algo%lScatteringText) then
-      call read_preproc_scattering_data_text(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
     else
       if (algo%steps .gt. 1) then
         if (temp%tlogarithmic) then
@@ -208,8 +203,8 @@ program main
       endif
       allocate(temp%TT(algo%steps))
       allocate(temp%BB(algo%steps))
-      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
 
       ! define Temperature grid
       if (temp%tlogarithmic) then
@@ -261,13 +256,13 @@ program main
 
   if (algo%lMUMODE) then
     if (algo%lScatteringFile) then
-      call read_preproc_scattering_data_hdf5(algo, kmesh, edisp, sct, pot, temp)
+      call read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
     else
       ! construct mu grid
       allocate(temp%TT(algo%steps))
       allocate(temp%BB(algo%steps))
-      allocate(sct%gam(edisp%nband_max, kmesh%nkp, edisp%ispin))
-      allocate(sct%zqp(edisp%nband_max, kmesh%nkp, edisp%ispin))
+      allocate(sct%gam(edisp%nband_max, ikstr:ikend, edisp%ispin))
+      allocate(sct%zqp(edisp%nband_max, ikstr:ikend, edisp%ispin))
       allocate(pot%MM(algo%steps))
       allocate(pot%QMM(algo%steps))
       temp%TT = temp%temp_config
@@ -376,9 +371,11 @@ program main
   if (algo%lInterbandQuantities) then
     allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
                                        edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+    allocate(edisp%Moptk(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-      call read_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
+      call read_full_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
       edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
     enddo
     deallocate(edisp%Moptk)
@@ -406,7 +403,7 @@ program main
       if (edisp%nelect_config > 0.d0) then
       write(stdout,*) '  new electrons:     ', edisp%nelect
       endif
-      if (edisp%gapped_complete .and. (int(edisp%nelect) /= edisp%nelect)) then
+      if (edisp%gapped_complete .and. (nint(edisp%nelect) /= edisp%nelect)) then
       write(stdout,*)
       write(stdout,*) '  WARNING: Detected gapped system without integer filling. Correct input?'
       write(stdout,*)
@@ -447,14 +444,14 @@ program main
       write(stdout,*) '    _________________________________________________________________'
       write(stdout,*) '    imp  dopant      density      energy [eV]  degeneracy  width [eV]'
       do iimp = 1,imp%nimp
-        if (int(imp%Dopant(iimp)) == 1) then
+        if (nint(imp%Dopant(iimp)) == 1) then
           string = 'donor'
         else
           string = 'acceptor'
         endif
         write(stdout,'(5X,I1,4X,A8,E14.4,E13.4,I4,7X,E14.4)') &
             iimp, string, imp%Density(iimp), &
-            imp%Energy(iimp), int(imp%Degeneracy(iimp)), imp%Bandwidth(iimp)
+            imp%Energy(iimp), nint(imp%Degeneracy(iimp)), imp%Bandwidth(iimp)
       enddo
     endif
     write(stdout,*)
@@ -572,7 +569,7 @@ program main
     if (algo%lScatteringFile) then
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
-      call read_scattering_data_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
       ! in case we have band shifts we might open or close the DFT gap
       ! for that reason : redo the mudft calculation and set the flags for each step
       ! also change the algorithm if necessary to speed things up / make things more robust
