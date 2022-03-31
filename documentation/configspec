@@ -132,3 +132,4 @@ Debug options:
   Secant:            Always perform root finding with secant algorithm
   NoRefine:          Never compute the chemical potential with the help of the refinement algorithm
   AlwaysRefine:      No temperature cutoff for Refinement procedure
+  SaveRAM:           Load in energy and diagonal optical elements core after core to avoid RAM usage spikes

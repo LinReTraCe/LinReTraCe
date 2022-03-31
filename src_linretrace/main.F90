@@ -37,7 +37,7 @@ program main
   integer(hid_t)    :: ifile_output
 
 
-  integer :: is, ig, iT, ik, iimp, imu
+  integer :: is, ig, iT, ik, iimp, imu, icore
   integer :: niitact
   integer :: iStart, iEnd, iStep
   real(8) :: ndevact
@@ -124,7 +124,17 @@ program main
 #endif
 
   ! read the energies and diagonal optical elements
-  call read_energy(algo,edisp)
+  if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
+    do icore = 0, nproc-1
+      if (myid.eq.icore) then
+        call read_energy(algo,edisp)
+      endif
+      call mpi_barrier(mpi_comm_world, mpierr)
+    enddo
+  else
+    call read_energy(algo,edisp)
+  endif
+
 
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
@@ -569,7 +579,16 @@ program main
     if (algo%lScatteringFile) then
       ! read in the scattering data for the current temperature
       ! scattering rates; quasi-particle weights and possible band-shifts
-      call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
+        do icore = 0, nproc-1
+          if (myid.eq.icore) then
+            call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+          endif
+          call mpi_barrier(mpi_comm_world, mpierr)
+        enddo
+      else
+        call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
+      endif
       ! in case we have band shifts we might open or close the DFT gap
       ! for that reason : redo the mudft calculation and set the flags for each step
       ! also change the algorithm if necessary to speed things up / make things more robust
