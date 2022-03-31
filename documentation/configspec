@@ -77,16 +77,16 @@ Percentage = (default = None)                          # relative position insid
                                                        # 4 numbers:   +1(donor)/-1(acceptor) density energy degeneracy
                                                        # 5 numbers:   +1(donor)/-1(acceptor) density energy degeneracy 1/2(spin)
 
-                                                       # density : [per unit cell]
+                                                       # density : [cm-3]
                                                        # energy : [eV] or 0<p<1 for Percentage
                                                        # energy shifts are applied after adjusting the bandgap!
 
                                                        # example donor 20meV below conduction band
-                                                       # Conduction = +1 1e-8 0.02 1
+                                                       # Conduction = +1 1e18 0.02 1
                                                        # example acceptor 10meV above valence band of spin down
-                                                       # Valence    = -1 1e-5 0.01 1 2
+                                                       # Valence    = -1 1e19 0.01 1 2
                                                        # example donor level in the center of the band
-                                                       # Percentage = +1 1e-3 0.5 2
+                                                       # Percentage = +1 1e15 0.5 2
 
 Bandtype   = (default = None)                          # box, triangle, halfcircle, sine, sine2, sine3, sine4
 Bandwidth  = (default = 0)                             # Bandwidth in [eV] for the provided Bandtype
@@ -130,3 +130,4 @@ Debug options:
   Secant:            Always perform root finding with secant algorithm
   NoRefine:          Never compute the chemical potential with the help of the refinement algorithm
   AlwaysRefine:      No temperature cutoff for Refinement procedure
+  NominalDoping:     Interpret the doping and impurity densities as nominal doping levels instead of densities

@@ -109,8 +109,15 @@ program main
     call log_master(stdout, 'WARNING: Neither Intra nor Interband responses will be calculated')
   endif
 
-  if (algo%ldoping) then
-    edisp%doping = edisp%doping * 1.d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+  if (.not. (algo%ldebug .and. (index(algo%dbgstr,"NominalDoping") .ne. 0))) then
+    if (algo%ldoping) then
+      edisp%doping = edisp%doping * 1d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+    endif
+    if (algo%lImpurities) then
+      do iimp = 1, imp%nimp
+        imp%Density(iimp) = imp%Density(iimp) * 1d-24 * kmesh%vol ! cm-3 -> AA-3 -> filling
+      enddo
+    endif
   endif
 
   ! distribute k-grid
