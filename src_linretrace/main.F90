@@ -606,7 +606,7 @@ program main
         do ig=1,size(sct%zqpcoeff,dim=1)
            sct%zqp(:,:,is) = sct%zqp(:,:,is) + sct%zqpcoeff(ig,is)*(temp%TT(iStep)**(ig-1))
         enddo
-        if (sct%zqp(1,1,is) > 1.d0) then ! since its a constant array
+        if (sct%zqp(1,ikstr,is) > 1.d0) then ! since its a constant array
           call log_master(stdout, 'WARNING: Zqp is bigger than 1 ... truncating to 1')
           sct%zqp(:,:,is) = 1.d0
         endif
