@@ -13,9 +13,10 @@ subroutine main_greeting(ounit)
   integer, intent(in) :: ounit
   write(ounit,*)
   write(ounit,*)'#####################################################'
-  write(ounit,*)'#  Lin-ReTraCe -- Linear Response Transport Centre  #'
+  write(ounit,*)'#  LinReTraCe --- Linear Response Transport Centre  #'
   write(ounit,*)'#####################################################'
   write(ounit,*)'#       M. Pickem, E. Maggio and J.M. Tomczak       #'
+  write(ounit,*)'#       (v1.0.0 April 2022)                         #'
   write(ounit,*)'#####################################################'
   write(ounit,*)
 end subroutine main_greeting

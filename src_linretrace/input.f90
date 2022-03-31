@@ -112,7 +112,7 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
   ! set common band gap
   if (edisp%gapped_complete) then
-    edisp%gap_min = minval(edisp%ene_conductionBand) - minval(edisp%ene_valenceBand)
+    edisp%gap_min = minval(edisp%ene_conductionBand) - maxval(edisp%ene_valenceBand)
   else
     edisp%gap_min = 0.d0
   endif
