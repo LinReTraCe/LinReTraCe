@@ -25,6 +25,7 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   integer, allocatable :: irank1arr(:)
   real(8), allocatable :: drank1arr(:)
   real(8), allocatable :: drank2arr(:,:)
+  real(16) :: multiplicity_sum
 
   call hdf5_open_file(trim(adjustl(algo%input_energies)), ifile, rdonly=.true.)
 
@@ -34,10 +35,12 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
   call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
 
+
   ! achieve proper quad precision in weightQ
   allocate(kmesh%weightQ(kmesh%nkp))
+  multiplicity_sum = sum(kmesh%multiplicity)
   do ik=1,kmesh%nkp
-    kmesh%weightQ(ik) = nint(kmesh%multiplicity(ik)) * nint(kmesh%weightsum) / real(nint(sum(kmesh%multiplicity)),16)
+    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / multiplicity_sum
   enddo
 
   ! band information + charge
