@@ -45,7 +45,7 @@ program main
   real(16):: ndevQ1, ndevQ2
 
   character(len=128) :: string
-  real(8) :: tstart, tfinish, timings(5)
+  real(8) :: tstart, tfinish, timings(6)
   real(8) :: time
   real(8), allocatable :: gap_file(:)
   logical :: gapped_file
@@ -129,7 +129,9 @@ program main
       if (myid.eq.icore) then
         call read_energy(algo,edisp)
       endif
+#ifdef MPI
       call mpi_barrier(mpi_comm_world, mpierr)
+#endif
     enddo
   else
     call read_energy(algo,edisp)
@@ -538,7 +540,7 @@ program main
   endif
 
   call cpu_time(tfinish)
-  timings(1) = timings(1) + (tfinish - tstart)
+  timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
   tstart = tfinish
 
 #ifdef MPI
@@ -638,6 +640,9 @@ program main
       sct%gam = sct%zqp * sct%gam  ! convention we use
     endif
 
+    call cpu_time(tfinish)
+    timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
+    tstart = tfinish
 
     ! root finding (mu)
     niitact = 0
@@ -646,10 +651,7 @@ program main
       ! initialize the new chemical potential
       if (iStep /= iStart) then
         pot%QMM(iStep) = pot%QMM(iStep-algo%step_dir) ! we initialize it to the value from the previous iteration
-                                         ! this does nothing if mu is constant
       endif
-
-      call cpu_time(tstart)
 
       if (edisp%gapped_complete) then
         call find_mu(pot%QMM(iStep),ndevVQ,ndevactQ,niitact, edisp, sct, kmesh, imp, algo, info)
@@ -670,11 +672,11 @@ program main
         endif
       endif
 
-      call cpu_time(tfinish)
-      timings(2) = timings(2) + (tfinish - tstart)
-      tstart = tfinish
-
       pot%MM(iStep) = real(pot%QMM(iStep),8)
+
+      call cpu_time(tfinish)
+      timings(3) = timings(3) + (tfinish - tstart) ! mu search time
+      tstart = tfinish
     endif
 
     ! after this step the mu stays for the evaluation -> save it
@@ -712,6 +714,10 @@ program main
     carrier_concentration(iStep) = -real(ndevQ1 / kmesh%vol * 1q24, 8)! 1 / A**3 -> 1 / cm**3
     ! actual occupation is then the difference to the charge neutrality
     pot%occ(iStep) = edisp%nelect - real(ndevQ1,8)
+
+    call cpu_time(tfinish)
+    timings(2) = timings(2) + (tfinish - tstart) ! auxiliary functions
+    tstart = tfinish
 
     if (myid.eq.master) then
       write(stdout,'(3X,2F15.7,F18.12,I7)') info%Temp, info%beta, pot%MM(iStep), niitact
@@ -752,7 +758,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(3) = timings(3) + (tfinish - tstart)
+    timings(4) = timings(4) + (tfinish - tstart) ! polygamma eval
     tstart = tfinish
 
     ! do the k-point loop and calculate the response
@@ -791,7 +797,7 @@ program main
     enddo
 
     call cpu_time(tfinish)
-    timings(4) = timings(4) + (tfinish - tstart)
+    timings(5) = timings(5) + (tfinish - tstart) ! response eval
     tstart = tfinish
 
     ! output the response
@@ -832,7 +838,7 @@ program main
     endif
 
     call cpu_time(tfinish)
-    timings(5) = timings(5) + (tfinish - tstart)
+    timings(6) = timings(6) + (tfinish - tstart) ! mpi summation + response output
     tstart = tfinish
 
   enddo ! end of the outer temperature / chemical potential loop
@@ -856,6 +862,10 @@ program main
     call hdf5_close_file(ifile_output)
   endif
 
+  call cpu_time(tfinish)
+  timings(2) = timings(2) + (tfinish - tstart) ! auxiliary functions
+  tstart = tfinish
+
 
   ! gather the timings
   time = sum(timings)
@@ -868,10 +878,11 @@ program main
     write(stdout,*)
     write(stdout,*) '  Timings (average) [s]:'
     write(stdout,'(A21,F19.6)') '    readin + alloc:  ', timings(1)
-    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(2)
-    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(3)
-    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(4)
-    write(stdout,'(A21,F19.6)') '    mpi + summation: ', timings(5)
+    write(stdout,'(A21,F19.6)') '    auxiliary-eval:  ', timings(2)
+    write(stdout,'(A21,F19.6)') '    mu-search:       ', timings(3)
+    write(stdout,'(A21,F19.6)') '    polygamma-eval:  ', timings(4)
+    write(stdout,'(A21,F19.6)') '    response-eval:   ', timings(5)
+    write(stdout,'(A21,F19.6)') '    mpi summation:   ', timings(6)
     write(stdout,*)
     write(stdout,'(A23,F17.6)') 'Total real time [s]:', time
     write(stdout,'(A23,F17.6)') 'Total CPU  time [s]:', sum(timings) * dble(nproc)
