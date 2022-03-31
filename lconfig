@@ -35,9 +35,8 @@ if __name__ == '__main__':
   ''' INPUT '''
 
   print(' INTERACTIVE GENERATION OF LRTC CONFIG FILES\n')
-  config['mode'] = int(input(' run mode (temp [1], mu [2]): '))
-  if config['mode'] != 1 and config['mode'] != 2: sys.exit('Please provide proper identifier [1/2]')
   config['energyfile'] = str(input(' energy file: '))
+  config['outputfile'] = str(input(' output file: '))
   intra = input(' calculate intra-band quantities [y,n]: ')
   config['intra'] = True if intra.lower() == 'y' else False
   inter = input(' calculate inter-band quantities [y,n]: ')
@@ -49,6 +48,8 @@ if __name__ == '__main__':
   quad   = input(' calculate quadruple precision [y,n]: ')
   config['quad'] = True if quad.lower() == 'y' else False
 
+  config['mode'] = int(input(' run mode (temp [1], mu [2]): '))
+  if config['mode'] != 1 and config['mode'] != 2: sys.exit('Please provide proper identifier [1/2]')
 
   if config['mode'] == 1:  # TEMP MODE
     config['tempmode'] = {}
@@ -66,7 +67,6 @@ if __name__ == '__main__':
     config['tempmode']['scat']    = list(input(' scattering coefficients (separated by space): ').split())
     config['tempmode']['qp']      = list(input(' quasiparticle coefficients (separated by space): ').split())
 
-
   elif config['mode'] == 2: # MU MODE
     config['mumode'] = {}
     print('\n  MU-MODE configuration:')
@@ -81,36 +81,6 @@ if __name__ == '__main__':
     config['mumode']['scat']     = float(input(' scattering rate: '))
     config['mumode']['qp']       = float(input(' quasiparticle weight: '))
 
-
-  # ''' SANITY CHECK '''
-
-  # print("\n\n Sanity check input")
-  #   try:
-  #     with h5py.File(config['energyfile'],'r'):
-  #       pass
-  #   except:
-  #     warning('Provided energy file does not exist or is not a valid HDF5 file')
-  #   if not (config['inter'] and config['intra']):
-  #     warning('Neither inter-band nor intra-band quantities to be calculated.')
-
-  #   if config['mode'] == 1:
-  #     tempConfig = config['tempmode']
-  #     if tempConfig['tpoints'] < 1:
-  #       warning('Number of temperature points must be greater than 0')
-  #     if tempConfig['tmin'] == tempConfig['tmax'] and tempConfig['tpoints'] != 1:
-  #       warning('Identical temperature end points require one tpoint')
-  #     if tempConfig['tmin'] != tempConfig['tmax'] and tempConfig['tpoints'] == 1:
-  #       warning('Different temperature end points require more than one tpoint')
-  #   elif config['mode'] == 2:
-  #     muConfig = config['mumode']
-  #     if muConfig['mupoints'] < 1:
-  #       warning('Number of temperature points must be greater than 0')
-  #     if muConfig['mumin'] == muConfig['mumax'] and muConfig['mupoints'] != 1:
-  #       warning('Identical temperature end points require one tpoint')
-  #     if muConfig['mumin'] != muConfig['mumax'] and muConfig['mupoints'] == 1:
-  #       warning('Different temperature end points require more than one tpoint')
-  #   elif config['mode'] == 2:
-
   ''' OUTPUT '''
 
   with open(args.output,'w') as cf:
@@ -120,6 +90,7 @@ if __name__ == '__main__':
     elif config['mode'] == 2:
       cf.write(f"RunMode         =  mu\n")
     cf.write(f"EnergyFile      =  {config['energyfile']}\n")
+    cf.write(f"OutputFile      =  {config['outputfile']}\n")
     cf.write(f"BFieldMode      =  {str(config['bfield'])[0]}\n")
     cf.write(f"Interband       =  {str(config['inter'])[0]}\n")
     cf.write(f"Intraband       =  {str(config['intra'])[0]}\n")
