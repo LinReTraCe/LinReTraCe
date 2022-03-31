@@ -586,7 +586,9 @@ program main
           if (myid.eq.icore) then
             call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
           endif
+#ifdef MPI
           call mpi_barrier(mpi_comm_world, mpierr)
+#endif
         enddo
       else
         call read_scattering_hdf5(ifile_scatter_hdf5, edisp, kmesh, sct, info)
