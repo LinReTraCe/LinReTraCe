@@ -21,7 +21,8 @@ class StructureFromArrays(ElectronicStructure):
   and numpy arrays that represent
   - kmesh multiplicity
   - energies
-  - optical elements
+  - optical elements (intra or full)
+  - optional: bfield intra band optical elements
   '''
 
   def __init__(self, nkx, nky, nkz, vol, charge):
@@ -56,6 +57,9 @@ class StructureFromArrays(ElectronicStructure):
     '''
 
     self.multiplicity = multiplicity
+    if np.abs(np.sum(self.multiplictiy) - self.nkx*self.nky*self.nkz) > 1e-6:
+      print('WARNING: Multiplicity sum does not agree with kmesh')
+
     self.nkp = self.multiplicity.shape[0]
     if self.nkp == self.nkx*self.nky*self.nkz:
       self.irreducible = False
