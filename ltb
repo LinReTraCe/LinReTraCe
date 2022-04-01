@@ -54,7 +54,7 @@ def parse_args(args=None):
   parser.add_argument('--mu', type=float, help='use provided chemical potential instead of provided filling')
   parser.add_argument('-o', '--output', default=None, help='Output file name')
   parser.add_argument('-p', '--plot', default=False, action='store_true', help='Plot bands / DOS / NOS')
-  parser.add_argument('--debug', default=False, action='store_true')
+  parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
 
 

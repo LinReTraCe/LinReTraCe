@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import sys
+import os
 import logging
 import argparse
 
@@ -13,7 +14,7 @@ from structure.wann import wannier90hamiltonian # wannier90 hk file
 from structure.wann import hamiltonian_matrix    # hk in matrix form
 
 '''
-ltb: Pre-processing of Wannier90 files and arbitrary H(k) structures in LRTC
+lwann : Pre-processing of Wannier90 folder and Wannier90 Hamiltonian files
 '''
 
 __author__     = 'Matthias Pickem'
@@ -24,70 +25,97 @@ __status__     = 'Dev'
 __license__    = 'GPLv3'
 __credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
 
-error = lambda string: sys.exit('lwann: {}'.format(string))
+def parse_args(args=None):
+  parser = argparse.ArgumentParser(
+    description='Argument parser for Wannier90 pre-processing of LRTC',
+    epilog="That's the end of the help")
+  parser.add_argument('system', help='Folder of Wannier90 calculation')
+  parser.add_argument('charge', help='Number of electrons in the provided bands')
+  parser.add_argument('-o', '--output', help='Outputname of hdf5 (default="lrtc-energies.hdf5")', default='lrtc-energies.hdf5')
+  parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
+  return parser.parse_args(args)
 
-logging.basicConfig()
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+class log_formatter(logging.Formatter):
+  def format(self, record):
+    if record.levelname == 'INFO':
+      return record.msg # so it looks like print
+    else:
+      return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information
+
+if __name__ == '__main__':
+  error = lambda string: sys.exit('lwann: {}'.format(string))
+  args = parse_args()
+  debug = args.debug
+
+  ''' define logging '''
+  logger = logging.getLogger()
+  logger.setLevel(logging.DEBUG)
+  console = logging.StreamHandler()
+  console.setFormatter(log_formatter())
+  console.setLevel(logging.DEBUG if debug else logging.INFO)
+  logger.addHandler(console)
+
+  if os.path.isfile(args.system):
+    try:
+      ham = wannier90hamiltonian(hk_file=args.system, charge=args.charge)
+      h5output(args.output, ham, ham, peierls=True)
+    except Exception as e:
+      error(str(e)+"\nExit.")
+  else:
+    try:
+      ham = wannier90calculation(args.system)
+      ham.readData()
+      ham.diagData()
+    except Exception as e:
+      error(str(e)+"\nExit.")
 
 
-ham = wannier90calculation('../t2g')
-ham.readData()
+  # INTERFACE WITH hamiltonian arrays
+  if False:
+    hk = np.zeroes((8000,3,3), dtype=np.float64)
+    vk = np.zeroes((8000,3,3,3), dtype=np.float64)
+    ck = np.zeroes((8000,3,3,6), dtype=np.float64)
+    ham = hamiltonian_matrix(hk, vk, ck, charge=1)
+    fname = 'SVO.hdf5'
+    h5output(fname, ham, ham, peierls=True)
 
+    plot = False
 
-# INTERFACE WITH hamiltonian file
-if False:
-  ham = wannier90hamiltonian(hk_file='SVO_k20.hk', charge=1)
-  fname = 'SVO.hdf5'
-  h5output(fname, ham, ham, peierls=True)
+    if plot:
+      try:
+        logging.getLogger("matplotlib").setLevel(logging.WARNING)
+        import matplotlib.pyplot as plt
+      except ImportError:
+        error('Debug option requires matplotlib library')
 
-# INTERFACE WITH hamiltonian arrays
-if False:
-  hk = np.zeroes((8000,3,3), dtype=np.float64)
-  vk = np.zeroes((8000,3,3,3), dtype=np.float64)
-  ck = np.zeroes((8000,3,3,6), dtype=np.float64)
-  ham = hamiltonian_matrix(hk, vk, ck, charge=1)
-  fname = 'SVO.hdf5'
-  h5output(fname, ham, ham, peierls=True)
+      for iband in range(ham.energyBandMax):
+        plt.plot(ham.energies[0][:,iband], label='band {}'.format(iband+1), lw=2)
+        mean = np.mean(ham.energies[0][:,iband])
+      plt.axhline(ham.mu, label='mu_ham = {:.3f}'.format(ham.mu), color='black', lw=1, ls='--')
+      plt.xlabel(r'$k_i$')
+      plt.ylabel(r'$\varepsilon(k_i)$')
+      plt.legend(loc='best')
+      plt.show()
 
-plot = False
+    if plot:
+      ham.calcDOS(gamma=0.03, npoints=10000, windowsize=1.5)
 
-if plot:
-  try:
-    logging.getLogger("matplotlib").setLevel(logging.WARNING)
-    import matplotlib.pyplot as plt
-  except ImportError:
-    error('Debug option requires matplotlib library')
+      fig = plt.figure()
+      ax1 = fig.add_subplot(111)
+      ax2 = ax1.twinx()
+      for ispin in range(ham.spins):
+        ax1.plot(ham.dosaxis, ham.dos[ispin], label='dos', color='blue', lw=2)
+        ax2.plot(ham.dosaxis, ham.nos[ispin], label='nos', color='red', lw=2)
 
-  for iband in range(ham.energyBandMax):
-    plt.plot(ham.energies[0][:,iband], label='band {}'.format(iband+1), lw=2)
-    mean = np.mean(ham.energies[0][:,iband])
-  plt.axhline(ham.mu, label='mu_ham = {:.3f}'.format(ham.mu), color='black', lw=1, ls='--')
-  plt.xlabel(r'$k_i$')
-  plt.ylabel(r'$\varepsilon(k_i)$')
-  plt.legend(loc='best')
-  plt.show()
+      ax1.axvline(x=ham.mu, color='black', lw=1, ls='-')
+      ax1.set_ylim(ymin=0)
+      ax1.set_ylabel(r'$\mathrm{dos}$')
+      ax1.set_xlabel(r'$\mu$ [eV]')
+      ax1.legend(loc='center left')
 
-if plot:
-  ham.calcDOS(gamma=0.03, npoints=10000, windowsize=1.5)
+      ax2.axhline(y=ham.charge, color='black', lw=1, ls='-')
+      ax2.set_ylim(ymin=0)
+      ax2.set_ylabel(r'$\mathrm{nos}$')
+      ax2.legend(loc='center right')
 
-  fig = plt.figure()
-  ax1 = fig.add_subplot(111)
-  ax2 = ax1.twinx()
-  for ispin in range(ham.spins):
-    ax1.plot(ham.dosaxis, ham.dos[ispin], label='dos', color='blue', lw=2)
-    ax2.plot(ham.dosaxis, ham.nos[ispin], label='nos', color='red', lw=2)
-
-  ax1.axvline(x=ham.mu, color='black', lw=1, ls='-')
-  ax1.set_ylim(ymin=0)
-  ax1.set_ylabel(r'$\mathrm{dos}$')
-  ax1.set_xlabel(r'$\mu$ [eV]')
-  ax1.legend(loc='center left')
-
-  ax2.axhline(y=ham.charge, color='black', lw=1, ls='-')
-  ax2.set_ylim(ymin=0)
-  ax2.set_ylabel(r'$\mathrm{nos}$')
-  ax2.legend(loc='center right')
-
-  plt.show()
-
+    plt.show()

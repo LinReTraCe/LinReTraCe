@@ -58,7 +58,7 @@ class wannier90calculation(DFTcalculation):
     self._readHr()
     logger.info("Files successfully read.")
 
-  def transformData(self):
+  def diagData(self):
     ''' calculate e(r), v(r), c(r) ? '''
     pass
     self._calcFermiLevel()
@@ -197,6 +197,7 @@ class wannier90hamiltonian(ElectronicStructure):
     We enforce one spin here for the time being
     Calculation of intra/intra band optical elements are left for someone else (:
     '''
+    raise NotImplementedError("Interface to Wannier90 H(k) Hamiltonianos not yet fully implemented")
     super(hamiltonian_wannier90, self).__init__()
     self.charge = charge
 
