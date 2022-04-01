@@ -8,8 +8,9 @@ import numpy as np
 import scipy.optimize
 
 from structure.inout import h5output
-from structure.hamiltonian import hamiltonian_wannier90
-from structure.hamiltonian import hamiltonian_matrix
+from structure.wann import wannier90calculation # full calculation
+from structure.wann import hamiltonian_wannier90 # wannier90 hk file
+from structure.wann import hamiltonian_matrix    # hk in matrix form
 
 '''
 ltb: Pre-processing of Wannier90 files and arbitrary H(k) structures in LRTC
@@ -30,9 +31,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
+ham = wannier90calculation('../t2g')
+ham.readData()
+
+
 # INTERFACE WITH hamiltonian file
-if True:
-  ham = hamiltonian_wannier90(hk_file='SVO_k20.hk', charge=1)
+if False:
+  ham = wannier90hamiltonian(hk_file='SVO_k20.hk', charge=1)
   fname = 'SVO.hdf5'
   h5output(fname, ham, ham, peierls=True)
 
@@ -45,8 +50,7 @@ if False:
   fname = 'SVO.hdf5'
   h5output(fname, ham, ham, peierls=True)
 
-
-plot = True
+plot = False
 
 if plot:
   try:
