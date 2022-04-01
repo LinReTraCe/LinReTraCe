@@ -101,80 +101,89 @@ class wannier90calculation(DFTcalculation):
     self.rvec = []
     logger.info("Reading: {}".format(self.fnnkp))
     with open(str(self.fnnkp),'r') as nnkp:
-      read_rvec = False
-      for line in nnkp:
-        if line.startswith('begin real_lattice'):
-          read_rvec = True
-          continue
-        if read_rvec:
-          rx, ry, rz = float(line[:12]), float(line[12:24]), float(line[24:36])
-          self.rvec.append([rx,ry,rz])
-        if len(self.rvec) == 3:
-          break
+      while ( not nnkp.readline().startswith('begin real_lattice')):
+        pass
+      for i in range(3):
+        line = nnkp.readline()
+        rx, ry, rz = float(line[:12]), float(line[12:24]), float(line[24:36])
+        self.rvec.append([rx,ry,rz])
+      if not nnkp.readline().startswith('end real_lattice'):
+        raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
     logger.info('   real_lattice: {}'.format(self.rvec))
 
     self.kvec = []
     with open(str(self.fnnkp),'r') as nnkp:
-      read_kvec = False
-      for line in nnkp:
-        if line.startswith('begin recip_lattice'):
-          read_kvec= True
-          continue
-        if read_kvec:
-          kx, ky, kz = float(line[:12]), float(line[12:24]), float(line[24:36])
-          self.kvec.append([kx,ky,kz])
-        if len(self.kvec) == 3:
-          break
+      while ( not nnkp.readline().startswith('begin recip_lattice')):
+        pass
+      for i in range(3):
+        line = nnkp.readline()
+        kx, ky, kz = float(line[:12]), float(line[12:24]), float(line[24:36])
+        self.kvec.append([kx,ky,kz])
+      if not nnkp.readline().startswith('end recip_lattice'):
+        raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
     logger.info('   recip_lattice: {}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
-      read_kp = False
-      self.nkp = None
       self.klist = []
-      for line in nnkp:
-        if line.startswith('begin kpoints'):
-          read_kp = True
-          continue
-        if read_kp:
-          if self.nkp is None:
-            self.nkp = int(line)
-            logger.info('{}'.format(self.nkp))
-          else:
-            kx, ky, kz = float(line[:14]), float(line[14:28]), float(line[28:42])
-            self.klist.append([kx,ky,kz])
-          if len(self.klist) == self.nkp:
-            break
+      while ( not nnkp.readline().startswith('begin kpoints')):
+        pass
+      self.nkp = int(nnkp.readline())
+      logger.info('   number of kpoints: {}'.format(self.nkp))
+      for i in range(self.nkp):
+        line = nnkp.readline()
+        kx, ky, kz = float(line[:14]), float(line[14:28]), float(line[28:42])
+        self.klist.append([kx,ky,kz])
+      if not nnkp.readline().startswith('end kpoints'):
+        raise IOError('Wannier90 {} is not at the end of kpoints after reading'.format(str(self.fnnkp)))
     self.klist = np.array(self.klist, dtype=np.float64)
-    logger.info('   number of kpoints: {}'.format(self.nkp))
 
     with open(str(self.fnnkp),'r') as nnkp:
-      read_proj = False
-      self.nproj = None
+      while ( not nnkp.readline().startswith('begin projections')):
+        pass
+      self.nproj = int(nnkp.readline())
+      logger.info('   number of projections: {}'.format(self.nproj))
       self.plist = []
-      skip = False
-      for line in nnkp:
-        if line.startswith('begin projections'):
-          read_proj = True
-          continue
-        if skip:
-          skip = False
-          continue
-        if read_proj:
-          if self.nproj is None:
-            self.nproj = int(line)
-          else:
-            rx, ry, rz = float(line[:10]), float(line[10:21]), float(line[21:32])
-            skip = True # only every other line
-            self.plist.append([rx,ry,rz])
-          if len(self.plist) == self.nproj:
-            break
+      for i in range(self.nproj):
+        line = nnkp.readline()
+        rx, ry, rz = float(line[:10]), float(line[10:21]), float(line[21:32])
+        self.plist.append([rx,ry,rz])
+        nnkp.readline() # skip the one after
+      if not nnkp.readline().startswith('end projections'):
+        raise IOError('Wannier90 {} is not at the end of projections after reading'.format(str(self.fnnkp)))
     self.plist = np.array(self.plist, dtype=np.float64)
-    logger.info('   number of projections: {}'.format(self.nproj))
 
   def _readHr(self):
-    pass
+    logger.info("Reading: {}".format(self.fhr))
+
+    with open(str(self.fhr),'r') as hr:
+      hr.readline() # 'written on ...' line
+      nproj = int(hr.readline())
+      self.nrp = int(hr.readline())
+      logger.info('   number of rpoints: {}'.format(self.nrp))
+      if (self.nproj != nproj):
+        raise IOError('Inconsistent number of projections between case.nnkp anc case_hr.dat')
+
+      self.rmultiplicity = []
+      while (len(self.rmultiplicity) != self.nrp):
+        line = hr.readline()
+        mult = line.split() # I think this is save
+        for imult in mult:
+          self.rmultiplicity.append(imult)
+      self.rmultiplicity = np.array(self.rmultiplicity, dtype=np.float64)
+
+      self.hrlist = []
+      self.rlist = []
+      for ir in range(self.nrp):
+        for ip in range(self.nproj**2):
+          line = hr.readline()
+          rx, ry, rz, p1, p2 = [int(line[0+i*5:5+i*5]) for i in range(5)]
+          tr, tj = float(line[25:37]), float(line[37:])
+
+      if hr.readline() != "": # exactly at the EOF
+        raise IOError('Wannier90 {} is not at the EOF after reading'.format(str(self.fhr)))
+
 
 
 class wannier90hamiltonian(ElectronicStructure):

@@ -9,7 +9,7 @@ import scipy.optimize
 
 from structure.inout import h5output
 from structure.wann import wannier90calculation # full calculation
-from structure.wann import hamiltonian_wannier90 # wannier90 hk file
+from structure.wann import wannier90hamiltonian # wannier90 hk file
 from structure.wann import hamiltonian_matrix    # hk in matrix form
 
 '''
