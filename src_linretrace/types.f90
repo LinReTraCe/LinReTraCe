@@ -25,7 +25,7 @@ module Mtypes
     logical :: lScatteringText       ! do we get the scattering information from a text file
     logical :: lInterBandQuantities  ! calc inter band response
     logical :: lIntraBandQuantities  ! calc intra band response
-    logical :: lEnergyOutput  ! output renormalized energies
+    ! logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response
     logical :: lBoltzmannFermi! calc boltzmann response with Fermi function or PolyGamma
     logical :: lScissors      ! apply gap widening

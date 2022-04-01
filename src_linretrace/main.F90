@@ -80,10 +80,6 @@ program main
   call mpi_initialize()
   if (myid.eq.master) call main_greeting(stdout)
 
-#ifdef MPI
-  call mpi_barrier(mpi_comm_world, mpierr)
-#endif
-
   call read_config(algo, edisp, sct, temp, pot, imp)
   call check_files(algo)
 
@@ -570,10 +566,6 @@ program main
   endif
   deallocate(kmesh%multiplicity)
 
-#ifdef MPI
-  call mpi_barrier(mpi_comm_world, mpierr)
-#endif
-
   ! MAIN LOOP
   do iStep=iStart,iEnd,algo%step_dir
     ! run time information
@@ -843,11 +835,14 @@ program main
       endif
     endif
 
+    ! deprecated for the time being : we only have the current k-range
+    ! would require a all to one mpi communication
+    ! --
     ! output the renormalized energies defined by Z*(ek - mu)
     ! for each temperature point
-    if (myid.eq.master .and. algo%lEnergyOutput) then
-      call output_energies(algo, edisp, kmesh, sct, info)
-    endif
+    ! if (myid.eq.master .and. algo%lEnergyOutput) then
+    !   call output_energies(algo, edisp, kmesh, sct, info)
+    ! endif
 
     call cpu_time(tfinish)
     timings(6) = timings(6) + (tfinish - tstart) ! mpi summation + response output

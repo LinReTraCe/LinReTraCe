@@ -68,13 +68,8 @@ module Mmpi_org
   end subroutine mpi_genkstep
 
 
-!!! COMMUNICATION ROUTINES
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_DVECSCAT
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! scatters a double precision vector
 ! across processors
-
 #ifdef MPI
   subroutine mpi_dvecscat(dvec, n, sub_dvec, nk)
    implicit none
@@ -96,9 +91,6 @@ module Mmpi_org
 
   end subroutine mpi_dvecscat
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_QVECSCAT
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! scatters a quad precision vector
 ! across processors
   subroutine mpi_Qvecscat(qvec, n, sub_qvec, nk)
@@ -120,22 +112,14 @@ module Mmpi_org
 
   end subroutine mpi_Qvecscat
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! SUBROUTINE MPI_GENKSTEP
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  SUBROUTINE MPI_REDUCE_QUAD
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine mpi_reduce_quad(qp0,qp1)
-
     implicit none
 
     !input/output
     real(16) :: qp0,qp1
     !parameters
     real(16) :: QCUT
-    parameter(QCUT=1.Q14)  ! relevant digits  14?
+    parameter(QCUT=1.Q14)  ! relevant digits
     !tmps
     real(16) :: qtmp,qtmp2,qtmp3
     !Transferrables
@@ -197,15 +181,15 @@ module Mmpi_org
 !    endif
 
 ! GATHER INT0 ... could do gather instead of allgather... but dont wanna recommunicate the result...
-    call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
+    ! call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
     call MPI_ALLGATHER(INT0,1,MPI_INTEGER8,INT0_T,1,MPI_INTEGER8,MPI_COMM_WORLD,mpierr)
 
 ! GATHER IEXP
-    call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
+    ! call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
     call MPI_ALLGATHER(IEXP,1,MPI_INTEGER8,IEXP_T,1,MPI_INTEGER8,MPI_COMM_WORLD,mpierr)
 
 ! GATHER DP0
-    call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
+    ! call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
     call MPI_ALLGATHER(DP0,1,MPI_DOUBLE_PRECISION,DP0_T,1,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD,mpierr)
 
 !    call MPI_BARRIER( MPI_COMM_WORLD, mpierr )
@@ -260,10 +244,6 @@ module Mmpi_org
     return
   end subroutine mpi_reduce_quad
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  SUBROUTINE MPI_BCAST_QUAD_OLD
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine mpi_bcast_quad_old(qp0)!,qp1)
     implicit none
     real(16) :: qptmp,qp0!,qp1
@@ -285,10 +265,6 @@ module Mmpi_org
     return
   end subroutine mpi_bcast_quad_old
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  SUBROUTINE MPI_BCAST_QUAD
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine mpi_bcast_quad(qp0)
     implicit none
 

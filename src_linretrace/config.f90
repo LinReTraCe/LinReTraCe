@@ -125,7 +125,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   algo%lRedoMudft     = .false.
 
-  algo%lEnergyOutput  = .false.
+  ! algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
   algo%lBoltzmannFermi= .true.       ! deprecated flag that switches between boltzmann and psi1 approx -- keep true always
   algo%fullOutput     = 0 ! disabled
@@ -161,14 +161,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(4) = 'Bandgap'
   dictionary(5) = 'ElectronOccupation'
   dictionary(6) = 'FullOutput'
-  dictionary(7) = 'EnergyOutput'
-  dictionary(8) = 'QuadResponse'
-  dictionary(9) = 'Interband'
-  dictionary(10) = 'Intraband'
-  dictionary(11) = 'Boltzmann'
-  dictionary(12) = 'BFieldMode'
-  dictionary(13) = 'FermiOccupation'
-  dictionary(14) = 'NominalDoping'
+  dictionary(7) = 'QuadResponse'
+  dictionary(8) = 'Interband'
+  dictionary(9) = 'Intraband'
+  dictionary(10) = 'Boltzmann'
+  dictionary(11) = 'BFieldMode'
+  dictionary(12) = 'FermiOccupation'
+  dictionary(13) = 'NominalDoping'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -202,8 +201,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
   call bool_find('NominalDoping', algo%lNominalDoping, search_start, search_end, found)
 
-  call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
+  ! call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   ! call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
   call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)

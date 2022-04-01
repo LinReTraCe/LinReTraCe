@@ -12,7 +12,6 @@ ElectronOccupation = (default = None)                  # Adjust system charge ..
 FullOutput         = (default = None)                  # full: output momentum and band resolved responses
                                                        # ksum: output momentum summed, band resolved responses
                                                        # bsum: output momentum resolved, band summed responses
-EnergyOutput       = (default = F)                     # output renomralized, momentum and band resolved energy array for each step
 QuadResponse       = (default = F)                     # calculate quad precision responses
 Interband          = (default = T)                     # calculate Interband quantities
 Intraband          = (default = T)                     # calculate Intraband quantities

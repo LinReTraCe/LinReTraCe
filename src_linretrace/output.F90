@@ -43,7 +43,7 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_attribute(ifile, '.config', 'interbandquantities', algo%lInterBandQuantities)
   call hdf5_write_attribute(ifile, '.config', 'intrabandquantities', algo%lIntraBandQuantities)
   call hdf5_write_attribute(ifile, '.config', 'fulloutput', algo%fullOutput)
-  call hdf5_write_attribute(ifile, '.config', 'energyOutput', algo%lEnergyOutput)
+  ! call hdf5_write_attribute(ifile, '.config', 'energyOutput', algo%lEnergyOutput)
   call hdf5_write_attribute(ifile, '.config', 'boltzmann', algo%lBoltzmann)
   call hdf5_write_attribute(ifile, '.config', 'scissors', algo%lScissors)
   call hdf5_write_attribute(ifile, '.config', 'steps', algo%steps)
@@ -176,36 +176,36 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
 
 end subroutine
 
-subroutine output_energies(algo, edisp, kmesh, sct, info)
-  implicit none
-  type(algorithm)  :: algo
-  type(energydisp) :: edisp
-  type(kpointmesh) :: kmesh
-  type(scattering) :: sct
-  type(runinfo)    :: info
+! subroutine output_energies(algo, edisp, kmesh, sct, info)
+!   implicit none
+!   type(algorithm)  :: algo
+!   type(energydisp) :: edisp
+!   type(kpointmesh) :: kmesh
+!   type(scattering) :: sct
+!   type(runinfo)    :: info
 
-  integer(hid_t)     :: ifile
-  real(8), allocatable :: enrgy(:,:,:)
-  character(len=128) :: string
+!   integer(hid_t)     :: ifile
+!   real(8), allocatable :: enrgy(:,:,:)
+!   character(len=128) :: string
 
-  allocate(enrgy(edisp%nband_max,kmesh%nkp,edisp%ispin))
+!   allocate(enrgy(edisp%nband_max,kmesh%nkp,edisp%ispin))
 
-  enrgy = sct%zqp * (edisp%band - info%mu)
+!   enrgy = sct%zqp * (edisp%band - info%mu)
 
-  write(string,'(I6.6,"/energies")') info%iStep
-  call hdf5_open_file(algo%output_file, ifile)
-  call hdf5_write_data(ifile, string, enrgy)
+!   write(string,'(I6.6,"/energies")') info%iStep
+!   call hdf5_open_file(algo%output_file, ifile)
+!   call hdf5_write_data(ifile, string, enrgy)
 
-  write(string,'(I6.6)') info%iStep
-  call hdf5_write_attribute(ifile, string, "temperature", info%temp)
-  call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
-  call hdf5_write_attribute(ifile, string, "chemicalpotential", info%mu)
+!   write(string,'(I6.6)') info%iStep
+!   call hdf5_write_attribute(ifile, string, "temperature", info%temp)
+!   call hdf5_write_attribute(ifile, string, "invtemperature", info%beta)
+!   call hdf5_write_attribute(ifile, string, "chemicalpotential", info%mu)
 
-  call hdf5_close_file(ifile)
+!   call hdf5_close_file(ifile)
 
-  deallocate(enrgy)
+!   deallocate(enrgy)
 
-end subroutine
+! end subroutine
 
 
 subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
