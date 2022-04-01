@@ -716,13 +716,16 @@ class LRTCoutput(object):
     Get the temperature and inverse temperature axis
     Also save the number of temperature steps
     '''
-    with h5py.File(self.fname, 'r') as h5:
-      self.temp    = h5['.quantities/tempAxis'][()]
-      self.invtemp = h5['.quantities/betaAxis'][()]
-      self.carrier = h5['.quantities/carrier'][()]
-      self.mu      = h5['.quantities/mu'][()]
-      self.mudft   = h5['.structure/mudft'][()]
-      self.nT      = self.temp.shape[0]
+    try:
+      with h5py.File(self.fname, 'r') as h5:
+        self.temp    = h5['.quantities/tempAxis'][()]
+        self.invtemp = h5['.quantities/betaAxis'][()]
+        self.carrier = h5['.quantities/carrier'][()]
+        self.mu      = h5['.quantities/mu'][()]
+        self.mudft   = h5['.structure/mudft'][()]
+        self.nT      = self.temp.shape[0]
+    except:
+      raise IOError('Incomplete LRTC output file')
 
     if self.mode == 'temp':
       if altaxis:
