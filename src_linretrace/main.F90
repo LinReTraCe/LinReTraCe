@@ -39,6 +39,7 @@ program main
 
   integer :: is, ig, iT, ik, iimp, imu, icore
   integer :: niitact
+  integer :: nkred
   integer :: iStart, iEnd, iStep
   real(8) :: ndevact
   real(16):: ndevactQ
@@ -123,6 +124,15 @@ program main
   endif
 #endif
 
+  ! define kpoint weights on the MPI range
+  allocate(kmesh%weightQ(ikstr:ikend))
+  allocate(kmesh%weight(ikstr:ikend))
+  nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
+  do ik=ikstr,ikend
+    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / nkred
+    kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
+  enddo
+
   ! read the energies and diagonal optical elements
   if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
     do icore = 0, nproc-1
@@ -137,7 +147,7 @@ program main
     call read_energy(algo,edisp)
   endif
 
-
+  ! save this values to print the old vs new information in the output summary
   allocate(gap_file(edisp%ispin))
   gap_file = edisp%gap
   gapped_file = edisp%gapped_complete
@@ -372,15 +382,14 @@ program main
     endif
   endif
 
-  call hdf5_open_file(algo%input_energies,   ifile_energy,  rdonly=.true.)
-
+  ! this is kept open during the run, since we access it for each step once
   if (algo%lScatteringFile) then
     call hdf5_open_file(algo%input_scattering_hdf5, ifile_scatter_hdf5, rdonly=.true.)
   endif
 
-
   ! load the optical elements for each processes k-range
   if (algo%lInterbandQuantities) then
+    call hdf5_open_file(algo%input_energies, ifile_energy, rdonly=.true.)
     allocate(edisp%Mopt(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
                                        edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
     allocate(edisp%Moptk(edisp%iOptical,edisp%nbopt_min:edisp%nbopt_max, &
@@ -391,6 +400,7 @@ program main
       edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
     enddo
     deallocate(edisp%Moptk)
+    call hdf5_close_file(ifile_energy)
   endif
 
   if (myid .eq. master) then
@@ -543,11 +553,6 @@ program main
   timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
   tstart = tfinish
 
-#ifdef MPI
-  call mpi_barrier(mpi_comm_world, mpierr)
-#endif
-
-  ! MAIN LOOP
   if (algo%lTMODE  .and. .not. (algo%lDebug .and. (index(algo%dbgstr,"LoopReverse") .ne. 0)) .or. &
      (algo%lMUMODE .and. algo%lDebug .and. (index(algo%dbgstr,"LoopReverse") .ne. 0))) then
     iStart = algo%steps
@@ -563,8 +568,13 @@ program main
     call hdf5_create_file(algo%output_file)
     call output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   endif
+  deallocate(kmesh%multiplicity)
 
+#ifdef MPI
+  call mpi_barrier(mpi_comm_world, mpierr)
+#endif
 
+  ! MAIN LOOP
   do iStep=iStart,iEnd,algo%step_dir
     ! run time information
     info%iStep   = iStep
@@ -898,7 +908,6 @@ program main
 
 
 
-  call hdf5_close_file(ifile_energy)
   if (algo%lScatteringFile) then
     call hdf5_close_file(ifile_scatter_hdf5)
   endif

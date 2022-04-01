@@ -34,19 +34,23 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
   real(8) :: target_zero1, target_zero2, target_zero
 
   real(8) :: emin, emax
-  real(8) :: minkweight
   integer :: is, iband
 
-
-  minkweight = minval(kmesh%weight)
   ! root finding purely for a DFT band structure
   ! i.e. T = 0
   ! bisection
-  mu1 = minval(edisp%band) - 0.1
+  mu1 = minval(edisp%band)
+  mu2 = maxval(edisp%band)
+#ifdef MPI
+  call MPI_allreduce(MPI_IN_PLACE, mu1, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, mpierr)
+  call MPI_allreduce(MPI_IN_PLACE, mu2, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+#endif
+  mu1 = mu1-0.01
+  mu2 = mu2+0.01
+
   call occ_DFT(mu1,occ1,edisp,kmesh)
   target_zero1 = edisp%nelect - occ1
 
-  mu2 = maxval(edisp%band) + 0.1
   call occ_DFT(mu2,occ2,edisp,kmesh)
   target_zero2 = edisp%nelect - occ2
 
@@ -56,8 +60,8 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
      call occ_DFT(mu,occ,edisp,kmesh)
      target_zero = edisp%nelect - occ
 
-     if (abs(target_zero) < minkweight) exit ! if we hit the band gap
-     if ((mu2-mu1)*10.d0 < minkweight) exit ! if converged
+     if (abs(target_zero) < kmesh%minimal_weight) exit ! if we hit the band gap
+     if ((mu2-mu1)*10.d0 < kmesh%minimal_weight) exit ! if converged
 
      if (target_zero.gt.0.q0) then
         mu1=mu
@@ -67,7 +71,6 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
         target_zero2=target_zero
      endif
   enddo
-
 
   ! Detect if we are gapped
   edisp%gapped = .true.
@@ -837,30 +840,21 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   real(8) :: occ_loc
   integer :: is, ik, iband
-  complex(8), allocatable :: to_evaluate(:,:,:)
-  real(8), allocatable    :: occupation(:,:,:)
   !external variables
   complex(8), external :: wpsipg
 
-  allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
-  to_evaluate = 0.5d0 + info%beta2p * &
-                (sct%gam(:,ikstr:ikend,:) - ci*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-
+  occ_loc = 0.d0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = 0.5d0 + aimag(wpsipg(to_evaluate(iband,ik,is),0))/pi
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+        occ_loc = occ_loc + (0.5d0 + &
+        aimag(wpsipg(0.5d0 + info%beta2p * &
+             (sct%gam(iband,ik,is) - ci*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/pi) &
+        * kmesh%weight(ik)
       enddo
     enddo
   enddo
-
-  deallocate(to_evaluate)
-  occ_loc = sum(occupation)
-  deallocate(occupation)
 
 #ifdef MPI
   call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
@@ -886,32 +880,21 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   !local variables
   real(16) :: occ_loc
   integer  :: iband, is, ik
-
-  complex(16), allocatable :: to_evaluate(:,:,:)
-  real(16), allocatable    :: occupation(:,:,:)
   !external variables
   complex(16), external :: wpsipghp
 
-
-  allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
-  to_evaluate = 0.5q0 + info%beta2pQ * &
-                (sct%gam(:,ikstr:ikend,:) - ciQ*sct%zqp(:,ikstr:ikend,:)*(edisp%band(:,ikstr:ikend,:) - mu))
-
+  occ_loc = 0.q0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = 0.5q0 + aimag(wpsipghp(to_evaluate(iband,ik,is),0))/piQ
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+        occ_loc = occ_loc + (0.5q0 + &
+        aimag(wpsipghp(0.5q0 + info%beta2pQ * &
+             (sct%gam(iband,ik,is) - ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ) &
+        * kmesh%weightQ(ik)
       enddo
     enddo
   enddo
-
-  deallocate(to_evaluate)
-  occ_loc = sum(occupation)
-  deallocate(occupation)
 
 #ifdef MPI
   call MPI_reduce_quad(occ_loc, occ_tot)
@@ -937,22 +920,16 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   real(8) :: occ_loc
   integer :: is, ik, iband
 
-  real(8), allocatable :: occupation(:,:,:)
-
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
+  occ_loc = 0.d0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta)
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weight(ik)
+        occ_loc = occ_loc + &
+        fermi(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%beta) * kmesh%weight(ik)
       enddo
     enddo
   enddo
-
-  occ_loc = sum(occupation)
-  deallocate(occupation)
 
 #ifdef MPI
   call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
@@ -975,30 +952,18 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   type(runinfo)    :: info
   type(algorithm)  :: algo
 
-  logical:: ingap
-  !local variables
-
   real(16) :: occ_loc
   integer :: is, ik, iband
-  real(16) :: locecc, lochole
 
-  real(16), allocatable :: electrons(:,:,:)
-  real(16), allocatable :: holes(:,:,:)
-  real(16), allocatable :: occupation(:,:,:)
-
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-
+  occ_loc = 0.q0
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        occupation(iband,ik,is) = fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ)
-        occupation(iband,ik,is) = occupation(iband,ik,is) * kmesh%weightQ(ik)
+        occ_loc = occ_loc + &
+        fermi_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu), info%betaQ) * kmesh%weightQ(ik)
       enddo
     enddo
   enddo
-  occ_loc = sum(occupation)
-
-  deallocate(occupation)
 
 #ifdef MPI
   call mpi_reduce_quad(occ_loc, occ_tot) ! custom quad reduction
@@ -1248,23 +1213,18 @@ subroutine occ_DFT(mu, occ_tot, edisp, kmesh)
 
   real(8) :: occ_loc
   integer :: is, ik, iband
-  real(8), allocatable :: occupation(:,:,:)
-  allocate(occupation(edisp%nband_max, ikstr:ikend, edisp%ispin))
-  occupation = 0.d0
 
+  occ_loc = 0.d0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
         if (edisp%band(iband,ik,is) < mu) then
-          occupation(iband,ik,is) = kmesh%weight(ik)
+          occ_loc = occ_loc + kmesh%weight(ik)
         endif
       enddo
     enddo
   enddo
-
-  occ_loc = sum(occupation)
-  deallocate(occupation)
 
 #ifdef MPI
   call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)

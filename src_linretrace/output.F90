@@ -18,9 +18,10 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   type(scattering)  :: sct
   type(impurity)    :: imp
 
-  character(len=256) :: string
-  integer(hid_t)     :: ifile
-  integer            :: iimp
+  character(len=256)   :: string
+  integer(hid_t)       :: ifile
+  integer              :: iimp
+  real(8), allocatable :: weights(:)
 
   call hdf5_open_file(algo%output_file, ifile)
   call hdf5_write_attribute(ifile, '/', 'identifier', 'LRTCoutput')
@@ -96,14 +97,19 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_data(ifile, ".structure/charge",  edisp%nelect) ! this might have been changed by config
   call hdf5_write_data(ifile, '.structure/mudft',   pot%mu_dft)    ! this also might have changed
   call hdf5_write_data(ifile, '.structure/nkp',     kmesh%nkp)
-  call hdf5_write_data(ifile, '.structure/weights', kmesh%weight)
 
-  if (edisp%ispin == 1) then
-    call hdf5_write_data(ifile, "/.structure/energies", edisp%band(:,:,1))
-  else
-    call hdf5_write_data(ifile, "/.structure/energies/up", edisp%band(:,:,1))
-    call hdf5_write_data(ifile, "/.structure/energies/dn", edisp%band(:,:,2))
-  endif
+  allocate(weights(kmesh%nkp))
+  weights = kmesh%multiplicity / real(kmesh%nkp,8) ! since we only have them on the MPI range saved
+  call hdf5_write_data(ifile, '.structure/weights', weights)
+  deallocate(weights)
+
+  ! remove this for the time being
+  ! if (edisp%ispin == 1) then
+  !   call hdf5_write_data(ifile, "/.structure/energies", edisp%band(:,:,1))
+  ! else
+  !   call hdf5_write_data(ifile, "/.structure/energies/up", edisp%band(:,:,1))
+  !   call hdf5_write_data(ifile, "/.structure/energies/dn", edisp%band(:,:,2))
+  ! endif
 
   ! output bandgap information to have access to it
   ! in the general output file

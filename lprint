@@ -115,15 +115,15 @@ if __name__ == '__main__':
         outobj.outputList(full=True)
       elif cmd == 'config':
         outobj.outputConfig()
-      elif cmd == 'dos':
-        if cmdlength == 1:
-          outobj.outputDOS(args.plot)
-        else:
-          broadening = float(args.output[1])
-          outobj.outputDOS(args.plot, broadening)
-        if args.plot:
-          plt.title(outobj.fname)
-          plt.show()
+      # elif cmd == 'dos':
+      #   if cmdlength == 1:
+      #     outobj.outputDOS(args.plot)
+      #   else:
+      #     broadening = float(args.output[1])
+      #     outobj.outputDOS(args.plot, broadening)
+      #   if args.plot:
+      #     plt.title(outobj.fname)
+      #     plt.show()
       else:
         ''' response / quantity plotting / output '''
         if cmdlength == 1:

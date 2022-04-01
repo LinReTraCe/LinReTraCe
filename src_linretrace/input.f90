@@ -31,17 +31,13 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
   ! mesh information
   call hdf5_read_data(ifile, "/.kmesh/nkp",         kmesh%nkp)
+  call hdf5_read_data(ifile, "/.kmesh/nkx",         kmesh%nkx)
+  call hdf5_read_data(ifile, "/.kmesh/nky",         kmesh%nky)
+  call hdf5_read_data(ifile, "/.kmesh/nkz",         kmesh%nkz)
   call hdf5_read_data(ifile, "/.kmesh/weightsum",   kmesh%weightsum)
-  call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
+  ! call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
   call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
-
-
-  ! achieve proper quad precision in weightQ
-  allocate(kmesh%weightQ(kmesh%nkp))
-  multiplicity_sum = sum(kmesh%multiplicity)
-  do ik=1,kmesh%nkp
-    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / multiplicity_sum
-  enddo
+  kmesh%minimal_weight = minval(kmesh%multiplicity) / real(kmesh%nkx*kmesh%nky*kmesh%nkz,8)
 
   ! band information + charge
   call hdf5_read_data(ifile, "/.bands/mu",             pot%mu_dft_file)
