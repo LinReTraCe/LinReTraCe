@@ -225,32 +225,32 @@ class w2kcalculation(DFTcalculation):
 
     if self.calctype == 1: # unpolarized
       self.spinorbit = False
-      self.weightsum = 2.
+      self.weightsum = 2
       self.spins = 1
       self.fenergyaccess = [self.fenergy]
       self.fmomentaccess = [self.fmoment]
     elif self.calctype == 2: # spin-polarized
       self.spinorbit = False
-      self.weightsum = 1.
+      self.weightsum = 1
       self.spins = 2
       self.fenergyaccess = [self.fenergyup, self.fenergydn]
       self.fmomentaccess = [self.fmomentup, self.fmomentdn]
     elif self.calctype == 3: # spin-orbit with inversion
       self.spinorbit = True
-      self.weightsum = 1.    # this is 1 because w2k outputs essentially double the number of bands per k-point
+      self.weightsum = 1    # this is 1 because w2k outputs essentially double the number of bands per k-point
                              # in this kind of calculation
       self.spins = 2
       self.fenergyaccess = [self.fenergyso]
       self.fmomentaccess = [self.fmoment]
     elif self.calctype == 4: # spin-orbit without inversion
       self.spinorbit = True
-      self.weightsum = 1.
+      self.weightsum = 1
       self.spins = 2
       self.fenergyaccess = [self.fenergyso]
       self.fmomentaccess = [self.fmomentup]
     elif self.calctype == 5: # spin-polarized + spin-orbit
       self.spinorbit = True
-      self.weightsum = 1.
+      self.weightsum = 1
       self.spins = 2
       self.fenergyaccess = [self.fenergysoup]
       self.fmomentaccess = [self.fmomentup]
@@ -426,18 +426,18 @@ class w2kcalculation(DFTcalculation):
         if ("END" in line):
           break
         else:
-          kx   = line[10:20]
-          ky   = line[20:30]
-          kz   = line[30:40]
-          mult = line[50:55]
+          kx   = float(line[10:20])
+          ky   = float(line[20:30])
+          kz   = float(line[30:40])
+          mult = int(float(line[50:55]))
           myklist.append([kx,ky,kz])
           mymult.append(mult)
       else: # if we did not find the break condition
         raise IOError('Wien2k {}: Did not find END statement.'.format(str(self.fklist)))
 
-    self.kpoints = np.array(myklist).astype(np.float64)
-    self.multiplicity = np.array(mymult).astype(np.float64)
-    self.weights = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
+    self.kpoints = np.array(myklist, dtype=np.float64)
+    self.multiplicity = np.array(mymult, dtype=int)
+    self.weights = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
     self.nkp = self.kpoints.shape[0]
     self.irreducible = not (self.nkx*self.nky*self.nkz == self.nkp)
 
@@ -795,7 +795,7 @@ class vaspcalculation(DFTcalculation):
       # sum_i mult_i = nkx * nky * nkz
 
       self.weights = np.array(weightlist, dtype=np.float64) # always normalized to 1
-      self.multiplicity = np.around(self.weights * self.nkx * self.nky * self.nkz)
+      self.multiplicity = np.around(self.weights * self.nkx * self.nky * self.nkz).astype(int)
 
       self.weights *= self.weightsum # adjust for spin unpolarized calculations
 

@@ -60,7 +60,7 @@ class Model(ElectronicStructure, ABC):
     self.nkp            = self.nkx*self.nky*self.nkz
     self.charge         = None
     self.weights        = None
-    self.weightsum      = 2. # always spin-unpolarized (paramagnetic)
+    self.weightsum      = 2  # always spin-unpolarized (paramagnetic)
     self.multiplicity   = None
 
     self.energyBandMax  = 1
@@ -407,8 +407,8 @@ class tightbinding(Model):
     logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
 
     ''' from the mapping and counts thereof generate multiplicity and weights '''
-    self.multiplicity = np.array(counts, dtype=np.float64)
-    self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
+    self.multiplicity = np.array(counts, dtype=int)
+    self.weights      = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
 
     self.kpoints = grid[unique]
     self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
@@ -512,7 +512,7 @@ class tightbinding(Model):
       self.kpoints = kpoints
       self.nkp = self.kpoints.shape[0]
       self.weights = np.full((self.nkp,), fill_value=2./self.nkp, dtype=np.float64)
-      self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
+      self.multiplicity = np.ones((self.nkp,), dtype=int)
 
   def _checkFile(self):
     '''

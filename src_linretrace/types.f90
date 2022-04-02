@@ -51,10 +51,10 @@ module Mtypes
   ! information about the k-points which is necessary for us
   ! that is: number of k-points and their weights
   type kpointmesh
-    real(8)               :: weightsum
+    integer               :: weightsum
     real(8), allocatable  :: weight(:)
     real(16), allocatable :: weightQ(:)
-    real(8), allocatable  :: multiplicity(:)
+    integer, allocatable  :: multiplicity(:)
     real(8)               :: minimal_weight ! smalles occuring weight
     integer               :: nkp
     integer               :: nkx

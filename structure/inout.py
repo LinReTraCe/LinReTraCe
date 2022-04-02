@@ -48,7 +48,11 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
     h5out['.kmesh/nky']           = escalc.nky
     h5out['.kmesh/nkz']           = escalc.nkz
     h5out['.kmesh/weights']       = escalc.weights
+    if type(escalc.weightsum) is not int:
+      raise IOError('Weightsum must be integer')
     h5out['.kmesh/weightsum']     = escalc.weightsum
+    if escalc.multiplicity.dtype != int:
+      raise IOError('Multiplicity must be array of integers')
     h5out['.kmesh/multiplicity']  = escalc.multiplicity
     h5out['.kmesh/points']        = escalc.kpoints
     h5out['.kmesh/irreducible']   = escalc.irreducible

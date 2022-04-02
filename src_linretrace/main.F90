@@ -125,7 +125,8 @@ program main
   allocate(kmesh%weight(ikstr:ikend))
   nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
   do ik=ikstr,ikend
-    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / nkred
+    ! these integer statements here ARE NECESSARY TO PRODCE THE REQUIRED ACCURACY
+    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
     kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
   enddo
 
