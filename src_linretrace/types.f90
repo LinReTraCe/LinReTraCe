@@ -73,9 +73,12 @@ module Mtypes
     integer :: nbopt_max                     ! number of bands (interval) included in the optical matrix elements
     integer :: iSpin                         ! number of spins
     logical :: lBandShift   ! do we get band_shifts from the scattering file?
-    logical :: lFullMoments  ! do we have the full optical elements
-    logical :: lIntraMoments ! do we have the intra optical elements
-    logical :: lBfieldMoments ! do we have the magnetic intra optical elements
+
+    logical :: lFullMoments   ! full optical elements
+    logical :: lBFullMoments  ! magnetic full optical elements
+    logical :: lIntraMoments  ! intra optical elements
+    logical :: lBIntraMoments ! magnetic intra optical elements
+
     integer :: iOptical     ! number of optical elements 3 6 or 9
     real(8) :: nelect_file   ! electrons given by energy file
     real(8) :: nelect_config ! number of electrons given by config file
@@ -114,6 +117,9 @@ module Mtypes
     ! are loaded in one go
     real(8), allocatable    :: MoptDiag(:,:,:,:) ! 3..9, nband, spin, k-points
 
+    ! same thing for the magnetic things
+    real(8), allocatable    :: MBoptk(:,:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin, krange
+    real(8), allocatable    :: MBopt(:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin
     ! diagonal magnetic optical elements
     real(8), allocatable    :: MBoptDiag(:,:,:,:,:,:) ! 3, 3, 3, nband, spin, k-points
   end type

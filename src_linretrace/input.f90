@@ -221,9 +221,10 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   endif
 
   ! set logical flags whether specific dataset exist in the energy file
-  edisp%lIntraMoments = .false.
-  edisp%lFullMoments = .false.
-  edisp%lBfieldMoments = .false.
+  edisp%lIntraMoments  = .false.
+  edisp%lFullMoments   = .false.
+  edisp%lBIntraMoments = .false.
+  edisp%lBFullMoments  = .false.
 
   if (edisp%ispin == 1) then
     if (.not. hdf5_dataset_exists(ifile, "/energies")) then
@@ -236,10 +237,13 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
       deallocate(irank1arr)
     endif
     if (hdf5_dataset_exists(ifile, "/momentsDiagonalBfield")) then
-      edisp%lBfieldMoments = .true.
+      edisp%lBIntraMoments = .true.
     endif
     if (hdf5_dataset_exists(ifile, "/kPoint/0000000001/moments")) then
       edisp%lFullMoments = .true.
+    endif
+    if (hdf5_dataset_exists(ifile, "/kPoint/0000000001/momentsBfield")) then
+      edisp%lBFullMoments = .true.
     endif
   else if (edisp%ispin == 2) then
     if (.not. (hdf5_dataset_exists(ifile, "/up/energies") .and. &
@@ -255,11 +259,15 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
     endif
     if (hdf5_dataset_exists(ifile, "/up/momentsDiagonalBfield") .and. &
         hdf5_dataset_exists(ifile, "/dn/momentsDiagonalBfield")) then
-      edisp%lBfieldMoments = .true.
+      edisp%lBIntraMoments = .true.
     endif
     if (hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/moments") .and. &
         hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/moments")) then
       edisp%lFullMoments = .true.
+    endif
+    if (hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/momentsBfield") .and. &
+        hdf5_dataset_exists(ifile, "/up/kPoint/0000000001/momentsBfield")) then
+      edisp%lBFullMoments = .true.
     endif
   else
     call stop_with_message(stderr, 'Provided number of spins in EnergyFile invalid')
@@ -284,7 +292,7 @@ subroutine read_energy(algo, edisp)
   if (edisp%lIntraMoments) then
     allocate(edisp%MoptDiag(edisp%iOptical, edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
   endif
-  if (edisp%lBfieldMoments) then
+  if (edisp%lBIntraMoments) then
     allocate(edisp%MBoptdiag(3, 3, 3, edisp%nband_max, edisp%ispin, ikstr:ikend))
   endif
 
@@ -294,7 +302,7 @@ subroutine read_energy(algo, edisp)
     call hdf5_read_data(ifile, "/energies", drank2arr)
     edisp%band_file(:,:,1)     = drank2arr(:,ikstr:ikend)
     deallocate(drank2arr)
-    if (edisp%lBfieldMoments) then
+    if (edisp%lBIntraMoments) then
       ! call hdf5_read_data(ifile, "/derivatives",   drank3arr)
       ! edisp%band_dk(:,:,:,1) = drank3arr
       ! deallocate(drank3arr)
@@ -318,7 +326,7 @@ subroutine read_energy(algo, edisp)
     edisp%band_file(:,:,2)     = drank2arr(:,ikstr:ikend)
     deallocate(drank2arr)
 
-    if (edisp%lBfieldMoments) then
+    if (edisp%lBIntraMoments) then
       ! call hdf5_read_data(ifile, "/up/derivatives",  drank3arr)
       ! edisp%band_dk(:,:,:,1) = drank3arr
       ! deallocate(drank3arr)
