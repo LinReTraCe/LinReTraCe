@@ -93,7 +93,7 @@ class wannier90calculation(DFTcalculation):
     self.ndim = 3 - np.sum(greaterThanOne)
     logger.info("   Number of dimensions: {}".format(self.ndim))
 
-    self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
+    self.multiplicity = np.ones((self.nkp,), dtype=int)
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
     self.irreducible = False
 
