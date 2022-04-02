@@ -67,6 +67,7 @@ if __name__ == '__main__':
       ham = wannier90calculation(args.system)
       ham.readData()
       ham.diagData()
+      # ham.outputData(args.output, args.charge)
     except Exception as e:
       error(str(e)+"\nExit.")
 

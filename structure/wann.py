@@ -46,9 +46,8 @@ class wannier90calculation(DFTcalculation):
     self._checkDirectory()
     self._defineCase()
     self._defineFiles()
-    # self._detectCalculation() # restrict spin 1 for the time being
-    self.spins = 1
     self._checkFiles()
+    # self._detectCalculation() # restrict spin 1 for the time being
     logger.info("Files successfully loaded.")
 
   def readData(self):
@@ -59,10 +58,46 @@ class wannier90calculation(DFTcalculation):
     self._readHr()
     logger.info("Files successfully read.")
 
+    # for the time beiing:
+    self.spins = 1
+    self.energyBandMax = self.nproj
+
+    self.nkx, self.nky, self.nkz = [np.max(self.klist[:,i]) for i in range(3)]
+    self.nkx = int(np.around(1./(1.0 - self.nkx)))
+    self.nky = int(np.around(1./(1.0 - self.nky)))
+    self.nkz = int(np.around(1./(1.0 - self.nkz)))
+    logger.info("   Momentum Grid:  {} x {} x {}".format(self.nkx,self.nky,self.nkz))
+
+    greaterThanOne = ([self.nkx,self.nky,self.nkz] == np.ones(3, dtype=np.int))
+    self.dims = np.logical_not(greaterThanOne)
+    self.ndim = 3 - np.sum(greaterThanOne)
+    logger.info("   Number of dimensions: {}".format(self.ndim))
+
+    self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
+    self.weightsum = 2
+    self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
+    self.irreducible = False
+
+
   def diagData(self):
-    ''' calculate e(r), v(r), c(r) ? '''
+    ''' calculate e(r), v(r), c(r)
+        we need to generate:
+          self.energies[[nkp,nband]]
+          self.velocties[[nkp,nband,3]]
+          self.curvatures[[nkp,nband,6]]
+          self.opticalDiag[[nkp,nband,3/6]]  3 if ortho
+          self.BopticalDiag[[nkp,nband,3,3,3]]
+          self.opticalMoments[[nkp,nband,nband,3/6]]  3 if ortho
+          self.BopticalMoments[[nkp,nband,nband,3,3,3]] + write output function
+    '''
     pass
-    # self._calcFermiLevel()
+
+
+  def outputData(self, fname, charge, mu=None):
+    ''' call the output function '''
+    self.charge = charge
+    # self._calcFermiLevel(mu)
+    h5output(fname, self, self, peierls=True)
 
   def _defineFiles(self):
     self.fhr         = self.case + '_hr.dat'
@@ -111,7 +146,20 @@ class wannier90calculation(DFTcalculation):
       if not nnkp.readline().startswith('end real_lattice'):
         raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
-    logger.info('   real_lattice: {}'.format(self.rvec))
+    logger.info('   real_lattice: \n{}'.format(self.rvec))
+
+    if np.abs(np.dot(self.rvec[0,:],self.rvec[1,:]) < 1e-6) and \
+       np.abs(np.dot(self.rvec[0,:],self.rvec[2,:]) < 1e-6) and \
+       np.abs(np.dot(self.rvec[1,:],self.rvec[2,:]) < 1e-6):
+      self.ortho = True
+    else:
+      self.ortho = False
+    logger.info('   orthogonal lattice: {}'.format(self.ortho))
+
+    # V = (axb . c)
+    self.vol = np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:])
+    logger.info('   deduced volume: {}'.format(self.vol))
+
 
     self.kvec = []
     with open(str(self.fnnkp),'r') as nnkp:
@@ -124,7 +172,7 @@ class wannier90calculation(DFTcalculation):
       if not nnkp.readline().startswith('end recip_lattice'):
         raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
-    logger.info('   recip_lattice: {}'.format(self.kvec))
+    logger.info('   recip_lattice: \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
       self.klist = []
