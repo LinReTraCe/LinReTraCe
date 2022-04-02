@@ -78,6 +78,10 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
     do iband = 1,edisp%nband_max
       emin = minval(edisp%band(iband,:,is))
       emax = maxval(edisp%band(iband,:,is))
+#ifdef MPI
+      call MPI_allreduce(MPI_IN_PLACE, emin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, mpierr)
+      call MPI_allreduce(MPI_IN_PLACE, emax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+#endif
       if ((mu > emin) .and. (mu < emax)) then ! we cut through a band -> not gapped
         edisp%gapped(is) = .false.
         exit
@@ -91,6 +95,10 @@ subroutine find_mu_DFT(edisp,kmesh,pot)
       do iband = 1, edisp%nband_max
         emin = minval(edisp%band(iband,:,is))
         emax = maxval(edisp%band(iband,:,is))
+#ifdef MPI
+        call MPI_allreduce(MPI_IN_PLACE, emin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, mpierr)
+        call MPI_allreduce(MPI_IN_PLACE, emax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, mpierr)
+#endif
         if (mu>emax) then
           edisp%ene_valenceBand(is) = emax
           edisp%valenceBand(is) = iband
@@ -536,6 +544,9 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
 
   if ( .not. (algo%ldebug .and. (index(algo%dbgstr,"AlwaysRefine") .ne. 0)) ) then
     sctmin = minval(sct%gam)
+#ifdef MPI
+    call MPI_allreduce(MPI_IN_PLACE, sctmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, mpierr)
+#endif
     gapdistance = 0.d0 ! smalles distance to either valence or conduction band
     if (edisp%gapped_complete) then
       distance_cb = minval(edisp%ene_conductionBand) - mu
