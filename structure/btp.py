@@ -81,6 +81,7 @@ class BTPInterpolation(object):
     self.curvatures    = []
     self.opticalDiag   = []
     self.BopticalDiag  = []
+    self.bopticfull    = False # we only have the intra band data
 
   def interpolate(self, niter):
     logger.info('BoltzTrap2: Interpolating band-structure.')

@@ -86,8 +86,10 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
       h5out[prefix+'energies']          = escalc.energies[ispin]
       if btpinterp is not None:
         # we do not need to truncate here
-        h5out[prefix+'derivatives']     = btpinterp.velocities[ispin]
-        h5out[prefix+'curvatures']      = btpinterp.curvatures[ispin]
+        ''' these derivatives used to be used in LRTC: now not necessary anymore '''
+        if False:
+          h5out[prefix+'derivatives']     = btpinterp.velocities[ispin]
+          h5out[prefix+'curvatures']      = btpinterp.curvatures[ispin]
         h5out[prefix+'momentsDiagonalBfield'] = btpinterp.BopticalDiag[ispin]
 
 
@@ -97,7 +99,8 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
             if peierls:
               logger.warning('CAREFUL: Overwriting intra-band optical elements from DFT calculation.')
             else:
-              logger.warning('CAREFUL: You are mixing DFT and Peierls optical elements.')
+              if escalc != btpinterp:
+                logger.warning('CAREFUL: You are mixing DFT and Peierls optical elements.')
 
       # optical elements
       # use the peierls approximation
@@ -137,3 +140,7 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
       if escalc.opticfull:
         for ikp in range(escalc.nkp):
           h5out[prefix+'kPoint/{:010}/moments'.format(ikp+1)] = escalc.opticalMoments[ispin][ikp]
+
+      if btpinterp is not None and btpinterp.bopticfull:
+        for ikp in range(escalc.nkp):
+          h5out[prefix+'kPoint/{:010}/momentsBfield'.format(ikp+1)] = btpinterp.BopticalMoments[ispin][ikp]

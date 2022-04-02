@@ -92,7 +92,7 @@ program main
   call read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
   ! quick checks if run-options are in agreement with provided data
-  if (algo%lBfield .and. .not. edisp%lBfieldMoments) then
+  if (algo%lBfield .and. .not. edisp%lBIntraMoments) then
     call stop_with_message(stderr, 'Bfield optical elements required for Bfield quantities')
   endif
 
