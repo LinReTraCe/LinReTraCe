@@ -31,7 +31,7 @@ def parse_args(args=None):
     epilog="That's the end of the help")
   parser.add_argument('system', help='Folder of Wannier90 calculation')
   parser.add_argument('charge', help='Number of electrons in the provided bands')
-  parser.add_argument('--kpoints', nargs=3, help='Custom k grid - must conform original grid (8x8x5 -> 20x20x5)')
+  parser.add_argument('--kmesh', nargs=3, help='Custom k grid - must conform original grid (8x8x5 -> 20x20x5)')
   parser.add_argument('--kshift', help='Shift custom k grid', default=False, action='store_true')
   parser.add_argument('-o', '--output', help='Outputname of hdf5 (default="lrtc-energies.hdf5")', default='lrtc-energies.hdf5')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
@@ -47,7 +47,7 @@ class log_formatter(logging.Formatter):
 if __name__ == '__main__':
   error = lambda string: sys.exit('lwann: {}'.format(string))
   # args = parse_args()
-  args = parse_args('../t2g 1 --kpoints 3 3 3'.split())
+  args = parse_args('../t2g 1 --kmesh 20 20 20'.split())
   debug = args.debug
 
   ''' define logging '''
@@ -68,7 +68,9 @@ if __name__ == '__main__':
     # try:
     ham = wannier90calculation(args.system)
     ham.readData()
-    ham.diagData(kgrid=args.kpoints, kshift=args.kshift)
+    if args.kmesh:
+      ham.newKmesh(np.array(args.kmesh, dtype=int), kshift=args.kshift)
+    ham.diagData()
     ham.calcOptical()
     ham.outputData(args.output, float(args.charge))
     # except Exception as e:

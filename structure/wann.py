@@ -97,8 +97,51 @@ class wannier90calculation(DFTcalculation):
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
     self.irreducible = False
 
+  def newKmesh(self, kmesh, kshift=False):
+    '''
+      Instead of the kmesh found in the Wannier90 calculation
+      define a new one. also redefine multiplicities and weights
+    '''
 
-  def diagData(self, peierlscorrection=True, kgrid=None, kshift=False):
+    logger.info('Overwriting kmesh information with provided one: {}'.format(kmesh))
+    raise_error = False
+    if self.nkx == self.nky and kmesh[0] != kmesh[1]:
+        raise_error = True
+    if self.nkx == self.nkz and kmesh[0] != kmesh[2]:
+        raise_error = True
+    if self.nky == self.nkz and kmesh[1] != kmesh[2]:
+        raise_error = True
+    if raise_error:
+      raise IOError('Provided kmesh does not conform to original kmesh')
+
+    self.nkx, self.nky, self.nkz = kmesh
+    self.nkp = self.nkx*self.nky*self.nkz
+
+    self._kmeshx = np.linspace(0,1,self.nkx,endpoint=False)
+    self._kmeshy = np.linspace(0,1,self.nky,endpoint=False)
+    self._kmeshz = np.linspace(0,1,self.nkz,endpoint=False)
+
+    if kshift:
+      self._kmeshshift = []
+      for ik in [self.nkx,self.nky,self.nkz]:
+        if ik > 1:
+          self._kmeshshift.append(1./ik/2.)
+        else:
+          self._kmeshshift.append(0.0)
+      self._kmeshshift = np.array(self._kmeshshift, dtype=np.float64)
+
+    self.kpoints = []
+    for ikx in self._kmeshx:
+      for iky in self._kmeshy:
+        for ikz in self._kmeshz:
+          self.kpoints.append([ikx,iky,ikz])
+    self.kpoints = np.array(self.kpoints)
+    if kshift: self.kpoints += self._kmeshshift[None,:]
+
+    self.multiplicity = np.ones((self.nkp,), dtype=int)
+    self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
+
+  def diagData(self, peierlscorrection=True):
     ''' calculate e(r), v(r), c(r)
         we need to generate:
           self.energies[[nkp,nband]]
@@ -233,6 +276,7 @@ class wannier90calculation(DFTcalculation):
       if np.any(np.abs(mb.imag) > 1e-6):
         # FIXME: do this properly
         logger.info('Detected complex magnetic optical elements. Truncating.')
+      mb = mb.real
       self.BopticalMoments.append(mb)
       mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
       self.BopticalDiag.append(mbdiag)
