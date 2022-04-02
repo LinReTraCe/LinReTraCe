@@ -65,13 +65,14 @@ if __name__ == '__main__':
     except Exception as e:
       error(str(e)+"\nExit.")
   else:
-    try:
-      ham = wannier90calculation(args.system)
-      ham.readData()
-      ham.diagData(kgrid=args.kpoints, kshift=args.kshift)
-      # ham.outputData(args.output, args.charge)
-    except Exception as e:
-      error(str(e)+"\nExit.")
+    # try:
+    ham = wannier90calculation(args.system)
+    ham.readData()
+    ham.diagData(kgrid=args.kpoints, kshift=args.kshift)
+    ham.calcOptical()
+    ham.outputData(args.output, float(args.charge))
+    # except Exception as e:
+    #   error(str(e)+"\nExit.")
 
   sys.exit(0)
 

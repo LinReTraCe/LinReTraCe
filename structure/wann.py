@@ -11,6 +11,7 @@ from structure.aux   import progressBar
 from structure.dft   import DFTcalculation
 from structure.es    import ElectronicStructure
 from structure.inout import h5output
+from structure.aux   import levicivita
 
 import scipy.optimize
 import numpy as np
@@ -50,6 +51,21 @@ class wannier90calculation(DFTcalculation):
     self._checkFiles()        # check if all files are okay
     logger.info("Files successfully loaded.")
 
+    ''' define the usual spin resolved arrays '''
+    self.energies        = []
+    self.velocities      = []
+    self.curvatures      = []
+    self.opticalDiag     = []
+    self.BopticalDiag    = []
+    self.opticalMoments  = []
+    self.BopticalMoments = []
+
+    ''' and some flags '''
+    self.opticfull  = True
+    self.opticdiag  = True
+    self.bopticfull = True
+
+
   def readData(self):
     ''' get the lattice vectors, number of k-points
         number of projections, projection centers,
@@ -58,11 +74,13 @@ class wannier90calculation(DFTcalculation):
     self._readHr()
     logger.info("Files successfully read.")
 
-    # for the time beiing:
-    self.energyBandMax = self.nproj
+    # internal variables stemming from DFTcalculations
+    self.energyBandMax  = self.nproj
+    self.opticalBandMin = 0
+    self.opticalBandMax = self.nproj
 
-    minarr = np.array([np.min(self.klist[:,i]) for i in range(3)])
-    maxarr = np.array([np.max(self.klist[:,i]) for i in range(3)])
+    minarr = np.array([np.min(self.kpoints[:,i]) for i in range(3)])
+    maxarr = np.array([np.max(self.kpoints[:,i]) for i in range(3)])
     spacing = (1-maxarr+minarr) # minarr is > 0 for shifted grids
     self.nkx, self.nky, self.nkz = [int(np.around(1./i)) for i in spacing]
     logger.info("   Momentum Grid:  {} x {} x {}".format(self.nkx,self.nky,self.nkz))
@@ -80,7 +98,7 @@ class wannier90calculation(DFTcalculation):
     self.irreducible = False
 
 
-  def diagData(self, kgrid=None, kshift=False):
+  def diagData(self, peierlscorrection=True, kgrid=None, kshift=False):
     ''' calculate e(r), v(r), c(r)
         we need to generate:
           self.energies[[nkp,nband]]
@@ -91,14 +109,129 @@ class wannier90calculation(DFTcalculation):
           self.opticalMoments[[nkp,nband,nband,3/6]]  3 if ortho
           self.BopticalMoments[[nkp,nband,nband,3,3,3]] + write output function
     '''
-    pass
 
+    logger.info('Calculating and diagonalizing H(k), v(k), c(k)')
+    for ispin in range(self.spins):
+
+      ''' decorator for progress bar '''
+      if self.spins == 1:
+        prefix = ''
+      else:
+        if ispin == 0:
+          prefix = 'up:'
+        else:
+          prefix = 'dn:'
+
+      # hamiltonian H(r)
+      hr = self.hrlist[ispin] # self.nrp, self.nproj, self.nproj
+      # hamiltonian H(k)
+      hk = np.zeros((self.nkp,self.nproj,self.nproj), dtype=np.complex128)
+      # hamiltonian derivative d_dk H(k)
+      # 3: x y z
+      hvk = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.complex128)
+      # hamiltonian double derivative d2_dk2 H(k)
+      # 6: xx yy zz xy xz yz
+      hck = np.zeros((self.nkp,self.nproj,self.nproj,6), dtype=np.complex128)
+
+      for ik in range(self.nkp):
+        # do not take the k-iteration into the einstein summation to show progress
+        progressBar(ik+1,self.nkp, status='k-points', prefix=prefix)
+
+        ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+        rdotk = 2*np.pi*np.einsum('i,ri->r',self.kpoints[ik,:], self.rlist) # no scaling to recip vector / lattice vectors here ?
+        ee = np.exp(1j * rdotk) / self.rmultiplicity # rmultiplicity takes care of double counting issues
+        hk[ik,:,:] = np.einsum('r,rij->ij', ee, hr)
+
+        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+        prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
+        hvk[ik,:,:,:] = np.einsum('dr,r,rij->ijd',1j*prefactor_r,ee,hr)
+
+        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+        prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+        for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+          prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+        hck[ik,:,:,:] = np.einsum('dr,r,rij->ijd',-prefactor_r2,ee,hr)
+
+        if peierlscorrection:
+          # Jan's code snippet
+          # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+          distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
+          ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
+          hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+
+
+      # eigk  : self.nkp, self.nproj
+      # U     : self.nkp, self.nproj, self.nproj
+      #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
+      # inv(U) @ hk @ U = ek
+
+      ''' this transforms all k points at once '''
+      ek, U = np.linalg.eig(hk)
+      Uinv = np.linalg.inv(U)
+      vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
+      ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
+
+      if np.any(np.abs(ek.imag) > 1e-5):
+        logger.warn('Detected complex energies ... truncating')
+      if np.any(np.abs(hvk.imag) > 1e-5):
+        logger.warn('Detected complex velocities ... truncating')
+      if np.any(np.abs(hck.imag) > 1e-5):
+        logger.warn('Detected complex curvatures ... truncating')
+
+      ek = ek.real
+      vk = vk.real
+      ck = ck.real
+
+      self.energies.append(ek)
+      self.velocities.append(vk)
+      self.curvatures.append(ck)
+
+  def calcOptical(self):
+    '''
+      from the velocities and curvatures : calculate
+      the optical elements and b-field optical elements
+    '''
+
+    if self.irreducible:
+      logger.critical('Detected irreducible grid: optical moments are not symmetrized - will produce wrong results')
+
+    logger.info('Calculating optical elements from derivatives')
+    # devine levicity matrix so we can use it in einsteinsummations
+    levmatrix = np.zeros((3,3,3), dtype=np.float64)
+    for i in range(3):
+      for j in range(3):
+        for k in range(3):
+          levmatrix[i,j,k] = levicivita(i,j,k)
+
+    for ispin in range(self.spins):
+      vel = self.velocities[ispin] # nkp, nproj, nproj, 3
+      cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
+
+      # transform into matrix form
+      curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.float64)
+      curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
+      curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
+
+      # no symmetrization necessary since we _currently_ restrict to reducible grids
+      if self.ortho:
+        vel2 = vel[:,:,:,[0,1,2]] * vel[:,:,:,[0,1,2]]
+      else:
+        vel2 = vel[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,1,2]]
+      self.opticalMoments.append(vel2)
+      vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
+      self.opticalDiag.append(vel2diag)
+
+        #           epsilon_cij v_a v_j c_bi -> abc
+      mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
+      self.BopticalMoments.append(mb)
+      mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
+      self.BopticalDiag.append(mbdiag)
 
   def outputData(self, fname, charge, mu=None):
     ''' call the output function '''
     self.charge = charge
-    # self._calcFermiLevel(mu)
-    h5output(fname, self, self, peierls=True)
+    self._calcFermiLevel(mu)
+    h5output(fname, self, self)
 
   def _defineCase(self):
     '''
@@ -198,6 +331,7 @@ class wannier90calculation(DFTcalculation):
     self.rvec = np.array(self.rvec, dtype=np.float64)
     logger.info('   real_lattice: \n{}'.format(self.rvec))
 
+    ''' FIXME: this does not detect orthogonal bcc and fcc lattices '''
     if np.abs(np.dot(self.rvec[0,:],self.rvec[1,:]) < 1e-6) and \
        np.abs(np.dot(self.rvec[0,:],self.rvec[2,:]) < 1e-6) and \
        np.abs(np.dot(self.rvec[1,:],self.rvec[2,:]) < 1e-6):
@@ -225,7 +359,7 @@ class wannier90calculation(DFTcalculation):
     logger.info('   recip_lattice: \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
-      self.klist = []
+      self.kpoints = []
       while ( not nnkp.readline().startswith('begin kpoints')):
         pass
       self.nkp = int(nnkp.readline())
@@ -233,10 +367,10 @@ class wannier90calculation(DFTcalculation):
       for i in range(self.nkp):
         line = nnkp.readline()
         kx, ky, kz = float(line[:14]), float(line[14:28]), float(line[28:42])
-        self.klist.append([kx,ky,kz])
+        self.kpoints.append([kx,ky,kz])
       if not nnkp.readline().startswith('end kpoints'):
         raise IOError('Wannier90 {} is not at the end of kpoints after reading'.format(str(self.fnnkp)))
-    self.klist = np.array(self.klist, dtype=np.float64)
+    self.kpoints = np.array(self.kpoints, dtype=np.float64)
 
     with open(str(self.fnnkp),'r') as nnkp:
       while ( not nnkp.readline().startswith('begin projections')):
@@ -290,6 +424,7 @@ class wannier90calculation(DFTcalculation):
             matrix[ir,p1-1,p2-1] = tr + 1j * tj
           self.rlist.append([rx,ry,rz])
         self.hrlist.append(matrix) # one spin .. so we can loop and append
+        self.rlist = np.array(self.rlist, dtype=np.float64)
 
         if hr.readline() != "": # exactly at the EOF
           raise IOError('Wannier90 {} is not at the EOF after reading'.format(str(filehr)))
