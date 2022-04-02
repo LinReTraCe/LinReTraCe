@@ -43,11 +43,11 @@ class wannier90calculation(DFTcalculation):
     logger.info("Initializing Wannier90 calculation.")
     super(wannier90calculation, self).__init__(directory)
 
-    self._checkDirectory()
-    self._defineCase()
-    self._defineFiles()
-    self._checkFiles()
-    # self._detectCalculation() # restrict spin 1 for the time being
+    self._checkDirectory()    # is this actually a directory
+    self._defineCase()        # filename prefix
+    self._defineFiles()       # define all possible hr file variants
+    self._detectCalculation() # check which hr files we have -> calculation type
+    self._checkFiles()        # check if all files are okay
     logger.info("Files successfully loaded.")
 
   def readData(self):
@@ -59,7 +59,6 @@ class wannier90calculation(DFTcalculation):
     logger.info("Files successfully read.")
 
     # for the time beiing:
-    self.spins = 1
     self.energyBandMax = self.nproj
 
     minarr = np.array([np.min(self.klist[:,i]) for i in range(3)])
@@ -68,13 +67,15 @@ class wannier90calculation(DFTcalculation):
     self.nkx, self.nky, self.nkz = [int(np.around(1./i)) for i in spacing]
     logger.info("   Momentum Grid:  {} x {} x {}".format(self.nkx,self.nky,self.nkz))
 
+    if not (self.nkx*self.nky*self.nkz == self.nkp):
+      raise IOError('Irreducible momentum grids not implemented')
+
     greaterThanOne = ([self.nkx,self.nky,self.nkz] == np.ones(3, dtype=np.int))
     self.dims = np.logical_not(greaterThanOne)
     self.ndim = 3 - np.sum(greaterThanOne)
     logger.info("   Number of dimensions: {}".format(self.ndim))
 
     self.multiplicity = np.ones((self.nkp,), dtype=np.float64)
-    self.weightsum = 2
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
     self.irreducible = False
 
@@ -99,10 +100,6 @@ class wannier90calculation(DFTcalculation):
     # self._calcFermiLevel(mu)
     h5output(fname, self, self, peierls=True)
 
-  def _defineFiles(self):
-    self.fhr         = self.case + '_hr.dat'
-    self.fnnkp       = self.case + '.nnkp'
-
   def _defineCase(self):
     '''
     Get the Path prefix for a Wannier90 calculation
@@ -123,17 +120,70 @@ class wannier90calculation(DFTcalculation):
       raise IOError('Could not detect Wannier90 calculation')
     self.case = os.path.join(self.directory,self.case)
 
+  def _defineFiles(self):
+    '''
+      static file endings with varialbe file beginnings
+    '''
+    self.fhr         = self.case + '_hr.dat'
+    self.fhrup       = self.case + '_hr.datup'
+    self.fhrdn       = self.case + '_hr.datdn'
+    self.fnnkp       = self.case + '.nnkp'
+
+  def _detectCalculation(self):
+    '''
+      Depending on the existance of hr file variations
+      detect the type of calculation
+      currently restricted to polarized and unpolarized
+      self.calctype:  1 - spin polarized
+                      2 - spin unpolarized
+    '''
+
+    if os.path.isfile(self.fhrup) and os.stat(str(self.fhrup)).st_size != 0 \
+       and os.path.isfile(self.fhrdn) and os.stat(str(self.fhrdn)).st_size != 0:
+      self.calctype = 1
+      logger.info("Detected spin polarized calculation.")
+    elif os.path.isfile(self.fhr) and os.stat(str(self.fhr)).st_size != 0:
+      self.calctype = 2
+      self.weightsum = 2
+      self.spins = 1
+      logger.info("Detected spin unpolarized calculation.")
+    else:
+      raise IOError("Error: No matching hr file combinations found")
+
   def _checkFiles(self):
-    if not os.path.isfile(self.fhr):
-      raise IOError('Error: case_hr.dat is missing')
-    if os.stat(str(self.fhr)).st_size == 0:
-      raise IOerror('Error: case_hr.dat is empty.')
+    '''
+      Check that all necessary files are existing files and are not empty
+      Also set the number of spins and weightsum accordingly.
+    '''
     if not os.path.isfile(self.fnnkp):
       raise IOError('Error: case_hr.dat is missing')
     if os.stat(str(self.fnnkp)).st_size == 0:
       raise IOerror('Error: case_hr.dat is empty.')
 
+    if self.calctype == 1:
+      self.weightsum = 1
+      self.spins = 2
+      self.fhraccess = [self.fhrup, self.fhrdn]
+    elif self.calctype == 2:
+      self.weightsum = 2
+      self.spins = 1
+      self.fhraccess = [self.fhr]
+
+    for i in self.fhraccess:
+      if not os.path.isfile(i):
+        raise IOError('Error: case_hr.dat* is missing')
+      if os.stat(i).st_size == 0:
+        raise IOerror('Error: case_hr.dat* is empty.')
+
   def _readNnkp(self):
+    '''
+      Retrieve all possible information from case.nnkp
+      real lattice vector
+      reciprocal lattice vector
+      number of k-points
+      array of k-points
+      number of projections and the atomic position of each of them
+    '''
     self.rvec = []
     logger.info("Reading: {}".format(self.fnnkp))
     with open(str(self.fnnkp),'r') as nnkp:
@@ -204,38 +254,45 @@ class wannier90calculation(DFTcalculation):
     self.plist = np.array(self.plist, dtype=np.float64)
 
   def _readHr(self):
-    logger.info("Reading: {}".format(self.fhr))
+    '''
+      Retrieve all possible information from case_hr.dat*
+      number of r-points
+      r-point multiplicity
+      and the full hopping matrix [nrp, projections, projections] complex128
+    '''
 
-    with open(str(self.fhr),'r') as hr:
-      hr.readline() # 'written on ...' line
-      nproj = int(hr.readline())
-      self.nrp = int(hr.readline())
-      logger.info('   number of rpoints: {}'.format(self.nrp))
-      if (self.nproj != nproj):
-        raise IOError('Inconsistent number of projections between case.nnkp anc case_hr.dat')
+    for filehr in self.fhraccess:
+      logger.info("Reading: {}".format(filehr))
+      with open(str(filehr),'r') as hr:
+        hr.readline() # 'written on ...' line
+        nproj = int(hr.readline())
+        self.nrp = int(hr.readline())
+        logger.info('   number of rpoints: {}'.format(self.nrp))
+        if (self.nproj != nproj):
+          raise IOError('Inconsistent number of projections between case.nnkp anc case_hr.dat')
 
-      self.rmultiplicity = []
-      while (len(self.rmultiplicity) != self.nrp):
-        line = hr.readline()
-        mult = line.split() # I think this is save
-        for imult in mult:
-          self.rmultiplicity.append(imult)
-      self.rmultiplicity = np.array(self.rmultiplicity, dtype=np.float64)
-
-      self.hrlist = []
-      self.rlist = []
-      matrix = np.zeros((self.nrp,self.nproj,self.nproj), dtype=np.complex128)
-      for ir in range(self.nrp):
-        for ip in range(self.nproj**2):
+        self.rmultiplicity = []
+        while (len(self.rmultiplicity) != self.nrp):
           line = hr.readline()
-          rx, ry, rz, p1, p2 = [int(line[0+i*5:5+i*5]) for i in range(5)]
-          tr, tj = float(line[25:37]), float(line[37:])
-          matrix[ir,p1-1,p2-1] = tr + 1j * tj
-        self.rlist.append([rx,ry,rz])
-      self.hrlist.append(matrix) # one spin .. so we can loop and append
+          mult = line.split() # I think this is save
+          for imult in mult:
+            self.rmultiplicity.append(imult)
+        self.rmultiplicity = np.array(self.rmultiplicity, dtype=np.float64)
 
-      if hr.readline() != "": # exactly at the EOF
-        raise IOError('Wannier90 {} is not at the EOF after reading'.format(str(self.fhr)))
+        self.hrlist = []
+        self.rlist = []
+        matrix = np.zeros((self.nrp,self.nproj,self.nproj), dtype=np.complex128)
+        for ir in range(self.nrp):
+          for ip in range(self.nproj**2):
+            line = hr.readline()
+            rx, ry, rz, p1, p2 = [int(line[0+i*5:5+i*5]) for i in range(5)]
+            tr, tj = float(line[25:37]), float(line[37:])
+            matrix[ir,p1-1,p2-1] = tr + 1j * tj
+          self.rlist.append([rx,ry,rz])
+        self.hrlist.append(matrix) # one spin .. so we can loop and append
+
+        if hr.readline() != "": # exactly at the EOF
+          raise IOError('Wannier90 {} is not at the EOF after reading'.format(str(filehr)))
 
 
 
