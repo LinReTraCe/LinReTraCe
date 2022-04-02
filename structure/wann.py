@@ -95,9 +95,10 @@ class wannier90calculation(DFTcalculation):
 
     self.multiplicity = np.ones((self.nkp,), dtype=int)
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
+    # wannier90 should always give us a reducible grid
     self.irreducible = False
 
-  def newKmesh(self, kmesh, kshift=False):
+  def newKmesh(self, kmesh, kshift=False, kirr=False):
     '''
       Instead of the kmesh found in the Wannier90 calculation
       define a new one. also redefine multiplicities and weights
@@ -176,31 +177,56 @@ class wannier90calculation(DFTcalculation):
       # 6: xx yy zz xy xz yz
       hck = np.zeros((self.nkp,self.nproj,self.nproj,6), dtype=np.complex128)
 
-      for ik in range(self.nkp):
-        # do not take the k-iteration into the einstein summation to show progress
-        progressBar(ik+1,self.nkp, status='k-points', prefix=prefix)
+      # for ik in range(self.nkp):
+      #   # do not take the k-iteration into the einstein summation to show progress
+      #   progressBar(ik+1,self.nkp, status='k-points', prefix=prefix)
 
-        ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
-        rdotk = 2*np.pi*np.einsum('i,ri->r',self.kpoints[ik,:], self.rlist) # no scaling to recip vector / lattice vectors here ?
-        ee = np.exp(1j * rdotk) / self.rmultiplicity # rmultiplicity takes care of double counting issues
-        hk[ik,:,:] = np.einsum('r,rij->ij', ee, hr)
+      #   ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+      #   rdotk = 2*np.pi*np.einsum('i,ri->r',self.kpoints[ik,:], self.rlist) # no scaling to recip vector / lattice vectors here ?
+      #   ee = np.exp(1j * rdotk) / self.rmultiplicity # rmultiplicity takes care of double counting issues
+      #   hk[ik,:,:] = np.einsum('r,rij->ij', ee, hr)
 
-        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-        prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
-        hvk[ik,:,:,:] = np.einsum('dr,r,rij->ijd',1j*prefactor_r,ee,hr)
+      #   ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+      #   prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
+      #   hvk[ik,:,:,:] = np.einsum('dr,r,rij->ijd',1j*prefactor_r,ee,hr)
 
-        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-        prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
-        for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
-          prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
-        hck[ik,:,:,:] = np.einsum('dr,r,rij->ijd',-prefactor_r2,ee,hr)
+      #   ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+      #   prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+      #   for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+      #     prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+      #   hck[ik,:,:,:] = np.einsum('dr,r,rij->ijd',-prefactor_r2,ee,hr)
 
-        if peierlscorrection:
-          # Jan's code snippet
-          # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-          distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
-          ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
-          hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+      #   if peierlscorrection:
+      #     # Jan's code snippet
+      #     # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+      #     distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
+      #     ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
+      #     hvk_correction = 1j * hk[ik,:,:,None] * ri_minus_rj[:,:,:]
+      #     hvk[ik,...] += hvk_correction
+
+      ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+      rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints, self.rlist) # no scaling to recip vector / lattice vectors here ?
+      ee = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
+      hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
+
+      ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+      prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
+      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
+
+      ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+      prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+      for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+        prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,hr)
+
+      if peierlscorrection:
+        # Jan's code snippet
+        # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+        distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
+        ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
+        hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+        hvk += hvk_correction
+
 
 
       # eigk  : self.nkp, self.nproj
@@ -281,8 +307,11 @@ class wannier90calculation(DFTcalculation):
       mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
       self.BopticalDiag.append(mbdiag)
 
-  def outputData(self, fname, charge, mu=None):
+  def outputData(self, fname, charge, mu=None, intraonly=False):
     ''' call the output function '''
+    if intraonly:
+      self.opticfull = False
+      self.bopticfull = False
     self.charge = charge
     self._calcFermiLevel(mu)
     h5output(fname, self, self)

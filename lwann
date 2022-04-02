@@ -33,6 +33,9 @@ def parse_args(args=None):
   parser.add_argument('charge', help='Number of electrons in the provided bands')
   parser.add_argument('--kmesh', nargs=3, help='Custom k grid - must conform original grid (8x8x5 -> 20x20x5)')
   parser.add_argument('--kshift', help='Shift custom k grid', default=False, action='store_true')
+  parser.add_argument('--kirr',  help='Custom k grid is irreducible', default=False, action='store_true')
+  parser.add_argument('--nocorrection', help='Do not calculate the correction terms to the Peierls approximation', default=False, action='store_true')
+  parser.add_argument('--intra', help='Only output intra elements', default=False, action='store_true')
   parser.add_argument('-o', '--output', help='Outputname of hdf5 (default="lrtc-energies.hdf5")', default='lrtc-energies.hdf5')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
@@ -47,7 +50,7 @@ class log_formatter(logging.Formatter):
 if __name__ == '__main__':
   error = lambda string: sys.exit('lwann: {}'.format(string))
   # args = parse_args()
-  args = parse_args('../t2g 1 --kmesh 20 20 20'.split())
+  args = parse_args('../t2g 1 --kmesh 20 20 20 --intra'.split())
   debug = args.debug
 
   ''' define logging '''
@@ -69,10 +72,10 @@ if __name__ == '__main__':
     ham = wannier90calculation(args.system)
     ham.readData()
     if args.kmesh:
-      ham.newKmesh(np.array(args.kmesh, dtype=int), kshift=args.kshift)
-    ham.diagData()
+      ham.newKmesh(np.array(args.kmesh, dtype=int), kshift=args.kshift, kirr=args.kirr)
+    ham.diagData(peierlscorrection = not args.nocorrection)
     ham.calcOptical()
-    ham.outputData(args.output, float(args.charge))
+    ham.outputData(args.output, float(args.charge), intraonly=args.intra)
     # except Exception as e:
     #   error(str(e)+"\nExit.")
 
