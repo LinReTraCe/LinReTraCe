@@ -173,15 +173,13 @@ class wannier90calculation(DFTcalculation):
 
       if np.any(np.abs(ek.imag) > 1e-5):
         logger.warn('Detected complex energies ... truncating')
-      if np.any(np.abs(hvk.imag) > 1e-5):
-        logger.warn('Detected complex velocities ... truncating')
-      if np.any(np.abs(hck.imag) > 1e-5):
-        logger.warn('Detected complex curvatures ... truncating')
+      ''' apparently complex velocities and curvatures are allowed now '''
+      # if np.any(np.abs(hvk.imag) > 1e-5):
+      #   logger.warn('Detected complex velocities ... truncating')
+      # if np.any(np.abs(hck.imag) > 1e-5):
+      #   logger.warn('Detected complex curvatures ... truncating')
 
       ek = ek.real
-      vk = vk.real
-      ck = ck.real
-
       self.energies.append(ek)
       self.velocities.append(vk)
       self.curvatures.append(ck)
@@ -208,21 +206,33 @@ class wannier90calculation(DFTcalculation):
       cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
 
       # transform into matrix form
-      curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.float64)
+      curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
       curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
-      curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
+      curmat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(curmat[:,:,:, [0,0,1], [1,2,2]])
 
       # no symmetrization necessary since we _currently_ restrict to reducible grids
+      # we exploit the LRTC Fortran differentiation between 3 6 and 9 optical elements
+      # this way the array stays float64
+      vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
       if self.ortho:
-        vel2 = vel[:,:,:,[0,1,2]] * vel[:,:,:,[0,1,2]]
+        vel2 = vel2[:,:,:,:3].real
       else:
-        vel2 = vel[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,1,2]]
+        if np.any(np.abs(vel2.imag) > 1e-6):
+          temp = vel2.copy()
+          vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
+          vel2[:,:,:,:6] = temp
+          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+        else:
+          vel2 = vel2.real
       self.opticalMoments.append(vel2)
       vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
       self.opticalDiag.append(vel2diag)
 
         #           epsilon_cij v_a v_j c_bi -> abc
       mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
+      if np.any(np.abs(mb.imag) > 1e-6):
+        # FIXME: do this properly
+        logger.info('Detected complex magnetic optical elements. Truncating.')
       self.BopticalMoments.append(mb)
       mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
       self.BopticalDiag.append(mbdiag)
