@@ -44,7 +44,8 @@ class log_formatter(logging.Formatter):
 
 if __name__ == '__main__':
   error = lambda string: sys.exit('lwann: {}'.format(string))
-  args = parse_args()
+  # args = parse_args()
+  args = parse_args(['../t2g', '1']) # debug
   debug = args.debug
 
   ''' define logging '''
@@ -69,6 +70,8 @@ if __name__ == '__main__':
     except Exception as e:
       error(str(e)+"\nExit.")
 
+  sys.exit(0)
+
 
   # INTERFACE WITH hamiltonian arrays
   if False:
@@ -77,7 +80,7 @@ if __name__ == '__main__':
     ck = np.zeroes((8000,3,3,6), dtype=np.float64)
     ham = hamiltonian_matrix(hk, vk, ck, charge=1)
     fname = 'SVO.hdf5'
-    h5output(fname, ham, ham, peierls=True)
+    ham.outputData(fname)
 
     plot = False
 

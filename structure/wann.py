@@ -7,9 +7,10 @@ import sys
 import logging
 logger = logging.getLogger(__name__)
 
-from structure.aux import progressBar
-from structure.dft  import DFTcalculation
-from structure.es  import ElectronicStructure
+from structure.aux   import progressBar
+from structure.dft   import DFTcalculation
+from structure.es    import ElectronicStructure
+from structure.inout import h5output
 
 import scipy.optimize
 import numpy as np
@@ -61,7 +62,7 @@ class wannier90calculation(DFTcalculation):
   def diagData(self):
     ''' calculate e(r), v(r), c(r) ? '''
     pass
-    self._calcFermiLevel()
+    # self._calcFermiLevel()
 
   def _defineFiles(self):
     self.fhr         = self.case + '_hr.dat'
@@ -175,11 +176,15 @@ class wannier90calculation(DFTcalculation):
 
       self.hrlist = []
       self.rlist = []
+      matrix = np.zeros((self.nrp,self.nproj,self.nproj), dtype=np.complex128)
       for ir in range(self.nrp):
         for ip in range(self.nproj**2):
           line = hr.readline()
           rx, ry, rz, p1, p2 = [int(line[0+i*5:5+i*5]) for i in range(5)]
           tr, tj = float(line[25:37]), float(line[37:])
+          matrix[ir,p1-1,p2-1] = tr + 1j * tj
+        self.rlist.append([rx,ry,rz])
+      self.hrlist.append(matrix) # one spin .. so we can loop and append
 
       if hr.readline() != "": # exactly at the EOF
         raise IOError('Wannier90 {} is not at the EOF after reading'.format(str(self.fhr)))
@@ -330,3 +335,9 @@ class hamiltonian_matrix(ElectronicStructure):
     self.BopticalDiag   = [np.zeros((self.nkp, self.energyBandMax, 3, 3, 3), dtype=np.float64)]
 
     self._calcFermiLevel()
+
+  def outputData(self, fname):
+    '''
+    Output the loaded data
+    '''
+    h5output(fname, self, self, peierls=True)
