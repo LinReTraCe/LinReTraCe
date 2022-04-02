@@ -62,10 +62,10 @@ class wannier90calculation(DFTcalculation):
     self.spins = 1
     self.energyBandMax = self.nproj
 
-    self.nkx, self.nky, self.nkz = [np.max(self.klist[:,i]) for i in range(3)]
-    self.nkx = int(np.around(1./(1.0 - self.nkx)))
-    self.nky = int(np.around(1./(1.0 - self.nky)))
-    self.nkz = int(np.around(1./(1.0 - self.nkz)))
+    minarr = np.array([np.min(self.klist[:,i]) for i in range(3)])
+    maxarr = np.array([np.max(self.klist[:,i]) for i in range(3)])
+    spacing = (1-maxarr+minarr) # minarr is > 0 for shifted grids
+    self.nkx, self.nky, self.nkz = [int(np.around(1./i)) for i in spacing]
     logger.info("   Momentum Grid:  {} x {} x {}".format(self.nkx,self.nky,self.nkz))
 
     greaterThanOne = ([self.nkx,self.nky,self.nkz] == np.ones(3, dtype=np.int))
@@ -79,7 +79,7 @@ class wannier90calculation(DFTcalculation):
     self.irreducible = False
 
 
-  def diagData(self):
+  def diagData(self, kgrid=None, kshift=False):
     ''' calculate e(r), v(r), c(r)
         we need to generate:
           self.energies[[nkp,nband]]
