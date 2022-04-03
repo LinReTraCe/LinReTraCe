@@ -98,7 +98,7 @@ class wannier90calculation(DFTcalculation):
     # wannier90 should always give us a reducible grid
     self.irreducible = False
 
-  def newKmesh(self, kmesh, kshift=False, kirr=False):
+  def expandKmesh(self, kmesh, kshift=False, kirr=False):
     '''
       Instead of the kmesh found in the Wannier90 calculation
       define a new one. also redefine multiplicities and weights
@@ -112,6 +112,11 @@ class wannier90calculation(DFTcalculation):
         raise_error = True
     if self.nky == self.nkz and kmesh[1] != kmesh[2]:
         raise_error = True
+
+    for iknew, ikold in zip(kmesh, [self.nkx, self.nky, self.nkz]):
+      if iknew < 1: raise_error = True
+      if ikold == 1 and not (iknew == 1): raise_error = True
+
     if raise_error:
       raise IOError('Provided kmesh does not conform to original kmesh')
 
@@ -141,6 +146,115 @@ class wannier90calculation(DFTcalculation):
 
     self.multiplicity = np.ones((self.nkp,), dtype=int)
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
+
+  def readWien2k(self):
+    '''
+      Read Wien2K struct and klist file as new kmesh
+    '''
+
+    self.fstruct = self.case+'.struct'
+    self.fklist = self.case+'.klist'
+
+    self._readWien2kStruct()
+    self._readWien2kKlist()
+
+  def _readWien2kKlist(self):
+    '''
+    Read the kpoint list.
+    Read the multiplicity.
+    Define the weights.
+    '''
+
+    logger.info("Wien2K reading: {}".format(self.fklist))
+    with open(str(self.fklist), 'r') as klist:
+      # first we get the divisor
+      firstline = klist.readline()
+      pos1 = firstline.find('(')+1
+      pos2 = firstline.find(')')
+      divisor = []
+      divisor.append(int(firstline[pos1:pos1+3]))
+      divisor.append(int(firstline[pos1+3:pos1+6]))
+      divisor.append(int(firstline[pos1+6:pos1+9]))
+      divisor = np.array(divisor, dtype=np.int)
+
+      self.nkx, self.nky, self.nkz = divisor
+      # determine dimension whether we find '1's in the divisor
+      self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
+      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
+
+      # now we reset the file
+      klist.seek(0)
+
+      myklist = []
+      mymult  = []
+      for line in klist:
+        if ("END" in line):
+          break
+        else:
+          kx   = float(line[10:20])
+          ky   = float(line[20:30])
+          kz   = float(line[30:40])
+          mult = int(float(line[50:55]))
+          myklist.append([kx,ky,kz])
+          mymult.append(mult)
+      else: # if we did not find the break condition
+        raise IOError('Wien2k {}: Did not find END statement.'.format(str(self.fklist)))
+
+    self.kpoints = np.array(myklist, dtype=np.float64)
+    self.multiplicity = np.array(mymult, dtype=int)
+    self.weights = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
+    self.nkp = self.kpoints.shape[0]
+    self.irreducible = not (self.nkx*self.nky*self.nkz == self.nkp)
+    self.kpoints = self.kpoints / divisor[None,:]
+
+    logger.info("  Wien2K number of dimensions: {}".format(self.ndim))
+    logger.info("  Wien2K number of k-points: {}".format(self.nkp))
+
+  def _readWien2kStruct(self):
+    '''
+    Read the number of inequivalent atoms.
+    Necessary for the header of the energy files.
+        Get the orthogonality of our system (check for 90 degree angles).
+    '''
+
+    logger.info("Wien2K Reading: {}".format(self.fstruct))
+    with open(str(self.fstruct), 'r') as struct:
+      # get the number of inequivalent atoms
+      self.iatms = 0 # inequivalent atoms
+      for line in struct:
+        if line.startswith('ATOM'):
+          self.iatms += 1
+
+      if self.iatms == 0:
+        raise IOError('Wien2k {}: Reading number of inequivalent atoms failed.'.format(str(self.fstruct)))
+      else:
+        logger.info("  Wien2K: Number of inequivalent atoms: {}".format(self.iatms))
+
+      struct.seek(0)
+      # get the number of symmetry operations
+      for line in struct:
+        if 'NUMBER OF SYMMETRY OPERATIONS' in line:
+          self.nsym = int(line[:4])
+          logger.info("  Wien2K: Number of symmetry operations: {}".format(self.nsym))
+          break
+      else:
+        raise IOError('Wien2k {}: Reading number of symmetry operations failed.'.format(str(self.fstruct)))
+
+      # without resetting we can continue reading the operations
+      self.symop    = np.zeros((self.nsym,3,3), dtype=np.float64)
+      self.invsymop = np.zeros((self.nsym,3,3), dtype=np.float64)
+      for isym in range(self.nsym):
+        for i in range(3):
+          temp = struct.readline()
+          self.symop[isym,i,:] = np.array([temp[:2],temp[2:4],temp[4:6]], dtype=np.float64)
+        struct.readline() # skip
+        self.invsymop[isym] = np.linalg.inv(self.symop[isym])
+
+      if struct.readline() != "": # exactly at the EOF
+        raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
+
+      logger.debug('Symmetry operations')
+      logger.debug(self.symop)
 
   def diagData(self, peierlscorrection=True):
     ''' calculate e(r), v(r), c(r)
@@ -259,9 +373,6 @@ class wannier90calculation(DFTcalculation):
       the optical elements and b-field optical elements
     '''
 
-    if self.irreducible:
-      logger.critical('Detected irreducible grid: optical moments are not symmetrized - will produce wrong results')
-
     logger.info('Calculating optical elements from derivatives')
     # devine levicity matrix so we can use it in einsteinsummations
     levmatrix = np.zeros((3,3,3), dtype=np.float64)
@@ -270,42 +381,96 @@ class wannier90calculation(DFTcalculation):
         for k in range(3):
           levmatrix[i,j,k] = levicivita(i,j,k)
 
-    for ispin in range(self.spins):
-      vel = self.velocities[ispin] # nkp, nproj, nproj, 3
-      cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
-
-      # transform into matrix form
-      curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
-      curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
-      curmat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(curmat[:,:,:, [0,0,1], [1,2,2]])
-
-      # no symmetrization necessary since we _currently_ restrict to reducible grids
-      # we exploit the LRTC Fortran differentiation between 3 6 and 9 optical elements
-      # this way the array stays float64
-      vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
-      if self.ortho:
-        vel2 = vel2[:,:,:,:3].real
-      else:
-        if np.any(np.abs(vel2.imag) > 1e-6):
-          temp = vel2.copy()
-          vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-          vel2[:,:,:,:6] = temp
-          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+    # symmetrizing is essential
+    if self.irreducible:
+      for ispin in range(self.spins):
+        if self.ortho:
+          loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
         else:
-          vel2 = vel2.real
-      self.opticalMoments.append(vel2)
-      vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
-      self.opticalDiag.append(vel2diag)
+          loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
+        loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.float64)
+        for ikp in range(self.nkp):
+          progressBar(ikp+1,self.nkp,status='k-points')
 
-        #           epsilon_cij v_a v_j c_bi -> abc
-      mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
-      if np.any(np.abs(mb.imag) > 1e-6):
-        # FIXME: do this properly
-        logger.info('Detected complex magnetic optical elements. Truncating.')
-      mb = mb.real
-      self.BopticalMoments.append(mb)
-      mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
-      self.BopticalDiag.append(mbdiag)
+          vel     = self.velocities[0][ikp,:,:,:] # bands, bands, 3
+          cur     = self.curvatures[0][ikp,:,:,:] # bands, bands, 6
+
+          # put the curvatures into matrix form
+          curmat  = np.zeros((self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+          curmat[:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:]
+          curmat[:,:, [1,2,2], [0,0,0]] = curmat[:, [0,0,1], [1,2,2]]
+
+          # generate the transformed velocities and curvatures
+          vk = np.einsum('nij,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
+          ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+
+          # take the mean over the squares
+          vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
+          vk2 = np.mean(vk2,axis=2)
+
+          if self.ortho:
+            loc_opticalMoments[ikp,...] = vk2[...,:3].real
+          else:
+            loc_opticalMoments[ikp,:,:,:6] = vk2.real
+            loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
+
+          #           epsilon_cij v_a v_j c_bi -> abc
+          mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk,vk,ck)
+          # FIXME: TRUNCATED
+          mb = np.mean(mb,axis=2).real
+          loc_BopticalMoments[ikp,...] = mb
+
+
+        self.opticalMoments.append(loc_opticalMoments)
+        self.BopticalMoments.append(loc_BopticalMoments)
+        self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),:])
+        self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
+
+      if not self.ortho:
+        truncate = True
+        for ispin in range(self.spins):
+          if np.any(np.abs(self.opticalMoments[...,6:]) > 1e-6):
+            truncate = False
+        if truncate:
+          for ispin in range(self.spins):
+            self.opticalMoments[ispin]  = self.opticalMoments[ispin][...,:6]
+            self.BopticalMoments[ispin] = self.BopticalMoments[ispin][...,:6]
+            self.opticalDiag[ispin]     = self.opticalDiag[ispin][...,:6]
+            self.BopticalDiag[ispin]    = self.BopticalDiag[ispin][...,:6]
+    else:
+      for ispin in range(self.spins):
+        vel = self.velocities[ispin] # nkp, nproj, nproj, 3
+        cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
+
+        # transform into matrix form
+        curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
+        curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
+        curmat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(curmat[:,:,:, [0,0,1], [1,2,2]])
+        vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
+        if self.ortho:
+          vel2 = vel2[:,:,:,:3].real
+        else:
+          if np.any(np.abs(vel2.imag) > 1e-6):
+            temp = vel2.copy()
+            vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
+            vel2[:,:,:,:6] = temp
+            vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+          else:
+            vel2 = vel2.real
+        self.opticalMoments.append(vel2)
+        vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
+        self.opticalDiag.append(vel2diag)
+
+          #           epsilon_cij v_a v_j c_bi -> abc
+        mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
+        if np.any(np.abs(mb.imag) > 1e-6):
+          # FIXME: do this properly
+          logger.info('Detected complex magnetic optical elements. Truncating.')
+        mb = mb.real
+        self.BopticalMoments.append(mb)
+        mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
+        self.BopticalDiag.append(mbdiag)
+
 
   def outputData(self, fname, charge, mu=None, intraonly=False):
     ''' call the output function '''

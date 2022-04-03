@@ -100,15 +100,15 @@ class LRTCinput(object):
 
       print('\nOPTICAL DATA')
       if spins==1:
-        print('  intra elements   : {}'.format('yes' if 'momentsDiagonal' in h5 else 'no'))
-        print('  inter elements   : {}'.format('yes' if 'kPoint/{:010}/moments'.format(1) in h5 else 'no'))
-        print('  band derivatives : {}'.format('yes' if 'derivatives' in h5 else 'no'))
-        print('  band curvatures  : {}'.format('yes' if 'curvatures' in h5 else 'no'))
+        print('  intra optical elements   : {}'.format('yes' if 'momentsDiagonal' in h5 else 'no'))
+        print('  inter optical elements   : {}'.format('yes' if 'kPoint/{:010}/moments'.format(1) in h5 else 'no'))
+        print('  intra magnetic elements  : {}'.format('yes' if 'momentsDiagonalBfield' in h5 else 'no'))
+        print('  inter magnetic elements  : {}'.format('yes' if 'kPoint/{:010}/momentsBfield'.format(1) in h5 else 'no'))
       else:
-        print('  intra elements   : {}'.format('yes' if 'up/momentsDiagonal' in h5 else 'no'))
-        print('  inter elements   : {}'.format('yes' if 'up/kPoint/{:010}/moments'.format(1) in h5 else 'no'))
-        print('  band derivatives : {}'.format('yes' if 'up/derivatives' in h5 else 'no'))
-        print('  band curvatures  : {}'.format('yes' if 'up/curvatures' in h5 else 'no'))
+        print('  intra optical elements   : {}'.format('yes' if 'up/momentsDiagonal' in h5 else 'no'))
+        print('  inter optical elements   : {}'.format('yes' if 'up/kPoint/{:010}/moments'.format(1) in h5 else 'no'))
+        print('  intra magnetic elements  : {}'.format('yes' if 'up/momentsDiagonalBfield' in h5 else 'no'))
+        print('  inter magnetic elements  : {}'.format('yes' if 'up/kPoint/{:010}/momentsBfield'.format(1) in h5 else 'no'))
 
 
   def outputDOS(self, plot, broadening=0.02):
