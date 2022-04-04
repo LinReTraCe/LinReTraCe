@@ -328,7 +328,7 @@ class LRTCoutput(object):
 
 
 
-  def outputData(self, command, imag=False, plot=False, diag=False, compare=False, *args):
+  def outputData(self, command, imag=False, plot=False, diag=False, sym=False, compare=False, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -404,51 +404,71 @@ class LRTCoutput(object):
 
               if ispin >= 0:
                 if idir3 is None:
-                  outarray = outfull[:,ispin,idir1,idir2]
+                  outarray_dir = outfull[:,ispin,idir1,idir2]
+                  if sym:
+                    outarray_sym = (outfull[:,ispin,idir1,idir2] + outfull[:,ispin,idir2,idir1]) / 2.
+                    outarray_asym = (outfull[:,ispin,idir1,idir2] - outfull[:,ispin,idir2,idir1]) / 2.
                 else:
-                  outarray = outfull[:,ispin,idir1,idir2,idir3]
+                  outarray_dir = outfull[:,ispin,idir1,idir2,idir3]
+                  if sym:
+                    outarray_sym = (outfull[:,ispin,idir1,idir2,idir3] + outfull[:,ispin,idir2,idir1,idir3]) / 2.
+                    outarray_asym = (outfull[:,ispin,idir1,idir2,idir3] - outfull[:,ispin,idir2,idir1,idir3]) / 2.
               else:
                 if idir3 is None:
-                  outarray = outspinsum[:,idir1,idir2]
+                  outarray_dir = outspinsum[:,idir1,idir2]
+                  if sym:
+                    outarray_sym = (outspinsum[:,idir1,idir2] + outspinsum[:,idir2,idir1]) / 2.
+                    outarray_asym = (outspinsum[:,idir1,idir2] - outspinsum[:,idir2,idir1]) / 2.
                 else:
-                  outarray = outspinsum[:,idir1,idir2,idir3]
+                  outarray_dir = outspinsum[:,idir1,idir2,idir3]
+                  if sym:
+                    outarray_sym = (outspinsum[:,idir1,idir2,idir3] + outspinsum[:,idir2,idir1,idir3]) / 2.
+                    outarray_asym = (outspinsum[:,idir1,idir2,idir3] - outspinsum[:,idir2,idir1,idir3]) / 2.
 
-
-              if plot:
-                plt.plot(self.axis, outarray.real, label='{}.real [{}]{}'.format(command, icombdescr, ' - '+self.fname if compare else ''))
-                if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}]{}'.format(command, icombdescr, ' - '+self.fname if compare else ''))
+              if sym:
+                outarray_dir = None
               else:
-                if idir3 is None:
-                  auxarray = np.zeros((self.nT,3), dtype=np.int)
-                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1], dtype=np.int)
+                outarray_sym = outarray_asym = None
 
-                  if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i', \
-                               header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2'.format \
-                               (self.axisname,self.axisunit,command))
-                    self.headerwritten = True
+              for outarray, symdescr, isym in zip([outarray_dir, outarray_sym, outarray_asym], ['', ' sym', ' asym'], range(3)):
+                if outarray is None: continue
 
-                  else:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
+                if plot:
+                  plt.plot(self.axis, outarray.real, label='{}.real [{}{}]{}'.format(command, icombdescr, symdescr, ' - '+self.fname if compare else ''))
+                  if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}{}]{}'.format(command, icombdescr, symdescr, ' - '+self.fname if compare else ''))
                 else:
-                  auxarray = np.zeros((self.nT,4), dtype=np.int)
-                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=np.int)
+                  if idir3 is None:
+                    auxarray = np.zeros((self.nT,4), dtype=np.int)
+                    auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,isym], dtype=np.int)
 
-                  if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
-                               header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3'.format \
-                               (self.axisname,self.axisunit,command))
-                    self.headerwritten = True
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 isym'.format \
+                                 (self.axisname,self.axisunit,command))
+                      self.headerwritten = True
 
+                    else:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
                   else:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
+                    auxarray = np.zeros((self.nT,5), dtype=np.int)
+                    auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1,isym], dtype=np.int)
+
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i %2i', \
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3 isym'.format \
+                                 (self.axisname,self.axisunit,command))
+                      self.headerwritten = True
+
+                    else:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i %2i', comments='', header='\n')
 
               # we have plotted it now, now break the idir3 loop
               # if this is not done we do it twice more
+              print('bla')
               if idir3 is None:
                 break
     else:
