@@ -43,28 +43,32 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
     h5out.attrs['identifier'] = 'LRTCinput'
 
     # output of attributes
-    h5out['.kmesh/nkp']           = escalc.nkp
-    h5out['.kmesh/nkx']           = escalc.nkx
-    h5out['.kmesh/nky']           = escalc.nky
-    h5out['.kmesh/nkz']           = escalc.nkz
+    h5out['.kmesh/nkp']           = int(escalc.nkp)
+    h5out['.kmesh/nkx']           = int(escalc.nkx)
+    h5out['.kmesh/nky']           = int(escalc.nky)
+    h5out['.kmesh/nkz']           = int(escalc.nkz)
+    if escalc.weights.dtype != np.float64:
+      raise IOError('weights must be array of np.float64')
     h5out['.kmesh/weights']       = escalc.weights
-    if type(escalc.weightsum) is not int:
-      raise IOError('Weightsum must be integer')
-    h5out['.kmesh/weightsum']     = escalc.weightsum
+    h5out['.kmesh/weightsum']     = int(escalc.weightsum)
     if escalc.multiplicity.dtype != int:
       raise IOError('Multiplicity must be array of integers')
     h5out['.kmesh/multiplicity']  = escalc.multiplicity
+    if escalc.kpoints.dtype != np.float64:
+      raise IOError('kpoints must be array of np.float64')
     h5out['.kmesh/points']        = escalc.kpoints
     h5out['.kmesh/irreducible']   = escalc.irreducible
 
-    h5out['.unitcell/volume']     = escalc.vol
-    h5out['.unitcell/ndim']       = escalc.ndim
+    h5out['.unitcell/volume']     = float(escalc.vol)
+    h5out['.unitcell/ndim']       = int(escalc.ndim)
+    if escalc.dims.dtype != bool:
+      raise IOError('dims must be array of boolean')
     h5out['.unitcell/dims']       = escalc.dims
 
-    h5out['.bands/charge']        = escalc.charge
-    h5out['.bands/energyBandMax'] = escalc.energyBandMax
-    h5out['.bands/ispin']         = escalc.spins
-    h5out['.bands/mu']            = escalc.mu
+    h5out['.bands/charge']        = float(escalc.charge)
+    h5out['.bands/energyBandMax'] = int(escalc.energyBandMax)
+    h5out['.bands/ispin']         = int(escalc.spins)
+    h5out['.bands/mu']            = float(escalc.mu)
 
     for ispin in range(escalc.spins):
       if escalc.spins == 1:

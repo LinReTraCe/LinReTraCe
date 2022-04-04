@@ -468,7 +468,6 @@ class LRTCoutput(object):
 
               # we have plotted it now, now break the idir3 loop
               # if this is not done we do it twice more
-              print('bla')
               if idir3 is None:
                 break
     else:

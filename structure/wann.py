@@ -80,10 +80,15 @@ class wannier90calculation(DFTcalculation):
     self.opticalBandMax = self.nproj
 
     minarr = np.array([np.min(self.kpoints[:,i]) for i in range(3)])
+    if np.any(minarr > 0):
+      self.kshift = True
+    else:
+      self.kshift = False
     maxarr = np.array([np.max(self.kpoints[:,i]) for i in range(3)])
     spacing = (1-maxarr+minarr) # minarr is > 0 for shifted grids
     self.nkx, self.nky, self.nkz = [int(np.around(1./i)) for i in spacing]
     logger.info("   Momentum Grid:  {} x {} x {}".format(self.nkx,self.nky,self.nkz))
+    logger.info("   Momentum Shift: {}".format(self.kshift))
 
     if not (self.nkx*self.nky*self.nkz == self.nkp):
       raise IOError('Irreducible momentum grids not implemented')
@@ -98,7 +103,7 @@ class wannier90calculation(DFTcalculation):
     # wannier90 should always give us a reducible grid
     self.irreducible = False
 
-  def expandKmesh(self, kmesh, kshift=False, kirr=False):
+  def expandKmesh(self, kmesh, kirr=False):
     '''
       Instead of the kmesh found in the Wannier90 calculation
       define a new one. also redefine multiplicities and weights
@@ -127,7 +132,7 @@ class wannier90calculation(DFTcalculation):
     self._kmeshy = np.linspace(0,1,self.nky,endpoint=False)
     self._kmeshz = np.linspace(0,1,self.nkz,endpoint=False)
 
-    if kshift:
+    if self.kshift:
       self._kmeshshift = []
       for ik in [self.nkx,self.nky,self.nkz]:
         if ik > 1:
@@ -176,6 +181,21 @@ class wannier90calculation(DFTcalculation):
       divisor.append(int(firstline[pos1+3:pos1+6]))
       divisor.append(int(firstline[pos1+6:pos1+9]))
       divisor = np.array(divisor, dtype=np.int)
+
+      raise_error = False
+      if self.nkx == self.nky and divisor[0] != divisor[1]:
+          raise_error = True
+      if self.nkx == self.nkz and divisor[0] != divisor[2]:
+          raise_error = True
+      if self.nky == self.nkz and divisor[1] != divisor[1]:
+          raise_error = True
+
+      for iknew, ikold in zip(divisor, [self.nkx, self.nky, self.nkz]):
+        if iknew < 1: raise_error = True
+        if ikold == 1 and not (iknew == 1): raise_error = True
+
+      if raise_error:
+        raise IOError('Provided kmesh does not conform to original kmesh')
 
       self.nkx, self.nky, self.nkz = divisor
       # determine dimension whether we find '1's in the divisor

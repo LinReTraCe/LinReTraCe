@@ -33,7 +33,6 @@ def parse_args(args=None):
   parser.add_argument('charge', help='Number of electrons in the provided bands')
   group = parser.add_mutually_exclusive_group(required=False)
   group.add_argument('--kmesh', nargs=3, help='Custom k grid - must conform original grid (8x8x5 -> 20x20x5)')
-  parser.add_argument('--kshift', help='Custom k grid - shift to avoid Gamma point', default=False, action='store_true')
   group.add_argument('--wien2k',  help='Use Wien2K k grid instead (struct, klist)', default=False, action='store_true')
   parser.add_argument('--nocorrection', help='Do not calculate the correction terms to the Peierls approximation', default=False, action='store_true')
   parser.add_argument('--intra', help='Only output intra elements', default=False, action='store_true')
@@ -73,7 +72,7 @@ if __name__ == '__main__':
       ham = wannier90calculation(args.system)
       ham.readData()
       if args.kmesh:
-        ham.expandKmesh(np.array(args.kmesh, dtype=int), kshift=args.kshift)
+        ham.expandKmesh(np.array(args.kmesh, dtype=int))
       elif args.wien2k:
         ham.readWien2k()
       ham.diagData(peierlscorrection = not args.nocorrection)
