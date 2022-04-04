@@ -599,13 +599,11 @@ class wannier90calculation(DFTcalculation):
     self.rvec = np.array(self.rvec, dtype=np.float64)
     logger.info('   real_lattice: \n{}'.format(self.rvec))
 
-    ''' FIXME: this does not detect orthogonal bcc and fcc lattices '''
-    if np.abs(np.dot(self.rvec[0,:],self.rvec[1,:]) < 1e-6) and \
-       np.abs(np.dot(self.rvec[0,:],self.rvec[2,:]) < 1e-6) and \
-       np.abs(np.dot(self.rvec[1,:],self.rvec[2,:]) < 1e-6):
-      self.ortho = True
-    else:
-      self.ortho = False
+    ''' if a_1 + a_2 + a_3 is a scaled vector of the maximal entries -> ortho '''
+    sum_vecs = np.sum(self.rvec, axis=1) # a_1 + a_2 + a_3
+    max_vecs = np.array([np.max(np.abs(i)) for i in self.rvec[:,i]]) # maximal entries
+    ratio = sum_vecs / max_vecs
+    self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
     # V = (axb . c)
