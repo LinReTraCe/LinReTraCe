@@ -40,11 +40,11 @@ def parse_args(args=None):
   parser.add_argument('-c', '--compare', nargs='+', help='Comparison of identical dataset from different LRTC output files')
   parser.add_argument('-g', '--gap',  help='Plot the band gap in combination with mu', default=False, action='store_true')
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
-  parser.add_argument('-s', '--sym',    help='Plot the (a)symmetrized band combination instead (xy -> sym=(xy+yx)/2 - asym(xy-yx)/2', default=False, action='store_true') # plot the symmetrized / asymmetrized values instead
   parser.add_argument('-x', '--axis', help='Use alternate axis (T -> beta or mu -> carrier)', default=False, action='store_true')
-  parser.add_argument('--imag',   help=argparse.SUPPRESS, default=False, action='store_true') # plot the imaginary parts
-  parser.add_argument('--diag',   help=argparse.SUPPRESS, default=False, action='store_true') # only use the diagonal parts (when no directions supplied9
+  parser.add_argument('--imag',   help=argparse.SUPPRESS, default=False, action='store_true') # plot the imaginary parts in addition to the real part
+  parser.add_argument('--diag',   help=argparse.SUPPRESS, default=False, action='store_true') # only use the diagonal parts (when no directions supplied
   parser.add_argument('--debug',  help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--sym',    help=argparse.SUPPRESS, default=False, action='store_true') # plot the symmetrized / asymmetrized values instead (dir1,dir2) +- (dir2,dir1) / 2.
 
   return parser.parse_args(args)
 
