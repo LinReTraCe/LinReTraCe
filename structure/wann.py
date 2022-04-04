@@ -147,7 +147,7 @@ class wannier90calculation(DFTcalculation):
         for ikz in self._kmeshz:
           self.kpoints.append([ikx,iky,ikz])
     self.kpoints = np.array(self.kpoints)
-    if kshift: self.kpoints += self._kmeshshift[None,:]
+    if self.kshift: self.kpoints += self._kmeshshift[None,:]
 
     self.multiplicity = np.ones((self.nkp,), dtype=int)
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
