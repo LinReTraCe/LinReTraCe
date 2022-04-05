@@ -12,6 +12,7 @@ from structure.dft   import DFTcalculation
 from structure.es    import ElectronicStructure
 from structure.inout import h5output
 from structure.aux   import levicivita
+from structure.units import bohr2angstrom
 
 import scipy.optimize
 import numpy as np
@@ -41,7 +42,7 @@ class wannier90calculation(DFTcalculation):
   '''
 
   def __init__(self, directory, **kwargs):
-    logger.info("Initializing Wannier90 calculation.")
+    logger.info("\nInitializing Wannier90 calculation.")
     super(wannier90calculation, self).__init__(directory)
 
     self._checkDirectory()    # is this actually a directory
@@ -70,6 +71,7 @@ class wannier90calculation(DFTcalculation):
     ''' get the lattice vectors, number of k-points
         number of projections, projection centers,
         hopping parameters '''
+    self._readWout()
     self._readNnkp()
     self._readHr()
     logger.info("Files successfully read.")
@@ -525,10 +527,15 @@ class wannier90calculation(DFTcalculation):
     '''
       static file endings with varialbe file beginnings
     '''
-    self.fhr         = self.case + '_hr.dat'
-    self.fhrup       = self.case + '_hr.datup'
-    self.fhrdn       = self.case + '_hr.datdn'
-    self.fnnkp       = self.case + '.nnkp'
+    self.fhr     = self.case + '_hr.dat'
+    self.fhrup   = self.case + '_hr.datup'
+    self.fhrdn   = self.case + '_hr.datdn'
+
+    self.fnnkp   = self.case + '.nnkp'
+
+    self.fwout   = self.case + '.wout'
+    self.fwoutup = self.case + '.woutup'
+    self.fwoutdn = self.case + '.woutdn'
 
   def _detectCalculation(self):
     '''
@@ -565,16 +572,47 @@ class wannier90calculation(DFTcalculation):
       self.weightsum = 1
       self.spins = 2
       self.fhraccess = [self.fhrup, self.fhrdn]
+      self.fwoutaccess = [self.fwoutup, self.fwoutdn]
     elif self.calctype == 2:
       self.weightsum = 2
       self.spins = 1
       self.fhraccess = [self.fhr]
+      self.fwoutaccess = [self.fwout]
 
     for i in self.fhraccess:
       if not os.path.isfile(i):
         raise IOError('Error: case_hr.dat* is missing')
       if os.stat(i).st_size == 0:
         raise IOerror('Error: case_hr.dat* is empty.')
+
+  def _readWout(self):
+    '''
+      get length scale
+    '''
+
+    self.lengthscale = []
+
+    for fwout in self.fwoutaccess:
+      logger.info("Reading: {}".format(fwout))
+      with open(str(fwout), 'r') as wout:
+        for line in wout:
+          if 'Length Unit' in line:
+            if 'Ang' in line:
+              logger.info("   Length scale: Ang")
+              self.lengthscale.append(1.0)
+            else:
+              logger.info("   Length scale: Bohr")
+              self.lengthscale.append(bohr2angstrom)
+            break
+        else:
+          raise IOError('Length scale not detected in case.wout* file')
+
+    if len(self.lengthscale) == 2:
+      if self.lengthscale[0] != self.lengthscale[1]:
+        raise IOError('Up and Dn files have two different length scales')
+
+    self.lengthscale = self.lengthscale[0]
+
 
   def _readNnkp(self):
     '''
@@ -597,17 +635,19 @@ class wannier90calculation(DFTcalculation):
       if not nnkp.readline().startswith('end real_lattice'):
         raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
+    self.rvec *= self.lengthscale
     logger.info('   real_lattice: \n{}'.format(self.rvec))
 
     ''' if a_1 + a_2 + a_3 is a scaled vector of the maximal entries -> ortho '''
     sum_vecs = np.sum(self.rvec, axis=1) # a_1 + a_2 + a_3
-    max_vecs = np.array([np.max(np.abs(i)) for i in self.rvec[:,i]]) # maximal entries
+    max_vecs = np.array([np.max(np.abs(self.rvec[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
     # V = (axb . c)
     self.vol = np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:])
+    self.vol *= self.lengthscale**3
     logger.info('   deduced volume: {}'.format(self.vol))
 
 
@@ -622,6 +662,7 @@ class wannier90calculation(DFTcalculation):
       if not nnkp.readline().startswith('end recip_lattice'):
         raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
+    self.kvec /= self.lengthscale
     logger.info('   recip_lattice: \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:

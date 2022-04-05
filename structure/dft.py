@@ -141,7 +141,7 @@ class w2kcalculation(DFTcalculation):
   '''
 
   def __init__(self, directory, optic=False, calctype=0, case=None, **kwargs):
-    logger.info("Initializing Wien2k calculation.")
+    logger.info("\nInitializing Wien2k calculation.")
     super(w2kcalculation, self).__init__(directory)
     self.optic         = optic   # exising full optical elements
     self.calctype      = calctype
@@ -644,7 +644,7 @@ class vaspcalculation(DFTcalculation):
   '''
 
   def __init__(self, directory, **kwargs):
-    logger.info("Initializing VASP calculation.")
+    logger.info("\nInitializing VASP calculation.")
     super(vaspcalculation, self).__init__(directory)
 
     self.version = None
