@@ -71,7 +71,11 @@ class wannier90calculation(DFTcalculation):
     ''' get the lattice vectors, number of k-points
         number of projections, projection centers,
         hopping parameters '''
-    self._readWout()
+    try:
+      self._readWout()
+    except:
+      logger.critical('An error occured while reading case.wout*, defaulting to Angstrom')
+      self.lengthscale = 1.0
     self._readNnkp()
     self._readHr()
     logger.info("Files successfully read.")
