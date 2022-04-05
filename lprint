@@ -39,6 +39,7 @@ def parse_args(args=None):
   parser.add_argument('output',  nargs='+', help='Dataset to print/plot (\'list\' for an overview)')
   parser.add_argument('-c', '--compare', nargs='+', help='Comparison of identical dataset from different LRTC output files')
   parser.add_argument('-g', '--gap',  help='Plot the band gap in combination with mu', default=False, action='store_true')
+  parser.add_argument('-s', '--scale', help='Scale all quantities by factor', default=1, type=float)
   parser.add_argument('-p', '--plot', help='Plot the dataset instead', default=False, action='store_true')
   parser.add_argument('-x', '--axis', help='Use alternate axis (T -> beta or mu -> carrier)', default=False, action='store_true')
   parser.add_argument('--imag',   help=argparse.SUPPRESS, default=False, action='store_true') # plot the imaginary parts in addition to the real part
@@ -128,9 +129,9 @@ if __name__ == '__main__':
         if cmdlength == 1:
           if args.compare:
             for cmpobj in compareobjs:
-              cmpobj.outputData(cmd, args.imag, args.plot, args.diag, args.compare)
+              cmpobj.outputData(cmd, args.imag, args.plot, args.diag, args.scale, args.compare)
           else:
-            outobj.outputData(cmd, args.imag, args.plot, args.diag, args.compare)
+            outobj.outputData(cmd, args.imag, args.plot, args.diag, args.scale, args.compare)
         else:
           # we iterate through the list and check the following arguments
           for i,icmd in enumerate(args.output):
@@ -159,9 +160,9 @@ if __name__ == '__main__':
 
             if args.compare:
               for cmpobj in compareobjs:
-                cmpobj.outputData(icmd, args.imag, args.plot, args.diag, args.compare, *add_arguments)
+                cmpobj.outputData(icmd, args.imag, args.plot, args.diag, args.scale, args.compare, *add_arguments)
             else:
-              outobj.outputData(icmd, args.imag, args.plot, args.diag, args.compare, *add_arguments)
+              outobj.outputData(icmd, args.imag, args.plot, args.diag, args.scale, args.compare, *add_arguments)
 
         ''' finally, do some decorating '''
         if args.plot:

@@ -328,7 +328,7 @@ class LRTCoutput(object):
 
 
 
-  def outputData(self, command, imag=False, plot=False, diag=False, compare=False, *args):
+  def outputData(self, command, imag=False, plot=False, diag=False, scale=1, compare=False, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -412,6 +412,8 @@ class LRTCoutput(object):
                   outarray = outspinsum[:,idir1,idir2]
                 else:
                   outarray = outspinsum[:,idir1,idir2,idir3]
+
+              outarray *= scale
 
               if plot:
                 plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if compare else ''))
