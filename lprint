@@ -106,6 +106,14 @@ if __name__ == '__main__':
   cmd = args.output[0].strip()
   cmdlength = len(args.output)
 
+  ''' settings to give to outputData method -- all have proper default values '''
+  settings = type('', (), {})() # magic -- creates empty object
+  settings.plot    = args.plot
+  settings.imag    = args.imag
+  settings.diag    = args.diag
+  settings.scale   = args.scale
+  settings.compare = args.compare # if option unused default = None
+
   ''' Output object commands '''
   if outobj is not None:
     try:
@@ -129,9 +137,9 @@ if __name__ == '__main__':
         if cmdlength == 1:
           if args.compare:
             for cmpobj in compareobjs:
-              cmpobj.outputData(cmd, args.imag, args.plot, args.diag, args.scale, args.compare)
+              cmpobj.outputData(cmd, settings)
           else:
-            outobj.outputData(cmd, args.imag, args.plot, args.diag, args.scale, args.compare)
+            outobj.outputData(cmd, settings)
         else:
           # we iterate through the list and check the following arguments
           for i,icmd in enumerate(args.output):
@@ -146,26 +154,26 @@ if __name__ == '__main__':
                 pass # interpret as command
 
             # check arguments afterward until we get to an error
-            add_arguments = []
+            directions = []
             for j in range(i+1,cmdlength):
               try:
                 check = int(args.output[j])
-                add_arguments.append(args.output[j])
+                directions.append(args.output[j])
               except:
                 try:
                   check = directionTransform(args.output[j], outobj.dims)
-                  add_arguments.append(check)
+                  directions.append(check)
                 except:
                   break
 
             if args.compare:
               for cmpobj in compareobjs:
-                cmpobj.outputData(icmd, args.imag, args.plot, args.diag, args.scale, args.compare, *add_arguments)
+                cmpobj.outputData(icmd, settings, *directions)
             else:
-              outobj.outputData(icmd, args.imag, args.plot, args.diag, args.scale, args.compare, *add_arguments)
+              outobj.outputData(icmd, settings, *directions)
 
         ''' finally, do some decorating '''
-        if args.plot:
+        if settings.plot:
           plt.xlabel(outobj.axislatex, fontsize=14)
           if outobj.mode == 'mu':
             if args.axis:
@@ -180,7 +188,7 @@ if __name__ == '__main__':
         except:
           pass
 
-        if args.plot:
+        if settings.plot:
           plt.legend(loc='best')
           if not args.compare: plt.title(outobj.fname)
           plt.show()
@@ -199,8 +207,7 @@ if __name__ == '__main__':
         if cmdlength == 1:
           inpobj.outputDOS(args.plot)
         else:
-          broadening = float(args.output[1])
-          inpobj.outputDOS(args.plot, broadening)
+          inpobj.outputDOS(args.plot, *args.output[1:])
 
         if args.plot:
           plt.title(inpobj.fname)

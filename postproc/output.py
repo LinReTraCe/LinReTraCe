@@ -132,7 +132,7 @@ class LRTCoutput(object):
           self.datasets.update({key : (False, requirement, description, True, magnetic)})
 
 
-  def saveData(self, command, diag=False, *args):
+  def saveData(self, command, *args):
     '''
     Check if the provided command is valid for the given file.
     Save the collected data in self.data in form of a OrderedDict
@@ -328,7 +328,7 @@ class LRTCoutput(object):
 
 
 
-  def outputData(self, command, imag=False, plot=False, diag=False, scale=1, compare=False, *args):
+  def outputData(self, command, settings, *args):
     '''
     User interface for lprint.
     Save the data via saveData
@@ -336,10 +336,10 @@ class LRTCoutput(object):
     or plot it with matplotlib.
     '''
 
-    if plot:
+    if settings.plot:
       import matplotlib.pyplot as plt
 
-    self.saveData(command, diag, *args)
+    self.saveData(command, *args)
     self.headerwritten = False
 
     response = self.owned[command][3]
@@ -378,7 +378,7 @@ class LRTCoutput(object):
                 if ispin == -1: # skip spin-summed elements if we plot all combinations
                   continue
 
-                if diag: # skip non-diagonal elements
+                if settings.diag: # skip non-diagonal elements
                   if idir3 is None:
                     if idir1!=idir2: continue
                   else:
@@ -413,11 +413,11 @@ class LRTCoutput(object):
                 else:
                   outarray = outspinsum[:,idir1,idir2,idir3]
 
-              outarray *= scale
+              outarray *= settings.scale
 
-              if plot:
-                plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if compare else ''))
-                if imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}{}]'.format(command, icombdescr, ' - '+self.fname if compare else ''))
+              if settings.plot:
+                plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
+                if settings.imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
               else:
                 if idir3 is None:
                   auxarray = np.zeros((self.nT,3), dtype=np.int)
@@ -454,8 +454,8 @@ class LRTCoutput(object):
                 break
     else:
       outarray = self.data[command]
-      if plot:
-        plt.plot(self.axis, outarray, label='{}{}'.format(command, ' - '+self.fname if compare else ''))
+      if settings.plot:
+        plt.plot(self.axis, outarray, label='{}{}'.format(command, ' - '+self.fname if settings.compare else ''))
       else:
         np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
         (self.axisname,self.axisunit, self.owned[command][1]))

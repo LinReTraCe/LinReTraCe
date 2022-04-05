@@ -111,12 +111,17 @@ class LRTCinput(object):
         print('  inter magnetic elements  : {}'.format('yes' if 'up/kPoint/{:010}/momentsBfield'.format(1) in h5 else 'no'))
 
 
-  def outputDOS(self, plot, broadening=0.02):
+  def outputDOS(self, plot, broadening=0.02, npoints=1001):
     '''
     Print DOS/NOS
     '''
 
     import matplotlib.pyplot as plt
+
+    broadening = float(broadening)
+    npoints = int(npoints)
+    if broadening < 0: raise IOError('DOS broadening must be > 0')
+    if npoints < 1: raise IOError('DOS points must be >= 1')
 
     with h5py.File(self.fname,'r') as h5:
       mu  = h5['.bands/mu'][()]
@@ -125,15 +130,15 @@ class LRTCinput(object):
       if spins==1:
         ene = h5['energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxis, dos, nos = calcDOS(ene, weights, gamma=broadening, windowsize=1.1)
+        dosaxis, dos, nos = calcDOS(ene, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
         del ene
       else:
         eneup = h5['up/energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxisup, dosup, nosup = calcDOS(eneup, weights, gamma=broadening, windowsize=1.1)
+        dosaxisup, dosup, nosup = calcDOS(eneup, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
         del eneup
         enedn = h5['dn/energies'][()]
-        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, gamma=broadening, windowsize=1.1)
+        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
         del enedn
 
       if plot:
