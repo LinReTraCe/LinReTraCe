@@ -552,7 +552,7 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   if (lBoutput) then
     if (algo%fullOutput > 0) then
 
-      ! L11M
+      ! L11B
       select case (algo%fullOutput)
         case (1) ! full
           allocate(sB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
@@ -617,7 +617,7 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 #endif
       deallocate(sB_partial_sum)
 
-      ! L12M
+      ! L12B
       select case (algo%fullOutput)
         case (1) ! full
           allocate(aB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
@@ -682,7 +682,7 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 #endif
       deallocate(aB_partial_sum)
 
-      ! L22M
+      ! L22B
       select case (algo%fullOutput)
         case (1) ! full
           allocate(xB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,ikstr:ikend))
@@ -753,15 +753,15 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L11M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L11B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, sB_gather)
 
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L12M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L12B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, aB_gather)
 
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L22M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L22B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, xB_gather)
 
       endif
@@ -820,11 +820,11 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 
       ! output at the last temperature step
       if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
-        string = "/L11M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L11B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%sB_sum_range)
-        string = "/L12M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L12B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%aB_sum_range)
-        string = "/L22M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L22B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%xB_sum_range)
       endif
     endif
@@ -1289,7 +1289,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   if (lBoutput) then
     if (algo%fullOutput > 0) then
 
-      ! L11M
+      ! L11B
       select case (algo%fullOutput)
         case (1) ! full
           sumstyle = '/full'
@@ -1380,7 +1380,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       deallocate(sB_partial_sum_dp)
 
 
-      ! L12M
+      ! L12B
       select case (algo%fullOutput)
         case (1) ! full
           sumstyle = '/full'
@@ -1470,7 +1470,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 #endif
       deallocate(aB_partial_sum_dp)
 
-      ! L22M
+      ! L22B
       select case (algo%fullOutput)
         case (1) ! full
           sumstyle = '/full'
@@ -1563,15 +1563,15 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L11M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L11B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, sB_gather)
 
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L12M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L12B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, aB_gather)
 
         write(string,'(I6.6)') info%iStep
-        string = 'step/' // trim(string) // "/L22M/" // trim(adjustl(gname)) // sumstyle
+        string = 'step/' // trim(string) // "/L22B/" // trim(adjustl(gname)) // sumstyle
         call hdf5_write_data(ifile, string, xB_gather)
 
       endif
@@ -1641,11 +1641,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 
       ! output at the last temperature step
       if ((algo%step_dir==1 .and. info%iStep==algo%steps) .or. (algo%step_dir==-1 .and. info%iStep==1)) then
-        string = "/L11M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L11B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%sB_sum_range)
-        string = "/L12M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L12B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%aB_sum_range)
-        string = "/L22M/" // trim(adjustl(gname)) // "/sum"
+        string = "/L22B/" // trim(adjustl(gname)) // "/sum"
         call hdf5_write_data(ifile, string, resp%xB_sum_range)
       endif
     endif

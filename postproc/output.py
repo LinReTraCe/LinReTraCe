@@ -105,17 +105,17 @@ class LRTCoutput(object):
     # 'raw' Onsager coefficients
     for iL, unit in zip(['L11','L12','L22'],['V/(A*m)','A/m', 'V*A/m']):
       for ii in ['inter','intra']:
-        for iM, iMdescr, iMflag in zip(['','M'],['',' in magnetic field'],[False,True]):
+        for iM, iMdescr, iMflag in zip(['','B'],['',' in magnetic field'],[False,True]):
           for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
-            key = '{}{}-{}{}'.format(iL,iM,ii,iB) # L11M-intraBoltz
+            key = '{}{}-{}{}'.format(iL,iM,ii,iB) # L11B-intraBoltz
             if key[-1] == '-': key = key[:-1]
-            internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip())
+            internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip()) # L11B/intraBoltzmann/sum
             description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients
     for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','tc','tr','rh','n','muh','mut'], \
-            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11M','L11'),('L11M','L12M','L11','L12'),('L11','L11M'),('L12','L12M')], \
+            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
             ['resistivity', 'conductivity','peltier', 'seebeck', 'thermal conductivity', 'thermal resistivity', 'hall', 'nernst', 'hall mobility', 'thermal mobility'], \
             ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(m*K)]','[m*K/W]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
             [False,False,False,False,False,False,True,True,True,True]):
@@ -180,7 +180,7 @@ class LRTCoutput(object):
 
     # transform the data from onsager coefficients into physical observables
     if response and derived: # combine the saved data
-      requirements = sorted(self.owned[command][1]) # so we have L11 L11M L12 L12M L22 L22M
+      requirements = sorted(self.owned[command][1]) # so we have L11 L11B L12 L12B L22 L22B
       # print(requirements)
       # this sorting is vital for the array indexing below
 
