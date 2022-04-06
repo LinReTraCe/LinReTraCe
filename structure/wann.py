@@ -41,9 +41,11 @@ class wannier90calculation(DFTcalculation):
   intra + inter band magnetic optical elements ~ velocities**2 * curvature
   '''
 
-  def __init__(self, directory, **kwargs):
+  def __init__(self, directory, charge, **kwargs):
     logger.info("\nInitializing Wannier90 calculation.")
     super(wannier90calculation, self).__init__(directory)
+    self.charge = float(charge)
+    if self.charge < 0: raise ValueError('Provided charge must be >= 0')
 
     self._checkDirectory()    # is this actually a directory
     self._defineCase()        # filename prefix
@@ -84,6 +86,9 @@ class wannier90calculation(DFTcalculation):
     self.energyBandMax  = self.nproj
     self.opticalBandMin = 0
     self.opticalBandMax = self.nproj
+
+    if self.charge > 2*self.nproj:
+      raise IOError('Provided charge is larger than possible in projected bands.')
 
     minarr = np.array([np.min(self.kpoints[:,i]) for i in range(3)])
     if np.any(minarr > 0):
@@ -367,8 +372,6 @@ class wannier90calculation(DFTcalculation):
         hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
-
-
       # eigk  : self.nkp, self.nproj
       # U     : self.nkp, self.nproj, self.nproj
       #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
@@ -498,12 +501,11 @@ class wannier90calculation(DFTcalculation):
         self.BopticalDiag.append(mbdiag)
 
 
-  def outputData(self, fname, charge, mu=None, intraonly=False):
+  def outputData(self, fname, mu=None, intraonly=False):
     ''' call the output function '''
     if intraonly:
       self.opticfull = False
       self.bopticfull = False
-    self.charge = charge
     self._calcFermiLevel(mu)
     h5output(fname, self, self)
 

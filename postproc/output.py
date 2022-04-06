@@ -697,7 +697,7 @@ class LRTCoutput(object):
         # we get a byte string here
         # hence we have to decode it to utf-8
         if hfi.attrs['identifier'].decode("utf-8") != 'LRTCoutput':
-          raise IOError('Provided file is not an LRTC output file.')
+          raise IOError('{} is not an LRTC output file.'.format(self.fname))
         if hfi['.quantities'].attrs['mode'].decode("utf-8") == 'temp':
           self.mode = 'temp'
         elif hfi['.quantities'].attrs['mode'].decode("utf-8") == 'mu':
@@ -710,7 +710,7 @@ class LRTCoutput(object):
         self.dimmask3 = np.logical_and(np.logical_and(self.dims[:,None], self.dims[None,:])[:,:,None], self.dims[None,None,:])
         print('#   File: {} - Run mode: {} - {} dimensions: {}'.format(self.fname, self.mode, self.ndim, np.array(["x","y","z"])[self.dims]))
     except:
-      raise IOError('Provided file is not an LRTC output file.')
+      raise IOError('{} is not an LRTC output file.'.format(self.fname))
 
   def _get_axis(self, altaxis):
     '''

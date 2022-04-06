@@ -99,6 +99,7 @@ if __name__ == '__main__':
     try:
       compareobjs = [outobj]
       for cmpfile in args.compare:
+        if cmpfile == args.file: continue
         compareobjs.append(LRTCoutput(cmpfile, altaxis=args.axis))
     except Exception as e:
       error('\n'+str(e))
