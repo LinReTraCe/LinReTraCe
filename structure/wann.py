@@ -44,8 +44,9 @@ class wannier90calculation(DFTcalculation):
   def __init__(self, directory, charge, **kwargs):
     logger.info("\nInitializing Wannier90 calculation.")
     super(wannier90calculation, self).__init__(directory)
-    self.charge = float(charge)
-    if self.charge < 0: raise ValueError('Provided charge must be >= 0')
+    self.charge = charge
+    if isinstance(self.charge, float):
+      if self.charge < 0: raise ValueError('Provided charge must be >= 0')
 
     self._checkDirectory()    # is this actually a directory
     self._defineCase()        # filename prefix
@@ -87,8 +88,9 @@ class wannier90calculation(DFTcalculation):
     self.opticalBandMin = 0
     self.opticalBandMax = self.nproj
 
-    if self.charge > 2*self.nproj:
-      raise IOError('Provided charge is larger than possible in projected bands.')
+    if isinstance(self.charge, float):
+      if self.charge > 2*self.nproj:
+        raise IOError('Provided charge is larger than possible in projected bands.')
 
     minarr = np.array([np.min(self.kpoints[:,i]) for i in range(3)])
     if np.any(minarr > 0):
@@ -379,6 +381,12 @@ class wannier90calculation(DFTcalculation):
 
       ''' this transforms all k points at once '''
       ek, U = np.linalg.eig(hk)
+      for ik in range(self.nkp):
+        ekk, Uk = ek[ik,:], U[ik,:,:]
+        idx = ekk.argsort()
+        ek[ik,:] = ekk[idx]
+        U[ik,:,:] = Uk[:,idx]
+
       Uinv = np.linalg.inv(U)
       vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
       ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
@@ -506,7 +514,21 @@ class wannier90calculation(DFTcalculation):
     if intraonly:
       self.opticfull = False
       self.bopticfull = False
-    self._calcFermiLevel(mu)
+
+    ''' we either get mu=None (with self.charge = number)
+        or we get mu=0.0 with self.charge = None '''
+    if mu is None:
+      self._calcFermiLevel(mu)
+    else:
+      self.charge = 0
+      self.charge_old = self._calcOccupation(mu)
+      logger.info('Determined charge in the projection: {}'.format(self.charge_old))
+      self.charge = np.around(self.charge_old)
+      if self.charge != self.charge_old:
+        logger.warning('Rounding to nearest integer: {}'.format(self.charge))
+        logger.warning('Redetermining chemical potential.')
+        self._calcFermiLevel()
+        logger.warning('If this behavior is not intended provide the desired charge with --charge')
     h5output(fname, self, self)
 
   def _defineCase(self):
