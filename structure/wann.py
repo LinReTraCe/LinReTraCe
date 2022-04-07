@@ -381,12 +381,17 @@ class wannier90calculation(DFTcalculation):
 
       ''' this transforms all k points at once '''
       ek, U = np.linalg.eig(hk)
+
+      ''' Sort eigenvalues from smallest to largest
+          Required for detection of possible gaps '''
       for ik in range(self.nkp):
         ekk, Uk = ek[ik,:], U[ik,:,:]
         idx = ekk.argsort()
         ek[ik,:] = ekk[idx]
         U[ik,:,:] = Uk[:,idx]
 
+      ''' the velocities and curvatures are ordered according to e(k)
+          due to the reordering of U '''
       Uinv = np.linalg.inv(U)
       vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
       ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
@@ -526,7 +531,6 @@ class wannier90calculation(DFTcalculation):
       self.charge = np.around(self.charge_old)
       if self.charge != self.charge_old:
         logger.warning('Rounding to nearest integer: {}'.format(self.charge))
-        logger.warning('Redetermining chemical potential.')
         self._calcFermiLevel()
         logger.warning('If this behavior is not intended provide the desired charge with --charge')
     h5output(fname, self, self)
