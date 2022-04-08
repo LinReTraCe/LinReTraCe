@@ -174,12 +174,19 @@ class ElectronicStructure(ABC):
 
       # save the gap data
       if locgapped:
-        self.gapped.append(True)
         enevalence    = self.energies[ispin][:,self.vb[ispin]]
         eneconduction = self.energies[ispin][:,self.cb[ispin]]
-        self.gap.append(np.min(eneconduction) - np.max(enevalence))
-        self.ecb.append(np.min(eneconduction))
-        self.evb.append(np.max(enevalence))
+        gap = np.min(eneconduction) - np.max(enevalence)
+        if gap < 1e-13: # required for 'touching' bands like in graphene
+          self.gapped.append(False)
+          self.gap.append(np.nan)
+          self.ecb.append(np.nan)
+          self.evb.append(np.nan)
+        else:
+          self.gapped.append(True)
+          self.gap.append(gap)
+          self.ecb.append(np.min(eneconduction))
+          self.evb.append(np.max(enevalence))
       else:
         self.gapped.append(False)
         self.gap.append(np.nan)

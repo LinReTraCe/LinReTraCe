@@ -476,9 +476,7 @@ class wannier90calculation(DFTcalculation):
         if truncate:
           for ispin in range(self.spins):
             self.opticalMoments[ispin]  = self.opticalMoments[ispin][...,:6]
-            self.BopticalMoments[ispin] = self.BopticalMoments[ispin][...,:6]
             self.opticalDiag[ispin]     = self.opticalDiag[ispin][...,:6]
-            self.BopticalDiag[ispin]    = self.BopticalDiag[ispin][...,:6]
     else:
       for ispin in range(self.spins):
         vel = self.velocities[ispin] # nkp, nproj, nproj, 3

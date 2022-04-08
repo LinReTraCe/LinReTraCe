@@ -9,10 +9,10 @@ import numpy as np
 import scipy.optimize
 
 from structure.inout import h5output
-from structure.model import tightbinding
+from structure.model import orthogonal_tightbinding
 
 '''
-ltb: Pre-processing of tight-binding structures for the LRTC code
+lotb: Old Pre-processing of orthogonal tight-binding structures for the LRTC code
 '''
 
 __author__     = 'Matthias Pickem'
@@ -32,17 +32,19 @@ class log_formatter(logging.Formatter):
 
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
-    description='Argument parser for the TB pre-processing for LRTC',
+    description='Argument parser for the pre-processing of orthogonal tight binding models for LRTC',
     epilog="That's the end of the help")
 
   # mandatory
   parser.add_argument('tb_file', type=str, help='tight binding file')
-  parser.add_argument('rvec_file', type=str, help='primitive lattice vectors file')
-  parser.add_argument('atom_file', type=str, help='atomic positions file')
+  parser.add_argument('ax', type=float,  help='lattice spacing in x-direction')
+  parser.add_argument('ay', type=float,  help='lattice spacing in y-direction')
+  parser.add_argument('az', type=float,  help='lattice spacing in z-direction')
   parser.add_argument('nkx', type=int, help='number of k-points in x-direction')
   parser.add_argument('nky', type=int, help='number of k-points in y-direction')
   parser.add_argument('nkz', type=int, help='number of k-points in z-direction')
   parser.add_argument('filling', type=float, help='number of electrons in the system (1 filled band = 2 electrons)')
+
 
   # optional
   parser.add_argument('--shift', default=False, help='shift k-grid by half a k-point', action='store_true')
@@ -69,46 +71,31 @@ if __name__ == '__main__':
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 
-  ''' pre-checking existence of files and number of columns before doing anything '''
+
   try:
     tbdata = np.genfromtxt(args.tb_file)
-    if len(tbdata.shape) == 1:
-      tbdata = tbdata[None,:]
-    if not (tbdata.shape[1] == 6 or tbdata.shape[1] == 7):
-      raise IOError('Provided tight binding file has wrong format (number of columns: 6/7)')
-  except Exception as e:
-    error(str(e)+'\nExit.')
-
-  try:
-    rvecdata = np.genfromtxt(args.rvec_file)
-    if np.any(rvecdata.shape - np.array((3,3), dtype=int)):
-      raise IOError('Provided rvector file has wrong format (3 rows, 3 columnns)')
-  except Exception as e:
-    error(str(e)+'\nExit.')
-
-  try:
-    atomdata = np.genfromtxt(args.atom_file)
-    if len(atomdata.shape) == 1:
-      atomdata = atomdata[None,:]
-    if (atomdata.shape[1] != 4):
-      raise IOError('Provided atom file has wrong format (number of columns: 4)')
+    if (tbdata.shape[1] != 5):
+      raise IOError('Provided tight binding file has wrong format (number of columns: 5)')
   except Exception as e:
     error(str(e)+'\nExit.')
 
   # create tightbinding object
   irr = not args.red
   try:
-    tb = tightbinding(nkx=args.nkx, \
-                      nky=args.nky, \
-                      nkz=args.nkz, \
-                      irreducible=irr, \
-                      kshift=args.shift)
+    tb = orthogonal_tightbinding(ax=args.ax, \
+                                 ay=args.ay, \
+                                 az=args.az, \
+                                 nkx=args.nkx, \
+                                 nky=args.nky, \
+                                 nkz=args.nkz, \
+                                 irreducible=irr, \
+                                 kshift=args.shift)
   except:
     error(str(e)+'\nExit.')
 
   # compute the dispersion, etc and output it
   try:
-    tb.computeData(tbdata=tbdata, rvecdata=rvecdata, atomdata=atomdata, charge=args.filling, mu=args.mu)
+    tb.computeData(tbdata = tbdata, charge=args.filling, mu=args.mu)
   except Exception as e:
     error(str(e)+'\nExit.')
 
