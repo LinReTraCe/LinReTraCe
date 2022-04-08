@@ -45,13 +45,14 @@ def parse_args(args=None):
   parser.add_argument('filling', type=float, help='number of electrons in the system (1 filled band = 2 electrons)')
 
   # optional
+  parser.add_argument('-o', '--output', default=None, help='Output file name')
+  parser.add_argument('-p', '--plot', default=False, action='store_true', help='Plot bands / DOS / NOS')
   parser.add_argument('--shift', default=False, help='shift k-grid by half a k-point', action='store_true')
+  parser.add_argument('--intraonly', default=False, help='only save intra-band elements', action='store_true')
   parser.add_argument('--intra', type=float, help='set all intra-band elements to value given')
   parser.add_argument('--inter', type=float, help='set all inter-band elements to value given')
   parser.add_argument('--red', default=False, help='make k-grid reducible', action='store_true')
-  parser.add_argument('--mu', type=float, help='use provided chemical potential instead of provided filling')
-  parser.add_argument('-o', '--output', default=None, help='Output file name')
-  parser.add_argument('-p', '--plot', default=False, action='store_true', help='Plot bands / DOS / NOS')
+  parser.add_argument('--mu', type=float, help='use provided chemical potential instead of provided filling (only for debugging)')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
 
@@ -116,6 +117,11 @@ if __name__ == '__main__':
     tb.setDiagonal(args.intra)
   if args.inter is not None:
     tb.setOffDiagonal(args.inter)
+
+  if args.intraonly:
+    tb.bopticfull = False
+    tb.opticfull = False
+
   fname = args.output if args.output is not None else \
           'tb-{}-{}-{}-{}.hdf5'.format(tb.nkx,tb.nky,tb.nkz,'irr' if irr else 'red')
   h5output(fname, tb, tb)

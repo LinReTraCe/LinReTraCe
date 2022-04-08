@@ -517,8 +517,15 @@ class orthogonal_tightbinding(Model):
       self.weights      = self.weightsum * self.multiplicity / np.sum(self.multiplicity)
       logger.info('Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
     else:
-      self.kpoints = kpoints
-      self.nkp = self.kpoints.shape[0]
+      self.nkp = self.nkx * self.nky * self.nkz
+      self.kpoints = []
+      for ikx in np.linspace(0,1,self.nkx,endpoint=False):
+        for iky in np.linspace(0,1,self.nky,endpoint=False):
+          for ikz in np.linspace(0,1,self.nkz,endpoint=False):
+            self.kpoints.append([ikx,iky,ikz])
+      self.kpoints = np.array(self.kpoints, dtype=np.float64)
+      if self.kshift:
+        self.kpoints += is_shift.astype(np.float64)/2. / kgrid[None,:].astype(np.float64)
       self.weights = np.full((self.nkp,), fill_value=2./self.nkp, dtype=np.float64)
       self.multiplicity = np.ones((self.nkp,), dtype=int)
 
@@ -1065,16 +1072,9 @@ class tightbinding(Model):
       self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:])
       self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),...])
 
-    if not self.ortho:
-      truncate = True
-      if np.any(np.abs(self.opticalMoments[0][...,6:]) > 1e-6):
-        truncate = False
-      if truncate:
-        self.opticalMoments[0]  = self.opticalMoments[0][...,:6]
-        self.opticalDiag[0]     = self.opticalDiag[0][...,:6]
     else:
-      vel = self.velocities[ispin]
-      cur = self.curvatures[ispin]
+      vel = self.velocities[0]
+      cur = self.curvatures[0]
 
       # transform into matrix form
       curmat  = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
@@ -1104,3 +1104,11 @@ class tightbinding(Model):
       self.BopticalMoments.append(mb)
       mbdiag = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag.append(mbdiag)
+
+    if not self.ortho:
+      truncate = True
+      if np.any(np.abs(self.opticalMoments[0][...,6:]) > 1e-6):
+        truncate = False
+      if truncate:
+        self.opticalMoments[0]  = self.opticalMoments[0][...,:6]
+        self.opticalDiag[0]     = self.opticalDiag[0][...,:6]
