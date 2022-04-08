@@ -171,6 +171,8 @@ class ElectronicStructure(ABC):
           self.vb.append(iband)
           self.cb.append(iband+1)
           break
+      else:
+        locgapped = False
 
       # save the gap data
       if locgapped:
