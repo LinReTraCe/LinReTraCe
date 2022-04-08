@@ -1,0 +1,5 @@
+in order to generate a density of states that has no gap
+we have to capture the special K and K' points
+
+-> use a a number that is divisiable by three for nkx=nky
+-> e.g. 60 60 1

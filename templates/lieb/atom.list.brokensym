@@ -1,0 +1,5 @@
+# sort rx, ry, rz
+1 0 0 0
+# to break symmetry
+2 0 0.4 0
+2 0.4 0 0
