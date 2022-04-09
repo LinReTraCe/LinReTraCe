@@ -284,7 +284,7 @@ subroutine read_energy(algo, edisp)
   integer(hid_t)   :: ifile
   real(8), allocatable :: drank2arr(:,:)
   real(8), allocatable :: drank3arr(:,:,:)
-  real(8), allocatable :: drank5arr(:,:,:,:,:)
+  complex(8), allocatable :: zrank5arr(:,:,:,:,:)
 
   allocate(edisp%band_file(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(edisp%band(edisp%nband_max, ikstr:ikend, edisp%ispin))
@@ -308,9 +308,9 @@ subroutine read_energy(algo, edisp)
       ! call hdf5_read_data(ifile, "/curvatures",  drank3arr)
       ! edisp%band_d2k(:,:,:,1) = drank3arr
       ! deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,1,:) = drank5arr(:,:,:,:,ikstr:ikend)
-      deallocate(drank5arr)
+      call hdf5_read_data(ifile, "/momentsDiagonalBfield",   zrank5arr)
+      edisp%MBoptDiag(:,:,:,:,1,:) = zrank5arr(:,:,:,:,ikstr:ikend)
+      deallocate(zrank5arr)
     endif
     if (edisp%lIntraMoments) then
       call hdf5_read_data(ifile, "momentsDiagonal", drank3arr)
@@ -338,12 +338,12 @@ subroutine read_energy(algo, edisp)
       ! call hdf5_read_data(ifile, "/dn/curvatures",   drank3arr)
       ! edisp%band_d2k(:,:,:,2) = drank3arr
       ! deallocate(drank3arr)
-      call hdf5_read_data(ifile, "/up/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,1,:) = drank5arr(:,:,:,:,ikstr:ikend)
-      deallocate(drank5arr)
-      call hdf5_read_data(ifile, "/dn/momentsDiagonalBfield",   drank5arr)
-      edisp%MBoptDiag(:,:,:,:,2,:) = drank5arr(:,:,:,:,ikstr:ikend)
-      deallocate(drank5arr)
+      call hdf5_read_data(ifile, "/up/momentsDiagonalBfield",   zrank5arr)
+      edisp%MBoptDiag(:,:,:,:,1,:) = zrank5arr(:,:,:,:,ikstr:ikend)
+      deallocate(zrank5arr)
+      call hdf5_read_data(ifile, "/dn/momentsDiagonalBfield",   zrank5arr)
+      edisp%MBoptDiag(:,:,:,:,2,:) = zrank5arr(:,:,:,:,ikstr:ikend)
+      deallocate(zrank5arr)
     endif
     if (edisp%lIntraMoments) then
       call hdf5_read_data(ifile, "/up/momentsDiagonal", drank3arr)

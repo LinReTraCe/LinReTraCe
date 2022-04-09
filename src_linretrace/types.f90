@@ -118,8 +118,8 @@ module Mtypes
     real(8), allocatable    :: MoptDiag(:,:,:,:) ! 3..9, nband, spin, k-points
 
     ! same thing for the magnetic things
-    real(8), allocatable    :: MBoptk(:,:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin, krange
-    real(8), allocatable    :: MBopt(:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin
+    complex(8), allocatable    :: MBoptk(:,:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin, krange
+    complex(8), allocatable    :: MBopt(:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin
     ! diagonal magnetic optical elements
     complex(8), allocatable    :: MBoptDiag(:,:,:,:,:,:) ! 3, 3, 3, nband, spin, k-points
   end type
