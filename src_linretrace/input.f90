@@ -789,6 +789,38 @@ subroutine read_full_optical_elements(ifile, edisp, sct, info)
 
 end subroutine
 
+subroutine read_full_magnetic_optical_elements(ifile, edisp, sct, info)
+  ! currently unused subroutine which will be used to load in the full magnetic
+  ! field optical elements
+  implicit none
+  integer(hid_t)   :: ifile
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  complex(8), allocatable :: zarr5(:,:,:,:,:)
+  character(len=128)   :: string
+
+  if (edisp%ispin == 1) then
+    if (allocated(zarr5)) deallocate(zarr5)
+    write(string,'("kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,1) = zarr5
+    deallocate(zarr5)
+  else
+    if (allocated(zarr5)) deallocate(zarr5)
+    write(string,'("up/kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,1) = zarr5
+    deallocate(zarr5)
+    write(string,'("dn/kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,2) = zarr5
+    deallocate(zarr5)
+  endif
+
+end subroutine
+
 subroutine read_muT_hdf5(algo, temp, mu)
   implicit none
   type(algorithm)   :: algo
