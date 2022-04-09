@@ -11,7 +11,7 @@ try:
 except ImportError:
   spglib_exist = False
 
-from   model import Model
+from   structure.model import Model
 
 from   structure.aux import levicivita
 from   structure.aux import progressBar
@@ -294,18 +294,16 @@ class OrthogonalTightBinding(Model):
         Check symmetries ?
     '''
 
-    bandmin = int(np.min(self.tbdata[:,3:5]))
-    bandmax = int(np.max(self.tbdata[:,3:5]))
+    bandmin = int(np.min(self.tbdata[:,3]))
+    bandmax = int(np.max(self.tbdata[:,3]))
 
     if bandmin != 1:
       raise IOError('Error: tight binding parameter set must start at band 1')
 
     bandcheck = np.full((bandmax,), fill_value=False)
     for itb in range(self.tbdata.shape[0]):
-      band1 = int(self.tbdata[itb,3]) - 1 # band identifier
-      band2 = int(self.tbdata[itb,4]) - 1 # band identifier
-      bandcheck[band1] = True
-      bandcheck[band2] = True
+      band = int(self.tbdata[itb,3]) - 1 # band identifier
+      bandcheck[band] = True
 
     if not np.all(bandcheck):
       raise IOError('Error: tight binding parameter set does not contain all bands')

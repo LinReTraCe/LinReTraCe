@@ -59,7 +59,7 @@ def parse_args(args=None):
 
 
 if __name__ == '__main__':
-  error = lambda string: sys.exit('\nltb: {}'.format(string))
+  error = lambda string: sys.exit('\nlotb: {}'.format(string))
   args = parse_args()
   debug = args.debug
 
