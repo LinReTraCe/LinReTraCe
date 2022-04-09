@@ -13,28 +13,19 @@ with warnings.catch_warnings():
   import h5py
 
 from structure.dft import DFTcalculation
-# from structure.model import Model
-# from structure.btp   import BTPInterpolation
 
-def h5output(outfile, escalc, btpinterp=None, peierls=False):
+def h5output(outfile, escalc, velcalc=None, peierls=False):
   '''
   Output function which takes an instance of an ElectronicStructure calculation
   and writes the internal data to an hdf5 file.
-  Secondary argument is optional and contains the interpolated
-  band velocities / band curvatures.
-  In the case of models this can be computed explicitly.
+
+  Secondary argument is optional and contains the derivatives of the bands
+  These are required to calculate the magnetic field optical elements.
+  derivatives must therefore be either a BTPinterpolation object or a Model object.
+
   Third argument is also optional and functions as a switch
   to use the velocities squared as the diagonal optical elements (peierls approximation)
   '''
-
-  # if not isinstance(escalc, ElectronicStructure):
-  #   sys.exit('Provided electronic structure object for h5output is illegal.')
-
-  # if btpinterp is not None:
-  #   if not (isinstance(btpinterp, Model) or \
-  #      isinstance(btpinterp, BTPInterpolation)):
-  #     sys.exit('Provided interpolation object for h5output is illegal.')
-
 
   logger.info("Initializing output: {}".format(outfile))
   with h5py.File(outfile, 'w') as h5out:
@@ -86,47 +77,37 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
         h5out['.bands/bandgap'+prefix+'ene_vband'] = escalc.evb[ispin]
 
 
-      # energies + derivatives
-      h5out[prefix+'energies']          = escalc.energies[ispin]
-      if btpinterp is not None:
-        # we do not need to truncate here
-        ''' these derivatives used to be used in LRTC: now not necessary anymore '''
-        if False:
-          h5out[prefix+'derivatives']     = btpinterp.velocities[ispin]
-          h5out[prefix+'curvatures']      = btpinterp.curvatures[ispin]
-        h5out[prefix+'momentsDiagonalBfield'] = btpinterp.BopticalDiag[ispin]
-
-
+      # energies
+      h5out[prefix+'energies'] = escalc.energies[ispin]
       if isinstance(escalc, DFTcalculation):
         if ispin == 0: # only warn once
-          if escalc.opticdiag and btpinterp is not None:
+          if escalc.opticdiag and velcalc is not None:
             if peierls:
               logger.warning('CAREFUL: Overwriting intra-band optical elements from DFT calculation.')
             else:
-              if escalc != btpinterp:
+              if escalc != velcalc:
                 logger.warning('CAREFUL: You are mixing DFT and Peierls optical elements.')
 
       # optical elements
       # use the peierls approximation
       # if a) specificially asked for
       #    b) its the only thing we have
-
-      if not escalc.opticdiag and btpinterp is not None:
+      if not escalc.opticdiag and velcalc is not None:
         peierls = True
 
-      if (peierls and btpinterp is not None):
+      if (peierls and velcalc is not None):
         if escalc.opticfull:
           ''' if the full elements are present we need to truncate accordingly '''
-          h5out[prefix+'momentsDiagonal'] = btpinterp.opticalDiag[ispin][:,escalc.opticalBandMin:escalc.opticalBandMax,:]
+          h5out[prefix+'momentsDiagonal'] = velcalc.opticalDiag[ispin][:,escalc.opticalBandMin:escalc.opticalBandMax,:]
           if ispin == 0:
             h5out['.bands/opticalBandMin']  = escalc.opticalBandMin + 1 # internal -> Fortran
             h5out['.bands/opticalBandMax']  = escalc.opticalBandMax
         else:
           ''' if they are not : use the full range from the interpolated data '''
-          h5out[prefix+'momentsDiagonal'] = btpinterp.opticalDiag[ispin]
+          h5out[prefix+'momentsDiagonal'] = velcalc.opticalDiag[ispin]
           if ispin == 0:
-            h5out['.bands/opticalBandMin']  = btpinterp.opticalBandMin + 1 # internal -> Fortran
-            h5out['.bands/opticalBandMax']  = btpinterp.opticalBandMax
+            h5out['.bands/opticalBandMin']  = velcalc.opticalBandMin + 1 # internal -> Fortran
+            h5out['.bands/opticalBandMax']  = velcalc.opticalBandMax
       elif escalc.opticdiag:
         h5out[prefix+'momentsDiagonal'] = escalc.opticalDiag[ispin]
         if ispin == 0:
@@ -140,11 +121,14 @@ def h5output(outfile, escalc, btpinterp=None, peierls=False):
           logger.critical('No optical elements available. Use band interpolation (--interp) or provide them (--optic).')
           logger.critical('Output file is not able to produce transport results with linretrace.\n')
 
-
       if escalc.opticfull:
         for ikp in range(escalc.nkp):
           h5out[prefix+'kPoint/{:010}/moments'.format(ikp+1)] = escalc.opticalMoments[ispin][ikp]
 
-      if btpinterp is not None and btpinterp.bopticfull:
-        for ikp in range(escalc.nkp):
-          h5out[prefix+'kPoint/{:010}/momentsBfield'.format(ikp+1)] = btpinterp.BopticalMoments[ispin][ikp]
+      # no truncation necessary, we have the b-field quantities always on the full energy range
+      if velcalc is not None:
+        if velcalc.bopticdiag:
+          h5out[prefix+'momentsDiagonalBfield'] = velcalc.BopticalDiag[ispin]
+        if velcalc.bopticfull:
+          for ikp in range(escalc.nkp):
+            h5out[prefix+'kPoint/{:010}/momentsBfield'.format(ikp+1)] = velcalc.BopticalMoments[ispin][ikp]

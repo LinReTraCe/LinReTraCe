@@ -49,6 +49,7 @@ class ElectronicStructure(ABC):
     self.weightsum      = 0    # sum of the weights
     self.kpoints        = None # list of the k-points ... shape [nkp,3] float64
     self.irreducible    = False# irreducible or reducible k-grid
+    self.ortho          = False
 
     self.spins          = 1    # number of spins we are considering
     self.vol            = 0    # volume of the unit cell in AA^3
@@ -69,14 +70,36 @@ class ElectronicStructure(ABC):
     self.energyBandMax  = 0    # band maximum for energies
 
     # information about optical elements
-    self.opticfull      = False # full optical elements (inter+intra)
-    self.opticdiag      = False # intra band optical elements
-    self.opticalMoments = []   # list for full optical elements
-    self.opticalDiag    = []   # list for band-diagonal optical elements
-    self.BopticalDiag   = []   # list for band-diagonal magnetic optical elements
-    self.opticalBandMin = 0    # band interval minimum for optical elements
-    self.opticalBandMax = 0    # band interval maximum for optical elements
+    self.opticdiag       = False # intra band optical elements
+    self.opticalDiag     = []    # list for band-diagonal optical elements
+    self.opticfull       = False # full optical elements (inter+intra)
+    self.opticalMoments  = []    # list for full optical elements
+    # same thing for the b-field quantities
+    self.bopticdiag      = False
+    self.bopticalDiag    = []
+    self.bopticfull      = False
+    self.bopticalMoments = []   # list for full optical elements
+    self.opticalBandMin  = 0    # band interval minimum for optical elements
+    self.opticalBandMax  = 0    # band interval maximum for optical elements
 
+  def _defineDimensions(self):
+    '''
+    Count dimension as every k-axis with more than one k-point
+    1-dimension k-axis is enforced to be kx
+    2-dimension k-axis are enforced to be kx and ky
+    '''
+    self.ndim = 0
+    self.dims = []
+    for i in [self.nkx, self.nky, self.nkz]:
+      if i < 1:
+        raise ValueError("Number of kpoints in each direction have to be positive")
+      if i > 1:
+        self.ndim += 1
+        self.dims.append(True)
+      else:
+        self.dims.append(False)
+    self.dims = np.array(self.dims)
+    logger.info('Detected {} dimensions.'.format(self.ndim))
 
   def _calcOccupation(self, mu):
     '''

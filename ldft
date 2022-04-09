@@ -34,7 +34,7 @@ def parse_args(args=None):
     description='Argument parser for the DFT pre-processing of LRTC',
     epilog="That's the end of the help")
   parser.add_argument('system',     help='Folder of DFT calculation')
-  parser.add_argument('-o', '--output',   help='Outputname of hdf5 (default="lrtc-energies.hdf5")', default='lrtc-energies.hdf5')
+  parser.add_argument('-o', '--output',   help='Outputname of hdf5 (default="lrtc-dft.hdf5")', default='lrtc-dft.hdf5')
   parser.add_argument('--optic',    help='Read optical elements (Wien2K)', default=False, action='store_true')
 
   parser.add_argument('--trunc', nargs=2, help='Relative energy levels to include in the truncation. (relative to DFT chem. potential in [eV], e.g. -5 5)')

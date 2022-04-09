@@ -55,6 +55,10 @@ class wannier90calculation(DFTcalculation):
     self._checkFiles()        # check if all files are okay
     logger.info("Files successfully loaded.")
 
+    ''' and some flags '''
+    self.opticdiag  = True
+    self.bopticdiag = True
+
     ''' define the usual spin resolved arrays '''
     self.energies        = []
     self.velocities      = []
@@ -63,12 +67,6 @@ class wannier90calculation(DFTcalculation):
     self.BopticalDiag    = []
     self.opticalMoments  = []
     self.BopticalMoments = []
-
-    ''' and some flags '''
-    self.opticfull  = True
-    self.opticdiag  = True
-    self.bopticfull = True
-
 
   def readData(self):
     ''' get the lattice vectors, number of k-points
@@ -82,6 +80,10 @@ class wannier90calculation(DFTcalculation):
     self._readNnkp()
     self._readHr()
     logger.info("Files successfully read.")
+
+    if self.nproj > 1:
+      self.opticfull  = True
+      self.bopticfull = True
 
     # internal variables stemming from DFTcalculations
     self.energyBandMax  = self.nproj
@@ -106,9 +108,7 @@ class wannier90calculation(DFTcalculation):
     if not (self.nkx*self.nky*self.nkz == self.nkp):
       raise IOError('Irreducible momentum grids not implemented')
 
-    greaterThanOne = ([self.nkx,self.nky,self.nkz] == np.ones(3, dtype=np.int))
-    self.dims = np.logical_not(greaterThanOne)
-    self.ndim = 3 - np.sum(greaterThanOne)
+    self._defineDimensions()
     logger.info("   Number of dimensions: {}".format(self.ndim))
 
     self.multiplicity = np.ones((self.nkp,), dtype=int)
@@ -261,14 +261,14 @@ class wannier90calculation(DFTcalculation):
       if self.iatms == 0:
         raise IOError('Wien2k {}: Reading number of inequivalent atoms failed.'.format(str(self.fstruct)))
       else:
-        logger.info("  Wien2K: Number of inequivalent atoms: {}".format(self.iatms))
+        logger.info("  Number of inequivalent atoms: {}".format(self.iatms))
 
       struct.seek(0)
       # get the number of symmetry operations
       for line in struct:
         if 'NUMBER OF SYMMETRY OPERATIONS' in line:
           self.nsym = int(line[:4])
-          logger.info("  Wien2K: Number of symmetry operations: {}".format(self.nsym))
+          logger.info("  Number of symmetry operations: {}".format(self.nsym))
           break
       else:
         raise IOError('Wien2k {}: Reading number of symmetry operations failed.'.format(str(self.fstruct)))
@@ -430,7 +430,7 @@ class wannier90calculation(DFTcalculation):
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
         else:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-        loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.float64)
+        loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
         for ikp in range(self.nkp):
           progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -458,8 +458,7 @@ class wannier90calculation(DFTcalculation):
 
           #           epsilon_cij v_a v_j c_bi -> abc
           mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk,vk,ck)
-          # FIXME: TRUNCATED
-          mb = np.mean(mb,axis=2).real
+          mb = np.mean(mb,axis=2)
           loc_BopticalMoments[ikp,...] = mb
 
 
@@ -468,15 +467,6 @@ class wannier90calculation(DFTcalculation):
         self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),:])
         self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
 
-      if not self.ortho:
-        truncate = True
-        for ispin in range(self.spins):
-          if np.any(np.abs(self.opticalMoments[...,6:]) > 1e-6):
-            truncate = False
-        if truncate:
-          for ispin in range(self.spins):
-            self.opticalMoments[ispin]  = self.opticalMoments[ispin][...,:6]
-            self.opticalDiag[ispin]     = self.opticalDiag[ispin][...,:6]
     else:
       for ispin in range(self.spins):
         vel = self.velocities[ispin] # nkp, nproj, nproj, 3
@@ -503,13 +493,18 @@ class wannier90calculation(DFTcalculation):
 
           #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
-        if np.any(np.abs(mb.imag) > 1e-6):
-          # FIXME: do this properly
-          logger.info('Detected complex magnetic optical elements. Truncating.')
-        mb = mb.real
         self.BopticalMoments.append(mb)
         mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
         self.BopticalDiag.append(mbdiag)
+    if not self.ortho:
+      truncate = True
+      for ispin in range(self.spins):
+        if np.any(np.abs(self.opticalMoments[...,6:]) > 1e-6):
+          truncate = False
+      if truncate:
+        for ispin in range(self.spins):
+          self.opticalMoments[ispin]  = self.opticalMoments[ispin][...,:6]
+          self.opticalDiag[ispin]     = self.opticalDiag[ispin][...,:6]
 
 
   def outputData(self, fname, mu=None, intraonly=False):
@@ -525,12 +520,11 @@ class wannier90calculation(DFTcalculation):
     else:
       self.charge = 0
       self.charge_old = self._calcOccupation(mu)
-      logger.info('Determined charge in the projection: {}'.format(self.charge_old))
+      logger.warning('\n\nDetermined charge in the projection: {}'.format(self.charge_old))
       self.charge = np.around(self.charge_old)
       if self.charge != self.charge_old:
-        logger.warning('Rounding to nearest integer: {}'.format(self.charge))
+        logger.critical('Rounding to nearest integer: {}\nIf this behavior is not intended provide the desired charge with --charge\n\n'.format(self.charge))
         self._calcFermiLevel()
-        logger.warning('If this behavior is not intended provide the desired charge with --charge')
     h5output(fname, self, self)
 
   def _defineCase(self):

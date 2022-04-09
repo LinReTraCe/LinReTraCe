@@ -53,10 +53,6 @@ class DFTcalculation(ElectronicStructure, ABC):
     super(DFTcalculation, self).__init__()
     self.directory  = os.path.abspath(directory) # directory of our calculation
     self.version    = None      # DFT version as string
-
-    self.opticfull  = False     # full optical elements (intra + inter)
-    self.opticdiag  = False     # intra optical elements
-    self.ortho      = False
     self.aseobject  = None      # ase Atoms object
     self.spacegroup = None      # ase Spacegroup object
 

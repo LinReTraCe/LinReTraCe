@@ -121,7 +121,7 @@ module Mtypes
     real(8), allocatable    :: MBoptk(:,:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin, krange
     real(8), allocatable    :: MBopt(:,:,:,:,:,:) ! 3, 3, 3, nband, nband, spin
     ! diagonal magnetic optical elements
-    real(8), allocatable    :: MBoptDiag(:,:,:,:,:,:) ! 3, 3, 3, nband, spin, k-points
+    complex(8), allocatable    :: MBoptDiag(:,:,:,:,:,:) ! 3, 3, 3, nband, spin, k-points
   end type
 
   type impurity

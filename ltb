@@ -123,7 +123,7 @@ if __name__ == '__main__':
     tb.opticfull = False
 
   fname = args.output if args.output is not None else \
-          'tb-{}-{}-{}-{}.hdf5'.format(tb.nkx,tb.nky,tb.nkz,'irr' if irr else 'red')
+          'lrtc-tb-{}-{}-{}-{}.hdf5'.format(tb.nkx,tb.nky,tb.nkz,'irr' if irr else 'red')
   h5output(fname, tb, tb)
 
   logger.info("Output file {!r} successfully created.".format(fname))

@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#!/bin/env python
 
 from __future__ import print_function, division, absolute_import
 import sys
@@ -58,29 +58,25 @@ class Model(ElectronicStructure, ABC):
   def __init__(self, nkx, nky, nkz):
     super(Model, self).__init__()
 
-    self.opticdiag      = True
-    self.opticfull      = False
-
     self.nkx            = nkx
     self.nky            = nky
     self.nkz            = nkz
     self.nkp            = self.nkx*self.nky*self.nkz
-    self.charge         = None
-    self.weights        = None
     self.weightsum      = 2  # always spin-unpolarized (paramagnetic)
-    self.multiplicity   = None
-
-    self.energyBandMax  = 1
-    self.opticalBandMin = 0
-    self.opticalBandMax = 1
     self.spins          = 1
 
     self.nsym           = structure.symmetries.C1.nsym
     self.symop          = structure.symmetries.C1.symop
     self.invsymop       = structure.symmetries.C1.invsymop
 
+    ''' this should always be there for models '''
+    self.opticdiag      = True
+    self.bopticdiag     = True
+
     self.velocities     = []
     self.curvatures     = []
+
+    self._defineDimensions()
 
   @abc.abstractmethod
   def computeData(self):
@@ -90,37 +86,27 @@ class Model(ElectronicStructure, ABC):
     '''
     pass
 
-  def _defineDimension(self):
-    '''
-    Count dimension as every k-axis with more than one k-point
-    1-dimension k-axis is enforced to be kx
-    2-dimension k-axis are enforced to be kx and ky
-    '''
-    self.ndim = 0
-    self.dims = []
-    for i in [self.nkx, self.nky, self.nkz]:
-      if i < 1:
-        raise ValueError("Number of kpoints in each direction have to be positive")
-      if i > 1:
-        self.ndim += 1
-        self.dims.append(True)
-      else:
-        self.dims.append(False)
-    self.dims = np.array(self.dims)
-    logger.info('Detected {} dimensions.'.format(self.ndim))
-
-  def _setupArrays(self):
+  def _setupArrays(self, ortho):
     '''
     Setup energy, derivative, curvature and optical element arrays
     Currently set up to support non-orthogonal optical elements without spin-orbit coupling
     '''
-    logger.info('Setting up arrays with {} bands.'.format(self.energyBandMax))
-    self.energies       = [np.zeros((self.nkp, self.energyBandMax,), dtype=np.float64)]
-    self.velocities     = [np.zeros((self.nkp, self.energyBandMax, 3), dtype=np.float64)]
-    self.curvatures     = [np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.float64)]
-    self.opticalMoments = [np.zeros((self.nkp, self.energyBandMax, self.energyBandMax, 6), dtype=np.float64)]
-    self.opticalDiag    = [np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.float64)]
-    self.BopticalDiag   = [np.zeros((self.nkp, self.energyBandMax, 3, 3, 3), dtype=np.float64)]
+    logger.info('Setting up arrays with {} band{}.'.format(self.energyBandMax, 's' if self.energyBandMax > 1 else ''))
+
+    if ortho:
+      ioptical = 3
+    else:
+      ioptical = 9
+
+    ''' generic array structure for spin unpolarized calculations '''
+    self.energies        = [np.zeros((self.nkp, self.energyBandMax,), dtype=np.float64)]
+    self.opticalMoments  = [np.zeros((self.nkp, self.energyBandMax, self.energyBandMax, ioptical), dtype=np.float64)]
+    self.opticalDiag     = [np.zeros((self.nkp, self.energyBandMax, ioptical), dtype=np.float64)]
+    self.BopticalDiag    = [np.zeros((self.nkp, self.energyBandMax, 3, 3, 3), dtype=np.complex128)]
+    self.BopticalMoments = [np.zeros((self.nkp, self.energyBandMax, self.energyBandMax, 3, 3, 3), dtype=np.complex128)]
+
+    ''' velocities and curvatures depend strongly on the setup
+        hence they will be initiated according to the needs of the specific class '''
 
   def setDiagonal(self,value):
     logger.info('Setting diagonal optical elements to value: {}'.format(value))
@@ -130,12 +116,17 @@ class Model(ElectronicStructure, ABC):
   def setOffDiagonal(self,value):
     if self.energyBandMax > 1:
       logger.info('Setting offdiagonal optical elements to value: {}'.format(value))
+      ''' keep the intra band elements here '''
       self.opticalMoments[0][:,:,:,:] = float(value)
       self.opticalMoments[0][:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
         = self.opticalDiag[0][:,:,:]
 
+      self.BopticalMoments[0][:,:,:,:,:,:] = float(value)
+      self.BopticalMoments[0][:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
+        = self.BopticalDiag[0][:,:,:,:,:]
       logger.info('Setting offdiagonal output switch')
-      self.opticfull = True
+      self.opticfull  = True
+      self.bopticfull = True
     else:
       logger.warning('Cannot set offdiagonal optical elements since there is only one band')
 
@@ -151,9 +142,10 @@ class quadratic(Model):
 
   def __init__(self, spacing, nkx=1, nky=1, nkz=1):
     super(quadratic, self).__init__(nkx,nky,nkz)
+    raise NotImplementedError('Quadratic models have been deprecated.')
     self.spacing = spacing
 
-    self._defineDimension()
+    self._defineDimensions()
     self.vol = self.spacing**self.ndim
     self._setupKmesh()
 
@@ -284,9 +276,8 @@ class orthogonal_tightbinding(Model):
     self.spacing     = [self.ax, self.ay, self.az]
     self.irreducible = irreducible  # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
-    self.vol = self.ax*self.ay*self.az
-
-    self._defineDimension() # method from parent class
+    self.vol         = self.ax*self.ay*self.az
+    self.ortho       = True
 
     logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
     logger.info('nkx = {}'.format(self.nkx))
@@ -300,18 +291,6 @@ class orthogonal_tightbinding(Model):
         self._setupKmesh()
     else:
       self._setupKmesh()
-
-  def _setupArrays(self):
-    '''
-    Overwrite parent method in order to restrict to orthogonal arrays
-    '''
-    logger.info('Setting up arrays with {} bands.'.format(self.energyBandMax))
-    self.energies       = [np.zeros((self.nkp, self.energyBandMax,), dtype=np.float64)]
-    self.velocities     = [np.zeros((self.nkp, self.energyBandMax, 3), dtype=np.float64)]
-    self.curvatures     = [np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.float64)]
-    self.opticalMoments = [np.zeros((self.nkp, self.energyBandMax, self.energyBandMax, 3), dtype=np.float64)]
-    self.opticalDiag    = [np.zeros((self.nkp, self.energyBandMax, 3), dtype=np.float64)]
-    self.BopticalDiag   = [np.zeros((self.nkp, self.energyBandMax, 3, 3, 3), dtype=np.float64)]
 
   def _defineSymmetries(self):
     '''
@@ -378,7 +357,7 @@ class orthogonal_tightbinding(Model):
     if self.charge <= 0 or self.charge >= self.energyBandMax*2:
       raise ValueError('Provided charge does not match provided bands (out of range (0,2*bands))')
 
-    self._setupArrays()
+    self._setupArrays(self.ortho) # this takes an explicit argument
     self._computeDispersion()
     self._calcFermiLevel(mu)
 
@@ -638,8 +617,8 @@ class orthogonal_tightbinding(Model):
       logger.warn('Detected complex curvatures ... check tight-binding parameter set')
 
     self.energies[0][:,:]     = ek.real
-    self.velocities[0][:,:,:] = vk.real
-    self.curvatures[0][:,:,:] = ck.real
+    self.velocities.append(vk.real)
+    self.curvatures.append(ck.real)
 
     levmatrix = np.zeros((3,3,3), dtype=np.float64)
     for i in range(3):
@@ -717,7 +696,6 @@ class tightbinding(Model):
     super(tightbinding, self).__init__(nkx,nky,nkz)
     self.irreducible = irreducible  # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
-    self._defineDimension() # method from parent class
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
     if self.irreducible and not spglib_exist:
@@ -730,35 +708,31 @@ class tightbinding(Model):
     self.atomdata = atomdata
     self.charge   = charge
 
-    self.opticdiag  = True
-    self.energies        = []
-    self.velocities      = []
-    self.curvatures      = []
-    self.opticalDiag     = []
-    self.BopticalDiag    = []
-    self.opticalMoments  = []
-    self.BopticalMoments = []
-
     if self.tbdata.shape[1] == 6:
       self.imaghopping = False
     elif self.tbdata.shape[1] == 7:
       self.imaghopping = True
 
-    self._computeOrthogonality()
-    self._computeReciprocLattice()
-    self._readHr()
-    if self.charge <= 0 or self.charge >= self.energyBandMax*2:
-      raise ValueError('Provided charge does not match provided bands (out of range (0,2*bands))')
+    self._computeOrthogonality() # sets self.ortho
+    self._computeReciprocLattice() # defines reciprocal lattice vectors and volume
+    self._readHr() # reads hr in formatted array, detects unique r-vectors, detects inter-band transitions
+
+    if self.charge < 0 or self.charge > self.energyBandMax*2:
+      raise ValueError('Provided charge does not match provided bands : charge in [0,2*bands]')
+
     self._setupKmesh()
     if self.irreducible:
       self._checkSymmetries()
+
+    ''' after getting the correct number of k-points we can setup the arrays '''
+    self._setupArrays(self.ortho)
+
     self._computeHk()
     self._calcOptical()
 
     ''' setting some important variables '''
     self.opticalBandMin = 0
     self.opticalBandMax = self.energyBandMax
-
 
     self._calcFermiLevel(mu)
 
@@ -804,6 +778,9 @@ class tightbinding(Model):
     if inter:
       self.opticfull  = True
       self.bopticfull = True
+      logger.info('   Detected inter-band hopping parameters.')
+    else:
+      logger.info('   Detected only intra-band hopping parameters.')
 
     if not np.all(bandcheck):
       raise IOError('Error: tight binding parameter set does not contain all bands')
@@ -817,6 +794,7 @@ class tightbinding(Model):
       hrset.add((rx,ry,rz))
 
     self.nrp = len(hrset)
+    logger.info('   Number of unique r-points: {}'.format(self.nrp))
     self.rpoints = np.array(list(hrset), dtype=np.int)
 
     self.hr = np.zeros((self.nrp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
@@ -895,7 +873,6 @@ class tightbinding(Model):
       self.invsymop = np.linalg.inv(self.symop)
       self.nsym = self.symop.shape[0]
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
-      logger.warning('If this is not correct, adjust input files or use reducible grid')
     else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
@@ -916,15 +893,9 @@ class tightbinding(Model):
       logger.info('Reducible grid: {} symmetry operation'.format(self.nsym))
 
   def _computeHk(self):
-    ''' calculate e(r), v(r), c(r)
-        we need to generate:
-          self.energies[[nkp,nband]]
-          self.velocties[[nkp,nband,3]]
-          self.curvatures[[nkp,nband,6]]
-          self.opticalDiag[[nkp,nband,3/6]]  3 if ortho
-          self.BopticalDiag[[nkp,nband,3,3,3]]
-          self.opticalMoments[[nkp,nband,nband,3/6]]  3 if ortho
-          self.BopticalMoments[[nkp,nband,nband,3,3,3]] + write output function
+    '''
+      calculate H(k) d/dk H(k) and d2/dk2 H(k)
+      via H(r) and primitive lattice vectors
     '''
 
     # hamiltonian H(k)
@@ -936,7 +907,7 @@ class tightbinding(Model):
     # 6: xx yy zz xy xz yz
     hck = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,6), dtype=np.complex128)
 
-    ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+    ''' FOURIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
 
     rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints,self.rpoints)
     ee = np.exp(1j * rdotk)
@@ -973,8 +944,7 @@ class tightbinding(Model):
       print('Detected complex energies ... truncating')
     ''' apparently complex velocities and curvatures are allowed now '''
 
-    ek = ek.real
-    self.energies.append(ek)
+    self.energies[0][...] = ek.real
     self.velocities.append(vk)
     self.curvatures.append(ck)
 
@@ -1009,10 +979,13 @@ class tightbinding(Model):
             break
 
         if not transformed:
-          logger.warning('Tight binding parameter set does not fulfill symmteries given by unit cell' + \
-                        '\n symmetry of r-vector {} is not fulfilled'.format(rvec1) + \
-                        '\n avoid irreducible calculation if this is done on purpose\n\n')
+          logger.warning('\n\nTight binding parameter set does not fulfill symmteries given by unit cell' + \
+                        '\n symmetry of r-vector {} does not respect full point group symmetries'.format(rvec1) + \
+                        '\n break unit cell symmetry or avoid irreducible calculation if this is done on purpose\n\n')
           return
+    else:
+      logger.info('Tight binding parameter set fulfills full point group symmetry set determined by unit cell.')
+
 
   def _calcOptical(self):
     '''
@@ -1034,7 +1007,7 @@ class tightbinding(Model):
         loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3), dtype=np.float64)
       else:
         loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
-      loc_BopticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3,3), dtype=np.float64)
+      loc_BopticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3,3), dtype=np.complex128)
       for ikp in range(self.nkp):
         progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -1062,15 +1035,14 @@ class tightbinding(Model):
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk,vk,ck)
-        # FIXME: TRUNCATED
-        mb = np.mean(mb,axis=2).real
+        mb = np.mean(mb,axis=2)
         loc_BopticalMoments[ikp,...] = mb
 
 
-      self.opticalMoments.append(loc_opticalMoments)
-      self.BopticalMoments.append(loc_BopticalMoments)
-      self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:])
-      self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),...])
+      self.opticalMoments[0][...]  = loc_opticalMoments
+      self.opticalDiag[0][...]     = loc_opticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      self.BopticalMoments[0][...] = loc_BopticalMoments
+      self.BopticalDiag[0][...]    = loc_BopticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),...]
 
     else:
       vel = self.velocities[0]
@@ -1091,19 +1063,15 @@ class tightbinding(Model):
           vel2[:,:,:,6:] = temp[:,:,:,:3].imag
         else:
           vel2 = vel2.real
-      self.opticalMoments.append(vel2)
-      vel2diag = vel2[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
-      self.opticalDiag.append(vel2diag)
+      self.opticalMoments = [vel2]
+      vel2diag            = vel2[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      self.opticalDiag    = [vel2diag]
 
         #           epsilon_cij v_a v_j c_bi -> abc
       mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
-      if np.any(np.abs(mb.imag) > 1e-6):
-        # FIXME: do this properly
-        logger.info('Detected complex magnetic optical elements. Truncating.')
-      mb = mb.real
-      self.BopticalMoments.append(mb)
-      mbdiag = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
-      self.BopticalDiag.append(mbdiag)
+      self.BopticalMoments[0][...] = mb
+      mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
+      self.BopticalDiag[0][...]    = mbdiag
 
     if not self.ortho:
       truncate = True
