@@ -9,7 +9,7 @@ import h5py
 
 ''' insert the linretrace path here to get access to the FullScattering class '''
 sys.path.insert(0,'/home/user/linretrace')
-from  scattering.scattering import FullScattering
+from  scattering.fullscattering import FullScattering
 
 ''' define object via lrtc energy file '''
 scatobj = FullScattering('tb-60-60-60-irr.hdf5')
