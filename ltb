@@ -6,10 +6,9 @@ import logging
 import argparse
 
 import numpy as np
-import scipy.optimize
 
 from structure.inout import h5output
-from structure.model import tightbinding
+from structure.tb    import TightBinding
 
 '''
 ltb: Pre-processing of tight-binding structures for the LRTC code
@@ -99,7 +98,7 @@ if __name__ == '__main__':
   # create tightbinding object
   irr = not args.red
   try:
-    tb = tightbinding(nkx=args.nkx, \
+    tb = TightBinding(nkx=args.nkx, \
                       nky=args.nky, \
                       nkz=args.nkz, \
                       irreducible=irr, \

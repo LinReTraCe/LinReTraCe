@@ -8,13 +8,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 from structure.aux   import progressBar
-from structure.dft   import DFTcalculation
+from structure.dft   import DftCalculation
 from structure.es    import ElectronicStructure
 from structure.inout import h5output
 from structure.aux   import levicivita
 from structure.units import bohr2angstrom
 
-import scipy.optimize
 import numpy as np
 
 try:
@@ -29,7 +28,7 @@ try:
 except ImportError:
   ase_exists = False
 
-class wannier90calculation(DFTcalculation):
+class Wannier90Calculation(DftCalculation):
   '''
   Wannier90 calculation class which reads all the relevant information
   hopping parameteres
@@ -43,7 +42,7 @@ class wannier90calculation(DFTcalculation):
 
   def __init__(self, directory, charge, **kwargs):
     logger.info("\nInitializing Wannier90 calculation.")
-    super(wannier90calculation, self).__init__(directory)
+    super(Wannier90Calculation, self).__init__(directory)
     self.charge = charge
     if isinstance(self.charge, float):
       if self.charge < 0: raise ValueError('Provided charge must be >= 0')

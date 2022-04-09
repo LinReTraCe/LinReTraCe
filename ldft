@@ -6,13 +6,13 @@ import os
 import sys
 import logging
 
-from structure       import dft
-from structure.inout import h5output
-from structure.trunc import truncate
-from structure.trunc import TruncationError
+from structure.dftdetect import DftDetection
+from structure.inout     import h5output
+from structure.trunc     import truncate
+from structure.trunc     import TruncationError
 
 try:
-  from structure import btp
+  from structure.boltztrap import BoltztrapInterpolation
   btp_exists = True
 except ImportError:
   btp_exists = False
@@ -110,7 +110,7 @@ class Program(object):
       return
 
     # DFT detection + read-in
-    dftsearch = dft.DFTdetection(self.args.system)
+    dftsearch = DftDetection(self.args.system)
     dftdict = dftsearch()
     if dftdict is None:
       self.log.error('Could not detect supported DFT calculation in provided folder')
@@ -132,7 +132,7 @@ class Program(object):
     if self.args.interp:
       self.log.info('')
       try:
-        btinterp = btp.BTPInterpolation(calc)
+        btinterp = BoltztrapInterpolation(calc)
         btinterp.interpolate(self.args.interp)
       except BaseException as e:
         self.log.exception(str(e))

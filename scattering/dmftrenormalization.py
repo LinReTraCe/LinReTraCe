@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 
 
-class DMFTrenormalization(object):
+class DmftRenormalization(object):
   '''
   Class to load DMFT renormalization data
   We get a renormalization factor, a pole shift (given by Re Selfenergy(w=0))

@@ -15,11 +15,6 @@ else:
 import scipy.optimize
 import numpy as np
 
-# empty class which can be used as C-like struct
-class struct(object):
-  def __init__(self, **kwargs):
-    self.__dict__.update(kwargs)
-
 class Converged(Exception):
   def __init__(self, mu):
     super(Converged, self).__init__(self)

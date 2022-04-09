@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 import numpy as np
 
-from structure.dft   import DFTcalculation
+from structure.dft   import DftCalculation
 
 # rather bare-bone Exception classes
 class TruncationError(IOError):
@@ -25,7 +25,7 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   This method can only be applied to DFT calculations and not for models.
   '''
 
-  if not isinstance(dftcalc, DFTcalculation):
+  if not isinstance(dftcalc, DftCalculation):
     raise IOError('Provided DFT calculation object for truncation is illegal.')
 
   # make relative energies absolute

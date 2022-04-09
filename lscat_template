@@ -7,12 +7,12 @@ import logging
 import numpy as np
 import h5py
 
-''' insert the linretrace path here to get access to the LRTCscat class '''
+''' insert the linretrace path here to get access to the FullScattering class '''
 sys.path.insert(0,'/home/user/linretrace')
-from  scattering.inout import LRTCscat
+from  scattering.scattering import FullScattering
 
 ''' define object via lrtc energy file '''
-scatobj = LRTCscat('tb-60-60-60-irr.hdf5')
+scatobj = FullScattering('tb-60-60-60-irr.hdf5')
 
 ''' get dependencies '''
 spins, nkp, nbands = scatobj.getDependencies()

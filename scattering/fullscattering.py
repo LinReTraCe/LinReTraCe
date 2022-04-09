@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import h5py
 
-class LRTCscat(object):
+class FullScattering(object):
   '''
     class to define the most general scattering dependencies
     is instantiates with a LRTC energy input that sets most variables

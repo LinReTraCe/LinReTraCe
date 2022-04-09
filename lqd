@@ -7,7 +7,7 @@ import numpy as np
 import scipy.optimize
 
 from structure.inout import h5output
-from structure.model import quadratic
+from structure.quadratic import Quadratic
 
 '''
 lqd: Pre-processing of a quadradic dispersion for the LRTC code
@@ -32,7 +32,7 @@ debug = (logger.getEffectiveLevel() == logging.DEBUG)
 
 
 nk = 100
-qd = quadratic(spacing=5.0, nkx=nk,nky=nk,nkz=1)
+qd = Quadratic(spacing=5.0, nkx=nk,nky=nk,nkz=1)
 
 logger.debug(qd._kmeshx)
 logger.debug(qd._kmeshy)

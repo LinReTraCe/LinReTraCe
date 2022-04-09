@@ -12,7 +12,8 @@ with warnings.catch_warnings():
   warnings.filterwarnings("ignore",category=FutureWarning)
   import h5py
 
-from structure.dft import DFTcalculation
+from structure.dft import DftCalculation
+from structure.model import Model
 
 def h5output(outfile, escalc, velcalc=None, peierls=False):
   '''
@@ -21,7 +22,7 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
 
   Secondary argument is optional and contains the derivatives of the bands
   These are required to calculate the magnetic field optical elements.
-  derivatives must therefore be either a BTPinterpolation object or a Model object.
+  derivatives must therefore be either a BoltztrapInterpolation object or a Model object.
 
   Third argument is also optional and functions as a switch
   to use the velocities squared as the diagonal optical elements (peierls approximation)
@@ -79,7 +80,7 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
 
       # energies
       h5out[prefix+'energies'] = escalc.energies[ispin]
-      if isinstance(escalc, DFTcalculation):
+      if isinstance(escalc, DftCalculation):
         if ispin == 0: # only warn once
           if escalc.opticdiag and velcalc is not None:
             if peierls:

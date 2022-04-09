@@ -24,10 +24,10 @@ try:
 except ImportError:
   ase_exists = False
 
-from structure import es
-from structure import dft
-from structure import units
-from structure.aux import levicivita
+from structure.wien2k import Wien2kCalculation
+from structure.vasp   import VaspCalculation
+from structure        import units
+from structure.aux    import levicivita
 
 class MetaW2kLoader(BTP.GenericWien2kLoader):
   '''
@@ -62,7 +62,7 @@ class MetaW2kLoader(BTP.GenericWien2kLoader):
 
 
 
-class BTPInterpolation(object):
+class BoltztrapInterpolation(object):
   '''
   BoltzTrap Interpolation class which we initialize with a DFTcalculation subclass object.
   The interpolation is implemented for w2k and vasp
@@ -81,6 +81,7 @@ class BTPInterpolation(object):
     self.curvatures    = []
     self.opticalDiag   = []
     self.BopticalDiag  = []
+    self.bopticdiag    = True
     self.bopticfull    = False # we only have the intra band data
 
   def interpolate(self, niter):
@@ -88,7 +89,7 @@ class BTPInterpolation(object):
     logger.info('BoltzTrap2: Requesting interpolation parameter: {}'.format(niter))
     self.niter = niter
 
-    if isinstance(self.dftcalc, dft.w2kcalculation):
+    if isinstance(self.dftcalc, Wien2kCalculation):
       for ispin in range(self.dftcalc.spins):
 
         # set class energy files
@@ -108,7 +109,7 @@ class BTPInterpolation(object):
         if self.dftcalc.spinorbit:
           break
 
-    elif isinstance(self.dftcalc, dft.vaspcalculation):
+    elif isinstance(self.dftcalc, VaspCalculation):
 
       if self.dftcalc.irreducible and not ase_exists:
         raise IOError('vasp interpolation only works for reducible kmeshes or with ase installation')
@@ -134,7 +135,7 @@ class BTPInterpolation(object):
       else:
         self._save2() # we have to split the interpolated arrays we get from BTP
     else:
-      raise IOError('Received object which is not a supported calculation type')
+      raise IOError('BoltztrapInterpolation: Received object that is not supported.')
 
     self._symmetrize()
     logger.info('BoltzTrap2: Interpolation successful.')
@@ -333,7 +334,7 @@ class BTPInterpolation(object):
 
       nkp, nbands = self.velocities[ispin].shape[:2]
 
-      BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.float64)
+      BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.complex128)
       opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
 
       for ikp in range(nkp):
