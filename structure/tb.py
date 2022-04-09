@@ -14,6 +14,7 @@ except ImportError:
 from structure.aux   import levicivita
 from structure.aux   import progressBar
 from structure.model import Model
+import structure.symmetries.C1
 
 class TightBinding(Model):
   '''
@@ -129,6 +130,7 @@ class TightBinding(Model):
     self.nrp = len(hrset)
     logger.info('   Number of unique r-points: {}'.format(self.nrp))
     self.rpoints = np.array(list(hrset), dtype=np.int)
+    logger.debug(' Unique r-points:\n{}'.format(self.rpoints))
 
     self.hr = np.zeros((self.nrp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
     for i in range(self.tbdata.shape[0]):
@@ -187,6 +189,7 @@ class TightBinding(Model):
       symmetry = spglib.get_symmetry(cell, symprec=1e-5)
       symsfull = symmetry['rotations']
 
+      orthosym = True
       self.symop = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
@@ -202,11 +205,32 @@ class TightBinding(Model):
 
         if to_add: self.symop.append(isym)
 
+        if orthosym:
+          test = np.einsum('ij,jk->ik',isym,isym.T)
+          for i in range(3):
+            for j in range(3):
+              if i==j:
+                if test[i,j] != 1.0:
+                  orthosym=False
+              else:
+                if test[i,j] != 0.0:
+                  orthosym=False
+
+
       self.symop = np.array(self.symop)
       self.invsymop = np.linalg.inv(self.symop)
       self.nsym = self.symop.shape[0]
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
-    else:
+      logger.debug('Symmetry operation: \n{}'.format(self.symop))
+      logger.critical('\n\nSymmetry operations are not orthogonal -> changing to reducible calculation\n')
+      if not orthosym:
+        self.irreducible=False
+        self.nsym = structure.symmetries.C1.nsym
+        self.symop = structure.symmetries.C1.symop
+        self.invsymop = structure.symmetries.C1.invsymop
+
+    # because we might end up here from the irreducible setup
+    if not self.irreducible:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
       for ikx in np.linspace(0,1,self.nkx,endpoint=False):
@@ -313,8 +337,8 @@ class TightBinding(Model):
 
         if not transformed:
           logger.warning('\n\nTight binding parameter set does not fulfill symmteries given by unit cell' + \
-                        '\n symmetry of r-vector {} does not respect full point group symmetries'.format(rvec1) + \
-                        '\n break unit cell symmetry or avoid irreducible calculation if this is done on purpose\n\n')
+                        '\n symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
+                        '\n break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
           return
     else:
       logger.info('Tight binding parameter set fulfills full point group symmetry set determined by unit cell.')
