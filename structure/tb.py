@@ -246,11 +246,11 @@ class TightBinding(Model):
     ee = np.exp(1j * rdotk)
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' FORUIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r = np.einsum('di,ri->dr', self.rvecdata, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' FORUIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
     for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
       prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]

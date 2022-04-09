@@ -5,7 +5,6 @@ import sys
 import os
 import argparse
 import warnings
-from collections import OrderedDict
 
 import numpy as np
 with warnings.catch_warnings():
@@ -28,8 +27,8 @@ class LRTCoutput(object):
   '''
   def __init__(self, fname, altaxis=False):
     self.fname    = fname.strip()
-    self.datasets = OrderedDict({})
-    self.owned    = OrderedDict({})
+    self.datasets = {}
+    self.owned    = {}
     self.data     = None
     self.dataspinsum = None
 
@@ -135,7 +134,7 @@ class LRTCoutput(object):
   def saveData(self, command, *args):
     '''
     Check if the provided command is valid for the given file.
-    Save the collected data in self.data in form of a OrderedDict
+    Save the collected data in self.data in form of a dictionary
     '''
 
     command = command.strip()
@@ -154,8 +153,8 @@ class LRTCoutput(object):
     if self.data is None:
       # we define the dictionary and the temperatures
       # the first time we save something
-      self.data        = OrderedDict({})
-      self.dataspinsum = OrderedDict({})
+      self.data        = {}
+      self.dataspinsum = {}
       self.data.update({'temp':self.temp})
       self.data.update({'invtemp':self.invtemp})
       self.data.update({'mu':self.mu})
@@ -176,7 +175,6 @@ class LRTCoutput(object):
       key = self.owned[command][1] # internal hdf5 key
       out = self._getQuantity(key)
       self.data.update({command:out})
-
 
     # transform the data from onsager coefficients into physical observables
     if response and derived: # combine the saved data
