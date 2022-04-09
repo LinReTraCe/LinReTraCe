@@ -83,7 +83,7 @@ class TightBinding(Model):
     self.kvec[:,0] = np.cross(self.rvecdata[1,:],self.rvecdata[2,:]) / self.vol
     self.kvec[:,1] = np.cross(self.rvecdata[2,:],self.rvecdata[0,:]) / self.vol
     self.kvec[:,2] = np.cross(self.rvecdata[0,:],self.rvecdata[1,:]) / self.vol
-    self.kvec *= 2*np.pi
+    # self.kvec *= 2*np.pi
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
 
   def _readHr(self):
@@ -223,11 +223,11 @@ class TightBinding(Model):
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
       logger.debug('Symmetry operation: \n{}'.format(self.symop))
       logger.critical('\n\nSymmetry operations are not orthogonal -> changing to reducible calculation\n')
-      if not orthosym:
-        self.irreducible=False
-        self.nsym = structure.symmetries.C1.nsym
-        self.symop = structure.symmetries.C1.symop
-        self.invsymop = structure.symmetries.C1.invsymop
+      # if not orthosym:
+      #   self.irreducible=False
+      #   self.nsym = structure.symmetries.C1.nsym
+      #   self.symop = structure.symmetries.C1.symop
+      #   self.invsymop = structure.symmetries.C1.invsymop
 
     # because we might end up here from the irreducible setup
     if not self.irreducible:
@@ -273,6 +273,26 @@ class TightBinding(Model):
     ''' FORUIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r = np.einsum('di,ri->dr', self.rvecdata, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
+
+
+    ik = 4
+    logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
+    logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
+    logger.debug('irreducible hvk:\n{}\n\n'.format(hvk[ik,0,0,:]))
+    redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
+    # redk = np.einsum('ij,njk,k->ni',self.rvecdata,self.symop,self.kpoints[ik])
+    redk[redk<0] += 1
+    logger.debug('multiplicity k: {}'.format(self.multiplicity[ik]))
+    red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
+    red_ee = np.exp(1j * red_rdotk)
+    red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
+    red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
+
+    for i in range(redk.shape[0]):
+      print(redk[i],red_hk[i],red_hvk[i,0,0,:])
+    # logger.debug('connected k:\n{}\n\n'.format(redk))
+    # logger.debug('connected hk:\n{}\n\n'.format(red_hk))
+
 
     ''' FORUIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
