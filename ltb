@@ -4,6 +4,7 @@ import sys
 import os
 import logging
 import argparse
+from argparse import RawTextHelpFormatter
 
 import numpy as np
 
@@ -31,8 +32,27 @@ class log_formatter(logging.Formatter):
 
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
-    description='Argument parser for the TB pre-processing for LRTC',
-    epilog="That's the end of the help")
+    description='Argument parser for the TB pre-processing for LRTC', \
+    formatter_class=RawTextHelpFormatter,
+    epilog='''
+tb_file: list of unit-cell distances / orbitals (starting at 1) and hopping (units = eV)
+provide only hopping.real or hopping.real AND hopping.imag for all rows
+# x  y  z  orbital1 orbital2 hopping.real [hopping.imag]
+  0 +1  0  1        1        0.25
+  0 -1  0  1        1        0.25
+...
+
+rvec_file: 3 primitive lattice vectors, each row = 1 vector (units = Angstrom)
+# x y z
+  5 0 0
+  0 5 0
+  0 0 1
+
+atom_file: inequivalent atomic positions w.r.t. primitive lattice vectors
+# ineq (starting at 1) x y z
+  1                    0 0 0
+...
+''')
 
   # mandatory
   parser.add_argument('tb_file', type=str, help='tight binding file')
