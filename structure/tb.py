@@ -83,7 +83,7 @@ class TightBinding(Model):
     self.kvec[:,0] = np.cross(self.rvecdata[1,:],self.rvecdata[2,:]) / self.vol
     self.kvec[:,1] = np.cross(self.rvecdata[2,:],self.rvecdata[0,:]) / self.vol
     self.kvec[:,2] = np.cross(self.rvecdata[0,:],self.rvecdata[1,:]) / self.vol
-    # self.kvec *= 2*np.pi
+    self.kvec *= 2*np.pi
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
 
   def _readHr(self):
@@ -275,21 +275,50 @@ class TightBinding(Model):
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
 
-    ik = 4
+    ''' irreducible point '''
+    ik = 88
     logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
     logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
-    logger.debug('irreducible hvk:\n{}\n\n'.format(hvk[ik,0,0,:]))
+    logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
+    logger.debug('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
+
+    ''' generate all connected points via tranposed symmetry operations '''
+    ''' why transposed .. who the fuck knows '''
+    ''' on these explitily generated k-points .. apply the energy and velocity equations '''
     redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
-    # redk = np.einsum('ij,njk,k->ni',self.rvecdata,self.symop,self.kpoints[ik])
     redk[redk<0] += 1
-    logger.debug('multiplicity k: {}'.format(self.multiplicity[ik]))
     red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
     red_ee = np.exp(1j * red_rdotk)
     red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
     red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
 
+    ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
+    # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
+    testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+    symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
+    # symvk = np.einsum('nij,j->ni',self.symop,hvk[ik,0,0,:3])
+
+    # blaxx = 0
+    # blayy = 0
+    print('irrk, redk, ene(irrk), ene(P irrk), P vxy(irrk), vxy(P irrk)')
     for i in range(redk.shape[0]):
-      print(redk[i],red_hk[i],red_hvk[i,0,0,:])
+      print(self.kpoints[ik,:2], redk[i,:2], '[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
+      # print(self.kpoints[ik,:2], redk[i,:2], hk[ik,0,0], red_hk[i,0,0], symvk[:2], red_hvk[i,0,0,:2])
+      # blaxx += red_hvk[i,0,0,0]**2
+      # blayy += red_hvk[i,0,0,1]**2
+
+    # blaxx /= redk.shape[0]
+    # blayy /= redk.shape[0]
+    # print(' k symmetrized v**2: ', blaxx, blayy)
+    # print(' direct symmetrized v**2: ', symvk[0], symvk[1])
+    # print('\n\n\n\n')
+
+    # # avg = np.einsum('nij,j->ni',self.invsymop,hvk[ik,0,0,:])
+    # avg = np.einsum('nji,j,nji->ni',self.invsymop,hvk[ik,0,0,:],self.symop)
+    # avg = avg[:,0]*avg[:,0]
+    # avg = np.mean(avg)
+    # print(' rotationally symmetrized vx**2: ', avg)
+
     # logger.debug('connected k:\n{}\n\n'.format(redk))
     # logger.debug('connected hk:\n{}\n\n'.format(red_hk))
 
@@ -397,7 +426,12 @@ class TightBinding(Model):
         curmat[:,:, [1,2,2], [0,0,0]] = curmat[:,:, [0,0,1], [1,2,2]]
 
         # generate the transformed velocities and curvatures
-        vk = np.einsum('nij,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
+        # we have to adjust the symmetry operations for the velocity transformation
+        # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
+        testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        vk = np.einsum('nij,bpj->bpni',testsymop,vel)
+
+        # vk = np.einsum('nji,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
         ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
 
         # take the mean over the squares
