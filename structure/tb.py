@@ -191,6 +191,7 @@ class TightBinding(Model):
 
       orthosym = True
       self.symop = []
+      self.symopT = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
         to_add = True
@@ -203,7 +204,8 @@ class TightBinding(Model):
               if isym[j,i] != 0: to_add = False
               if isym[i,j] != 0: to_add = False # redundant I think
 
-        if to_add: self.symop.append(isym)
+        if to_add:
+          self.symop.append(isym)
 
         if orthosym:
           test = np.einsum('ij,jk->ik',isym,isym.T)
@@ -219,6 +221,7 @@ class TightBinding(Model):
 
       self.symop = np.array(self.symop)
       self.invsymop = np.linalg.inv(self.symop)
+
       self.nsym = self.symop.shape[0]
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
       logger.debug('Symmetry operation: \n{}'.format(self.symop))
@@ -283,7 +286,7 @@ class TightBinding(Model):
 
 
     ''' irreducible point '''
-    ik = 88
+    ik = 33
     logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
     logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
     logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
@@ -313,24 +316,12 @@ class TightBinding(Model):
 
 
     ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
+    ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
     # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
     testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+    testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
     symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
-    # symvk = np.einsum('nij,j->ni',self.symop,hvk[ik,0,0,:3])
-
-    ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
-    # symck = np.einsum('nij,jk,nkl->nil',np.linalg.inv(testsymop),hck_mat[ik,0,0,:,:],testsymop) # wrong
-    # testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
-    # symop1 = np.einsum('ij,jk,Nkl,lm,mn->Nin',np.linalg.inv(self.kvec),np.linalg.inv(self.kvec),self.invsymop,self.kvec,self.kvec)
-    symop1 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-    symop2 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
-    # symop2 = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
-
-    # symop1, symop2 = symop2, symop1
-    # symop1 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
-    # symop2 = np.einsum('ji,njk,lk->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
-    # symck = np.einsum('nij,jk->nik',symop1,hck_mat[ik,0,0,:,:])
-    symck = np.einsum('nij,jk,nkl->nil',symop1,hck_mat[ik,0,0,:,:],symop2)
+    symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
 
     # blaxx = 0
     # blayy = 0
@@ -344,7 +335,7 @@ class TightBinding(Model):
 
     print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
     for i in range(redk.shape[0]):
-      print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {}] --- [{} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real))
+      print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
       # print(self.kpoints[ik,:2], redk[i,:2], hk[ik,0,0], red_hk[i,0,0], symvk[:2], red_hvk[i,0,0,:2])
       # blaxx += red_hvk[i,0,0,0]**2
       # blayy += red_hvk[i,0,0,1]**2
@@ -465,11 +456,14 @@ class TightBinding(Model):
         # generate the transformed velocities and curvatures
         # we have to adjust the symmetry operations for the velocity transformation
         # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
-        testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-        vk = np.einsum('nij,bpj->bpni',testsymop,vel)
-
+        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
         # vk = np.einsum('nji,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
-        ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+        # ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+
+        vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+        ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
+
 
         # take the mean over the squares
         vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
@@ -507,8 +501,8 @@ class TightBinding(Model):
         if np.any(np.abs(vel2.imag) > 1e-6):
           temp = vel2.copy()
           vel2 = np.empty((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
-          vel2[:,:,:,:6] = temp
-          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+          vel2[:,:,:,:6] = temp.real
+          vel2[:,:,:,6:] = temp[:,:,:,3:].imag
         else:
           vel2 = vel2.real
       self.opticalMoments = [vel2]
