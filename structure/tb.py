@@ -285,75 +285,65 @@ class TightBinding(Model):
 
 
 
-    ''' irreducible point '''
-    ik = 33
-    logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
-    logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
-    logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
-    logger.debug('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
+    if True:
+      ''' irreducible point '''
+      ik = 33
+      logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
+      logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
+      logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
+      logger.debug('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
 
-    ''' generate all connected points via tranposed symmetry operations '''
-    ''' why transposed .. who the fuck knows '''
-    ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
-    redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
-    redk[redk<0] += 1
-    red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
-    red_ee = np.exp(1j * red_rdotk)
-    red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
-    red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
-    red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
-
-
-    ''' transform irreudicble hck into matrix form '''
-    hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
-    hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
-    hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
-
-    ''' transform reducible hck into matrix form '''
-    red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
-    red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
-    red_hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
+      ''' generate all connected points via tranposed symmetry operations '''
+      ''' why transposed .. who the fuck knows '''
+      ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
+      redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
+      redk[redk<0] += 1
+      red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
+      red_ee = np.exp(1j * red_rdotk)
+      #energy
+      red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
+      #velocitiy
+      red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
+      #curvature
+      red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
+      # mopt
+      red_hvkvk = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.float64)
+      red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]
+      red_hvkvk[:,:,:, [1,2,2], [0,0,1]] = red_hvkvk[:,:,:, [0,0,1], [1,2,2]]
 
 
-    ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
-    ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
-    # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
-    testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-    testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-    symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
-    symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
+      ''' transform irreudicble hck into matrix form '''
+      hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
+      hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
 
-    # blaxx = 0
-    # blayy = 0
-    print('irrk, redk, ene(irrk), ene(P irrk)')
-    for i in range(redk.shape[0]):
-      print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
+      ''' transform reducible hck into matrix form '''
+      red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
+      red_hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
 
-    print('P vx vy(irrk), vx vy(P irrk)')
-    for i in range(redk.shape[0]):
-      print(self.kpoints[ik,:2], redk[i,:2], '[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
 
-    print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
-    for i in range(redk.shape[0]):
-      print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
-      # print(self.kpoints[ik,:2], redk[i,:2], hk[ik,0,0], red_hk[i,0,0], symvk[:2], red_hvk[i,0,0,:2])
-      # blaxx += red_hvk[i,0,0,0]**2
-      # blayy += red_hvk[i,0,0,1]**2
+      ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
+      ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
+      # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
+      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
+      symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
 
-    # blaxx /= redk.shape[0]
-    # blayy /= redk.shape[0]
-    # print(' k symmetrized v**2: ', blaxx, blayy)
-    # print(' direct symmetrized v**2: ', symvk[0], symvk[1])
-    # print('\n\n\n\n')
+      # blaxx = 0
+      # blayy = 0
+      print('irrk, redk, ene(irrk), ene(P irrk)')
+      for i in range(redk.shape[0]):
+        print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
 
-    # # avg = np.einsum('nij,j->ni',self.invsymop,hvk[ik,0,0,:])
-    # avg = np.einsum('nji,j,nji->ni',self.invsymop,hvk[ik,0,0,:],self.symop)
-    # avg = avg[:,0]*avg[:,0]
-    # avg = np.mean(avg)
-    # print(' rotationally symmetrized vx**2: ', avg)
+      print('P vx vy(irrk), vx vy(P irrk)')
+      for i in range(redk.shape[0]):
+        print(self.kpoints[ik,:2], redk[i,:2], '[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
 
-    # logger.debug('connected k:\n{}\n\n'.format(redk))
-    # logger.debug('connected hk:\n{}\n\n'.format(red_hk))
+      print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
+      for i in range(redk.shape[0]):
+        print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
 
 
 
