@@ -317,6 +317,10 @@ class TightBinding(Model):
       hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
       hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
 
+      hvkvk_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
+      hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
+
       ''' transform reducible hck into matrix form '''
       red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
@@ -330,6 +334,7 @@ class TightBinding(Model):
       testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
       symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
+      symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
 
       # blaxx = 0
       # blayy = 0
@@ -344,6 +349,10 @@ class TightBinding(Model):
       print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
       for i in range(redk.shape[0]):
         print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
+
+      print('P vxvx vxvy(ikrr), vxvx vxvy (P irrk)')
+      for i in range(redk.shape[0]):
+        print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1], red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1]))
 
 
 
