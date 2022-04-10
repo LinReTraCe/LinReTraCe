@@ -79,12 +79,15 @@ class TightBinding(Model):
 
   def _computeReciprocLattice(self):
     self.vol = np.dot(np.cross(self.rvecdata[0,:],self.rvecdata[1,:]),self.rvecdata[2,:])
+    self.rvec = self.rvecdata.T # we go from rows to columns here to be conistent with kvec
     self.kvec = np.zeros_like(self.rvecdata, dtype=np.float64)
-    self.kvec[:,0] = np.cross(self.rvecdata[1,:],self.rvecdata[2,:]) / self.vol
-    self.kvec[:,1] = np.cross(self.rvecdata[2,:],self.rvecdata[0,:]) / self.vol
-    self.kvec[:,2] = np.cross(self.rvecdata[0,:],self.rvecdata[1,:]) / self.vol
+    self.kvec[:,0] = np.cross(self.rvec[:,1],self.rvec[:,2]) / self.vol
+    self.kvec[:,1] = np.cross(self.rvec[:,2],self.rvec[:,0]) / self.vol
+    self.kvec[:,2] = np.cross(self.rvec[:,0],self.rvec[:,1]) / self.vol
     self.kvec *= 2*np.pi
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
+    logger.debug('   real space lattice (columns) :\n{}'.format(self.rvec))
+    logger.debug('   reciprocal lattice (columns) :\n{}'.format(self.kvec))
 
   def _readHr(self):
     '''
