@@ -270,9 +270,16 @@ class TightBinding(Model):
     ee = np.exp(1j * rdotk)
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r = np.einsum('di,ri->dr', self.rvecdata, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
+
+    ''' FOURIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
+    prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+    for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+      prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+    hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
+
 
 
     ''' irreducible point '''
@@ -284,13 +291,26 @@ class TightBinding(Model):
 
     ''' generate all connected points via tranposed symmetry operations '''
     ''' why transposed .. who the fuck knows '''
-    ''' on these explitily generated k-points .. apply the energy and velocity equations '''
+    ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
     redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
     redk[redk<0] += 1
     red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
     red_ee = np.exp(1j * red_rdotk)
     red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
     red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
+    red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
+
+
+    ''' transform irreudicble hck into matrix form '''
+    hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+    hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
+    hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
+
+    ''' transform reducible hck into matrix form '''
+    red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+    red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
+    red_hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
+
 
     ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
     # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
@@ -298,11 +318,33 @@ class TightBinding(Model):
     symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
     # symvk = np.einsum('nij,j->ni',self.symop,hvk[ik,0,0,:3])
 
+    ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
+    # symck = np.einsum('nij,jk,nkl->nil',np.linalg.inv(testsymop),hck_mat[ik,0,0,:,:],testsymop) # wrong
+    # testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
+    # symop1 = np.einsum('ij,jk,Nkl,lm,mn->Nin',np.linalg.inv(self.kvec),np.linalg.inv(self.kvec),self.invsymop,self.kvec,self.kvec)
+    symop1 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+    symop2 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
+    # symop2 = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
+
+    # symop1, symop2 = symop2, symop1
+    # symop1 = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.symop,self.kvec)
+    # symop2 = np.einsum('ji,njk,lk->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
+    # symck = np.einsum('nij,jk->nik',symop1,hck_mat[ik,0,0,:,:])
+    symck = np.einsum('nij,jk,nkl->nil',symop1,hck_mat[ik,0,0,:,:],symop2)
+
     # blaxx = 0
     # blayy = 0
-    print('irrk, redk, ene(irrk), ene(P irrk), P vxy(irrk), vxy(P irrk)')
+    print('irrk, redk, ene(irrk), ene(P irrk)')
+    for i in range(redk.shape[0]):
+      print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
+
+    print('P vx vy(irrk), vx vy(P irrk)')
     for i in range(redk.shape[0]):
       print(self.kpoints[ik,:2], redk[i,:2], '[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
+
+    print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
+    for i in range(redk.shape[0]):
+      print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {}] --- [{} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real))
       # print(self.kpoints[ik,:2], redk[i,:2], hk[ik,0,0], red_hk[i,0,0], symvk[:2], red_hvk[i,0,0,:2])
       # blaxx += red_hvk[i,0,0,0]**2
       # blayy += red_hvk[i,0,0,1]**2
@@ -323,11 +365,6 @@ class TightBinding(Model):
     # logger.debug('connected hk:\n{}\n\n'.format(red_hk))
 
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
-    prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
-    for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
-      prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
-    hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
 
     ''' this transforms all k points at once '''
     ek, U = np.linalg.eig(hk)
