@@ -1,0 +1,11 @@
+# rx ry rz orb1 orb2 hopping.real [hopping.imag]
+# on site
+0 0 0 1 1 0.0
+# hopping
+0 1 0 1 1 1
+0 -1 0 1 1 1
+1 0 0 1 1 1
+-1 0 0 1 1 1
+##
++1 -1 0 1 1 1
+-1 +1 0 1 1 1
