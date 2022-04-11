@@ -71,6 +71,11 @@ class TightBinding(Model):
     self._calcFermiLevel(mu)
 
   def _computeOrthogonality(self):
+    '''
+      weird way to determine orthogonality of unit cells
+      that includes fcc and bcc vectors that are naturally not orthogonal
+      but describe a conventionally orthogonal unit cell
+    '''
     sum_vecs = np.sum(self.rvecdata, axis=1) # a_1 + a_2 + a_3
     max_vecs = np.array([np.max(np.abs(self.rvecdata[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
@@ -86,7 +91,7 @@ class TightBinding(Model):
     self.kvec[:,2] = np.cross(self.rvec[:,0],self.rvec[:,1]) / self.vol
     self.kvec *= 2*np.pi
     if self.vol < 0:
-      logger.critical('volume : (a_1 x a_2) . a_3 resulted in negative value : changing sign')
+      logger.warning('volume : (a_1 x a_2) . a_3 resulted in negative value : changing sign')
       self.vol *= (-1)
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
     logger.debug('   real space lattice (columns) :\n{}'.format(self.rvec))
@@ -447,6 +452,12 @@ class TightBinding(Model):
       else:
         loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
       loc_BopticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3,3), dtype=np.complex128)
+
+      # we have to adjust the symmetry operations for the transformation to describe cartesian coordinates
+      # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
+      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+
       for ikp in range(self.nkp):
         progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -459,16 +470,8 @@ class TightBinding(Model):
         curmat[:,:, [1,2,2], [0,0,0]] = curmat[:,:, [0,0,1], [1,2,2]]
 
         # generate the transformed velocities and curvatures
-        # we have to adjust the symmetry operations for the velocity transformation
-        # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
-        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
-        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
-        # vk = np.einsum('nji,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
-        # ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
-
         vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
         ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
-
 
         # take the mean over the squares
         vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
