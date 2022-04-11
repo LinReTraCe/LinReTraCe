@@ -75,12 +75,10 @@ class DftCalculation(ElectronicStructure, ABC):
     ''' This object resembles a 3x3 array whose [i, j]-th element is the jth Cartesian coordinate of the ith unit vector. '''
     self.kvec = self.aseobject.cell.reciprocal()
     self.kvec *= 2*np.pi # since it is not included in the method according to documentation
-    ''' we want them to be the columns, not the rows -> transpose '''
-    self.kvec = self.kvec.T
-    self.rvec = self.aseobject.cell.T
-    logger.debug('  real space lattice [Ang]    (columns) :\n{}'.format(self.rvec))
-    logger.debug('  reciprocal lattice [Ang^-1] (columns) :\n{}'.format(self.kvec))
-    logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2 / np.pi))
+    self.rvec = self.aseobject.cell[()]
+    logger.debug('  real space lattice [Ang]    (rows) :\n{}'.format(self.rvec))
+    logger.debug('  reciprocal lattice [Ang^-1] (rows) :\n{}'.format(self.kvec))
+    logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2. / np.pi))
 
     self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
     logger.info('  Space group: {}'.format(self.spacegroup))

@@ -77,19 +77,16 @@ class TightBinding(Model):
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
   def _computeReciprocLattice(self):
-    self.rvec = self.rvec_spglib.T # we go from rows to columns here to be conistent with kvec
-    self.vol = np.dot(np.cross(self.rvec[:,0],self.rvec[:,1]),self.rvec[:,2])
+    self.rvec = self.rvec_spglib
+    self.vol = np.abs(np.dot(np.cross(self.rvec[:,0],self.rvec[:,1]),self.rvec[:,2]))
     self.kvec = np.zeros_like(self.rvec, dtype=np.float64)
-    self.kvec[:,0] = np.cross(self.rvec[:,1],self.rvec[:,2]) / self.vol
-    self.kvec[:,1] = np.cross(self.rvec[:,2],self.rvec[:,0]) / self.vol
-    self.kvec[:,2] = np.cross(self.rvec[:,0],self.rvec[:,1]) / self.vol
+    self.kvec[0,:] = np.cross(self.rvec[1,:],self.rvec[2,:]) / self.vol
+    self.kvec[1,:] = np.cross(self.rvec[2,:],self.rvec[0,:]) / self.vol
+    self.kvec[2,:] = np.cross(self.rvec[0,:],self.rvec[1,:]) / self.vol
     self.kvec *= 2*np.pi
-    if self.vol < 0:
-      logger.warning('volume : (a_1 x a_2) . a_3 resulted in negative value : changing sign')
-      self.vol *= (-1)
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
-    logger.debug('   real space lattice (columns) :\n{}'.format(self.rvec))
-    logger.debug('   reciprocal lattice (columns) :\n{}'.format(self.kvec))
+    logger.debug('   real space lattice (rows) :\n{}'.format(self.rvec))
+    logger.debug('   reciprocal lattice (rows) :\n{}'.format(self.kvec))
     logger.debug('   recip.T @ real / (2pi) =\n{}'.format(self.kvec.T @ self.rvec / 2/np.pi))
 
   def _readHr(self):
@@ -272,8 +269,11 @@ class TightBinding(Model):
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
     ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
-    ''' einstein summation has to be done this way, dont ask me why '''
-    prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rpoints)
+    ''' self.rvec[i,j] is the jth entry of the ith vector (aka rows)
+        -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
+        with the x/y/z entries (columns) of the rvec matrix
+    '''
+    prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
     ''' FOURIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
@@ -284,16 +284,15 @@ class TightBinding(Model):
 
 
 
-    if False:
+    if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''
-      ik = 1
+      ik = 55 if self.nkp > 1 else 0 # safety
       logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
       logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
       logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
       logger.debug('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
 
       ''' generate all connected points via tranposed symmetry operations '''
-      ''' why transposed .. who the fuck knows '''
       ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
       redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
       redk[redk<0] += 1
@@ -328,8 +327,8 @@ class TightBinding(Model):
 
       ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
       ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
-      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
-      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
       symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
       symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
@@ -442,8 +441,8 @@ class TightBinding(Model):
 
       # we have to adjust the symmetry operations for the transformation to describe cartesian coordinates
       # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
-      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
-      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
 
       for ikp in range(self.nkp):
         progressBar(ikp+1,self.nkp,status='k-points')

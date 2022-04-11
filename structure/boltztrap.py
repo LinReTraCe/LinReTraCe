@@ -332,8 +332,8 @@ class BoltztrapInterpolation(object):
         opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
 
       nsym = self.dftcalc.nsym
-      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.dftcalc.kvec.T),self.dftcalc.invsymop,self.dftcalc.kvec.T)
-      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.dftcalc.kvec.T),self.dftcalc.invsymop,self.dftcalc.kvec.T)
+      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
+      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
 
       for ikp in range(nkp):
         progressBar(ikp+1,nkp, status='k-points', prefix=prefix)

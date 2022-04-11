@@ -344,7 +344,7 @@ class Wannier90Calculation(DftCalculation):
       hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
 
       ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
+      prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rlist)
       hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
 
       ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
@@ -357,7 +357,7 @@ class Wannier90Calculation(DftCalculation):
         # Jan's code snippet
         # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
         distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
-        ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
+        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances)
         hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
@@ -418,8 +418,8 @@ class Wannier90Calculation(DftCalculation):
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
         loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
 
-        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
-        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
         for ikp in range(self.nkp):
           progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -649,18 +649,17 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
     self.rvec *= self.lengthscale
-    self.rvec = self.rvec.T
-    logger.info('   real_lattice (columns): \n{}'.format(self.rvec))
+    logger.info('   real_lattice (rows): \n{}'.format(self.rvec))
 
     ''' if a_1 + a_2 + a_3 is a scaled vector of the maximal entries -> ortho '''
-    sum_vecs = np.sum(self.rvec, axis=1) # a_1 + a_2 + a_3
+    sum_vecs = np.sum(self.rvec, axis=0) # a_1 + a_2 + a_3
     max_vecs = np.array([np.max(np.abs(self.rvec[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
     # V = (axb . c)
-    self.vol = np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:])
+    self.vol = np.abs(np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:]))
     self.vol *= self.lengthscale**3
     logger.info('   deduced volume: {}'.format(self.vol))
 
@@ -677,8 +676,7 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
     self.kvec /= self.lengthscale
-    self.kvec = self.kvec.T
-    logger.info('   recip_lattice (columns): \n{}'.format(self.kvec))
+    logger.info('   recip_lattice (rows): \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
       self.kpoints = []
