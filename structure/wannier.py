@@ -647,7 +647,8 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
     self.rvec *= self.lengthscale
-    logger.info('   real_lattice: \n{}'.format(self.rvec))
+    self.rvec = self.rvec.T
+    logger.info('   real_lattice (columns): \n{}'.format(self.rvec))
 
     ''' if a_1 + a_2 + a_3 is a scaled vector of the maximal entries -> ortho '''
     sum_vecs = np.sum(self.rvec, axis=1) # a_1 + a_2 + a_3
@@ -674,7 +675,8 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
     self.kvec /= self.lengthscale
-    logger.info('   recip_lattice: \n{}'.format(self.kvec))
+    self.kvec = self.kvec.T
+    logger.info('   recip_lattice (columns): \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
       self.kpoints = []
