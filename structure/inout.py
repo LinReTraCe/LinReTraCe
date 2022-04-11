@@ -56,6 +56,7 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     if escalc.dims.dtype != bool:
       raise IOError('dims must be array of boolean')
     h5out['.unitcell/dims']       = escalc.dims
+    h5out['.unitcell/ortho']      = escalc.ortho
 
     h5out['.bands/charge']        = float(escalc.charge)
     h5out['.bands/energyBandMax'] = int(escalc.energyBandMax)
