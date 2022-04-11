@@ -410,14 +410,16 @@ class Wannier90Calculation(DftCalculation):
         for k in range(3):
           levmatrix[i,j,k] = levicivita(i,j,k)
 
-    # symmetrizing is essential
-    if self.irreducible:
+    if self.irreducible: # requires symmetry operations
       for ispin in range(self.spins):
         if self.ortho:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
         else:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
         loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
+
+        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
         for ikp in range(self.nkp):
           progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -430,8 +432,8 @@ class Wannier90Calculation(DftCalculation):
           curmat[:,:, [1,2,2], [0,0,0]] = curmat[:,:, [0,0,1], [1,2,2]]
 
           # generate the transformed velocities and curvatures
-          vk = np.einsum('nij,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
-          ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+          vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+          ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
           # take the mean over the squares
           vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
