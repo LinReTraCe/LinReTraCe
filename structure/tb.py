@@ -277,7 +277,7 @@ class TightBinding(Model):
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
     ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
-    prefactor_r = np.einsum('di,ri->dr', self.rvecdata, self.rpoints)
+    prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
     ''' FOURIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
