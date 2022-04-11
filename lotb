@@ -10,6 +10,7 @@ import scipy.optimize
 
 from structure.inout import h5output
 from structure.orthotb import OrthogonalTightBinding
+from structure.aux import LogFormatter
 
 '''
 lotb: Old Pre-processing of orthogonal tight-binding structures for the LRTC code
@@ -22,13 +23,6 @@ __version__    = '0.3'
 __status__     = 'Dev'
 __license__    = 'GPLv3'
 __credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
-
-class log_formatter(logging.Formatter):
-  def format(self, record):
-    if record.levelname == 'INFO':
-      return record.msg # so it looks like print
-    else:
-      return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information
 
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
@@ -67,7 +61,7 @@ if __name__ == '__main__':
   logger = logging.getLogger()
   logger.setLevel(logging.DEBUG)
   console = logging.StreamHandler()
-  console.setFormatter(log_formatter())
+  console.setFormatter(LogFormatter())
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 

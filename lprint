@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import argparse
 
+from structure.aux   import LogFormatter
 from postproc.output import *
 from postproc.input  import *
 
@@ -77,6 +78,14 @@ def directionTransform(string, dims):
 
 if __name__ == '__main__':
   args = parse_args()
+
+  ''' define logging '''
+  logger = logging.getLogger()
+  logger.setLevel(logging.DEBUG)
+  console = logging.StreamHandler()
+  console.setFormatter(LogFormatter())
+  console.setLevel(logging.DEBUG if debug else logging.INFO)
+  logger.addHandler(console)
 
   if args.plot:
     try:

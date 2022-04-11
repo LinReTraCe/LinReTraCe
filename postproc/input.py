@@ -5,7 +5,8 @@ import sys
 import os
 import argparse
 import warnings
-from collections import OrderedDict
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 with warnings.catch_warnings():

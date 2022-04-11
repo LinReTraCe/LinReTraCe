@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 import sys
+import logging
 
 def levicivita(a,b,c):
   '''
@@ -44,3 +45,10 @@ if __name__ == '__main__':
     for j in range(3):
       for k in range(3):
         print('e_',i,j,k,' = ', levicivita(i,j,k))
+
+class LogFormatter(logging.Formatter):
+  def format(self, record):
+    if record.levelname == 'INFO':
+      return record.msg # so it looks like print
+    else:
+      return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information

@@ -10,6 +10,7 @@ from structure.dftdetect import DftDetection
 from structure.inout     import h5output
 from structure.trunc     import truncate
 from structure.trunc     import TruncationError
+from structure.aux       import LogFormatter
 
 try:
   from structure.boltztrap import BoltztrapInterpolation
@@ -46,13 +47,6 @@ def parse_args(args=None):
   parser.add_argument('--debug',    help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
 
-class log_formatter(logging.Formatter):
-  def format(self, record):
-    if record.levelname == 'INFO':
-      return record.msg # so it looks like print
-    else:
-      return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information
-
 class Program(object):
   '''
   Program class which executes the DFT read-in,
@@ -81,7 +75,7 @@ class Program(object):
                                      # it essentially sets a lower limit for all the handlers
     # configure the console stream
     console = logging.StreamHandler()
-    console.setFormatter(log_formatter())
+    console.setFormatter(LogFormatter())
     console.setLevel(levels[value])
     self.log.addHandler(console)
 

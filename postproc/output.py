@@ -5,6 +5,8 @@ import sys
 import os
 import argparse
 import warnings
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 with warnings.catch_warnings():

@@ -6,6 +6,7 @@ import logging
 
 from  structure.es import ElectronicStructure
 from  structure.inout import h5output
+from  structure.aux import LogFormatter
 
 import numpy as np
 
@@ -112,16 +113,10 @@ class StructureFromArrays(ElectronicStructure):
 
 def setLogger():
   ''' some logging '''
-  class log_formatter(logging.Formatter):
-    def format(self, record):
-      if record.levelname == 'INFO':
-        return record.msg
-      else:
-        return '{}: {}: {}'.format(record.filename, record.levelname, record.msg)
   logger = logging.getLogger()
   logger.setLevel(logging.DEBUG) # root logger
   console = logging.StreamHandler()
-  console.setFormatter(log_formatter())
+  console.setFormatter(LogFormatter())
   console.setLevel(logging.INFO) # console logger print INFO, WARNING, ERROR and CRITICAL
   logger.addHandler(console)
   return logger
