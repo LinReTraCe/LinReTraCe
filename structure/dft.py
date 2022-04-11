@@ -15,18 +15,7 @@ else:
   ABC = abc.ABCMeta('ABC', (), {})
 
 import numpy as np
-
-try:
-  import ase
-  import ase.io
-  import ase.spacegroup
-  from ase import Atoms
-  from ase.spacegroup import get_spacegroup
-  mymethods = {'get_volume', 'get_global_number_of_atoms'}
-  Atommethods = set([method for method in dir(Atoms) if callable(getattr(Atoms, method))])
-  ase_exists = True if mymethods.issubset(Atommethods) else False
-except ImportError:
-  ase_exists = False
+import ase.spacegroup
 
 from structure.aux import progressBar
 from structure.es  import ElectronicStructure
@@ -73,26 +62,33 @@ class DftCalculation(ElectronicStructure, ABC):
     if not os.path.isdir(self.directory):
       raise IOError("Supplied Directory does not exist: " + self.directory)
 
-  def _getAuxiliaryInformation(self):
+  def _extractASEinformation(self):
     '''
-    Use the aseobject and extract information
+    Use the aseobject, saved in self.aseobject and extract information
     which is relevant to us.
     '''
 
-    self.vol = self.aseobject.get_volume() # volume of unit cell
-    self.atms = self.aseobject.get_global_number_of_atoms() # total number of atoms
-    # laa = self.aseobject.get_cell_lengths_and_angles()
-    laa = self.aseobject.cell.cellpar()
-    self.latLength = np.array(laa[:3])
-    self.latAngle = np.array(laa[3:])
-    self.spacegroup = ase.spacegroup.get_spacegroup(self.aseobject)
-    # logger.info('ASE: Detected space group {}'.format(self.spacegroup))
+    self.vol = self.aseobject.cell.volume # volume of unit cell
+    logger.info('Extracting ASE information:')
+    logger.info('  unit cell volume [Ang^3] : {}'.format(self.vol))
+
+    ''' This object resembles a 3x3 array whose [i, j]-th element is the jth Cartesian coordinate of the ith unit vector. '''
+    self.kvec = self.aseobject.cell.reciprocal()
+    self.kvec *= 2*np.pi # since it is not included in the method according to documentation
+    ''' we want them to be the columns, not the rows -> transpose '''
+    self.kvec = self.kvec.T
+    self.rvec = self.aseobject.cell[()]
+    logger.debug('  real space lattice [Ang]    (columns) :\n{}'.format(self.rvec))
+    logger.debug('  reciprocal lattice [Ang^-1] (columns) :\n{}'.format(self.kvec))
+    logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2 / np.pi))
+
+    self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
+    logger.info('  Space group: {}'.format(self.spacegroup))
+    self.nsym_ase = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations().shape[0]
+    logger.info('  Symmetry operations: {}'.format(self.nsym_ase))
 
     self._detectOrthogonality()
-    if self.ortho:
-      logger.info('ASE: Detected orthogonal crystal structure')
-    else:
-      logger.info('ASE: Detected non-orthogonal crystal structure')
+    logger.info('  Orthogonal crystal structure: {}'.format(str(self.ortho)))
 
   def _detectOrthogonality(self):
     '''
@@ -105,7 +101,4 @@ class DftCalculation(ElectronicStructure, ABC):
 
     orthogroups = list(range(16,143))
     orthogroups += list(range(195,231))
-    if self.spacegroup.no in orthogroups:
-      self.ortho = True
-    else:
-      self.ortho = False
+    self.ortho = (self.spacegroup in orthogroups)

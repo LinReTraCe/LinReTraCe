@@ -16,18 +16,6 @@ from structure.units import bohr2angstrom
 
 import numpy as np
 
-try:
-  import ase
-  import ase.io
-  import ase.spacegroup
-  from ase import Atoms
-  from ase.spacegroup import get_spacegroup
-  mymethods = {'get_volume', 'get_global_number_of_atoms'}
-  Atommethods = set([method for method in dir(Atoms) if callable(getattr(Atoms, method))])
-  ase_exists = True if mymethods.issubset(Atommethods) else False
-except ImportError:
-  ase_exists = False
-
 class Wannier90Calculation(DftCalculation):
   '''
   Wannier90 calculation class which reads all the relevant information

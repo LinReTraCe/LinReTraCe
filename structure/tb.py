@@ -5,11 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import numpy as np
-try:
-  import spglib
-  spglib_exist = True
-except ImportError:
-  spglib_exist = False
+import spglib
 
 from structure.aux   import levicivita
 from structure.aux   import progressBar
@@ -32,9 +28,6 @@ class TightBinding(Model):
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
-    if self.irreducible and not spglib_exist:
-      raise IOError('Irreducible grids are only supported via spglib')
-
 
   def computeData(self, tbdata, rvecdata, atomdata, charge, mu=None):
     self.tbdata   = tbdata
@@ -96,6 +89,7 @@ class TightBinding(Model):
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
     logger.debug('   real space lattice (columns) :\n{}'.format(self.rvec))
     logger.debug('   reciprocal lattice (columns) :\n{}'.format(self.kvec))
+    logger.debug('   recip.T @ real / (2pi) =\n{}'.format(self.kvec.T @ self.rvec / 2/np.pi))
 
   def _readHr(self):
     '''
@@ -289,9 +283,9 @@ class TightBinding(Model):
 
 
 
-    if True:
+    if False:
       ''' irreducible point '''
-      ik = 33
+      ik = 1
       logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
       logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
       logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))

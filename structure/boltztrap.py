@@ -15,15 +15,9 @@ from BoltzTraP2 import sphere
 from BoltzTraP2 import fite
 from BoltzTraP2 import serialization
 from BoltzTraP2.misc import ffloat
+import ase.spacegroup
 
-from structure.aux import progressBar
-
-try:
-  import ase.spacegroup
-  ase_exists = True
-except ImportError:
-  ase_exists = False
-
+from structure.aux    import progressBar
 from structure.wien2k import Wien2kCalculation
 from structure.vasp   import VaspCalculation
 from structure        import units
@@ -111,21 +105,24 @@ class BoltztrapInterpolation(object):
 
     elif isinstance(self.dftcalc, VaspCalculation):
 
-      if self.dftcalc.irreducible and not ase_exists:
-        raise IOError('vasp interpolation only works for reducible kmeshes or with ase installation')
-
       if self.dftcalc.irreducible:
-        logger.info('To continue, the spacegroup of your vasp calculation is required.')
+        logger.info('\n\nASE detected spacegroup number: {}'.format(self.dftcalc.spacegroup))
+        logger.info('If this is correct, skip by pressing enter or enter number in range 1-230')
         inputmethod = input if sys.version_info >= (3, 0) else raw_input
         spacegroup = inputmethod('Spacegroup [1-230]: ')
         try:
-          sg = int(spacegroup)
-          asespacegroup = ase.spacegroup.Spacegroup(sg)
-          self.dftcalc.symop = asespacegroup.get_rotations()
-          self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
-          self.dftcalc.nsym = self.dftcalc.symop.shape[0]
-        except:
-          raise IOError('Something went wrong')
+          if len(spacegroup.strip()) == 0:
+            sg = self.dftcalc.spacegroup
+          else:
+            sg = int(spacegroup)
+        except Exception as e:
+          raise IOError('Input invalid.')
+        asespacegroup = ase.spacegroup.Spacegroup(sg)
+        self.dftcalc.symop = asespacegroup.get_rotations()
+        logger.info('  Spacegroup: {}'.format(sg))
+        self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
+        self.dftcalc.nsym = self.dftcalc.symop.shape[0]
+        logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
 
       BTP.register_loader("VASP", BTP.VASPLoader)
       self._interp()

@@ -8,18 +8,7 @@ logger = logging.getLogger(__name__)
 from structure.aux import progressBar
 
 import numpy as np
-
-try:
-  import ase
-  import ase.io
-  import ase.spacegroup
-  from ase import Atoms
-  from ase.spacegroup import get_spacegroup
-  mymethods = {'get_volume', 'get_global_number_of_atoms'}
-  Atommethods = set([method for method in dir(Atoms) if callable(getattr(Atoms, method))])
-  ase_exists = True if mymethods.issubset(Atommethods) else False
-except ImportError:
-  ase_exists = False
+import ase.io
 
 from structure.dft import DftCalculation
 from structure     import units
@@ -68,10 +57,8 @@ class Wien2kCalculation(DftCalculation):
     self._checkFiles()
     logger.info("Files sucessfully loaded.")
 
-    if ase_exists:
-      ''' get all the crystal information from the ase atom object '''
-      self._getAuxiliaryInformation()         # self.vol; self.atms; self.latVec; self.latAngle
-      logger.info('ASE: unit cell volume: {} [Angstrom^3]'.format(self.vol))
+    ''' get all the crystal information from the ase atom object '''
+    self._extractASEinformation()
 
   def __repr__(self):
     return ('w2kcalculation(directory={0.directory}, '
@@ -111,8 +98,7 @@ class Wien2kCalculation(DftCalculation):
     self.fmomentdn   = self.case + '.symmatdn'
     self.fmoment     = self.case + '.symmat'
 
-    if ase_exists:
-      self.aseobject = ase.io.read(self.fstruct)
+    self.aseobject   = ase.io.read(self.fstruct)
 
   def _checkFiles(self):
     '''
@@ -175,7 +161,7 @@ class Wien2kCalculation(DftCalculation):
         if os.stat(str(i)).st_size == 0:
           raise IOError("Error: case.symmat* files empty")
 
-    logger.info("  Number of spins: {}".format(self.spins))
+    logger.info("  Number of inequivalent spins: {}".format(self.spins))
 
 
   def _detectCalculation(self):
@@ -238,7 +224,7 @@ class Wien2kCalculation(DftCalculation):
         raise IOError('Wien2k {}: Did not find Number of electrons (:NOE)'.format(str(self.fscf)))
     logger.info('  Number of electrons: {}'.format(self.charge))
 
-    if not ase_exists:
+    if False:
       with open(str(self.fscf), 'r') as scf:
         for line in scf:
           if line.startswith(':VOL '): # volume of the unit cell
@@ -276,6 +262,8 @@ class Wien2kCalculation(DftCalculation):
         if 'NUMBER OF SYMMETRY OPERATIONS' in line:
           self.nsym = int(line[:4])
           logger.info("  Number of symmetry operations: {}".format(self.nsym))
+          if self.nsym != self.nsym_ase:
+            logger.warning("\n\nASE detected a different number of symmetry operations: {}".format(self.nsym_ase))
           break
       else:
         raise IOError('Wien2k {}: Reading number of symmetry operations failed.'.format(str(self.fstruct)))
@@ -293,8 +281,7 @@ class Wien2kCalculation(DftCalculation):
       if struct.readline() != "": # exactly at the EOF
         raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
 
-      logger.debug('Symmetry operations')
-      logger.debug(self.symop)
+      logger.debug('Symmetry operations:\n {}'.format(self.symop))
 
 
   def _readKlist(self):
