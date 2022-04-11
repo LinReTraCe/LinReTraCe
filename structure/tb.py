@@ -29,11 +29,11 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def computeData(self, tbdata, rvecdata, atomdata, charge, mu=None):
-    self.tbdata   = tbdata
-    self.rvecdata = rvecdata
-    self.atomdata = atomdata
-    self.charge   = charge
+  def computeData(self, tbdata, rvec_spglib, atoms_spglib, charge, mu=None):
+    self.tbdata       = tbdata
+    self.rvec_spglib  = rvec_spglib # the vectors are the ROWS (required for spglib python interface)
+    self.atoms_spglib = atoms_spglib
+    self.charge       = charge
 
     if self.tbdata.shape[1] == 6:
       self.imaghopping = False
@@ -68,17 +68,18 @@ class TightBinding(Model):
       weird way to determine orthogonality of unit cells
       that includes fcc and bcc vectors that are naturally not orthogonal
       but describe a conventionally orthogonal unit cell
+      should work for all cases
     '''
-    sum_vecs = np.sum(self.rvecdata, axis=1) # a_1 + a_2 + a_3
-    max_vecs = np.array([np.max(np.abs(self.rvecdata[:,i])) for i in range(3)]) # maximal entries
+    sum_vecs = np.sum(self.rvec_spglib, axis=0) # a_1 + a_2 + a_3
+    max_vecs = np.array([np.max(np.abs(self.rvec_spglib[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
   def _computeReciprocLattice(self):
-    self.vol = np.dot(np.cross(self.rvecdata[0,:],self.rvecdata[1,:]),self.rvecdata[2,:])
-    self.rvec = self.rvecdata.T # we go from rows to columns here to be conistent with kvec
-    self.kvec = np.zeros_like(self.rvecdata, dtype=np.float64)
+    self.rvec = self.rvec_spglib.T # we go from rows to columns here to be conistent with kvec
+    self.vol = np.dot(np.cross(self.rvec[:,0],self.rvec[:,1]),self.rvec[:,2])
+    self.kvec = np.zeros_like(self.rvec, dtype=np.float64)
     self.kvec[:,0] = np.cross(self.rvec[:,1],self.rvec[:,2]) / self.vol
     self.kvec[:,1] = np.cross(self.rvec[:,2],self.rvec[:,0]) / self.vol
     self.kvec[:,2] = np.cross(self.rvec[:,0],self.rvec[:,1]) / self.vol
@@ -166,12 +167,12 @@ class TightBinding(Model):
     ''' define k-grid, shift if required '''
     if self.irreducible:
 
-      lattice   = self.rvecdata
+      lattice   = self.rvec_spglib
       positions = []
       numbers   = []
-      for i in range(self.atomdata.shape[0]):
-        numbers.append(self.atomdata[i,0])
-        positions.append(self.atomdata[i,1:])
+      for i in range(self.atoms_spglib.shape[0]):
+        numbers.append(self.atoms_spglib[i,0])
+        positions.append(self.atoms_spglib[i,1:])
 
       logger.info('Spglib: Generating irreducible kpoints.')
 
@@ -409,12 +410,12 @@ class TightBinding(Model):
             break
 
         if not transformed:
-          logger.warning('\n\nTight binding parameter set does not fulfill symmteries given by unit cell' + \
-                        '\n symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
-                        '\n break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
+          logger.warning('\n\nTight binding symmetry check: {}'.format(transformed) + \
+                        '\n    Symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
+                        '\n    Break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
           return
     else:
-      logger.info('Tight binding parameter set fulfills full point group symmetry set determined by unit cell.')
+      logger.info('Tight binding symmetry check: {}'.format(transformed))
 
 
   def _calcOptical(self):
