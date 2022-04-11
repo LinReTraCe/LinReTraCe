@@ -85,6 +85,9 @@ class TightBinding(Model):
     self.kvec[:,1] = np.cross(self.rvec[:,2],self.rvec[:,0]) / self.vol
     self.kvec[:,2] = np.cross(self.rvec[:,0],self.rvec[:,1]) / self.vol
     self.kvec *= 2*np.pi
+    if self.vol < 0:
+      logger.critical('volume : (a_1 x a_2) . a_3 resulted in negative value : changing sign')
+      self.vol *= (-1)
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
     logger.debug('   real space lattice (columns) :\n{}'.format(self.rvec))
     logger.debug('   reciprocal lattice (columns) :\n{}'.format(self.kvec))
@@ -277,6 +280,7 @@ class TightBinding(Model):
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
     ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' einstein summation has to be done this way, dont ask me why '''
     prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
@@ -332,9 +336,8 @@ class TightBinding(Model):
 
       ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
       ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
-      # testsymop = np.einsum('ij,njk,kl->nil',self.kvec,self.symop,np.linalg.inv(self.kvec))
-      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
       symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
       symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
@@ -458,8 +461,8 @@ class TightBinding(Model):
         # generate the transformed velocities and curvatures
         # we have to adjust the symmetry operations for the velocity transformation
         # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
-        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
+        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec.T),self.invsymop,self.kvec.T)
         # vk = np.einsum('nji,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
         # ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
 
