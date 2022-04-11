@@ -236,15 +236,7 @@ class TightBinding(Model):
       self.nsym = self.symop.shape[0]
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
       logger.debug('Symmetry operation: \n{}'.format(self.symop))
-      logger.critical('\n\nSymmetry operations are not orthogonal -> changing to reducible calculation\n')
-      # if not orthosym:
-      #   self.irreducible=False
-      #   self.nsym = structure.symmetries.C1.nsym
-      #   self.symop = structure.symmetries.C1.symop
-      #   self.invsymop = structure.symmetries.C1.invsymop
-
-    # because we might end up here from the irreducible setup
-    if not self.irreducible:
+    else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
       for ikx in np.linspace(0,1,self.nkx,endpoint=False):
