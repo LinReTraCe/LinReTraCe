@@ -73,7 +73,7 @@ class DftCalculation(ElectronicStructure, ABC):
     logger.info('  unit cell volume [Ang^3] : {}'.format(self.vol))
 
     ''' This object resembles a 3x3 array whose [i, j]-th element is the jth Cartesian coordinate of the ith unit vector. '''
-    self.kvec = self.aseobject.cell.reciprocal()
+    self.kvec = self.aseobject.cell.reciprocal()[()]
     self.kvec *= 2*np.pi # since it is not included in the method according to documentation
     self.rvec = self.aseobject.cell[()]
     logger.debug('  real space lattice [Ang]    (rows) :\n{}'.format(self.rvec))
@@ -82,8 +82,10 @@ class DftCalculation(ElectronicStructure, ABC):
 
     self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
     logger.info('  Space group: {}'.format(self.spacegroup))
-    self.nsym_ase = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations().shape[0]
+    self.symop_ase = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations()
+    self.nsym_ase  = self.symop_ase.shape[0]
     logger.info('  Symmetry operations: {}'.format(self.nsym_ase))
+    logger.debug('  Symmetry matrices:\n{}'.format(self.symop_ase))
 
     self._detectOrthogonality()
     logger.info('  Orthogonal crystal structure: {}'.format(str(self.ortho)))
