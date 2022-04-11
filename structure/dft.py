@@ -77,7 +77,7 @@ class DftCalculation(ElectronicStructure, ABC):
     self.kvec *= 2*np.pi # since it is not included in the method according to documentation
     ''' we want them to be the columns, not the rows -> transpose '''
     self.kvec = self.kvec.T
-    self.rvec = self.aseobject.cell[()]
+    self.rvec = self.aseobject.cell.T
     logger.debug('  real space lattice [Ang]    (columns) :\n{}'.format(self.rvec))
     logger.debug('  reciprocal lattice [Ang^-1] (columns) :\n{}'.format(self.kvec))
     logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2 / np.pi))
