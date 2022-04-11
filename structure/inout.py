@@ -119,8 +119,8 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
           # alibi variable so no errors occur
           h5out['.bands/opticalBandMin']  = 0
           h5out['.bands/opticalBandMax']  = 0
-          logger.critical('No optical elements available. Use band interpolation (--interp) or provide them (--optic).')
-          logger.critical('Output file is not able to produce transport results with linretrace.\n')
+          logger.warning('No optical elements available. Use band interpolation (--interp) or provide them (--optic).')
+          logger.warning('Output file is not able to produce transport results with linretrace.\n')
 
       if escalc.opticfull:
         for ikp in range(escalc.nkp):

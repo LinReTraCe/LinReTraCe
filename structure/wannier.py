@@ -74,7 +74,7 @@ class Wannier90Calculation(DftCalculation):
     try:
       self._readWout()
     except:
-      logger.critical('An error occured while reading case.wout*, defaulting to Angstrom')
+      logger.error('An error occured while reading case.wout*, defaulting to Angstrom')
       self.lengthscale = 1.0
     self._readNnkp()
     self._readHr()
@@ -522,7 +522,7 @@ class Wannier90Calculation(DftCalculation):
       logger.warning('\n\nDetermined charge in the projection: {}'.format(self.charge_old))
       self.charge = np.around(self.charge_old)
       if self.charge != self.charge_old:
-        logger.critical('Rounding to nearest integer: {}\nIf this behavior is not intended provide the desired charge with --charge\n\n'.format(self.charge))
+        logger.warning('Rounding to nearest integer: {}\nIf this behavior is not intended provide the desired charge with --charge\n\n'.format(self.charge))
         self._calcFermiLevel()
     h5output(fname, self, self)
 
