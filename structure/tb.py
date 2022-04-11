@@ -286,14 +286,18 @@ class TightBinding(Model):
 
     if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''
-      ik = 55 if self.nkp > 1 else 0 # safety
-      logger.debug('\n\nirreducible k:\n{}'.format(self.kpoints[ik,:]))
-      logger.debug('irreducible hk:\n{}'.format(hk[ik,0,:]))
-      logger.debug('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
-      logger.debug('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
+      import random
+      ik = random.randint(1,self.nkp)
+      logger.debug('\n\n Randomly chosen k-points: {}'.format(ik))
+      print('irreducible k:\n{}'.format(self.kpoints[ik,:]))
+      print('irreducible hk:\n{}'.format(hk[ik,0,:]))
+      print('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
+      print('irreducible hck:\n{}'.format(hck[ik,0,0,:]))
+      print('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
 
       ''' generate all connected points via tranposed symmetry operations '''
       ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
+      ''' yes this is the transposed symop here '''
       redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
       redk[redk<0] += 1
       red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
@@ -306,18 +310,8 @@ class TightBinding(Model):
       red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
       # mopt
       red_hvkvk = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.float64)
-      red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]
+      red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = (np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]).real
       red_hvkvk[:,:,:, [1,2,2], [0,0,1]] = red_hvkvk[:,:,:, [0,0,1], [1,2,2]]
-
-
-      ''' transform irreudicble hck into matrix form '''
-      hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
-      hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
-      hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
-
-      hvkvk_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
-      hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
-      hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
 
       ''' transform reducible hck into matrix form '''
       red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
@@ -325,31 +319,41 @@ class TightBinding(Model):
       red_hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
 
 
+
       ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
-      ''' apply the symmetry in matrix form (?) onto curvature matrix of irreducible point '''
+      ''' apply the symmetry in matrix form onto curvature matrix of irreducible point '''
       testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
       testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+
+      ''' transform into matrix form so we can apply the symmetries effectively '''
+      hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
+      hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
+      hvkvk_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
+      hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
+
       symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
       symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
 
       # blaxx = 0
       # blayy = 0
-      print('irrk, redk, ene(irrk), ene(P irrk)')
+      print('irrk, P^T irrk, ene(irrk), ene(P^T irrk)')
       for i in range(redk.shape[0]):
         print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
 
-      print('P vx vy(irrk), vx vy(P irrk)')
+      print('P vx vy(irrk), vx vy(P^T irrk)')
       for i in range(redk.shape[0]):
-        print(self.kpoints[ik,:2], redk[i,:2], '[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
+        print('[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
 
-      print('P cxx cxy(irrk), cxx cxy cyx(P irrk)')
+      print('P cxx cxy cyx cyy(irrk), cxx cxy cyx cyy(P^T irrk)')
       for i in range(redk.shape[0]):
-        print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
+        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
 
-      print('P vxvx vxvy(ikrr), vxvx vxvy (P irrk)')
+      print('P vxx vxy vyx vyy(ikrr), vxx vxy vyx vyy (P^T irrk)')
       for i in range(redk.shape[0]):
-        print(self.kpoints[ik,:2], redk[i,:2], '[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1], red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1]))
+        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1], red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1]))
 
 
 
