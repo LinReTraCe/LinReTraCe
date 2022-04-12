@@ -338,7 +338,8 @@ class TightBinding(Model):
 
       print('irrk, ene(irrk) --- P^T irrk, ene(P^T irrk) # all band combinations')
       for i in range(redk.shape[0]):
-        print(self.kpoints[ik,:3], hk[ik,:,:], ' --- ', redk[i,:3], red_hk[i,:,:])
+        print(self.kpoints[ik,:3], '\n', hk[ik,:,:], '\n --- \n', redk[i,:3], '\n', red_hk[i,:,:])
+        print()
 
       ''' debug output this only when it makes sense '''
       if self.energyBandMax == 1:
