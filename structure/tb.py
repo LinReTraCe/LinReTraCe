@@ -366,6 +366,16 @@ class TightBinding(Model):
       print('Curvature symmetry check: {}'.format(curcheck))
       print('Optical   symmetry check: {}'.format(optcheck))
 
+      print('\nSum over values comparisons.')
+      enecheck = np.allclose(np.sum(hk[ik], axis=(0,1)),   np.sum(red_hk,      axis=(1,2)))
+      velcheck = np.allclose(np.sum(symvk,  axis=(1,2)),   np.sum(red_hvk,     axis=(1,2)))
+      curcheck = np.allclose(np.sum(symck,  axis=(1,2)),   np.sum(red_hck_mat, axis=(1,2)))
+      optcheck = np.allclose(np.sum(symvkvk,axis=(1,2)),   np.sum(red_hvkvk,   axis=(1,2)))
+      print('Energy    symmetry check: {}'.format(enecheck))
+      print('Velocitiy symmetry check: {}'.format(velcheck))
+      print('Curvature symmetry check: {}'.format(curcheck))
+      print('Optical   symmetry check: {}'.format(optcheck))
+
       print('\nSum over absolute values comparisons.')
       enecheck = np.allclose(np.sum(np.abs(hk[ik]), axis=(0,1)),   np.sum(np.abs(red_hk),      axis=(1,2)))
       velcheck = np.allclose(np.sum(np.abs(symvk),  axis=(1,2)),   np.sum(np.abs(red_hvk),     axis=(1,2)))
