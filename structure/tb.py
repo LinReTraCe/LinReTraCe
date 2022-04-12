@@ -49,7 +49,8 @@ class TightBinding(Model):
 
     self._setupKmesh()
     if self.irreducible:
-      self._checkSymmetries()
+      self._checkSymmetriesTightbinding()
+      self._checkSymmetriesKmesh()
 
     ''' after getting the correct number of k-points we can setup the arrays '''
     self._setupArrays(self.ortho)
@@ -443,7 +444,7 @@ class TightBinding(Model):
     self.velocities.append(vk)
     self.curvatures.append(ck)
 
-  def _checkSymmetries(self):
+  def _checkSymmetriesTightbinding(self):
 
     for itb1 in range(self.tbdata.shape[0]):
       rvec1  = self.tbdata[itb1,:3].astype(int)
@@ -481,6 +482,21 @@ class TightBinding(Model):
     else:
       logger.info('Tight binding symmetry check: {}'.format(transformed))
 
+  def _checkSymmetriesKmesh(self):
+    '''
+      compare the momentum mesh to the unit cell symmetries
+      raise an IOError if there is disagreement
+    '''
+    nkvec = np.array([self.nkx,self.nky,self.nkz], dtype=np.float64)
+    transformed = np.abs(np.einsum('nij,j->ni',self.invsymop,nkvec))
+    equal_mesh = np.isclose(nkvec,transformed)
+    equal_zero = np.isclose(np.zeros((3,)),transformed)
+    equal  = np.all(np.logical_or(equal_zero,equal_mesh))
+    logger.info('Momentum grid symmetry check: {}'.format(str(equal)))
+
+    if not equal:
+      raise IOError('\nMomentum mesh does not respect point group symmetries of unit cell.' + \
+                    '\nIrreducible calculations must have momentum grid that does.')
 
   def _calcOptical(self):
     '''
