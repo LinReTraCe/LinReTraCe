@@ -302,14 +302,14 @@ class TightBinding(Model):
       ''' bring back to BZ '''
       redk[redk<0] += 1
       redk[redk>1] -= 1
-      red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
+      red_rdotk = 2*np.pi*np.einsum('ni,ri->nr',redk,self.rpoints)
       red_ee = np.exp(1j * red_rdotk)
       #energy
-      red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
+      red_hk = np.einsum('nr,rij->nij', red_ee, self.hr)
       #velocitiy
-      red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
+      red_hvk = np.einsum('dr,nr,rij->nijd',1j*prefactor_r,red_ee,self.hr)
       #curvature
-      red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
+      red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,self.hr)
       #mopt
       red_hvkvk = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.float64)
       red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = (np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]).real
@@ -332,33 +332,35 @@ class TightBinding(Model):
       hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
       hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
 
-      symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
-      symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
-      symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
+      symvk = np.einsum('nij,abj->nabi',testsymop,hvk[ik,:,:,:])
+      symck = np.einsum('nij,abjk,nkl->nabil',testsymop,hck_mat[ik,:,:,:,:],testsymopT)
+      symvkvk = np.einsum('nij,abjk,nkl->nabil',testsymop,hvkvk_mat[ik,:,:,:,:],testsymopT)
 
       print('irrk, ene(irrk) --- P^T irrk, ene(P^T irrk) # all band combinations')
       for i in range(redk.shape[0]):
         print(self.kpoints[ik,:3], hk[ik,:,:], ' --- ', redk[i,:3], red_hk[i,:,:])
 
-      print('\nTransformed vx vy vz(irrk) --- vx vy vz(P^T irrk)   # only real part of band 0')
-      for i in range(redk.shape[0]):
-        print(symvk[i].real, ' --- ', red_hvk[i,0,0,:].real)
+      ''' debug output this only when it makes sense '''
+      if self.energyBandMax == 1:
+        print('\nTransformed vx vy vz(irrk) --- vx vy vz(P^T irrk)   # only real part of band 0')
+        for i in range(redk.shape[0]):
+          print(symvk[i,0,0,:].real, ' --- ', red_hvk[i,0,0,:].real)
 
-      print('\nTransformed cxx cyy czz cxy cxz cyz (irrk) --- cxx cyy czz cxy cxz cyz (P^T irrk)   # only real part')
-      for i in range(redk.shape[0]):
-        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symck[i,0,0].real, symck[i,1,1].real, symck[i,2,2].real, symck[i,0,1].real,symck[i,0,2].real,symck[i,1,2].real, \
-                    red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,1,1].real, red_hck_mat[i,0,0,2,2].real, red_hck_mat[i,0,0,0,1].real,red_hck_mat[i,0,0,0,2].real,red_hck_mat[i,0,0,1,2].real))
+        print('\nTransformed cxx cyy czz cxy cxz cyz (irrk) --- cxx cyy czz cxy cxz cyz (P^T irrk)   # only real part')
+        for i in range(redk.shape[0]):
+          print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symck[i,0,0,0,0].real, symck[i,0,0,1,1].real, symck[i,0,0,2,2].real, symck[i,0,0,0,1].real,symck[i,0,0,0,2].real,symck[i,0,0,1,2].real, \
+                      red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,1,1].real, red_hck_mat[i,0,0,2,2].real, red_hck_mat[i,0,0,0,1].real,red_hck_mat[i,0,0,0,2].real,red_hck_mat[i,0,0,1,2].real))
 
-      print('\nTransformed vxx vyy vzz vxy vxz vyz(ikrr) --- vxx vyy vzz vxy vxz vyz (P^T irrk)   # only real part')
-      for i in range(redk.shape[0]):
-        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,1,1].real, symvkvk[i,2,2].real, symvkvk[i,0,1].real, symvkvk[i,0,2].real, symvkvk[i,1,2].real, \
-                    red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
+        print('\nTransformed vxx vyy vzz vxy vxz vyz(ikrr) --- vxx vyy vzz vxy vxz vyz (P^T irrk)   # only real part')
+        for i in range(redk.shape[0]):
+          print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0,0,0].real, symvkvk[i,0,0,1,1].real, symvkvk[i,0,0,2,2].real, symvkvk[i,0,0,0,1].real, symvkvk[i,0,0,0,2].real, symvkvk[i,0,0,1,2].real, \
+                      red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
 
-      print('\n\n   Symmetry checks (only working properly for 1 band, since matrices can be reordered by symmetry operations:')
-      enecheck = np.allclose(hk[ik,None,:,:],red_hk[:,:,:])
-      velcheck = np.allclose(symvk, red_hvk[:,0,0,:])
-      curcheck = np.allclose(symck, red_hck_mat[:,0,0,:,:])
-      optcheck = np.allclose(symvkvk, red_hvkvk[:,0,0,:,:])
+      print('\n\nTrace comparisons.')
+      enecheck = np.allclose(np.trace(hk[ik], axis1=0,axis2=1),   np.trace(red_hk,      axis1=1,axis2=2))
+      velcheck = np.allclose(np.trace(symvk,  axis1=1,axis2=2),   np.trace(red_hvk,     axis1=1,axis2=2))
+      curcheck = np.allclose(np.trace(symck,  axis1=1,axis2=2),   np.trace(red_hck_mat, axis1=1,axis2=2))
+      optcheck = np.allclose(np.trace(symvkvk,axis1=1,axis2=2),   np.trace(red_hvkvk,   axis1=1,axis2=2))
       print('Energy    symmetry check: {}'.format(enecheck))
       print('Velocitiy symmetry check: {}'.format(velcheck))
       print('Curvature symmetry check: {}'.format(curcheck))
