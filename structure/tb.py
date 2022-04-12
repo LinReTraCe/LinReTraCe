@@ -297,9 +297,12 @@ class TightBinding(Model):
 
       ''' generate all connected points via tranposed symmetry operations '''
       ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
+
       ''' yes this is the transposed symop here '''
       redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
+      ''' bring back to BZ '''
       redk[redk<0] += 1
+      redk[redk>1] -= 1
       red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
       red_ee = np.exp(1j * red_rdotk)
       #energy
@@ -308,17 +311,14 @@ class TightBinding(Model):
       red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
       #curvature
       red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
-      # mopt
+      #mopt
       red_hvkvk = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.float64)
       red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = (np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]).real
       red_hvkvk[:,:,:, [1,2,2], [0,0,1]] = red_hvkvk[:,:,:, [0,0,1], [1,2,2]]
-
-      ''' transform reducible hck into matrix form '''
+      #curvature in matrix form
       red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
-      red_hck_mat[:,:,:, [1,2,2], [0,0,0]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
-
-
+      red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
 
       ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
       ''' apply the symmetry in matrix form onto curvature matrix of irreducible point '''
@@ -337,23 +337,21 @@ class TightBinding(Model):
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
       symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
 
-      # blaxx = 0
-      # blayy = 0
       print('irrk, P^T irrk, ene(irrk), ene(P^T irrk)')
       for i in range(redk.shape[0]):
         print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
 
-      print('P vx vy(irrk), vx vy(P^T irrk)')
+      print('P vx vy(irrk) --- vx vy(P^T irrk)')
       for i in range(redk.shape[0]):
         print('[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
 
-      print('P cxx cxy cyx cyy(irrk), cxx cxy cyx cyy(P^T irrk)')
+      print('P cxx cxy cyx cyy(irrk) --- cxx cxy cyx cyy(P^T irrk)')
       for i in range(redk.shape[0]):
-        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1], red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1]))
+        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1].real, red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1].real))
 
-      print('P vxx vxy vyx vyy(ikrr), vxx vxy vyx vyy (P^T irrk)')
+      print('P vxx vxy vyx vyy(ikrr) --- vxx vxy vyx vyy (P^T irrk)')
       for i in range(redk.shape[0]):
-        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1], red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1]))
+        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1].real, red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1].real))
 
 
 
