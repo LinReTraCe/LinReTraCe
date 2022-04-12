@@ -211,6 +211,9 @@ class TightBinding(Model):
           isym[isym>1] = 0
           isym[isym<(-1)] = 0
 
+        if abs(np.linalg.det(isym)) != 1.:
+          logger.critical('Spglib: Throwing out symmetry operation without properly defined determinant:\n {}'.format(isym))
+
         ''' Filter out the symmetries corresponding to dimensions not in use (deactivated via nk_i = 1) '''
         to_add = True
         for i, dim in enumerate(self.dims):
