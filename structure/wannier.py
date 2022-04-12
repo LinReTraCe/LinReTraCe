@@ -437,7 +437,7 @@ class Wannier90Calculation(DftCalculation):
         # transform into matrix form
         curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
         curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
-        curmat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(curmat[:,:,:, [0,0,1], [1,2,2]])
+        curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
         vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
         if self.ortho:
           vel2 = vel2[:,:,:,:3].real

@@ -317,7 +317,7 @@ class TightBinding(Model):
       #curvature in matrix form
       red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
-      red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
+      red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
 
       ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
       ''' apply the symmetry in matrix form onto curvature matrix of irreducible point '''
@@ -327,7 +327,7 @@ class TightBinding(Model):
       ''' transform into matrix form so we can apply the symmetries effectively '''
       hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
-      hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
+      hck_mat[:,:,:, [1,2,2], [0,0,1]] = hck_mat[:,:,:, [0,0,1], [1,2,2]]
       hvkvk_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
       hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
@@ -361,6 +361,16 @@ class TightBinding(Model):
       velcheck = np.allclose(np.trace(symvk,  axis1=1,axis2=2),   np.trace(red_hvk,     axis1=1,axis2=2))
       curcheck = np.allclose(np.trace(symck,  axis1=1,axis2=2),   np.trace(red_hck_mat, axis1=1,axis2=2))
       optcheck = np.allclose(np.trace(symvkvk,axis1=1,axis2=2),   np.trace(red_hvkvk,   axis1=1,axis2=2))
+      print('Energy    symmetry check: {}'.format(enecheck))
+      print('Velocitiy symmetry check: {}'.format(velcheck))
+      print('Curvature symmetry check: {}'.format(curcheck))
+      print('Optical   symmetry check: {}'.format(optcheck))
+
+      print('\nSum over absolute values comparisons.')
+      enecheck = np.allclose(np.sum(np.abs(hk[ik]), axis=(0,1)),   np.sum(np.abs(red_hk),      axis=(1,2)))
+      velcheck = np.allclose(np.sum(np.abs(symvk),  axis=(1,2)),   np.sum(np.abs(red_hvk),     axis=(1,2)))
+      curcheck = np.allclose(np.sum(np.abs(symck),  axis=(1,2)),   np.sum(np.abs(red_hck_mat), axis=(1,2)))
+      optcheck = np.allclose(np.sum(np.abs(symvkvk),axis=(1,2)),   np.sum(np.abs(red_hvkvk),   axis=(1,2)))
       print('Energy    symmetry check: {}'.format(enecheck))
       print('Velocitiy symmetry check: {}'.format(velcheck))
       print('Curvature symmetry check: {}'.format(curcheck))
@@ -503,7 +513,7 @@ class TightBinding(Model):
       # transform into matrix form
       curmat  = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
-      curmat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(curmat[:,:,:, [0,0,1], [1,2,2]])
+      curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
       vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
       if self.ortho:
         vel2 = vel2[:,:,:,:3].real
