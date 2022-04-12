@@ -357,35 +357,63 @@ class TightBinding(Model):
           print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0,0,0].real, symvkvk[i,0,0,1,1].real, symvkvk[i,0,0,2,2].real, symvkvk[i,0,0,0,1].real, symvkvk[i,0,0,0,2].real, symvkvk[i,0,0,1,2].real, \
                       red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
 
-      print('\n\nTrace comparisons.')
-      enecheck = np.allclose(np.trace(hk[ik], axis1=0,axis2=1),   np.trace(red_hk,      axis1=1,axis2=2))
-      velcheck = np.allclose(np.trace(symvk,  axis1=1,axis2=2),   np.trace(red_hvk,     axis1=1,axis2=2))
-      curcheck = np.allclose(np.trace(symck,  axis1=1,axis2=2),   np.trace(red_hck_mat, axis1=1,axis2=2))
-      optcheck = np.allclose(np.trace(symvkvk,axis1=1,axis2=2),   np.trace(red_hvkvk,   axis1=1,axis2=2))
-      print('Energy    symmetry check: {}'.format(enecheck))
-      print('Velocitiy symmetry check: {}'.format(velcheck))
-      print('Curvature symmetry check: {}'.format(curcheck))
-      print('Optical   symmetry check: {}'.format(optcheck))
 
-      print('\nSum over values comparisons.')
-      enecheck = np.allclose(np.sum(hk[ik], axis=(0,1)),   np.sum(red_hk,      axis=(1,2)))
-      velcheck = np.allclose(np.sum(symvk,  axis=(1,2)),   np.sum(red_hvk,     axis=(1,2)))
-      curcheck = np.allclose(np.sum(symck,  axis=(1,2)),   np.sum(red_hck_mat, axis=(1,2)))
-      optcheck = np.allclose(np.sum(symvkvk,axis=(1,2)),   np.sum(red_hvkvk,   axis=(1,2)))
-      print('Energy    symmetry check: {}'.format(enecheck))
-      print('Velocitiy symmetry check: {}'.format(velcheck))
-      print('Curvature symmetry check: {}'.format(curcheck))
-      print('Optical   symmetry check: {}'.format(optcheck))
 
-      print('\nSum over absolute values comparisons.')
-      enecheck = np.allclose(np.sum(np.abs(hk[ik]), axis=(0,1)),   np.sum(np.abs(red_hk),      axis=(1,2)))
-      velcheck = np.allclose(np.sum(np.abs(symvk),  axis=(1,2)),   np.sum(np.abs(red_hvk),     axis=(1,2)))
-      curcheck = np.allclose(np.sum(np.abs(symck),  axis=(1,2)),   np.sum(np.abs(red_hck_mat), axis=(1,2)))
-      optcheck = np.allclose(np.sum(np.abs(symvkvk),axis=(1,2)),   np.sum(np.abs(red_hvkvk),   axis=(1,2)))
-      print('Energy    symmetry check: {}'.format(enecheck))
-      print('Velocitiy symmetry check: {}'.format(velcheck))
-      print('Curvature symmetry check: {}'.format(curcheck))
-      print('Optical   symmetry check: {}'.format(optcheck))
+      ''' to get a full one-to-one comparison
+          we need to sort these now
+          through the application of rotations pairs of colums and rows can be interchanged
+      '''
+      ek,U = np.linalg.eig(hk[ik])      # 1 transformation
+      ek = ek.real
+      sortindex = ek.argsort()
+      ek = ek[sortindex]
+      U = U[:,sortindex]
+      Uinv = np.linalg.inv(U)
+      hk_sorted = hk[ik,sortindex,sortindex]
+
+      symvk_sorted   = symvk.copy()
+      symck_sorted   = symck.copy()
+      symvkvk_sorted = symvkvk.copy()
+      for i in range(redk.shape[0]):
+        for idir in range(3):
+          symvkdir = symvk[i,:,:,idir]
+          symvk_sorted[i,:,:,idir] = symvkdir[sortindex,sortindex]
+          for jdir in range(3):
+            symckdir = symck[i,:,:,idir,jdir]
+            symck_sorted[i,:,:,idir,jdir] = symckdir[sortindex,sortindex]
+            symvkvkdir = symvkvk[i,:,:,idir,jdir]
+            symvkvk_sorted[i,:,:,idir,jdir] = symvkvkdir[sortindex,sortindex]
+
+      red_ek, red_U = np.linalg.eig(red_hk) # n transformations
+      red_ek = red_ek.real
+      red_hk_sorted    = red_hk.copy()
+      red_hvk_sorted   = red_hvk.copy()
+      red_hck_sorted   = red_hck_mat.copy()
+      red_hvkvk_sorted = red_hvkvk.copy()
+      for i in range(redk.shape[0]):
+        idx = red_ek[i].argsort()
+        red_ek[i,:] = red_ek[i,idx]
+        red_hk_sorted[i,:,:] = red_hk[i,idx,idx]
+        for idir in range(3):
+          red_vkdir = red_hvk[i,:,:,idir]
+          red_hvk_sorted[i,:,:,idir] = red_vkdir[idx,idx]
+          for jdir in range(3):
+            red_ckdir = red_hck_mat[i,:,:,idir,jdir]
+            red_hck_sorted[i,:,:,idir,jdir] = red_ckdir[idx,idx]
+            red_vkvkdir = red_hvkvk[i,:,:,idir,jdir]
+            red_hvkvk_sorted[i,:,:,idir,jdir] = red_vkvkdir[idx,idx]
+
+      ene_ev_check = np.allclose(ek, red_ek)
+      ene_hk_check = np.allclose(hk_sorted, red_hk_sorted)
+      velcheck = np.allclose(symvk_sorted, red_hvk_sorted)
+      curcheck = np.allclose(symck_sorted, red_hck_sorted)
+      optcheck = np.allclose(symvkvk_sorted, red_hvkvk_sorted)
+
+      print('Eigenvalue   symmetry check (irreducible, reducible): {}'.format(ene_ev_check))
+      print('Hamiltonian  symmetry check (irreducible, reducible): {}'.format(ene_hk_check))
+      print('Velocitiy    symmetry check (rotated,     reducible): {}'.format(velcheck))
+      print('Curvature    symmetry check (rotated,     reducible): {}'.format(curcheck))
+      print('Optical      symmetry check (rotated,     reducible): {}'.format(optcheck))
       print('\n\n')
 
 
