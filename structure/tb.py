@@ -200,9 +200,18 @@ class TightBinding(Model):
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
 
-        if np.any(np.abs(isym) > 1): # those are not what we want
-          continue
+        ''' Spglib gives a weird form of these rotations. this is an attempt to hotfix this mess.
+            Each element in the point gropup _must_ have a determinant of either -1 or +1.
+            Here we catch the problematic 'rotations' and overwrite the off-diagonal terms to
+            produce the correct result.
+            This is still very much experimental and I'm looking for a more robust solution.
+        '''
+        det = np.linalg.det(isym)
+        if abs(det) != 0:
+          isym[isym>1] = 0
+          isym[isym<(-1)] = 0
 
+        ''' Filter out the symmetries corresponding to dimensions not in use (deactivated via nk_i = 1) '''
         to_add = True
         for i, dim in enumerate(self.dims):
           if dim: continue
