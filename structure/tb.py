@@ -171,20 +171,20 @@ class TightBinding(Model):
         numbers.append(self.atoms_spglib[i,0])
         positions.append(self.atoms_spglib[i,1:])
 
-      logger.info('Spglib: Generating irreducible kpoints.')
 
       cell = (lattice, positions, numbers)
-      mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
 
+      ''' get spacegroup'''
+      spacegroup = spglib.get_spacegroup(cell, symprec=1e-5)
+      logger.info('Spglib: Detected spacegroup {}'.format(spacegroup))
+
+      logger.info('Spglib: Generating irreducible kpoints.')
+      mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
       unique, counts = np.unique(mapping, return_counts=True)
       self.nkp  = len(unique)
-
       logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
-
-      ''' from the mapping and counts thereof generate multiplicity and weights '''
       self.multiplicity = np.array(counts, dtype=int)
       self.weights      = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
-
       self.kpoints = grid[unique]
       self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
 
