@@ -287,11 +287,11 @@ class TightBinding(Model):
       ''' irreducible point '''
       import random
       ik = random.randint(1,self.nkp)
-      logger.debug('\n\n Randomly chosen k-points: {}'.format(ik))
-      print('irreducible k:\n{}'.format(self.kpoints[ik,:]))
-      print('irreducible hk:\n{}'.format(hk[ik,0,:]))
-      print('irreducible hvk:\n{}'.format(hvk[ik,0,0,:]))
-      print('irreducible hck:\n{}'.format(hck[ik,0,0,:]))
+      print('\n\n Randomly chosen k-points: {}'.format(ik))
+      print('irreducible k: {}'.format(self.kpoints[ik,:]))
+      print('irreducible hk: {}'.format(hk[ik,0,:]))
+      print('irreducible hvk: {}'.format(hvk[ik,0,0,:]))
+      print('irreducible hck: {}'.format(hck[ik,0,0,:]))
       print('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
 
       ''' generate all connected points via tranposed symmetry operations '''
@@ -336,21 +336,25 @@ class TightBinding(Model):
       symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
       symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
 
-      print('irrk, P^T irrk, ene(irrk), ene(P^T irrk)')
+      print('irrk, ene(irrk) --- P^T irrk, ene(P^T irrk) # all band combinations')
       for i in range(redk.shape[0]):
-        print(self.kpoints[ik,:2], redk[i,:2], '{} {}'.format(hk[ik,0,:], red_hk[i,0,:]))
+        print(self.kpoints[ik,:3], hk[ik,:,:], ' --- ', redk[i,:3], red_hk[i,:,:])
 
-      print('P vx vy(irrk) --- vx vy(P^T irrk)')
+      print('\nTransformed vx vy vz(irrk) --- vx vy vz(P^T irrk)   # only real part of band 0')
       for i in range(redk.shape[0]):
-        print('[{} {}] --- [{} {}]'.format(symvk[i,0].real, symvk[i,1].real, red_hvk[i,0,0,0].real, red_hvk[i,0,0,1].real))
+        print(symvk[i].real, ' --- ', red_hvk[i,0,0,:].real)
 
-      print('P cxx cxy cyx cyy(irrk) --- cxx cxy cyx cyy(P^T irrk)')
+      print('\nTransformed cxx cyy czz cxy cxz cyz (irrk) --- cxx cyy czz cxy cxz cyz (P^T irrk)   # only real part')
       for i in range(redk.shape[0]):
-        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symck[i,0,0].real, symck[i,0,1].real, symck[i,1,0].real, symck[i,1,1].real, red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,0,1].real, red_hck_mat[i,0,0,1,0].real, red_hck_mat[i,0,0,1,1].real))
+        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symck[i,0,0].real, symck[i,1,1].real, symck[i,2,2].real, symck[i,0,1].real,symck[i,0,2].real,symck[i,1,2].real, \
+                    red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,1,1].real, red_hck_mat[i,0,0,2,2].real, red_hck_mat[i,0,0,0,1].real,red_hck_mat[i,0,0,0,2].real,red_hck_mat[i,0,0,1,2].real))
 
-      print('P vxx vxy vyx vyy(ikrr) --- vxx vxy vyx vyy (P^T irrk)')
+      print('\nTransformed vxx vyy vzz vxy vxz vyz(ikrr) --- vxx vyy vzz vxy vxz vyz (P^T irrk)   # only real part')
       for i in range(redk.shape[0]):
-        print('[{} {} {} {}] --- [{} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,0,1].real, symvkvk[i,1,0].real, symvkvk[i,1,1].real, red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,1,0].real, red_hvkvk[i,0,0,1,1].real))
+        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,1,1].real, symvkvk[i,2,2].real, symvkvk[i,0,1].real, symvkvk[i,0,2].real, symvkvk[i,1,2].real, \
+                    red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
+
+      print('\n\n')
 
 
 
