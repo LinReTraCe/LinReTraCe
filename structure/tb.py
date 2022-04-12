@@ -5,11 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import numpy as np
-try:
-  import spglib
-  spglib_exist = True
-except ImportError:
-  spglib_exist = False
+import spglib
 
 from structure.aux   import levicivita
 from structure.aux   import progressBar
@@ -32,15 +28,12 @@ class TightBinding(Model):
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
-    if self.irreducible and not spglib_exist:
-      raise IOError('Irreducible grids are only supported via spglib')
 
-
-  def computeData(self, tbdata, rvecdata, atomdata, charge, mu=None):
-    self.tbdata   = tbdata
-    self.rvecdata = rvecdata
-    self.atomdata = atomdata
-    self.charge   = charge
+  def computeData(self, tbdata, rvec_spglib, atoms_spglib, charge, mu=None):
+    self.tbdata       = tbdata
+    self.rvec_spglib  = rvec_spglib # the vectors are the ROWS (required for spglib python interface)
+    self.atoms_spglib = atoms_spglib
+    self.charge       = charge
 
     if self.tbdata.shape[1] == 6:
       self.imaghopping = False
@@ -71,20 +64,30 @@ class TightBinding(Model):
     self._calcFermiLevel(mu)
 
   def _computeOrthogonality(self):
-    sum_vecs = np.sum(self.rvecdata, axis=1) # a_1 + a_2 + a_3
-    max_vecs = np.array([np.max(np.abs(self.rvecdata[:,i])) for i in range(3)]) # maximal entries
+    '''
+      weird way to determine orthogonality of unit cells
+      that includes fcc and bcc vectors that are naturally not orthogonal
+      but describe a conventionally orthogonal unit cell
+      should work for all cases
+    '''
+    sum_vecs = np.sum(self.rvec_spglib, axis=0) # a_1 + a_2 + a_3
+    max_vecs = np.array([np.max(np.abs(self.rvec_spglib[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
   def _computeReciprocLattice(self):
-    self.vol = np.dot(np.cross(self.rvecdata[0,:],self.rvecdata[1,:]),self.rvecdata[2,:])
-    self.kvec = np.zeros_like(self.rvecdata, dtype=np.float64)
-    self.kvec[:,0] = np.cross(self.rvecdata[1,:],self.rvecdata[2,:]) / self.vol
-    self.kvec[:,1] = np.cross(self.rvecdata[2,:],self.rvecdata[0,:]) / self.vol
-    self.kvec[:,2] = np.cross(self.rvecdata[0,:],self.rvecdata[1,:]) / self.vol
+    self.rvec = self.rvec_spglib
+    self.vol = np.abs(np.dot(np.cross(self.rvec[:,0],self.rvec[:,1]),self.rvec[:,2]))
+    self.kvec = np.zeros_like(self.rvec, dtype=np.float64)
+    self.kvec[0,:] = np.cross(self.rvec[1,:],self.rvec[2,:]) / self.vol
+    self.kvec[1,:] = np.cross(self.rvec[2,:],self.rvec[0,:]) / self.vol
+    self.kvec[2,:] = np.cross(self.rvec[0,:],self.rvec[1,:]) / self.vol
     self.kvec *= 2*np.pi
     logger.info('   volume [Ang^3]: {}'.format(self.vol))
+    logger.debug('   real space lattice (rows) :\n{}'.format(self.rvec))
+    logger.debug('   reciprocal lattice (rows) :\n{}'.format(self.kvec))
+    logger.debug('   recip.T @ real / (2pi) =\n{}'.format(self.kvec.T @ self.rvec / 2/np.pi))
 
   def _readHr(self):
     '''
@@ -161,27 +164,27 @@ class TightBinding(Model):
     ''' define k-grid, shift if required '''
     if self.irreducible:
 
-      lattice   = self.rvecdata
+      lattice   = self.rvec_spglib
       positions = []
       numbers   = []
-      for i in range(self.atomdata.shape[0]):
-        numbers.append(self.atomdata[i,0])
-        positions.append(self.atomdata[i,1:])
+      for i in range(self.atoms_spglib.shape[0]):
+        numbers.append(self.atoms_spglib[i,0])
+        positions.append(self.atoms_spglib[i,1:])
 
-      logger.info('Spglib: Generating irreducible kpoints.')
 
       cell = (lattice, positions, numbers)
-      mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
 
+      ''' get spacegroup'''
+      spacegroup = spglib.get_spacegroup(cell, symprec=1e-5)
+      logger.info('Spglib: Detected spacegroup {}'.format(spacegroup))
+
+      logger.info('Spglib: Generating irreducible kpoints.')
+      mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
       unique, counts = np.unique(mapping, return_counts=True)
       self.nkp  = len(unique)
-
       logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
-
-      ''' from the mapping and counts thereof generate multiplicity and weights '''
       self.multiplicity = np.array(counts, dtype=int)
       self.weights      = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
-
       self.kpoints = grid[unique]
       self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
 
@@ -191,6 +194,7 @@ class TightBinding(Model):
 
       orthosym = True
       self.symop = []
+      self.symopT = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
         to_add = True
@@ -203,7 +207,8 @@ class TightBinding(Model):
               if isym[j,i] != 0: to_add = False
               if isym[i,j] != 0: to_add = False # redundant I think
 
-        if to_add: self.symop.append(isym)
+        if to_add:
+          self.symop.append(isym)
 
         if orthosym:
           test = np.einsum('ij,jk->ik',isym,isym.T)
@@ -219,18 +224,11 @@ class TightBinding(Model):
 
       self.symop = np.array(self.symop)
       self.invsymop = np.linalg.inv(self.symop)
+
       self.nsym = self.symop.shape[0]
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
       logger.debug('Symmetry operation: \n{}'.format(self.symop))
-      logger.critical('\n\nSymmetry operations are not orthogonal -> changing to reducible calculation\n')
-      if not orthosym:
-        self.irreducible=False
-        self.nsym = structure.symmetries.C1.nsym
-        self.symop = structure.symmetries.C1.symop
-        self.invsymop = structure.symmetries.C1.invsymop
-
-    # because we might end up here from the irreducible setup
-    if not self.irreducible:
+    else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
       for ikx in np.linspace(0,1,self.nkx,endpoint=False):
@@ -270,15 +268,95 @@ class TightBinding(Model):
     ee = np.exp(1j * rdotk)
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
-    prefactor_r = np.einsum('di,ri->dr', self.rvecdata, self.rpoints)
+    ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' self.rvec[i,j] is the jth entry of the ith vector (aka rows)
+        -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
+        with the x/y/z entries (columns) of the rvec matrix
+    '''
+    prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rpoints)
     hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
 
-    ''' FORUIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
+    ''' FOURIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
     prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
     for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
       prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
     hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
+
+
+    if logger.isEnabledFor(logging.DEBUG):
+      ''' irreducible point '''
+      import random
+      ik = random.randint(1,self.nkp)
+      print('\n\n Randomly chosen k-points: {}'.format(ik))
+      print('irreducible k: {}'.format(self.kpoints[ik,:]))
+      print('irreducible hk: {}'.format(hk[ik,0,:]))
+      print('irreducible hvk: {}'.format(hvk[ik,0,0,:]))
+      print('irreducible hck: {}'.format(hck[ik,0,0,:]))
+      print('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
+
+      ''' generate all connected points via tranposed symmetry operations '''
+      ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
+
+      ''' yes this is the transposed symop here '''
+      redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
+      ''' bring back to BZ '''
+      redk[redk<0] += 1
+      redk[redk>1] -= 1
+      red_rdotk = 2*np.pi*np.einsum('ki,ri->kr',redk,self.rpoints)
+      red_ee = np.exp(1j * red_rdotk)
+      #energy
+      red_hk = np.einsum('kr,rij->kij', red_ee, self.hr)
+      #velocitiy
+      red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,self.hr)
+      #curvature
+      red_hck = np.einsum('dr,kr,rij->kijd',-prefactor_r2,red_ee,self.hr)
+      #mopt
+      red_hvkvk = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.float64)
+      red_hvkvk[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = (np.conjugate(red_hvk[:,:,:,[0,1,2,0,0,1]]) * red_hvk[:,:,:,[0,1,2,1,2,2]]).real
+      red_hvkvk[:,:,:, [1,2,2], [0,0,1]] = red_hvkvk[:,:,:, [0,0,1], [1,2,2]]
+      #curvature in matrix form
+      red_hck_mat  = np.zeros((redk.shape[0],self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
+      red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(red_hck_mat[:,:,:,[0,0,1], [1,2,2]])
+
+      ''' on the contrary apply the symmetry operations on the velocities of the irreducible point '''
+      ''' apply the symmetry in matrix form onto curvature matrix of irreducible point '''
+      testsymop = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      testsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+
+      ''' transform into matrix form so we can apply the symmetries effectively '''
+      hck_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = hck[:,:,:,:]
+      hck_mat[:,:,:, [1,2,2], [0,0,1]] = np.conjugate(hck_mat[:,:,:, [0,0,1], [1,2,2]])
+      hvkvk_mat = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+      hvkvk_mat[:,:,:,[0,1,2,0,0,1], [0,1,2,1,2,2]] = np.conjugate(hvk[:,:,:,[0,1,2,0,0,1]]) * hvk[:,:,:,[0,1,2,1,2,2]]
+      hvkvk_mat[:,:,:, [1,2,2], [0,0,1]] = hvkvk_mat[:,:,:, [0,0,1], [1,2,2]]
+
+      symvk = np.einsum('nij,j->ni',testsymop,hvk[ik,0,0,:3])
+      symck = np.einsum('nij,jk,nkl->nil',testsymop,hck_mat[ik,0,0,:,:],testsymopT)
+      symvkvk = np.einsum('nij,jk,nkl->nil',testsymop,hvkvk_mat[ik,0,0,:,:],testsymopT)
+
+      print('irrk, ene(irrk) --- P^T irrk, ene(P^T irrk) # all band combinations')
+      for i in range(redk.shape[0]):
+        print(self.kpoints[ik,:3], hk[ik,:,:], ' --- ', redk[i,:3], red_hk[i,:,:])
+
+      print('\nTransformed vx vy vz(irrk) --- vx vy vz(P^T irrk)   # only real part of band 0')
+      for i in range(redk.shape[0]):
+        print(symvk[i].real, ' --- ', red_hvk[i,0,0,:].real)
+
+      print('\nTransformed cxx cyy czz cxy cxz cyz (irrk) --- cxx cyy czz cxy cxz cyz (P^T irrk)   # only real part')
+      for i in range(redk.shape[0]):
+        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symck[i,0,0].real, symck[i,1,1].real, symck[i,2,2].real, symck[i,0,1].real,symck[i,0,2].real,symck[i,1,2].real, \
+                    red_hck_mat[i,0,0,0,0].real, red_hck_mat[i,0,0,1,1].real, red_hck_mat[i,0,0,2,2].real, red_hck_mat[i,0,0,0,1].real,red_hck_mat[i,0,0,0,2].real,red_hck_mat[i,0,0,1,2].real))
+
+      print('\nTransformed vxx vyy vzz vxy vxz vyz(ikrr) --- vxx vyy vzz vxy vxz vyz (P^T irrk)   # only real part')
+      for i in range(redk.shape[0]):
+        print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,1,1].real, symvkvk[i,2,2].real, symvkvk[i,0,1].real, symvkvk[i,0,2].real, symvkvk[i,1,2].real, \
+                    red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
+
+      print('\n\n')
+
+
 
     ''' this transforms all k points at once '''
     ek, U = np.linalg.eig(hk)
@@ -336,12 +414,12 @@ class TightBinding(Model):
             break
 
         if not transformed:
-          logger.warning('\n\nTight binding parameter set does not fulfill symmteries given by unit cell' + \
-                        '\n symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
-                        '\n break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
+          logger.warning('\n\nTight binding symmetry check: {}'.format(transformed) + \
+                        '\n    Symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
+                        '\n    Break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
           return
     else:
-      logger.info('Tight binding parameter set fulfills full point group symmetry set determined by unit cell.')
+      logger.info('Tight binding symmetry check: {}'.format(transformed))
 
 
   def _calcOptical(self):
@@ -365,6 +443,12 @@ class TightBinding(Model):
       else:
         loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
       loc_BopticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3,3), dtype=np.complex128)
+
+      # we have to adjust the symmetry operations for the transformation to describe cartesian coordinates
+      # i tried to mimic the way Wien2K does this. it works, but i have no idea why, good luck brave adventurer
+      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+
       for ikp in range(self.nkp):
         progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -374,11 +458,11 @@ class TightBinding(Model):
         # put the curvatures into matrix form
         curmat  = np.zeros((self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
         curmat[:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:]
-        curmat[:,:, [1,2,2], [0,0,0]] = curmat[:,:, [0,0,1], [1,2,2]]
+        curmat[:,:, [1,2,2], [0,0,1]] = curmat[:,:, [0,0,1], [1,2,2]]
 
         # generate the transformed velocities and curvatures
-        vk = np.einsum('nij,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
-        ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+        vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+        ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
         # take the mean over the squares
         vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
@@ -416,8 +500,8 @@ class TightBinding(Model):
         if np.any(np.abs(vel2.imag) > 1e-6):
           temp = vel2.copy()
           vel2 = np.empty((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
-          vel2[:,:,:,:6] = temp
-          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+          vel2[:,:,:,:6] = temp.real
+          vel2[:,:,:,6:] = temp[:,:,:,3:].imag
         else:
           vel2 = vel2.real
       self.opticalMoments = [vel2]

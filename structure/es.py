@@ -34,7 +34,7 @@ class ElectronicStructure(ABC):
 
   def __init__(self):
     # information about kmesh
-    self.nkp            = 0    # number of k-points
+    self.nkp            = 0    # number of k-points (if reducible nkp = nkx.nky.nkz)
     self.nkx            = 0    # number of k-points in x-direction
     self.nky            = 0    # number of k-points in x-direction
     self.nkz            = 0    # number of k-points in x-direction
@@ -46,10 +46,16 @@ class ElectronicStructure(ABC):
     self.irreducible    = False# irreducible or reducible k-grid
     self.ortho          = False
 
-    self.spins          = 1    # number of spins we are considering
-    self.vol            = 0    # volume of the unit cell in AA^3
+    self.spins          = 1    # number of inequivalent spins we are considering
     self.charge         = 0    # charge in the given bands
     self.mu             = 0    # chemical potential
+
+    self.vol            = 0    # volume of the unit cell in AA^3
+    self.rvec           = None # real space lattice vectors (rows)
+    self.kvec           = None # reciprocal space lattice vectors (rows)
+                               # [i,j] represents the jth element of the ith vector
+                               # i.e. first entry -> vector 1 2 3
+                               #      second entry -> x y z
 
     # symmetries
     self.nsym           = 0    # number of symmetry operations

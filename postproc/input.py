@@ -76,40 +76,41 @@ class LRTCinput(object):
       print('  charge: {}'.format(h5['.bands/charge'][()]))
       if spins==1:
         gapped = h5['.bands/bandgap/gapped'][()]
-        print('  gapped: {}'.format('yes' if gapped else 'no'))
+        print('  gapped: {}'.format(str(gapped)))
         if gapped:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/vband'][()]))
           print('    conduction band: {}'.format(h5['.bands/bandgap/cband'][()]))
       else:
         gappedup = h5['.bands/bandgap/up/gapped'][()]
-        print('  spin up gapped: {}'.format('yes' if gappedup else 'no'))
+        print('  spin up gapped: {}'.format(str(gappedup)))
         if gappedup:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/up/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/up/vband'][()]))
           print('    conduction band: {}'.format(h5['.bands/bandgap/up/cband'][()]))
         gappeddn = h5['.bands/bandgap/dn/gapped'][()]
-        print('  spin dn gapped: {}'.format('yes' if gappeddn else 'no'))
+        print('  spin dn gapped: {}'.format(str(gappeddn)))
         if gappeddn:
           print('    bandgap: {0:.4f} eV'.format(h5['.bands/bandgap/dn/gapsize'][()]))
           print('    valence    band: {}'.format(h5['.bands/bandgap/dn/vband'][()]))
           print('    conduction band: {}'.format(h5['.bands/bandgap/dn/cband'][()]))
-      print('  chemical potential: {0:.4f} eV'.format(h5['.bands/mu'][()]))
+      print('  chemical potential: {0:.6f} eV'.format(h5['.bands/mu'][()]))
 
       print('\nUNIT-CELL')
-      print('  volume: {0:.4f} angstrom**3'.format(h5['.unitcell/volume'][()]))
+      print('  volume: {0:.4f} [Ang^3]'.format(h5['.unitcell/volume'][()]))
+      print('  orthogonal: {}'.format(h5['.unitcell/ortho'][()]))
 
       print('\nOPTICAL DATA')
       if spins==1:
-        print('  intra optical elements   : {}'.format('yes' if 'momentsDiagonal' in h5 else 'no'))
-        print('  inter optical elements   : {}'.format('yes' if 'kPoint/{:010}/moments'.format(1) in h5 else 'no'))
-        print('  intra magnetic elements  : {}'.format('yes' if 'momentsDiagonalBfield' in h5 else 'no'))
-        print('  inter magnetic elements  : {}'.format('yes' if 'kPoint/{:010}/momentsBfield'.format(1) in h5 else 'no'))
+        print('  intra optical elements   : {}'.format(str('momentsDiagonal' in h5)))
+        print('  inter optical elements   : {}'.format(str('kPoint/{:010}/moments'.format(1) in h5)))
+        print('  intra magnetic elements  : {}'.format(str('momentsDiagonalBfield' in h5)))
+        print('  inter magnetic elements  : {}'.format(str('kPoint/{:010}/momentsBfield'.format(1) in h5)))
       else:
-        print('  intra optical elements   : {}'.format('yes' if 'up/momentsDiagonal' in h5 else 'no'))
-        print('  inter optical elements   : {}'.format('yes' if 'up/kPoint/{:010}/moments'.format(1) in h5 else 'no'))
-        print('  intra magnetic elements  : {}'.format('yes' if 'up/momentsDiagonalBfield' in h5 else 'no'))
-        print('  inter magnetic elements  : {}'.format('yes' if 'up/kPoint/{:010}/momentsBfield'.format(1) in h5 else 'no'))
+        print('  intra optical elements   : {}'.format(str('up/momentsDiagonal' in h5)))
+        print('  inter optical elements   : {}'.format(str('up/kPoint/{:010}/moments'.format(1) in h5)))
+        print('  intra magnetic elements  : {}'.format(str('up/momentsDiagonalBfield' in h5)))
+        print('  inter magnetic elements  : {}'.format(str('up/kPoint/{:010}/momentsBfield'.format(1) in h5)))
 
 
   def outputDOS(self, plot, broadening=0.02, npoints=1001):

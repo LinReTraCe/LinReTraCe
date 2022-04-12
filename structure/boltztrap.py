@@ -15,15 +15,9 @@ from BoltzTraP2 import sphere
 from BoltzTraP2 import fite
 from BoltzTraP2 import serialization
 from BoltzTraP2.misc import ffloat
+import ase.spacegroup
 
-from structure.aux import progressBar
-
-try:
-  import ase.spacegroup
-  ase_exists = True
-except ImportError:
-  ase_exists = False
-
+from structure.aux    import progressBar
 from structure.wien2k import Wien2kCalculation
 from structure.vasp   import VaspCalculation
 from structure        import units
@@ -111,21 +105,24 @@ class BoltztrapInterpolation(object):
 
     elif isinstance(self.dftcalc, VaspCalculation):
 
-      if self.dftcalc.irreducible and not ase_exists:
-        raise IOError('vasp interpolation only works for reducible kmeshes or with ase installation')
-
       if self.dftcalc.irreducible:
-        logger.info('To continue, the spacegroup of your vasp calculation is required.')
+        logger.info('\n\nASE detected spacegroup number: {}'.format(self.dftcalc.spacegroup))
+        logger.info('If this is correct, skip by pressing enter or enter number in range 1-230')
         inputmethod = input if sys.version_info >= (3, 0) else raw_input
         spacegroup = inputmethod('Spacegroup [1-230]: ')
         try:
-          sg = int(spacegroup)
-          asespacegroup = ase.spacegroup.Spacegroup(sg)
-          self.dftcalc.symop = asespacegroup.get_rotations()
-          self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
-          self.dftcalc.nsym = self.dftcalc.symop.shape[0]
-        except:
-          raise IOError('Something went wrong')
+          if len(spacegroup.strip()) == 0:
+            sg = self.dftcalc.spacegroup
+          else:
+            sg = int(spacegroup)
+        except Exception as e:
+          raise IOError('Input invalid.')
+        asespacegroup = ase.spacegroup.Spacegroup(sg)
+        self.dftcalc.symop = asespacegroup.get_rotations()
+        logger.info('  Spacegroup: {}'.format(sg))
+        self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
+        self.dftcalc.nsym = self.dftcalc.symop.shape[0]
+        logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
 
       BTP.register_loader("VASP", BTP.VASPLoader)
       self._interp()
@@ -306,12 +303,6 @@ class BoltztrapInterpolation(object):
     we need to symmetrized them [akin to what wien2k does]
     '''
 
-    nsym = self.dftcalc.nsym
-    syms = self.dftcalc.symop
-    symsinv = self.dftcalc.invsymop
-
-    # symmetrize each vector and matrix
-
     logger.info('BoltzTrap2: Symmetrizing band derivatives.')
 
     d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
@@ -335,7 +326,14 @@ class BoltztrapInterpolation(object):
       nkp, nbands = self.velocities[ispin].shape[:2]
 
       BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.complex128)
-      opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
+      if self.dftcalc.ortho:
+        opticalDiag  = np.zeros((nkp,nbands,3), dtype=np.float64)
+      else:
+        opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
+
+      nsym = self.dftcalc.nsym
+      rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
+      rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
 
       for ikp in range(nkp):
         progressBar(ikp+1,nkp, status='k-points', prefix=prefix)
@@ -349,21 +347,21 @@ class BoltztrapInterpolation(object):
         curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
-        # the k-points transform like k' = R k
-        # therefore the velocities transform identical: v' = R v
-        # the equivalent matrix transformation is then R^{-1} c R
+        vk = np.einsum('nij,bj->bni',rotsymop,vel)
+        ck = np.einsum('nij,bjk,nkl->bnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
-        vk = np.einsum('nij,bj->bni',syms,vel) # bands, nsym, 3
-        ck = np.einsum('nij,bjk,nkl->bnil',symsinv,curmat,syms) # bands, nsym, 3, 3
-
-        vk2 = vk[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
-        vk2 = np.mean(vk2,axis=1) # symmetrize over the squares
+        ''' these are band interpolation, nothing complex can appear here '''
+        vk2 = np.conjugate(vk[:,:,[0,1,2,0,0,1]]) * vk[:,:,[0,1,2,1,1,2]]
+        vk2 = np.mean(vk2,axis=1).real # symmetrize over the squares
 
         #           epsilon_cij v_a v_j c_bi -> abc
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
         mb = np.mean(mb,axis=1)
 
-        opticalDiag[ikp,:,:] = vk2
+        if self.dftcalc.ortho:
+          opticalDiag[ikp,:,:] = vk2[...,:3]
+        else:
+          opticalDiag[ikp,:,:] = vk2[...]
         BopticalDiag[ikp,:,:,:,:] = mb
 
       self.opticalDiag.append(opticalDiag)

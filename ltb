@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
   ''' define logging '''
   logger = logging.getLogger()
-  logger.setLevel(logging.DEBUG)
+  logger.setLevel(logging.DEBUG if debug else logging.INFO)
   console = logging.StreamHandler()
   console.setFormatter(LogFormatter())
   console.setLevel(logging.DEBUG if debug else logging.INFO)
@@ -122,7 +122,11 @@ if __name__ == '__main__':
 
   # compute the dispersion, etc and output it
   try:
-    tb.computeData(tbdata=tbdata, rvecdata=rvecdata, atomdata=atomdata, charge=args.filling, mu=args.mu)
+    tb.computeData(tbdata=tbdata, \
+                   rvec_spglib=rvecdata, \
+                   atoms_spglib=atomdata, \
+                   charge=args.filling, \
+                   mu=args.mu)
   except Exception as e:
     error(str(e)+'\nExit.')
 

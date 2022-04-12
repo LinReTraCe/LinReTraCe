@@ -6,22 +6,11 @@ import os
 import logging
 logger = logging.getLogger(__name__)
 
-from structure.aux import progressBar
-
 import numpy as np
+import ase.io
 
-try:
-  import ase
-  import ase.io
-  import ase.spacegroup
-  from ase import Atoms
-  from ase.spacegroup import get_spacegroup
-  mymethods = {'get_volume', 'get_global_number_of_atoms'}
-  Atommethods = set([method for method in dir(Atoms) if callable(getattr(Atoms, method))])
-  ase_exists = True if mymethods.issubset(Atommethods) else False
-except ImportError:
-  ase_exists = False
 
+from structure.aux import progressBar
 from structure.dft import DftCalculation
 from structure     import units
 
@@ -42,10 +31,7 @@ class VaspCalculation(DftCalculation):
     self._defineFiles()
     self._checkFiles()
     logger.info("Files sucessfully loaded.")
-
-    if ase_exists:
-      ''' get all the crystal information from the ase atom object '''
-      self._getAuxiliaryInformation()
+    self._extractASEinformation()
 
   def __repr__(self):
     return ('vaspcalculation(directory={0.directory!r}'.format(self))
@@ -53,8 +39,8 @@ class VaspCalculation(DftCalculation):
   # we only care about the vasprun file
   def _defineFiles(self):
     self.fvasprun    = os.path.join(self.directory,'vasprun.xml')
-    if ase_exists:
-      self.aseobject   = ase.io.read(self.fvasprun)
+    self.foutcar     = os.path.join(self.directory,'OUTCAR')
+    self.aseobject   = ase.io.read(self.fvasprun)
 
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):
@@ -108,7 +94,7 @@ class VaspCalculation(DftCalculation):
       self.weightsum = 2
     else:
       self.weightsum = 1
-    logger.info("  Number of spins: {}".format(self.spins))
+    logger.info("  Number of inequivalent spins: {}".format(self.spins))
 
   def _read_lnoncollinear(self):
     # same xml access problems as with the spins

@@ -16,18 +16,6 @@ from structure.units import bohr2angstrom
 
 import numpy as np
 
-try:
-  import ase
-  import ase.io
-  import ase.spacegroup
-  from ase import Atoms
-  from ase.spacegroup import get_spacegroup
-  mymethods = {'get_volume', 'get_global_number_of_atoms'}
-  Atommethods = set([method for method in dir(Atoms) if callable(getattr(Atoms, method))])
-  ase_exists = True if mymethods.issubset(Atommethods) else False
-except ImportError:
-  ase_exists = False
-
 class Wannier90Calculation(DftCalculation):
   '''
   Wannier90 calculation class which reads all the relevant information
@@ -323,40 +311,13 @@ class Wannier90Calculation(DftCalculation):
       # 6: xx yy zz xy xz yz
       hck = np.zeros((self.nkp,self.nproj,self.nproj,6), dtype=np.complex128)
 
-      # for ik in range(self.nkp):
-      #   # do not take the k-iteration into the einstein summation to show progress
-      #   progressBar(ik+1,self.nkp, status='k-points', prefix=prefix)
-
-      #   ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
-      #   rdotk = 2*np.pi*np.einsum('i,ri->r',self.kpoints[ik,:], self.rlist) # no scaling to recip vector / lattice vectors here ?
-      #   ee = np.exp(1j * rdotk) / self.rmultiplicity # rmultiplicity takes care of double counting issues
-      #   hk[ik,:,:] = np.einsum('r,rij->ij', ee, hr)
-
-      #   ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      #   prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
-      #   hvk[ik,:,:,:] = np.einsum('dr,r,rij->ijd',1j*prefactor_r,ee,hr)
-
-      #   ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      #   prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
-      #   for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
-      #     prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
-      #   hck[ik,:,:,:] = np.einsum('dr,r,rij->ijd',-prefactor_r2,ee,hr)
-
-      #   if peierlscorrection:
-      #     # Jan's code snippet
-      #     # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-      #     distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
-      #     ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
-      #     hvk_correction = 1j * hk[ik,:,:,None] * ri_minus_rj[:,:,:]
-      #     hvk[ik,...] += hvk_correction
-
       ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
       rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints, self.rlist) # no scaling to recip vector / lattice vectors here ?
       ee = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
       hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
 
       ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      prefactor_r = np.einsum('di,ri->dr', self.rvec, self.rlist)
+      prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rlist)
       hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
 
       ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
@@ -369,7 +330,7 @@ class Wannier90Calculation(DftCalculation):
         # Jan's code snippet
         # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
         distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
-        ri_minus_rj = np.einsum('di,abi->abd', self.rvec, distances)
+        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances)
         hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
@@ -422,14 +383,16 @@ class Wannier90Calculation(DftCalculation):
         for k in range(3):
           levmatrix[i,j,k] = levicivita(i,j,k)
 
-    # symmetrizing is essential
-    if self.irreducible:
+    if self.irreducible: # requires symmetry operations
       for ispin in range(self.spins):
         if self.ortho:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
         else:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
         loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
+
+        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
         for ikp in range(self.nkp):
           progressBar(ikp+1,self.nkp,status='k-points')
 
@@ -439,11 +402,11 @@ class Wannier90Calculation(DftCalculation):
           # put the curvatures into matrix form
           curmat  = np.zeros((self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
           curmat[:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:]
-          curmat[:,:, [1,2,2], [0,0,0]] = curmat[:,:, [0,0,1], [1,2,2]]
+          curmat[:,:, [1,2,2], [0,0,1]] = curmat[:,:, [0,0,1], [1,2,2]]
 
           # generate the transformed velocities and curvatures
-          vk = np.einsum('nij,bpj->bpni',self.symop,vel) # bands, bands, nsym, 3
-          ck = np.einsum('nij,bpjk,nkl->bpnil',self.invsymop,curmat,self.symop) # bands, bands, nsym, 3, 3
+          vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+          ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
           # take the mean over the squares
           vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
@@ -659,17 +622,17 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of real_lattice after reading'.format(str(self.fnnkp)))
     self.rvec = np.array(self.rvec, dtype=np.float64)
     self.rvec *= self.lengthscale
-    logger.info('   real_lattice: \n{}'.format(self.rvec))
+    logger.info('   real_lattice (rows): \n{}'.format(self.rvec))
 
     ''' if a_1 + a_2 + a_3 is a scaled vector of the maximal entries -> ortho '''
-    sum_vecs = np.sum(self.rvec, axis=1) # a_1 + a_2 + a_3
+    sum_vecs = np.sum(self.rvec, axis=0) # a_1 + a_2 + a_3
     max_vecs = np.array([np.max(np.abs(self.rvec[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
     # V = (axb . c)
-    self.vol = np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:])
+    self.vol = np.abs(np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:]))
     self.vol *= self.lengthscale**3
     logger.info('   deduced volume: {}'.format(self.vol))
 
@@ -686,7 +649,7 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Wannier90 {} is not at the end of recip_lattice after reading'.format(str(self.fnnkp)))
     self.kvec = np.array(self.kvec, dtype=np.float64)
     self.kvec /= self.lengthscale
-    logger.info('   recip_lattice: \n{}'.format(self.kvec))
+    logger.info('   recip_lattice (rows): \n{}'.format(self.kvec))
 
     with open(str(self.fnnkp),'r') as nnkp:
       self.kpoints = []
