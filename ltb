@@ -83,10 +83,9 @@ if __name__ == '__main__':
 
   ''' define logging '''
   logger = logging.getLogger()
-  logger.setLevel(logging.DEBUG)
+  logger.setLevel(logging.DEBUG if debug else logging.INFO)
   console = logging.StreamHandler()
   console.setFormatter(log_formatter())
-  console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 
   ''' pre-checking existence of files and number of columns before doing anything '''

@@ -283,7 +283,6 @@ class TightBinding(Model):
     hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
 
 
-
     if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''
       import random
