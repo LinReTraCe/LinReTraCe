@@ -51,9 +51,11 @@ class ElectronicStructure(ABC):
     self.mu             = 0    # chemical potential
 
     self.vol            = 0    # volume of the unit cell in AA^3
-    self.rvec           = None # real space lattice vectors (columns)
-    self.kvec           = None # reciprocal space lattice vectors
-                               # [:,i] represents the ith vector
+    self.rvec           = None # real space lattice vectors (rows)
+    self.kvec           = None # reciprocal space lattice vectors (rows)
+                               # [i,j] represents the jth element of the ith vector
+                               # i.e. first entry -> vector 1 2 3
+                               #      second entry -> x y z
 
     # symmetries
     self.nsym           = 0    # number of symmetry operations
