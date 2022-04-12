@@ -71,7 +71,7 @@ class Program(object):
     levels = [logging.DEBUG,logging.INFO,logging.WARNING,logging.ERROR,logging.CRITICAL]
 
     self.log = logging.getLogger()   # apparently this has to be empty
-    self.log.setLevel(logging.DEBUG) # the root logger should be set to DEBUG
+    self.log.setLevel(levels[value]) # the root logger should be set to DEBUG
                                      # it essentially sets a lower limit for all the handlers
     # configure the console stream
     console = logging.StreamHandler()

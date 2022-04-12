@@ -202,6 +202,8 @@ class OrthogonalTightBinding(Model):
     self.invsymop = np.linalg.inv(self.symop)
     self.nsym = self.symop.shape[0]
 
+    logger.debug('Spglib symmetries:\n{}'.format(self.symop))
+
   def _setupKmesh(self):
     '''
     Setup the kmesh in the interval [0,1) 2pi/a
@@ -244,7 +246,7 @@ class OrthogonalTightBinding(Model):
         mult[ik] = 1 # reset multiplicity counter
 
         ''' generate all the symmetry related k-points in the Brillouin zone '''
-        knew = np.einsum('nij,j->ni',self.symop,kpoints[ik,:])
+        knew = np.einsum('nji,j->ni',self.symop,kpoints[ik,:])
         kmod = knew%1
         ''' in order to index properly and if kshift is applied , shift back '''
         if self.kshift:
@@ -421,8 +423,8 @@ class OrthogonalTightBinding(Model):
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
         # generate the transformed velocities and curvatures
-        vk = np.einsum('nij,bj->bni',self.symop,vel) # bands, nsym, 3 -- active transormation
-        ck = np.einsum('nij,bjk,nkl->bnil',self.invsymop,curmat,self.symop) # bands, nsym, 3, 3
+        vk = np.einsum('nij,bj->bni',self.invsymop,vel) # bands, nsym, 3 -- active transormation
+        ck = np.einsum('nij,bjk,nlk->bnil',self.invsymop,curmat,self.invsymop) # bands, nsym, 3, 3
 
         # take the mean over the squares
         vk2 = vk[:,:,[0,1,2]] * vk[:,:,[0,1,2]]
