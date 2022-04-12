@@ -286,12 +286,12 @@ class TightBinding(Model):
     if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''
       import random
-      ik = random.randint(1,self.nkp)
+      ik = random.randint(1,self.nkp) # avoid gamma point
       print('\n\n Randomly chosen k-points: {}'.format(ik))
       print('irreducible k: {}'.format(self.kpoints[ik,:]))
-      print('irreducible hk: {}'.format(hk[ik,0,:]))
-      print('irreducible hvk: {}'.format(hvk[ik,0,0,:]))
-      print('irreducible hck: {}'.format(hck[ik,0,0,:]))
+      print('irreducible hk: {}'.format(hk[ik,:,:]))
+      print('irreducible hvk: {}'.format(hvk[ik,:,:,:]))
+      print('irreducible hck: {}'.format(hck[ik,:,:,:]))
       print('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
 
       ''' generate all connected points via tranposed symmetry operations '''
@@ -354,6 +354,15 @@ class TightBinding(Model):
         print('[{} {} {} {} {} {}] --- [{} {} {} {} {} {}]'.format(symvkvk[i,0,0].real, symvkvk[i,1,1].real, symvkvk[i,2,2].real, symvkvk[i,0,1].real, symvkvk[i,0,2].real, symvkvk[i,1,2].real, \
                     red_hvkvk[i,0,0,0,0].real, red_hvkvk[i,0,0,1,1].real, red_hvkvk[i,0,0,2,2].real, red_hvkvk[i,0,0,0,1].real, red_hvkvk[i,0,0,0,2].real, red_hvkvk[i,0,0,1,2].real))
 
+      print('\n\n   Symmetry checks (only working properly for 1 band, since matrices can be reordered by symmetry operations:')
+      enecheck = np.allclose(hk[ik,None,:,:],red_hk[:,:,:])
+      velcheck = np.allclose(symvk, red_hvk[:,0,0,:])
+      curcheck = np.allclose(symck, red_hck_mat[:,0,0,:,:])
+      optcheck = np.allclose(symvkvk, red_hvkvk[:,0,0,:,:])
+      print('Energy    symmetry check: {}'.format(enecheck))
+      print('Velocitiy symmetry check: {}'.format(velcheck))
+      print('Curvature symmetry check: {}'.format(curcheck))
+      print('Optical   symmetry check: {}'.format(optcheck))
       print('\n\n')
 
 
