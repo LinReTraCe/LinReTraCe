@@ -341,19 +341,16 @@ class OrthogonalTightBinding(Model):
   def _checkSymmetriesKmesh(self):
     '''
       compare the momentum mesh to the unit cell symmetries
-      raise an IOError if there is disagreement
     '''
-    nkvec = np.array([self.nkx,self.nky,self.nkz], dtype=np.float64)
+    nkvec = 1./np.array([self.nkx,self.nky,self.nkz], dtype=np.float64) # smallest possible k-spacing
     transformed = np.abs(np.einsum('nij,j->ni',self.invsymop,nkvec))
-    equal_mesh = np.isclose(nkvec,transformed)
-    equal_zero = np.isclose(np.zeros((3,)),transformed)
-    equal  = np.all(np.logical_or(equal_zero,equal_mesh))
-    logger.info('Momentum grid symmetry check: {}'.format(str(equal)))
-
-    if not equal:
-      raise IOError('\nMomentum mesh does not respect point group symmetries of unit cell.' + \
-                    '\nIrreducible calculations must have momentum grid that does.')
-
+    spacing_exact = transformed / nkvec[None,:]
+    spacing_round = np.rint(spacing_exact)
+    conform = np.all(np.isclose(spacing_round,spacing_exact))
+    logger.info('Momentum grid symmetry check: {}'.format(str(conform)))
+    if not conform:
+      logger.warning('\n    Momentum mesh does not conform to point group symmetries.' + \
+                     '\n    Change momentum grid or calculate on reducible grid (--red)\n\n')
 
 
   def _computeDispersion(self):
