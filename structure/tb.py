@@ -189,6 +189,7 @@ class TightBinding(Model):
       self.kpoints = grid[unique]
       self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
 
+      logger.debug('kpoints:\n{}'.format(self.kpoints))
       ''' get symmetry and reduce unnecessary ones '''
       symmetry = spglib.get_symmetry(cell, symprec=1e-5)
       symsfull = symmetry['rotations']
@@ -198,6 +199,10 @@ class TightBinding(Model):
       self.symopT = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
+
+        if np.any(np.abs(isym) > 1): # those are not what we want
+          continue
+
         to_add = True
         for i, dim in enumerate(self.dims):
           if dim: continue
@@ -210,18 +215,6 @@ class TightBinding(Model):
 
         if to_add:
           self.symop.append(isym)
-
-        if orthosym:
-          test = np.einsum('ij,jk->ik',isym,isym.T)
-          for i in range(3):
-            for j in range(3):
-              if i==j:
-                if test[i,j] != 1.0:
-                  orthosym=False
-              else:
-                if test[i,j] != 0.0:
-                  orthosym=False
-
 
       self.symop = np.array(self.symop)
       self.invsymop = np.linalg.inv(self.symop)
