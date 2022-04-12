@@ -67,6 +67,7 @@ class OrthogonalTightBinding(Model):
       except Exception as e:
         self._defineSymmetries()
         self._setupKmesh()
+      self._checkSymmetriesKmesh()
     else:
       self._setupKmesh()
 
@@ -336,6 +337,22 @@ class OrthogonalTightBinding(Model):
                         '\n symmetry of r-vector {} is not fulfilled'.format(rvec1) + \
                         '\n avoid irreducible calculation if this is done on purpose\n\n')
           return
+
+  def _checkSymmetriesKmesh(self):
+    '''
+      compare the momentum mesh to the unit cell symmetries
+      raise an IOError if there is disagreement
+    '''
+    nkvec = np.array([self.nkx,self.nky,self.nkz], dtype=np.float64)
+    transformed = np.abs(np.einsum('nij,j->ni',self.invsymop,nkvec))
+    equal_mesh = np.isclose(nkvec,transformed)
+    equal_zero = np.isclose(np.zeros((3,)),transformed)
+    equal  = np.all(np.logical_or(equal_zero,equal_mesh))
+    logger.info('Momentum grid symmetry check: {}'.format(str(equal)))
+
+    if not equal:
+      raise IOError('\nMomentum mesh does not respect point group symmetries of unit cell.' + \
+                    '\nIrreducible calculations must have momentum grid that does.')
 
 
 

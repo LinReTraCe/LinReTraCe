@@ -84,7 +84,7 @@ if __name__ == '__main__':
                                 nkz=args.nkz, \
                                 irreducible=irr, \
                                 kshift=args.shift)
-  except:
+  except Exception as e:
     error(str(e)+'\nExit.')
 
   # compute the dispersion, etc and output it
