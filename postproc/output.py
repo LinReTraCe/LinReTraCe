@@ -628,7 +628,6 @@ class LRTCoutput(object):
           exist = path in h5
         if exist:
           self.owned.update({key:value})
-
     # now we iterate through the derived datasets
     for (key, value) in self.datasets.items():
       raw_dset, requirements, desdcription, response, magnetic = value
@@ -642,6 +641,11 @@ class LRTCoutput(object):
           break
       if allcontained:
         self.owned.update({key:value})
+
+    if logger.isEnabledFor(logging.DEBUG):
+      print('Owned datasets:')
+      for key, value in self.owned.items():
+        print('{0:<20}'.format(key), value)
 
   def _parse(self):
     '''
@@ -669,6 +673,7 @@ class LRTCoutput(object):
     success = False
     for fi in sortedfiles:
       try:
+        logger.debug('Trying to open: {}'.format(fi))
         with h5py.File(fi,'r') as hfi:
           if hfi.attrs['identifier'].decode("utf-8") == 'LRTCoutput':
             self.fname = fi

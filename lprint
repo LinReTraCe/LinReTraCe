@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
   ''' define logging '''
   logger = logging.getLogger()
-  logger.setLevel(logging.DEBUG)
+  logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
   console = logging.StreamHandler()
   console.setFormatter(LogFormatter())
   console.setLevel(logging.DEBUG if args.debug else logging.INFO)
