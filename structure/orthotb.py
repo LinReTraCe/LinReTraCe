@@ -18,25 +18,22 @@ from   structure.aux import progressBar
 
 import structure.symmetries.C1
 
-import structure.symmetries.D1x
-import structure.symmetries.D1y
-import structure.symmetries.D1z
+import structure.symmetries.onedim.D1x
+import structure.symmetries.onedim.D1y
+import structure.symmetries.onedim.D1z
 
-import structure.symmetries.C2xy
-import structure.symmetries.C2xz
-import structure.symmetries.C2yz
+import structure.symmetries.twodim.D2xy
+import structure.symmetries.twodim.D2xz
+import structure.symmetries.twodim.D2yz
+import structure.symmetries.twodim.D4xy
+import structure.symmetries.twodim.D4xz
+import structure.symmetries.twodim.D4yz
 
-import structure.symmetries.C4xy
-import structure.symmetries.C4xz
-import structure.symmetries.C4yz
-
-import structure.symmetries.D2H
-
-import structure.symmetries.D4Hxy
-import structure.symmetries.D4Hxz
-import structure.symmetries.D4Hyz
-
-import structure.symmetries.OH
+import structure.symmetries.threedim.D2H
+import structure.symmetries.threedim.D4Hxy
+import structure.symmetries.threedim.D4Hxz
+import structure.symmetries.threedim.D4Hyz
+import structure.symmetries.threedim.OH
 
 class OrthogonalTightBinding(Model):
   '''
@@ -62,9 +59,9 @@ class OrthogonalTightBinding(Model):
     logger.info('nky = {}'.format(self.nky))
     logger.info('nkz = {}'.format(self.nkz))
     if self.irreducible:
-      try:
+      if spglib_exist:
         self._setupKmeshSpglib()
-      except Exception as e:
+      else:
         self._defineSymmetries()
         self._setupKmesh()
       self._checkSymmetriesKmesh()
@@ -81,40 +78,40 @@ class OrthogonalTightBinding(Model):
       sym = structure.symmetries.C1
     if self.ndim == 1:
       if self.nkx != 1:
-        sym = structure.symmetries.D1x
+        sym = structure.symmetries.onedim.D1x
       elif self.nky != 1:
-        sym = structure.symmetries.D1y
+        sym = structure.symmetries.onedim.D1y
       elif self.nkz != 1:
-        sym = structure.symmetries.D1z
+        sym = structure.symmetries.onedim.D1z
 
     if self.ndim == 2:
       if self.nkz == 1:
         if self.ax == self.ay:
-          sym = structure.symmetries.C4xy
+          sym = structure.symmetries.twodim.D4xy
         else:
-          sym = structure.symmetries.C2xy
+          sym = structure.symmetries.twodim.D2xy
       if self.nky == 1:
         if self.ax == self.az:
-          sym = structure.symmetries.C4xz
+          sym = structure.symmetries.twodim.D4xz
         else:
-          sym = structure.symmetries.C2xz
+          sym = structure.symmetries.twodim.D2xz
       if self.nkx == 1:
         if self.ay == self.az:
-          sym = structure.symmetries.C4yz
+          sym = structure.symmetries.twodim.D4yz
         else:
-          sym = structure.symmetries.C2yz
+          sym = structure.symmetries.twodim.D2yz
 
     if self.ndim == 3:
       if self.ax == self.ay and self.ax == self.az:
-        sym = structure.symmetries.OH
+        sym = structure.symmetries.threedim.OH
       elif self.ax == self.ay:
-        sym = structure.symmetries.D4Hxy
+        sym = structure.symmetries.threedim.D4Hxy
       elif self.ax == self.az:
-        sym = structure.symmetries.D4Hxz
+        sym = structure.symmetries.threedim.D4Hxz
       elif self.ay == self.az:
-        sym = structure.symmetries.D4Hyz
+        sym = structure.symmetries.threedim.D4Hyz
       else:
-        sym = structure.symmetries.D2H
+        sym = structure.symmetries.threedim.D2H
 
     self.nsym     = sym.nsym
     self.symop    = sym.symop
@@ -233,7 +230,7 @@ class OrthogonalTightBinding(Model):
     if self.kshift: kpoints += self._kmeshshift[None,:]
 
     unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=np.int)
-    mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.float64)
+    mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.int)
     irrk    = 0
 
     if self.irreducible:
@@ -337,6 +334,8 @@ class OrthogonalTightBinding(Model):
                         '\n symmetry of r-vector {} is not fulfilled'.format(rvec1) + \
                         '\n avoid irreducible calculation if this is done on purpose\n\n')
           return
+    else:
+      logger.info('Tight binding symmetry check: {}'.format(transformed))
 
   def _checkSymmetriesKmesh(self):
     '''
@@ -349,8 +348,8 @@ class OrthogonalTightBinding(Model):
     conform = np.all(np.isclose(spacing_round,spacing_exact))
     logger.info('Momentum grid symmetry check: {}'.format(str(conform)))
     if not conform:
-      logger.warning('\n    Momentum mesh does not conform to point group symmetries.' + \
-                     '\n    Change momentum grid or calculate on reducible grid (--red)\n\n')
+      logger.critical('\n    Momentum mesh does not conform to point group symmetries.' + \
+                      '\n    Change momentum grid or calculate on reducible grid (--red)\n\n')
 
 
   def _computeDispersion(self):

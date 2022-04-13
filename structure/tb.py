@@ -501,8 +501,8 @@ class TightBinding(Model):
     conform = np.all(np.isclose(spacing_round,spacing_exact))
     logger.info('Momentum grid symmetry check: {}'.format(str(conform)))
     if not conform:
-      logger.warning('\n    Momentum mesh does not conform to point group symmetries.' + \
-                     '\n    Change momentum grid or calculate on reducible grid (--red)\n\n')
+      logger.critical('\n    Momentum mesh does not conform to point group symmetries.' + \
+                      '\n    Change momentum grid or calculate on reducible grid (--red)\n\n')
 
   def _calcOptical(self):
     '''
