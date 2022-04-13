@@ -48,11 +48,16 @@ class OrthogonalTightBinding(Model):
     self.ax          = ax
     self.ay          = ay
     self.az          = az
-    self.spacing     = [self.ax, self.ay, self.az]
     self.irreducible = irreducible  # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
+
+    self.spacing     = [self.ax, self.ay, self.az]
     self.vol         = self.ax*self.ay*self.az
     self.ortho       = True
+    self.rvec        = np.array([[self.ax,0,0],\
+                                 [0,self.ay,0],\
+                                 [0,0,self.az]], dtype=np.float64)
+    self.kvec        = np.linalg.inv(self.rvec) * 2*np.pi # since its orthogonal
 
     logger.info('Setting up kmesh with {} reducible kpoints'.format(self.nkp))
     logger.info('nkx = {}'.format(self.nkx))
