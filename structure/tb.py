@@ -191,28 +191,25 @@ class TightBinding(Model):
 
       logger.debug('kpoints:\n{}'.format(self.kpoints))
       ''' get symmetry and reduce unnecessary ones '''
+      # try:
+      #   lattice, scaled_positions, numbers = spglib.standardize_cell(cell, symprec=1e-5)
+      #   cell_standardized = (lattice, scaled_positions, numbers)
+      # except:
+      #   cell_standardized = cell
       symmetry = spglib.get_symmetry(cell, symprec=1e-5)
       symsfull = symmetry['rotations']
 
-      orthosym = True
+      non_standard = False
       self.symop = []
-      self.symopT = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
 
-        ''' Spglib gives a weird form of these rotations. this is an attempt to hotfix this mess.
-            Each element in the point gropup _must_ have a determinant of either -1 or +1.
-            Here we catch the problematic 'rotations' and overwrite the off-diagonal terms to
-            produce the correct result.
-            This is still very much experimental and I'm looking for a more robust solution.
-        '''
-        det = np.linalg.det(isym)
-        if abs(det) != 0:
+        ''' Truncate if we detect a non-standardized unit cell '''
+        ''' I avoid redefining the unit cell, so the user knows what is happening '''
+        if abs(np.linalg.det(isym)) != 1:
+          non_standard = True
           isym[isym>1] = 0
           isym[isym<(-1)] = 0
-
-        if abs(np.linalg.det(isym)) != 1.:
-          logger.critical('Spglib: Throwing out symmetry operation without properly defined determinant:\n {}'.format(isym))
 
         ''' Filter out the symmetries corresponding to dimensions not in use (deactivated via nk_i = 1) '''
         to_add = True
@@ -232,6 +229,9 @@ class TightBinding(Model):
       self.invsymop = np.linalg.inv(self.symop)
 
       self.nsym = self.symop.shape[0]
+      if non_standard:
+        logger.critical('\n\nSpglib: Detected non-standardized unit cell. Continuing by truncating rotations.' + \
+                        '\n        Validity of generated data can not be guaranteed.\n')
       logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
       logger.debug('Symmetry operation: \n{}'.format(self.symop))
     else:
