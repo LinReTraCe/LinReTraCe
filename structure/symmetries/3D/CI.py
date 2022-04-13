@@ -1,20 +1,19 @@
 import numpy as np
 '''
-1D tightbinding: unit and inverse
+unit + inverse: Ci = S2
 '''
 
-strsym = 'D1-z'
+strsym = 'CI'
 nsym = 2
 symop = np.zeros((nsym,3,3), dtype=np.float64)
 invsymop = np.zeros_like(symop, dtype=np.float64)
 
-symop[0,:,:] = np.array([[1,0,0],\
-                         [0,1,0],\
-                         [0,0,1]])
-symop[1,:,:] = np.array([[1,0,0],\
-                         [0,1,0],\
-                         [0,0,-1]])
-
+symop[0,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0, 1, 0],\
+                         [ 0, 0, 1]])
+symop[1,:,:] = np.array([[-1, 0, 0],\
+                         [ 0,-1, 0],\
+                         [ 0, 0,-1]])
 for isym in range(nsym):
   invsymop[isym] = np.linalg.inv(symop[isym])
 

@@ -1,16 +1,20 @@
 import numpy as np
 '''
-Simply the unit ... dimensions are irrelevant here.
+1D tightbinding: unit and inverse
 '''
 
-strsym = 'C1'
-nsym = 1
+strsym = 'D1-y'
+nsym = 2
 symop = np.zeros((nsym,3,3), dtype=np.float64)
 invsymop = np.zeros_like(symop, dtype=np.float64)
 
-symop[0,:,:] = np.array([[1,0,0],\
-                         [0,1,0],\
-                         [0,0,1]])
+symop[0,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0, 1, 0],\
+                         [ 0, 0, 1]])
+symop[1,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0,-1, 0],\
+                         [ 0, 0, 1]])
+
 for isym in range(nsym):
   invsymop[isym] = np.linalg.inv(symop[isym])
 

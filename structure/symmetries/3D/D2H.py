@@ -8,39 +8,30 @@ nsym = 8
 symop = np.zeros((nsym,3,3), dtype=np.float64)
 invsymop = np.zeros_like(symop, dtype=np.float64)
 
-symop[0,:,:] = np.array([[ 1, 0, 0], \
-                         [ 0, 1, 0], \
+symop[0,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0, 1, 0],\
                          [ 0, 0, 1]])
-
-symop[1,:,:] = np.array([[-1, 0, 0], \
-                         [ 0,-1, 0], \
+symop[1,:,:] = np.array([[-1, 0, 0],\
+                         [ 0,-1, 0],\
                          [ 0, 0, 1]])
-
-symop[2,:,:] = np.array([[-1, 0, 0], \
-                         [ 0, 1, 0], \
+symop[2,:,:] = np.array([[-1, 0, 0],\
+                         [ 0, 1, 0],\
                          [ 0, 0,-1]])
-
-symop[3,:,:] = np.array([[ 1, 0, 0], \
-                         [ 0,-1, 0], \
+symop[3,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0,-1, 0],\
                          [ 0, 0,-1]])
-
 symop[4,:,:] = np.array([[-1, 0, 0],\
                          [ 0,-1, 0],\
                          [ 0, 0,-1]])
-
-symop[5,:,:] = np.array([[ 1, 0, 0], \
-                         [ 0, 1, 0], \
+symop[5,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0, 1, 0],\
                          [ 0, 0,-1]])
-
-symop[6,:,:] = np.array([[ 1, 0, 0], \
-                         [ 0,-1, 0], \
+symop[6,:,:] = np.array([[ 1, 0, 0],\
+                         [ 0,-1, 0],\
                          [ 0, 0, 1]])
-
-symop[7,:,:] = np.array([[-1, 0, 0], \
-                         [ 0, 1, 0], \
+symop[7,:,:] = np.array([[-1, 0, 0],\
+                         [ 0, 1, 0],\
                          [ 0, 0, 1]])
-
-
 
 for isym in range(nsym):
   invsymop[isym] = np.linalg.inv(symop[isym])
