@@ -204,12 +204,15 @@ class TightBinding(Model):
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
 
-        ''' Truncate if we detect a non-standardized unit cell '''
-        ''' I avoid redefining the unit cell, so the user knows what is happening '''
+        ''' Truncate if we detect a non-standardized unit cell.
+            I avoid redefining the unit cell, so the user knows what is happening
+            If the truncation results in a matrix without proper determinant raise an Exception.'''
         if abs(np.linalg.det(isym)) != 1:
           non_standard = True
           isym[isym>1] = 0
           isym[isym<(-1)] = 0
+          if abs(np.linalg.det(isym)) != 1:
+            raise ValueError('Non-stanardized unit cell resulted in matrix with invalid determinant')
 
         ''' Filter out the symmetries corresponding to dimensions not in use (deactivated via nk_i = 1) '''
         to_add = True
