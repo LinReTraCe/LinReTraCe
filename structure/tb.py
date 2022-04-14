@@ -277,6 +277,10 @@ class TightBinding(Model):
     ee = np.exp(1j * rdotk)
     hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
 
+    ''' this solves the problem of almost singular matrices
+        the eigenvalue routine then ignores a full 0 matrix -> thats what we want '''
+    hk[np.abs(hk) < 1e-14] = 0.0
+
     ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
     ''' self.rvec[i,j] is the jth entry of the ith vector (aka rows)
         -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
