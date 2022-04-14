@@ -1,12 +1,12 @@
 # rx ry rz orb1 orb2 hopping.real [hopping.imag]
 # on site
  0  0  0     1 1 0.0
-# x-directions
-+1  0 +1     1 1 0.25
--1  0 -1     1 1 0.25
-# y-directions
-+1 +1  0     1 1 0.25
--1 -1  0     1 1 0.25
-# z-directions
- 0 +1 +1     1 1 0.25
- 0 -1 -1     1 1 0.25
+# only hopping to body center == 8 sites to cover
+ 0  0 +1     1 1 0.25
+ 0  0 -1     1 1 0.25
+ 0 +1  0     1 1 0.25
+ 0 -1  0     1 1 0.25
++1  0  0     1 1 0.25
+-1  0  0     1 1 0.25
++1 +1 +1     1 1 0.25
+-1 -1 -1     1 1 0.25

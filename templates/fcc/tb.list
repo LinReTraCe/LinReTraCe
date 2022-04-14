@@ -1,12 +1,18 @@
 # rx ry rz orb1 orb2 hopping.real [hopping.imag]
 # on site
  0  0  0     1 1 0.0
-# conventional x-direction
-+1 -1 +1     1 1 0.25
--1 +1 -1     1 1 0.25
-# conventional y-direction
-+1 +1 -1     1 1 0.25
--1 -1 +1     1 1 0.25
-# conventional z-direction
--1 +1 +1     1 1 0.25
-+1 -1 -1     1 1 0.25
+# xy-plane
++1  0  0     1 1 0.25
+-1  0  0     1 1 0.25
+ 0 +1 -1     1 1 0.25
+ 0 -1 +1     1 1 0.25
+# xz-plane
+ 0  0 +1     1 1 0.25
+ 0  0 -1     1 1 0.25
++1 -1  0     1 1 0.25
+-1 +1  0     1 1 0.25
+# yz-plane
+ 0 +1  0     1 1 0.25
+ 0 -1  0     1 1 0.25
++1  0 -1     1 1 0.25
+-1  0 +1     1 1 0.25
