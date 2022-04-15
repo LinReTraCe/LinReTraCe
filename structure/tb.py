@@ -548,10 +548,11 @@ class TightBinding(Model):
 
         # generate the transformed velocities and curvatures
         vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+        vk_conj = np.conjugate(vk)
         ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
         # take the mean over the squares
-        vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
+        vk2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
         vk2 = np.mean(vk2,axis=2)
 
         if self.ortho:
@@ -561,7 +562,7 @@ class TightBinding(Model):
           loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
 
         #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk,vk,ck)
+        mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk_conj,vk,ck)
         mb = np.mean(mb,axis=2)
         loc_BopticalMoments[ikp,...] = mb
 
@@ -573,13 +574,14 @@ class TightBinding(Model):
 
     else:
       vel = self.velocities[0]
+      vel_conj = np.conjugate(vel)
       cur = self.curvatures[0]
 
       # transform into matrix form
       curmat  = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
       curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
-      vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
+      vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,1,2]]
       if self.ortho:
         vel2 = vel2[:,:,:,:3].real
       else:
@@ -595,16 +597,12 @@ class TightBinding(Model):
       self.opticalDiag    = [vel2diag]
 
         #           epsilon_cij v_a v_j c_bi -> abc
-      mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
+      mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel_conj,vel,curmat)
       self.BopticalMoments[0][...] = mb
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag
 
     if not self.ortho:
-      truncate = True
-      if np.any(np.abs(self.opticalMoments[0][...,6:]) > 1e-6):
-        truncate = False
-      if truncate:
+      if np.all(np.abs(self.opticalMoments[0][...,6:]) < 1e-6):
         self.opticalMoments[0]  = self.opticalMoments[0][...,:6]
         self.opticalDiag[0]     = self.opticalDiag[0][...,:6]
-

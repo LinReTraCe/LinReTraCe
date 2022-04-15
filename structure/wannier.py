@@ -406,10 +406,11 @@ class Wannier90Calculation(DftCalculation):
 
           # generate the transformed velocities and curvatures
           vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+          vk_conj = np.conjugate(vk)
           ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
           # take the mean over the squares
-          vk2 = np.conjugate(vk[:,:,:,[0,1,2,0,0,1]]) * vk[:,:,:,[0,1,2,1,2,2]]
+          vk2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
           vk2 = np.mean(vk2,axis=2)
 
           if self.ortho:
@@ -419,7 +420,7 @@ class Wannier90Calculation(DftCalculation):
             loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
 
           #           epsilon_cij v_a v_j c_bi -> abc
-          mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk,vk,ck)
+          mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk_conj,vk,ck)
           mb = np.mean(mb,axis=2)
           loc_BopticalMoments[ikp,...] = mb
 
@@ -432,20 +433,21 @@ class Wannier90Calculation(DftCalculation):
     else:
       for ispin in range(self.spins):
         vel = self.velocities[ispin] # nkp, nproj, nproj, 3
+        vel_conj = np.conjugate(vel)
         cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
 
         # transform into matrix form
         curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
         curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
         curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
-        vel2 = np.conjugate(vel[:,:,:,[0,1,2,0,0,1]]) * vel[:,:,:,[0,1,2,1,1,2]]
+        vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,1,2]]
         if self.ortho:
           vel2 = vel2[:,:,:,:3].real
         else:
           if np.any(np.abs(vel2.imag) > 1e-6):
             temp = vel2.copy()
             vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-            vel2[:,:,:,:6] = temp
+            vel2[:,:,:,:6] = temp.real
             vel2[:,:,:,6:] = temp[:,:,:,:3].imag
           else:
             vel2 = vel2.real
@@ -454,7 +456,7 @@ class Wannier90Calculation(DftCalculation):
         self.opticalDiag.append(vel2diag)
 
           #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel,vel,curmat)
+        mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel_conj,vel,curmat)
         self.BopticalMoments.append(mb)
         mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
         self.BopticalDiag.append(mbdiag)

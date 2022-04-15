@@ -348,14 +348,15 @@ class BoltztrapInterpolation(object):
         curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
 
         vk = np.einsum('nij,bj->bni',rotsymop,vel)
+        vk_conj = np.conjugate(vk)
         ck = np.einsum('nij,bjk,nkl->bnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
 
         ''' these are band interpolation, nothing complex can appear here '''
-        vk2 = np.conjugate(vk[:,:,[0,1,2,0,0,1]]) * vk[:,:,[0,1,2,1,1,2]]
+        vk2 = vk_conj[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
         vk2 = np.mean(vk2,axis=1).real # symmetrize over the squares
 
         #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
+        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk_conj,vk,ck)
         mb = np.mean(mb,axis=1)
 
         if self.dftcalc.ortho:
