@@ -466,10 +466,12 @@ class TightBinding(Model):
       if self.imaghopping:
         hop1 += 1j * self.tbdata[itb1,6]
 
+      ''' Inter-atomic hopping cannot be safely check: skip it '''
+      if band1_1 != band1_2: continue
+
       rvecsym = np.einsum('nij,j->ni',self.symop,rvec1)
 
       for isym in range(self.nsym):
-        transformed = False
         rvec_transformed = rvecsym[isym]
 
         for itb2 in range(self.tbdata.shape[0]):
@@ -483,16 +485,14 @@ class TightBinding(Model):
             hop2 += 1j * self.tbdata[itb2,6]
 
           if np.allclose(rvec_transformed,rvec2) and np.abs(hop1-hop2) < 1e-6:
-            transformed = True
             break
-
-        if not transformed:
-          logger.warning('\n\nTight binding symmetry check: {}'.format(transformed) + \
+        else:
+          logger.warning('\n\nIntra-orbital tight binding symmetry check: False' + \
                         '\n    Symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
                         '\n    Break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
           return
     else:
-      logger.info('Tight binding symmetry check: {}'.format(transformed))
+      logger.info('Intra-orbital tight binding symmetry check: True')
 
   def _checkSymmetriesKmesh(self):
     '''
