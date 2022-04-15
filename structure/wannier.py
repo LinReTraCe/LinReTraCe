@@ -444,13 +444,10 @@ class Wannier90Calculation(DftCalculation):
         if self.ortho:
           vel2 = vel2[:,:,:,:3].real
         else:
-          if np.any(np.abs(vel2.imag) > 1e-6):
-            temp = vel2.copy()
-            vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-            vel2[:,:,:,:6] = temp.real
-            vel2[:,:,:,6:] = temp[:,:,:,:3].imag
-          else:
-            vel2 = vel2.real
+          temp = vel2.copy()
+          vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
+          vel2[:,:,:,:6] = temp.real
+          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
         self.opticalMoments.append(vel2)
         vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
         self.opticalDiag.append(vel2diag)
