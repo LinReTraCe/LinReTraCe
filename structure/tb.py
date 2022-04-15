@@ -566,6 +566,10 @@ class TightBinding(Model):
         mb = np.mean(mb,axis=2)
         loc_BopticalMoments[ikp,...] = mb
 
+      if not self.ortho:
+        ''' truncate if there are only negligible imaginary terms '''
+        if np.all(np.abs(loc_opticalMoments[...,6:]) < 1e-6):
+          loc_opticalMoments  = loc_opticalMoments[...,:6]
 
       self.opticalMoments[0][...]  = loc_opticalMoments
       self.opticalDiag[0][...]     = loc_opticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
@@ -601,8 +605,3 @@ class TightBinding(Model):
       self.BopticalMoments[0][...] = mb
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag
-
-    if not self.ortho:
-      if np.all(np.abs(self.opticalMoments[0][...,6:]) < 1e-6):
-        self.opticalMoments[0]  = self.opticalMoments[0][...,:6]
-        self.opticalDiag[0]     = self.opticalDiag[0][...,:6]
