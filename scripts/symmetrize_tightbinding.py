@@ -27,6 +27,11 @@ if __name__ == '__main__':
   if len(tbdata.shape) == 1:
     tbdata = tbdata[None,:]
 
+  bandmin, bandmax = np.min(tbdata[:,3:5]), np.max(tbdata[:,3:5])
+
+  if bandmin != 1:
+    raise IOError('Band indices must start at 1')
+
   if tbdata.shape[1] == 6:
     imaghopping = False
   else:
@@ -50,6 +55,7 @@ if __name__ == '__main__':
 
   symmetry = spglib.get_symmetry(cell, symprec=1e-5)
   symsfull = symmetry['rotations']
+  logger.debug('Symmetry operation: \n{}'.format(symsfull))
 
   ''' Filter out weird symmetry operations due to non-standardized rvectors '''
   non_standard = False
@@ -72,8 +78,8 @@ if __name__ == '__main__':
   symmetrized_tbdata = []
   for itb1 in range(tbdata.shape[0]):
     rvec1  = tbdata[itb1,:3].astype(int)
-    band1_1  = int(tbdata[itb1,3]) - 1 # band identifier
-    band1_2  = int(tbdata[itb1,4]) - 1 # band identifier
+    band1_1  = int(tbdata[itb1,3]) # band identifier
+    band1_2  = int(tbdata[itb1,4]) # band identifier
     hop1real = tbdata[itb1,5]
     if imaghopping:
       hop1imag = tbdata[itb1,6]
@@ -88,26 +94,31 @@ if __name__ == '__main__':
     for isym in range(nsym):
       rvec_transformed = rvecsym[isym]
       for itb2 in range(tbdata.shape[0]):
-        band2_1  = int(tbdata[itb1,3]) - 1 # band identifier
-        band2_2  = int(tbdata[itb1,4]) - 1 # band identifier
-        if band1_1 != band2_1 or band2_2 != band2_2: continue
+        band2_1  = int(tbdata[itb1,3]) # band identifier
+        band2_2  = int(tbdata[itb1,4]) # band identifier
+        if band1_1 == band2_1 and band2_2 == band2_2: ## 12 == 12
+          pass
+        elif band1_1 == band2_2 and band1_2 == band2_1: ## 12 == 21
+          pass
+        else:
+          continue
 
         rvec2  = tbdata[itb2,:3].astype(int)
         hop2real   = tbdata[itb2,5]
         if imaghopping:
           hop2imag = tbdata[itb2,6]
-          hop2 = hop2real + 1j*hop2imag
+          if np.allclose(rvec_transformed,rvec2) and np.abs(hop1real-hop2real) < 1e-6:
+            if np.allclose(rvec_transformed,rvec2) and np.abs(hop1imag-hop2imag) < 1e-6:
+              break
         else:
-          hop2 = hop2real
-
-        if np.allclose(rvec_transformed,rvec2) and np.abs(hop1-hop2) < 1e-6:
-          break
+          if np.allclose(rvec_transformed,rvec2) and np.abs(hop1real-hop2real) < 1e-6:
+            break
 
       else: # if we did not break
         if imaghopping:
-          data = [*rvec_transformed,band2_1,band2_2,hop2real,hop2imag]
+          data = [*rvec_transformed,band2_1,band2_2,hop1real,hop1imag]
         else:
-          data = [*rvec_transformed,band2_1,band2_2,hop2real]
+          data = [*rvec_transformed,band2_1,band2_2,hop1real]
 
         if data not in symmetrized_tbdata:
           symmetrized_tbdata.append(data)
@@ -115,3 +126,7 @@ if __name__ == '__main__':
   print('\nSYMMETRIZED DATA:\n-----------------------')
   for line in symmetrized_tbdata:
     print('{:2} {:2} {:2}   {:2} {:2}    {} {}'.format(*line[:6],line[6] if imaghopping else ''))
+
+  if bandmax > 1:
+    logger.critical('\n\nInter-band hopping across unit cells cannot be safely generated this way.' +
+                    '\nFilter out unwanted hopping parameters!')
