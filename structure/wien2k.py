@@ -418,6 +418,7 @@ class Wien2kCalculation(DftCalculation):
             raise CustomError("Wien2k symmat file {}: Number of entries must be divisable by 3".format(str(i)))
 
           symm = np.ones((entries,), dtype=np.float64)
+          ''' Im (band1, band2) = - Im(band2, band1) '''
           if entries == 9:
             symm[6:] = -1.0
 

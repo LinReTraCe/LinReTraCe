@@ -326,10 +326,18 @@ class BoltztrapInterpolation(object):
       nkp, nbands = self.velocities[ispin].shape[:2]
 
       BopticalDiag = np.zeros((nkp,nbands,3,3,3), dtype=np.complex128)
-      if self.dftcalc.ortho:
-        opticalDiag  = np.zeros((nkp,nbands,3), dtype=np.float64)
+
+      if self.dftcalc.opticdiag:
+        # use the number of elements from the optics
+        ioptical = self.dftcalc.opticalDiag[0].shape[-1]
       else:
-        opticalDiag  = np.zeros((nkp,nbands,6), dtype=np.float64)
+        # use 3 or 6 according to our own rules.
+        if self.dftcalc.ortho:
+          ioptical = 3
+        else:
+          ioptical = 6
+      # this is 3 6 or 9
+      opticalDiag  = np.zeros((nkp,nbands,ioptical), dtype=np.float64)
 
       nsym = self.dftcalc.nsym
       rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
@@ -359,10 +367,11 @@ class BoltztrapInterpolation(object):
         mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk_conj,vk,ck)
         mb = np.mean(mb,axis=1)
 
-        if self.dftcalc.ortho:
+        if ioptical==3:
           opticalDiag[ikp,:,:] = vk2[...,:3]
         else:
-          opticalDiag[ikp,:,:] = vk2[...]
+          opticalDiag[ikp,:,:6] = vk2[...]
+
         BopticalDiag[ikp,:,:,:,:] = mb
 
       self.opticalDiag.append(opticalDiag)
