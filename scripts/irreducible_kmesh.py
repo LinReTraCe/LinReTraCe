@@ -2,8 +2,6 @@
 
 from __future__ import print_function, division, absolute_import
 import numpy as np
-import matplotlib.pyplot as plt
-import h5py
 import sys
 import logging
 
