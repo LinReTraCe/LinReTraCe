@@ -144,20 +144,21 @@ class VaspCalculation(DftCalculation):
       divisor = arr.text.split()
       divisor = np.array(divisor, dtype=np.int)
       self.nkx, self.nky, self.nkz = divisor
+      logger.info("  Momentum grid: {} {} {}".format(*divisor))
       self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
       self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
 
       self.irreducible = not (self.nkx*self.nky*self.nkx == self.nkp)
       if not self.irreducible:
-        self.dftcalc.nsym     = 1
-        self.dftcalc.symop    = np.zeros((1,3,3), dtype=np.float64)
-        self.dftcalc.invsymop = np.zeros((1,3,3), dtype=np.float64)
-        self.dftcalc.symop[0,:,:] = np.diag((1,1,1))
-        self.dftcalc.invsymop[0,:,:] = np.diag((1,1,1))
-
+        self.nsym     = 1
+        self.symop    = np.zeros((1,3,3), dtype=np.float64)
+        self.invsymop = np.zeros((1,3,3), dtype=np.float64)
+        self.symop[0,:,:] = np.diag((1,1,1))
+        self.invsymop[0,:,:] = np.diag((1,1,1))
     except Exception:
       raise IOError('Error occured during read-in of k-point divisors {}'.format(str(self.fvasprun)))
 
+    logger.info("  Irreducible grid: {}".format(str(self.irreducible)))
     logger.info("  Number of dimensions: {}".format(self.ndim))
 
   def _read_weights(self):

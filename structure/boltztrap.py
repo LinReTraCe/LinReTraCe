@@ -273,7 +273,7 @@ class BoltztrapInterpolation(object):
     nbands = self.interp_energies.shape[0] # this is guaranteed to be even here
     self.energies.append(self.interp_energies[:nbands//2,:].transpose(1,0) * units.hartree2eV)
     self.energies.append(self.interp_energies[nbands//2:,:].transpose(1,0) * units.hartree2eV)
-    self.velocities.append(self.interp_velocities[:,:nbands//2,:].transpose(2,1,0) * units.hartree2eV * untis.bohr2angstrom)
+    self.velocities.append(self.interp_velocities[:,:nbands//2,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
     self.velocities.append(self.interp_velocities[:,nbands//2:,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
     # the last two elements dont matter here, since its symmetric anyways
 
