@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 from __future__ import print_function, division, absolute_import
+import xml.etree.ElementTree as et
 import os
 import glob
 import logging
@@ -10,9 +11,9 @@ from structure.wien2k import Wien2kCalculation
 from structure.vasp   import VaspCalculation
 
 class DftDetection(object):
-  def __init__(self, directory):
-    self.directory      = os.path.abspath(directory) # directory of our calculation
-    self._checkDirectory()
+  def __init__(self, path):
+    self.path      = os.path.abspath(path) # directory of our calculation
+    self._checkPath()
     self.methods = [self._checkW2Kcalculation, self._checkVASPcalculation]
 
   def __repr__(self):
@@ -33,12 +34,10 @@ class DftDetection(object):
         return returndic
     return None
 
-  def _checkDirectory(self):
-    ''' Simple method to check if provided directory is actually a directory '''
-    if os.path.isfile(self.directory):
-      raise IOError("Supplied directory is a file, not a directory: " + self.directory)
-    if not os.path.isdir(self.directory):
-      raise IOError("Supplied Directory does not exist: " + self.directory)
+  def _checkPath(self):
+    ''' Simple method to check if provided path exists '''
+    if not os.path.exists(self.path):
+      raise IOError("Supplied path does not exist: " + self.path)
 
   def _checkW2Kcalculation(self):
     '''
@@ -46,7 +45,10 @@ class DftDetection(object):
     scf file -> also extract the case prename
     '''
 
-    scf = os.path.join(self.directory,'*.scf')
+    if not os.path.isdir(self.path):
+      return None
+
+    scf = os.path.join(self.path,'*.scf')
     files = glob.glob(scf)
     if len(files) >= 1:
       if len(files) > 1:
@@ -64,9 +66,16 @@ class DftDetection(object):
     Detect the vasp calculation by the existance of the vasprun.xml file
     '''
 
-    vasprun = os.path.join(self.directory,'vasprun.xml')
-    files = glob.glob(vasprun)
-    if len(files) == 1: # there is only one vasprun.xml
-      return {'dft': VaspCalculation}
-    else:
+    if os.path.isdir(self.path):
+      directory = os.path.abspath(self.path)
+      vasprun    = os.path.join(directory,'vasprun.xml')
+    elif os.path.isfile(self.path):
+      vasprun    = os.path.abspath(self.path)
+
+    try:
+      xmlroot = et.parse(vasprun).getroot()
+      version = xmlroot.find('generator/i[@name="version"]').text
+    except:
       return None
+
+    return {'dft': VaspCalculation}

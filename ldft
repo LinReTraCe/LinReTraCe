@@ -34,7 +34,7 @@ def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='Argument parser for the DFT pre-processing of LRTC',
     epilog="That's the end of the help")
-  parser.add_argument('system',     help='Folder of DFT calculation')
+  parser.add_argument('system',     help='Path to DFT calculation (Wien2K Folder or Vasp Folder / vasprun.xml directly')
   parser.add_argument('-o', '--output',   help='Outputname of hdf5 (default="lrtc-dft.hdf5")', default='lrtc-dft.hdf5')
   parser.add_argument('--optic',    help='Read optical elements (Wien2K)', default=False, action='store_true')
 
@@ -107,14 +107,14 @@ class Program(object):
     dftsearch = DftDetection(self.args.system)
     dftdict = dftsearch()
     if dftdict is None:
-      self.log.error('Could not detect supported DFT calculation in provided folder')
+      self.log.error('Could not detect supported DFT calculation in provided path.')
       return
     dftclass = dftdict.pop('dft')
 
     # check if output file exists
     if os.path.isfile(self.args.output):
       print('Output file already exists!')
-      overwrite = self.inputmethod('Overwrite? (y/N) ').strip().lower()
+      overwrite = self.inputmethod('Overwrite? (yes/no) ').strip().lower()
       if overwrite not in ['y','yes']:
         self.log.info('File will not be overwritten.\nExiting.')
         return

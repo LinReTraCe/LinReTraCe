@@ -22,13 +22,22 @@ class VaspCalculation(DftCalculation):
   All the data is read-in from the vasprun.xml file with the help of ElementTree.
   '''
 
-  def __init__(self, directory, **kwargs):
+  def __init__(self, path, **kwargs):
     logger.info("\nInitializing VASP calculation.")
-    super(VaspCalculation, self).__init__(directory)
-
+    super(VaspCalculation, self).__init__()
     self.version = None
-    self._checkDirectory() # from base class
-    self._defineFiles()
+
+    path = os.path.abspath(path)
+    if not os.path.exists(path):
+      raise IOError("Supplied path does not exist: " + path)
+
+    if os.path.isdir(path):
+      self.directory = os.path.abspath(path)
+      self.fvasprun    = os.path.join(self.directory,'vasprun.xml')
+    elif os.path.isfile(path):
+      self.fvasprun    = os.path.abspath(path)
+    self.aseobject   = ase.io.read(self.fvasprun)
+
     self._checkFiles()
     logger.info("Files sucessfully loaded.")
     self._extractASEinformation()
@@ -36,17 +45,11 @@ class VaspCalculation(DftCalculation):
   def __repr__(self):
     return ('vaspcalculation(directory={0.directory!r}'.format(self))
 
-  # we only care about the vasprun file
-  def _defineFiles(self):
-    self.fvasprun    = os.path.join(self.directory,'vasprun.xml')
-    self.foutcar     = os.path.join(self.directory,'OUTCAR')
-    self.aseobject   = ase.io.read(self.fvasprun)
-
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):
-      raise IOError("Error: vasprun.xml file missing.")
+      raise IOError("Error: vasprun file missing.")
     if os.stat(str(self.fvasprun)).st_size == 0:
-      raise IOError("Error: vasprun.xml is empty.")
+      raise IOError("Error: vasprun file is empty.")
 
   def readData(self):
     logger.info("Reading: {}".format(self.fvasprun))

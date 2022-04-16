@@ -34,18 +34,23 @@ class Wien2kCalculation(DftCalculation):
   or can be provided specifically (e.g. case="abc")
   '''
 
-  def __init__(self, directory, optic=False, calctype=0, case=None, **kwargs):
+  def __init__(self, path, optic=False, calctype=0, case=None, **kwargs):
     logger.info("\nInitializing Wien2k calculation.")
-    super(Wien2kCalculation, self).__init__(directory)
-    self.optic         = optic   # exising full optical elements
-    self.calctype      = calctype
-    self.case          = case
+    super(Wien2kCalculation, self).__init__()
+    self.directory = os.path.abspath(path) # directory of our calculation
+    self.optic     = optic   # exising full optical elements
+    self.calctype  = calctype
+    self.case      = case
 
     if self.optic: # otherwise already set by parent class
       self.opticdiag = True
       self.opticfull = True
 
-    self._checkDirectory()
+    if not os.path.exists(self.directory):
+      raise IOError("Supplied path does not exist: " + self.directory)
+    if not os.path.isdir(self.directory):
+      raise IOError("Supplied path is not a directory: " + self.directory)
+
     if self.case is None:
       self._defineCase(custom=False)
     else:

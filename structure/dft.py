@@ -36,9 +36,8 @@ class DftCalculation(ElectronicStructure, ABC):
   These methods are all denoted with a leading underline.
   '''
 
-  def __init__(self, directory):
+  def __init__(self):
     super(DftCalculation, self).__init__()
-    self.directory  = os.path.abspath(directory) # directory of our calculation
     self.version    = None      # DFT version as string
     self.aseobject  = None      # ase Atoms object
     self.spacegroup = None      # ase Spacegroup object
@@ -50,17 +49,6 @@ class DftCalculation(ElectronicStructure, ABC):
     for all kinds of DFT calculations.
     '''
     pass
-
-  def _checkDirectory(self):
-    '''
-    Simple method to check if provided directory is actually a directory.
-    Also adds the trailing backslash ('/') to the path so we can simply
-    add the filenames to the directory to get the full path.
-    '''
-    if os.path.isfile(self.directory):
-      raise IOError("Supplied directory is a file, not a directory: " + self.directory)
-    if not os.path.isdir(self.directory):
-      raise IOError("Supplied Directory does not exist: " + self.directory)
 
   def _extractASEinformation(self):
     '''
