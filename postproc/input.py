@@ -97,6 +97,7 @@ class LRTCinput(object):
       print('  chemical potential: {0:.6f} eV'.format(h5['.bands/mu'][()]))
 
       print('\nUNIT-CELL')
+      print('  lattice (rows) [Ang]:\n{}'.format(h5['.unitcell/rvec'][()]))
       print('  volume: {0:.4f} [Ang^3]'.format(h5['.unitcell/volume'][()]))
       print('  orthogonal: {}'.format(h5['.unitcell/ortho'][()]))
 
