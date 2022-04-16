@@ -90,17 +90,17 @@ class BoltztrapInterpolation(object):
         MetaW2kLoader.setfiles(self.dftcalc.case, self.dftcalc.weightsum, self.dftcalc.fscf, \
                                self.dftcalc.fstruct, self.dftcalc.fenergyaccess[ispin])
         # and register the new loader
-        BTP.register_loader("Custom", MetaW2kLoader)
+        BTP.register_loader(str(self.dftcalc.case), MetaW2kLoader)
         # interpolate and save
         self._interp()
         # self._rotate()
-        if self.dftcalc.spinorbit:
-          self._save1_so()
+        if self.dftcalc.spinorbit and self.dftcalc.spins == 2:
+          self._save1_separate()
         else:
           self._save1()
 
         # otherwise we would loop a second time over the same file
-        if self.dftcalc.spinorbit:
+        if self.dftcalc.spinorbit and self.dftcalc.spins == 2:
           break
 
     elif isinstance(self.dftcalc, VaspCalculation):
@@ -225,10 +225,14 @@ class BoltztrapInterpolation(object):
 
     self.curvatures.append(tmp2)
 
-  def _save1_so(self):
+  def _save1_separate(self):
     '''
     Identical to _save1 only applied to cases where we have spin orbit coupling
     Wien2K saves the data in one file (energyso or energysoup) where the 'spins' alternate
+    We perform this only for spin-polarized calculations with spin -orbit coupling where it makes
+    sense to separate out the energies
+
+    For unpolarized SOC calculations leave them as is.
     '''
 
     # we get the energies on the Hartree scale

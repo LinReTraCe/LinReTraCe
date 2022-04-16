@@ -130,13 +130,13 @@ class Wien2kCalculation(DftCalculation):
       self.spinorbit = True
       self.weightsum = 1    # this is 1 because w2k outputs essentially double the number of bands per k-point
                              # in this kind of calculation
-      self.spins = 2
+      self.spins = 1
       self.fenergyaccess = [self.fenergyso]
       self.fmomentaccess = [self.fmoment]
     elif self.calctype == 4: # spin-orbit without inversion
       self.spinorbit = True
       self.weightsum = 1
-      self.spins = 2
+      self.spins = 1
       self.fenergyaccess = [self.fenergyso]
       self.fmomentaccess = [self.fmomentup]
     elif self.calctype == 5: # spin-polarized + spin-orbit
@@ -378,9 +378,11 @@ class Wien2kCalculation(DftCalculation):
       for ikp in range(self.nkp):
         energies[ikp,:] = np.array(myenergy[ikp][:self.energyBandMax])
 
-      # for the spin unpolarized + spin-orbit case we have to extract the spins from one file ...
-      # in the energyso file the energies are listed with up dn up dn up dn ...
-      if self.spinorbit:
+      # in spinorbit calculations all the energies are listed in one file
+      # where they alternate like up dn up dn up dn ...
+      # leave unpolarized SOC calculation as is
+      # but seperate out the spins for the spin-polarized calculations
+      if self.spinorbit and self.spins == 2:
         self.energies.append(energies[:,::2]*units.rydberg2eV) # spin up
         self.energies.append(energies[:,1::2]*units.rydberg2eV) # spin up
         self.energyBandMax = int(self.energyBandMax / 2.) # we definitely have 2n bands from wien2k
@@ -490,8 +492,7 @@ class Wien2kCalculation(DftCalculation):
         # if in this common interval the bands are for some reason
         # above the band maximum of the energies, truncate it further
 
-        # again : differentiate between the spin-unpolarized + spin-orbit and the rest
-        if self.spinorbit:
+        if self.spinorbit and self.spins == 2:
           if bmax > 2*self.energyBandMax:
             bmax = 2*self.energyBandMax
         else:
@@ -511,7 +512,7 @@ class Wien2kCalculation(DftCalculation):
         # unit conversion to eV**2 * angstrom**2
         moments *= units.w2kmom
 
-        if self.spinorbit:
+        if self.spinorbit and self.spins == 2:
           self.opticalMoments.append(moments[:,::2,::2,:])
           self.opticalMoments.append(moments[:,1::2,1::2,:])
           self.opticalBandMax = self.opticalBandMin + int((self.opticalBandMax - self.opticalBandMin) / 2.)
@@ -520,7 +521,7 @@ class Wien2kCalculation(DftCalculation):
 
 
         nelements = self.opticalMoments[0].shape[1]
-        if self.spinorbit:
+        if self.spinorbit and self.spins == 2:
           self.opticalDiag.append(self.opticalMoments[0][:,np.arange(nelements),np.arange(nelements),:])
           self.opticalDiag.append(self.opticalMoments[1][:,np.arange(nelements),np.arange(nelements),:])
         else:
