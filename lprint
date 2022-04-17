@@ -25,7 +25,8 @@ error = lambda string: sys.exit('lprint: {}'.format(string))
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='''Argument parser for LRTC input and LRTC output data
-           " lprint <file> list " --- list all options
+           " lprint <file> list "  --- list all physical quantities
+           " lprint <file> olist " --- list all onsager coefficients
            -------------------------------------------
            " lprint <inputfile> info "         --- structural information of input file
            " lprint -p <inputfile> dos "       --- plot density of states
@@ -44,7 +45,7 @@ def parse_args(args=None):
   parser.add_argument('--nothrow', help='Do not throw exception if dataset is missing', default=False, action='store_true')
   parser.add_argument('--gap',     help='Plot the band gap in combination with mu', default=False, action='store_true')
   parser.add_argument('--scale',   help='Scale all quantities by factor', default=1, type=float)
-  parser.add_argument('--imag',    help=argparse.SUPPRESS, default=False, action='store_true') # plot the imaginary parts in addition to the real part
+  parser.add_argument('--imag',    help='Plot the imaginary parts as well', default=False, action='store_true') # plot the imaginary parts in addition to the real part
   parser.add_argument('--diag',    help=argparse.SUPPRESS, default=False, action='store_true') # only use the diagonal parts (when no directions supplied
   parser.add_argument('--debug',   help=argparse.SUPPRESS, default=False, action='store_true')
 
@@ -129,9 +130,9 @@ if __name__ == '__main__':
   if outobj is not None:
     try:
       if cmd == 'list':
-        outobj.outputList(full=False)
-      elif cmd == 'flist':
-        outobj.outputList(full=True)
+        outobj.outputList(onsager=False)
+      elif cmd == 'olist':
+        outobj.outputList(onsager=True)
       elif cmd == 'config':
         outobj.outputConfig()
       # elif cmd == 'dos':

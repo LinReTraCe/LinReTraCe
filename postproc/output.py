@@ -150,7 +150,7 @@ class LRTCoutput(object):
       else:
         commands = [command]
     else:
-      raise IOError('Provided dataset does not exist.')
+      raise IOError('Provided dataset does not exist. "lprint <file> list" to list all output containers. ')
 
     if self.data is None:
       # we define the dictionary and the temperatures
@@ -461,7 +461,7 @@ class LRTCoutput(object):
         (self.axisname,self.axisunit, self.owned[command][1]))
 
 
-  def outputList(self, full=False):
+  def outputList(self, onsager=False):
     '''
     List the internally existing data sets.
     full=False does not list the raw responses (L0 ...)
@@ -477,10 +477,10 @@ class LRTCoutput(object):
     for (key, value) in self.owned.items():
       raw_dset, path, description, response, magnetic = value
       if not response:
-        print('{:<12}  {}'.format(key, description))
+        print('{:<18}  {}'.format(key, description))
     print(barlength*u'\u2500')
 
-    if full:
+    if onsager:
       # raw responses
       for (key, value) in self.owned.items():
         raw_dset, path, description, response, magnetic = value
