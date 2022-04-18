@@ -26,16 +26,22 @@ class StructureFromArrays(ElectronicStructure):
   - optional: bfield intra band optical elements
   '''
 
-  def __init__(self, nkx, nky, nkz, vol, charge):
+  def __init__(self, nkx, nky, nkz, rvec, charge):
     ''' define essential information '''
     super(StructureFromArrays,self).__init__()
-    self.nkx = nkx
-    self.nky = nky
-    self.nkz = nkz
-    self.vol = vol
-    self.charge = charge
-    self.dims = np.array([ik>1 for ik in [self.nkx,self.nky,self.nkz]])
-    self.ndim = np.sum(self.dims.astype(int))
+    self.nkx        = nkx
+    self.nky        = nky
+    self.nkz        = nkz
+    self.rvec       = np.array(rvec,dtype=np.float64)
+    self.vol        = np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),self.rvec[2,:]))
+    self.kvec       = np.zeros_like(self.rvec, dtype=np.float64)
+    self.kvec[0,:]  = np.cross(self.rvec[1,:],self.rvec[2,:])
+    self.kvec[1,:]  = np.cross(self.rvec[2,:],self.rvec[0,:])
+    self.kvec[2,:]  = np.cross(self.rvec[0,:],self.rvec[1,:])
+    self.kvec      *= 2*np.pi / self.vol
+    self.charge     = charge
+    self.dims       = np.array([ik>1 for ik in [self.nkx,self.nky,self.nkz]])
+    self.ndim       = np.sum(self.dims.astype(int))
 
   def loadData(self, multiplicity, energies, optical, boptical=None, mu=None):
     ''' read in
@@ -44,6 +50,7 @@ class StructureFromArrays(ElectronicStructure):
       energies : shape [spins, nkp, bands] float64
         spins: number of spins 1/2
         bands: number of bands
+               the energies have to be sorted
       optical  : shape
                         [spins, nkp, bands, bands, elements] float64
                     or  [spins, nkp, bands, elements] float64
@@ -57,9 +64,16 @@ class StructureFromArrays(ElectronicStructure):
                      important for gapped systems
     '''
 
-    self.multiplicity = multiplicity
-    if np.abs(np.sum(self.multiplictiy) - self.nkx*self.nky*self.nkz) > 1e-6:
-      print('WARNING: Multiplicity sum does not agree with kmesh')
+    self.multiplicity = np.array(multiplicity, dtype=int)
+    energies = np.array(energies, dtype=np.float64)
+    optical  = np.array(optical,  dtype=np.float64)
+    if boptical:
+      boptical = np.array(boptical, dtype=np.complex128)
+
+    if np.abs(np.sum(self.multiplicity) - self.nkx*self.nky*self.nkz) > 1e-6:
+      raise IOError('Multiplicity sum does not agree with kmesh')
+    if sum(multiplicity) != np.sum(self.multiplicity):
+      raise IOError('Multiplicity array does not contain integers')
 
     self.nkp = self.multiplicity.shape[0]
     if self.nkp == self.nkx*self.nky*self.nkz:
@@ -125,8 +139,9 @@ if __name__ == '__main__':
 
   logger = setLogger()
 
-
-  test = StructureFromArrays(nkx=10, nky=10, nkz=10, vol=1, charge=1)
+  '''           a1       a2       a3     '''
+  lattice = [[5,0,0], [0,5,0], [0,0,1]]
+  test = StructureFromArrays(nkx=10, nky=10, nkz=10, rvec=lattice, charge=1)
 
   multiplicity = np.ones((1000,), dtype=np.float64) # nkp
   energies = np.zeros((1,1000,1), dtype=np.float64) # spin, nkp, bands

@@ -79,7 +79,7 @@ class TightBinding(Model):
 
   def _computeReciprocLattice(self):
     self.rvec = self.rvec_spglib
-    self.vol = np.abs(np.dot(np.cross(self.rvec[:,0],self.rvec[:,1]),self.rvec[:,2]))
+    self.vol = np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),self.rvec[2,:]))
     self.kvec = np.zeros_like(self.rvec, dtype=np.float64)
     self.kvec[0,:] = np.cross(self.rvec[1,:],self.rvec[2,:]) / self.vol
     self.kvec[1,:] = np.cross(self.rvec[2,:],self.rvec[0,:]) / self.vol
