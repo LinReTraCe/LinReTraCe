@@ -403,9 +403,9 @@ class TightBinding(Model):
 
       ''' yes this is the transposed symop here '''
       redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ik])
-      ''' bring back to BZ '''
-      redk[redk<0] += 1
-      redk[redk>1] -= 1
+      ''' bring back to BZ --- python modulo via % is implemented as floored division -> -0.2 % 1 = 0.8'''
+      redk = redk%1
+
       red_rdotk = 2*np.pi*np.einsum('ni,ri->nr',redk,self.rpoints)
       red_ee = np.exp(1j * red_rdotk)
       #energy

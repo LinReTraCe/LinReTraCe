@@ -248,7 +248,9 @@ class OrthogonalTightBinding(Model):
         irrk += 1    # new point -> increase irreducible counter
         mult[ik] = 1 # reset multiplicity counter
 
-        ''' generate all the symmetry related k-points in the Brillouin zone '''
+        ''' generate all the symmetry related k-points in the Brillouin zone
+            Python modulo via % is implemented as floored division -> -0.2 % 1 = 0.8
+        '''
         knew = np.einsum('nji,j->ni',self.symop,kpoints[ik,:])
         kmod = knew%1
         ''' in order to index properly and if kshift is applied , shift back '''
