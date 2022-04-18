@@ -1,0 +1,29 @@
+begin hopping
+  # rx ry rz orb1 orb2 hopping.real [hopping.imag]
+  # on site
+   0  0  0   1 1   0.0
+  # hopping x- y- direction
+  +1  0  0   1 1   0.25 # t
+  -1  0  0   1 1   0.25 # t
+   0 +1  0   1 1   0.25 # t
+   0 -1  0   1 1   0.25 # t
+  +1 +1  0   1 1  -0.0625 # t'
+  -1 -1  0   1 1  -0.0625 # t'
+  -1 +1  0   1 1  -0.0625 # t'
+  +1 -1  0   1 1  -0.0625 # t'
+  +2  0  0   1 1   0.03 # t''
+  -2  0  0   1 1   0.03 # t''
+   0 +2  0   1 1   0.03 # t''
+   0 -2  0   1 1   0.03 # t''
+end hopping
+
+begin atoms
+  # sort rx, ry, rz
+  1 0 0 0
+end atoms
+
+begin real_lattice
+  1 0 0
+  0 1 0
+  0 0 1
+end real_lattice

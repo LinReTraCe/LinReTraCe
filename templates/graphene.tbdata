@@ -1,0 +1,26 @@
+# INFO .. in order to capture the special K and K' point the number
+# of kpoints in each direction must be divisable by 3
+
+begin hopping
+# rx ry rz orb1 orb2 hopping.real [hopping.imag]
+# on site hopping A-B
+   0  0  0     1 2 1.0
+   0  0  0     2 1 1.0
+# into nearest u.c. only A-B connections
+  +1  0  0     2 1 1.0
+   0 +1  0     2 1 1.0
+  -1  0  0     1 2 1.0
+   0 -1  0     1 2 1.0
+end hopping
+
+begin atoms
+  # sort rx, ry, rz
+  1 0.25 0.25 0
+  1 0.75 0.75 0
+end atoms
+
+begin real_lattice
+  1   0            0
+  0.5 0.8660254038 0
+  0   0            1
+end real_lattice
