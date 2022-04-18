@@ -29,23 +29,33 @@ def parse_args(args=None):
     description='Argument parser for the TB pre-processing for LRTC', \
     formatter_class=RawTextHelpFormatter,
     epilog='''
-tb_file: list of unit-cell distances / orbitals (starting at 1) and hopping (units = eV)
-provide only hopping.real or hopping.real AND hopping.imag for all rows
+tb_file:
+  begin hopping:      hopping parameter [eV]
+                      sign convention e(k) ~ -t * (1-2.delta_(R,0)) e^{ikR}
+  begin atoms:        fractional atomic positions inside unit cell
+  begin real_lattice: lattice vectors [Angstrom]
+                      each row = 1 vector, each column = Cartesian x/y/z component
+
+
+begin hopping
 # x  y  z  orbital1 orbital2 hopping.real [hopping.imag]
   0 +1  0  1        1        0.25
-  0 -1  0  1        1        0.25
+  0 -1  0  1        1        0.25 0.005
 ...
+end hopping
 
-rvec_file: 3 primitive lattice vectors, each row = 1 vector (units = Angstrom)
+begin atoms
+# ineq (starting at 1) x y z
+  1                    0 0 0
+...
+end atoms
+
+begin real_lattice
 # x y z
   5 0 0
   0 5 0
   0 0 1
-
-atom_file: inequivalent atomic positions w.r.t. primitive lattice vectors
-# ineq (starting at 1) x y z
-  1                    0 0 0
-...
+end real_lattice
 ''')
 
   # mandatory
