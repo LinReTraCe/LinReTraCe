@@ -50,8 +50,6 @@ atom_file: inequivalent atomic positions w.r.t. primitive lattice vectors
 
   # mandatory
   parser.add_argument('tb_file', type=str, help='tight binding file')
-  parser.add_argument('rvec_file', type=str, help='primitive lattice vectors file')
-  parser.add_argument('atom_file', type=str, help='atomic positions file')
   parser.add_argument('nkx', type=int, help='number of k-points in x-direction')
   parser.add_argument('nky', type=int, help='number of k-points in y-direction')
   parser.add_argument('nkz', type=int, help='number of k-points in z-direction')
@@ -83,32 +81,6 @@ if __name__ == '__main__':
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 
-  ''' pre-checking existence of files and number of columns before doing anything '''
-  try:
-    tbdata = np.genfromtxt(args.tb_file)
-    if len(tbdata.shape) == 1:
-      tbdata = tbdata[None,:]
-    if not (tbdata.shape[1] == 6 or tbdata.shape[1] == 7):
-      raise IOError('Provided tight binding file has wrong format (number of columns: 6/7)')
-  except Exception as e:
-    error(str(e)+'\nExit.')
-
-  try:
-    rvecdata = np.genfromtxt(args.rvec_file)
-    if np.any(rvecdata.shape - np.array((3,3), dtype=int)):
-      raise IOError('Provided rvector file has wrong format (3 rows, 3 columnns)')
-  except Exception as e:
-    error(str(e)+'\nExit.')
-
-  try:
-    atomdata = np.genfromtxt(args.atom_file)
-    if len(atomdata.shape) == 1:
-      atomdata = atomdata[None,:]
-    if (atomdata.shape[1] != 4):
-      raise IOError('Provided atom file has wrong format (number of columns: 4)')
-  except Exception as e:
-    error(str(e)+'\nExit.')
-
   # create tightbinding object
   irr = not args.red
   try:
@@ -122,9 +94,7 @@ if __name__ == '__main__':
 
   # compute the dispersion, etc and output it
   try:
-    tb.computeData(tbdata=tbdata, \
-                   rvec_spglib=rvecdata, \
-                   atoms_spglib=atomdata, \
+    tb.computeData(tbfile=args.tb_file, \
                    charge=args.filling, \
                    mu=args.mu)
   except Exception as e:

@@ -29,20 +29,13 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def computeData(self, tbdata, rvec_spglib, atoms_spglib, charge, mu=None):
-    self.tbdata       = tbdata
-    self.rvec_spglib  = rvec_spglib # the vectors are the ROWS (required for spglib python interface)
-    self.atoms_spglib = atoms_spglib
+  def computeData(self, tbfile, charge, mu=None):
+    self.tbfile       = tbfile
     self.charge       = charge
 
-    if self.tbdata.shape[1] == 6:
-      self.imaghopping = False
-    elif self.tbdata.shape[1] == 7:
-      self.imaghopping = True
-
+    self._readTb()
     self._computeOrthogonality() # sets self.ortho
     self._computeReciprocLattice() # defines reciprocal lattice vectors and volume
-    self._readHr() # reads hr in formatted array, detects unique r-vectors, detects inter-band transitions
 
     if self.charge < 0 or self.charge > self.energyBandMax*2:
       raise ValueError('Provided charge does not match provided bands : charge in [0,2*bands]')
@@ -71,14 +64,13 @@ class TightBinding(Model):
       but describe a conventionally orthogonal unit cell
       should work for all cases
     '''
-    sum_vecs = np.sum(self.rvec_spglib, axis=0) # a_1 + a_2 + a_3
-    max_vecs = np.array([np.max(np.abs(self.rvec_spglib[:,i])) for i in range(3)]) # maximal entries
+    sum_vecs = np.sum(self.rvec, axis=0) # a_1 + a_2 + a_3
+    max_vecs = np.array([np.max(np.abs(self.rvec[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
     logger.info('   orthogonal lattice: {}'.format(self.ortho))
 
   def _computeReciprocLattice(self):
-    self.rvec = self.rvec_spglib
     self.vol = np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),self.rvec[2,:]))
     self.kvec = np.zeros_like(self.rvec, dtype=np.float64)
     self.kvec[0,:] = np.cross(self.rvec[1,:],self.rvec[2,:]) / self.vol
@@ -90,28 +82,118 @@ class TightBinding(Model):
     logger.debug('   reciprocal lattice (rows) :\n{}'.format(self.kvec))
     logger.debug('   recip.T @ real / (2pi) =\n{}'.format(self.kvec.T @ self.rvec / 2/np.pi))
 
-  def _readHr(self):
+  def _readTb(self):
     '''
-      Check that all bands exist
-      Read Hr data into array  -> self.hr
-      Read all rvectors into array -> self.rpoints
+      read tight binding input
+      format is akin to wannier90
     '''
 
-    bandmin = int(np.min(self.tbdata[:,3:5]))
-    bandmax = int(np.max(self.tbdata[:,3:5]))
+    logger.info("Reading: {}".format(self.tbfile))
+    self.atoms = []
+    with open(str(self.tbfile),'r') as data:
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if line.startswith('begin atoms'): break
+        else:
+          raise IOError('ltb could not detect "begin atoms" block')
 
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if len(line)==0 or line.startswith('#'): continue
+          if line.startswith('end atoms'): break
+        else:
+          raise IOError('ltb is not at the "end atoms" marker after reading'.format(str(self.tbfile)))
+
+        atom_id, rx, ry, rz = [float(i) for i in line.split()]
+        if abs(np.rint(atom_id) - atom_id) > 1e-6: raise IOError('Invalid atom description: {}'.format(line))
+        if rx < 0 or rx > 1: raise IOError('Invalid atom description: {}'.format(line))
+        if ry < 0 or ry > 1: raise IOError('Invalid atom description: {}'.format(line))
+        if rz < 0 or rz > 1: raise IOError('Invalid atom description: {}'.format(line))
+        self.atoms.append([atom_id, rx, ry, rz])
+    self.atoms = np.array(self.atoms, dtype=np.float64)
+    logger.debug('   atoms: \n{}'.format(self.atoms))
+
+    self.rvec = []
+    with open(str(self.tbfile),'r') as data:
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if line.startswith('begin real_lattice'): break
+        else:
+          raise IOError('ltb could not detect "begin real_lattice" block')
+
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if len(line)==0 or line.startswith('#'): continue
+          if line.startswith('end real_lattice'): break
+          rx, ry, rz = [float(i) for i in line.split()]
+          self.rvec.append([rx,ry,rz])
+        else:
+          raise IOError('ltb is not at the "end real_lattice" marker after reading'.format(str(self.tbfile)))
+
+    self.rvec = np.array(self.rvec, dtype=np.float64)
+    if self.rvec.shape != (3,3):
+      raise IOError('Provided real_lattice is not a properly defined 3x3 matrix')
+    logger.debug('   real_lattice (rows): \n{}'.format(self.rvec))
+
+    self.tbdata = []
+    self.imaghopping = False
+    bandmin = bandmax = None
+    with open(str(self.tbfile),'r') as data:
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if line.startswith('begin hopping'): break
+        else:
+          raise IOError('ltb could not detect "begin hopping" block')
+
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if len(line)==0 or line.startswith('#'): continue
+          if line.startswith('end hopping'): break
+
+          linedata = line.split()
+          lenline  = len(linedata)
+          if lenline==6 or lenline==7:
+            self.tbdata.append([float(i) for i in linedata])
+          else:
+            raise IOError('Provided hopping paramater line is invald: {}'.format(line))
+        else:
+          raise IOError('ltb is not at the "end hopping" marker after reading'.format(str(self.tbdata)))
+
+    self.tbdata = np.array(self.tbdata, dtype=np.float64)
+
+    ''' we do not transform the list of lists into an array since the different lines
+        could have different lengths (imaginary part optional) '''
+
+    ''' detect inter band transitions and minimum and maximum band entry '''
+    inter     = False
+    bandcheck = set()
+    for i in range(self.tbdata.shape[0]):
+      locmin = min(self.tbdata[i,3:5].astype(int))
+      locmax = max(self.tbdata[i,3:5].astype(int))
+      if bandmin is None:
+        bandmin = locmin
+        bandmax = locmax
+      else:
+        if locmin < bandmin: bandmin = locmin
+        if locmax > bandmax: bandmax = locmax
+      if locmin != locmax: inter = True
+      bandcheck.update({locmin,locmax})
     if bandmin != 1:
-      raise IOError('Error: tight binding parameter set must start at band 1')
-
-    inter = False
-    bandcheck = np.full((bandmax,), fill_value=False)
-    for itb in range(self.tbdata.shape[0]):
-      band1 = int(self.tbdata[itb,3]) - 1 # band identifier
-      bandcheck[band1] = True
-      band2 = int(self.tbdata[itb,4]) - 1 # band identifier
-      bandcheck[band2] = True
-      if band1 != band2:
-        inter = True
+      raise IOError('Tight binding parameter set must start at band 1')
+    if len(bandcheck) != bandmax:
+      raise IOError('Tight binding parameter set does not contain the full band range')
 
     if inter:
       self.opticfull  = True
@@ -120,20 +202,22 @@ class TightBinding(Model):
     else:
       logger.info('   Detected only intra-band hopping parameters.')
 
-    if not np.all(bandcheck):
-      raise IOError('Error: tight binding parameter set does not contain all bands')
-
     self.energyBandMax  = bandmax
     logger.info('   Number of bands: {}'.format(self.energyBandMax))
 
     hrset = set()
+    rset  = set()
     for i in range(self.tbdata.shape[0]):
-      rx, ry, rz = self.tbdata[i,:3]
-      hrset.add((rx,ry,rz))
+      rx, ry, rz, band1, band2 = self.tbdata[i,:5].astype(int)
+      rset.add((rx,ry,rz))
+      hrset.add((rx,ry,rz,band1,band2))
 
-    self.nrp = len(hrset)
+    if len(hrset) != self.tbdata.shape[0]:
+      raise IOError('Detected duplicate entries in the hopping parameters')
+
+    self.nrp = len(rset)
     logger.info('   Number of unique r-points: {}'.format(self.nrp))
-    self.rpoints = np.array(list(hrset), dtype=np.int)
+    self.rpoints = np.array(list(rset), dtype=np.int)
     logger.debug(' Unique r-points:\n{}'.format(self.rpoints))
 
     self.hr = np.zeros((self.nrp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
@@ -141,13 +225,17 @@ class TightBinding(Model):
       rvec = self.tbdata[i,:3].astype(int)
       orb1, orb2 = self.tbdata[i,3:5].astype(int)
       hop = self.tbdata[i,5]
-      if self.imaghopping:
+      try:
         hop += 1j * self.tbdata[i,6]
+      except:
+        pass
 
       ir = np.argwhere(np.sum(np.abs(self.rpoints-rvec[None,:]),axis=1)==0)[0][0]
       if np.all(rvec==np.zeros((3,), dtype=np.int)) and orb1==orb2:
         hop *= (-1)
       self.hr[ir,orb1-1,orb2-1] += -hop
+
+    logger.debug('Tight binding parameter set:\n{}'.format(self.hr))
 
   def _setupKmesh(self):
     '''
@@ -165,12 +253,12 @@ class TightBinding(Model):
     ''' define k-grid, shift if required '''
     if self.irreducible:
 
-      lattice   = self.rvec_spglib
+      lattice   = self.rvec
       positions = []
       numbers   = []
-      for i in range(self.atoms_spglib.shape[0]):
-        numbers.append(self.atoms_spglib[i,0])
-        positions.append(self.atoms_spglib[i,1:])
+      for i in range(self.atoms.shape[0]):
+        numbers.append(self.atoms[i,0])
+        positions.append(self.atoms[i,1:])
 
 
       cell = (lattice, positions, numbers)
