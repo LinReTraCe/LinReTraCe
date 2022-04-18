@@ -108,6 +108,8 @@ class TightBinding(Model):
         else:
           raise IOError('ltb is not at the "end atoms" marker after reading'.format(str(self.tbfile)))
 
+        comment = line.find('#')
+        if comment != -1: line = line[:comment]
         atom_id, rx, ry, rz = [float(i) for i in line.split()]
         if abs(np.rint(atom_id) - atom_id) > 1e-6: raise IOError('Invalid atom description: {}'.format(line))
         if rx < 0 or rx > 1: raise IOError('Invalid atom description: {}'.format(line))
@@ -133,6 +135,8 @@ class TightBinding(Model):
           line = line.strip()
           if len(line)==0 or line.startswith('#'): continue
           if line.startswith('end real_lattice'): break
+          comment = line.find('#')
+          if comment != -1: line = line[:comment]
           rx, ry, rz = [float(i) for i in line.split()]
           self.rvec.append([rx,ry,rz])
         else:
@@ -144,7 +148,6 @@ class TightBinding(Model):
     logger.debug('   real_lattice (rows): \n{}'.format(self.rvec))
 
     self.tbdata = []
-    self.imaghopping = False
     bandmin = bandmax = None
     with open(str(self.tbfile),'r') as data:
       while True:
@@ -162,16 +165,16 @@ class TightBinding(Model):
           if len(line)==0 or line.startswith('#'): continue
           if line.startswith('end hopping'): break
 
+          comment = line.find('#')
+          if comment != -1: line = line[:comment]
           linedata = line.split()
           lenline  = len(linedata)
           if lenline==6 or lenline==7:
-            self.tbdata.append([float(i) for i in linedata])
+            self.tbdata.append(np.array([float(i) for i in linedata]))
           else:
             raise IOError('Provided hopping paramater line is invald: {}'.format(line))
         else:
           raise IOError('ltb is not at the "end hopping" marker after reading'.format(str(self.tbdata)))
-
-    self.tbdata = np.array(self.tbdata, dtype=np.float64)
 
     ''' we do not transform the list of lists into an array since the different lines
         could have different lengths (imaginary part optional) '''
@@ -179,9 +182,9 @@ class TightBinding(Model):
     ''' detect inter band transitions and minimum and maximum band entry '''
     inter     = False
     bandcheck = set()
-    for i in range(self.tbdata.shape[0]):
-      locmin = min(self.tbdata[i,3:5].astype(int))
-      locmax = max(self.tbdata[i,3:5].astype(int))
+    for i in range(len(self.tbdata)):
+      locmin = min(self.tbdata[i][3:5].astype(int))
+      locmax = max(self.tbdata[i][3:5].astype(int))
       if bandmin is None:
         bandmin = locmin
         bandmax = locmax
@@ -207,12 +210,12 @@ class TightBinding(Model):
 
     hrset = set()
     rset  = set()
-    for i in range(self.tbdata.shape[0]):
-      rx, ry, rz, band1, band2 = self.tbdata[i,:5].astype(int)
+    for i in range(len(self.tbdata)):
+      rx, ry, rz, band1, band2 = self.tbdata[i][:5].astype(int)
       rset.add((rx,ry,rz))
       hrset.add((rx,ry,rz,band1,band2))
 
-    if len(hrset) != self.tbdata.shape[0]:
+    if len(hrset) != len(self.tbdata):
       raise IOError('Detected duplicate entries in the hopping parameters')
 
     self.nrp = len(rset)
@@ -221,12 +224,12 @@ class TightBinding(Model):
     logger.debug(' Unique r-points:\n{}'.format(self.rpoints))
 
     self.hr = np.zeros((self.nrp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
-    for i in range(self.tbdata.shape[0]):
-      rvec = self.tbdata[i,:3].astype(int)
-      orb1, orb2 = self.tbdata[i,3:5].astype(int)
-      hop = self.tbdata[i,5]
+    for i in range(len(self.tbdata)):
+      rvec = self.tbdata[i][:3].astype(int)
+      orb1, orb2 = self.tbdata[i][3:5].astype(int)
+      hop = self.tbdata[i][5]
       try:
-        hop += 1j * self.tbdata[i,6]
+        hop += 1j * self.tbdata[i][6]
       except:
         pass
 
@@ -537,8 +540,7 @@ class TightBinding(Model):
     ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
 
     if np.any(np.abs(ek.imag) > 1e-5):
-      print('Detected complex energies ... truncating')
-    ''' apparently complex velocities and curvatures are allowed now '''
+      logger.warning('\n\nDetected complex energies ... truncating\n')
 
     self.energies[0][...] = ek.real
     self.velocities.append(vk)
@@ -546,13 +548,15 @@ class TightBinding(Model):
 
   def _checkSymmetriesTightbinding(self):
 
-    for itb1 in range(self.tbdata.shape[0]):
-      rvec1  = self.tbdata[itb1,:3].astype(int)
-      band1_1  = int(self.tbdata[itb1,3]) - 1 # band identifier
-      band1_2  = int(self.tbdata[itb1,4]) - 1 # band identifier
-      hop1   = self.tbdata[itb1,5]
-      if self.imaghopping:
-        hop1 += 1j * self.tbdata[itb1,6]
+    for itb1 in range(len(self.tbdata)):
+      rvec1  = self.tbdata[itb1][:3].astype(int)
+      band1_1  = int(self.tbdata[itb1][3]) - 1 # band identifier
+      band1_2  = int(self.tbdata[itb1][4]) - 1 # band identifier
+      hop1   = self.tbdata[itb1][5]
+      try:
+        hop1 += 1j * self.tbdata[itb1][6]
+      except:
+        pass
 
       ''' Inter-atomic hopping cannot be safely check: skip it '''
       if band1_1 != band1_2: continue
@@ -562,15 +566,17 @@ class TightBinding(Model):
       for isym in range(self.nsym):
         rvec_transformed = rvecsym[isym]
 
-        for itb2 in range(self.tbdata.shape[0]):
-          band2_1  = int(self.tbdata[itb1,3]) - 1 # band identifier
-          band2_2  = int(self.tbdata[itb1,4]) - 1 # band identifier
+        for itb2 in range(len(self.tbdata)):
+          band2_1  = int(self.tbdata[itb1][3]) - 1 # band identifier
+          band2_2  = int(self.tbdata[itb1][4]) - 1 # band identifier
           if band1_1 != band2_1 or band2_2 != band2_2: continue
 
-          rvec2  = self.tbdata[itb2,:3].astype(int)
-          hop2   = self.tbdata[itb2,5]
-          if self.imaghopping:
-            hop2 += 1j * self.tbdata[itb2,6]
+          rvec2  = self.tbdata[itb2][:3].astype(int)
+          hop2   = self.tbdata[itb2][5]
+          try:
+            hop2 += 1j * self.tbdata[itb2][6]
+          except:
+            pass
 
           if np.allclose(rvec_transformed,rvec2) and np.abs(hop1-hop2) < 1e-6:
             break
