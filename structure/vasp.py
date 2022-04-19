@@ -42,9 +42,6 @@ class VaspCalculation(DftCalculation):
     logger.info("Files sucessfully loaded.")
     self._extractASEinformation()
 
-  def __repr__(self):
-    return ('vaspcalculation(directory={0.directory!r}'.format(self))
-
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):
       raise IOError("Error: vasprun file missing.")
@@ -65,7 +62,7 @@ class VaspCalculation(DftCalculation):
     self._read_energies()
     logger.info("Files successfully read.")
     self._calcFermiLevel()
-    self._checkFermiLevel() # TODO: decide if I want to remove this =?
+    self._checkFermiLevel()
 
   def _checkFermiLevel(self):
     try:

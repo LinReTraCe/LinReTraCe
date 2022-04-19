@@ -26,10 +26,9 @@ class ElectronicStructure(ABC):
   Here we define all the common elements:
   Number of spins, k-points, multiplicity, weights, etc.
 
-  This class provides the internal methods to find the 'DFT' mu, i.e.
-  the chemical potential for T=0: _calcFermiLevel(mu=None)
-  Before using the output function h5out in inout.py this must be called
-  in order to set the required internal variables that are output
+  Methods required to be ran before using the output function in inout.py:
+    _calcFermiLevel
+    _defineDimensions
   '''
 
   def __init__(self):

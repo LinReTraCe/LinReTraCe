@@ -17,7 +17,7 @@ class TruncationError(IOError):
     return self.message
 
 
-def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
+def truncate(dftcalc, velcalc, energy1, energy2, absolute=False):
   '''
   Use the provided energy range (absolute or relative to the chemical potential,
   calculate the common bands, and truncate the energy window for the
@@ -122,14 +122,14 @@ def truncate(dftcalc, btpinterp, energy1, energy2, absolute=False):
   # truncate possible derivatives
   # this is straight-forward: same treatment as the energies as we get the derivatives
   # and curvatures on the full energy range
-  if btpinterp is not None:
-    for ispin in range(btpinterp.spins):
-      btpinterp.velocities[ispin]  = btpinterp.velocities[ispin][:,bmin:bmax]
-      btpinterp.curvatures[ispin]  = btpinterp.curvatures[ispin][:,bmin:bmax]
-      btpinterp.opticalDiag[ispin] = btpinterp.opticalDiag[ispin][:,bmin:bmax]
-      btpinterp.BopticalDiag[ispin] = btpinterp.BopticalDiag[ispin][:,bmin:bmax]
-      btpinterp.opticalBandMin = 0
-      btpinterp.opticalBandMax = dftcalc.energyBandMax
+  if velcalc is not None:
+    for ispin in range(velcalc.spins):
+      velcalc.velocities[ispin]  = velcalc.velocities[ispin][:,bmin:bmax]
+      velcalc.curvatures[ispin]  = velcalc.curvatures[ispin][:,bmin:bmax]
+      velcalc.opticalDiag[ispin] = velcalc.opticalDiag[ispin][:,bmin:bmax]
+      velcalc.BopticalDiag[ispin] = velcalc.BopticalDiag[ispin][:,bmin:bmax]
+      velcalc.opticalBandMin = 0
+      velcalc.opticalBandMax = dftcalc.energyBandMax
 
 
   # general case of truncation procedure

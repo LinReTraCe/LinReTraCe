@@ -65,12 +65,6 @@ class Wien2kCalculation(DftCalculation):
     ''' get all the crystal information from the ase atom object '''
     self._extractASEinformation()
 
-  def __repr__(self):
-    return ('w2kcalculation(directory={0.directory}, '
-            'optic={0.optic!r}, '
-            'calctype={0.calctype!r}, '
-            'case={0.case!r})'.format(self))
-
   # internal routine to get the Path prefix case
   def _defineCase(self, custom=False):
     '''
