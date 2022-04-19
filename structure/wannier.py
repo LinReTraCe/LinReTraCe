@@ -30,12 +30,17 @@ class Wannier90Calculation(DftCalculation):
 
   def __init__(self, directory, charge, **kwargs):
     logger.info("\nInitializing Wannier90 calculation.")
-    super(Wannier90Calculation, self).__init__(directory)
-    self.charge = charge
+    super(Wannier90Calculation, self).__init__()
+    self.directory = directory
+    self.charge    = charge
     if isinstance(self.charge, float):
       if self.charge < 0: raise ValueError('Provided charge must be >= 0')
 
-    self._checkDirectory()    # is this actually a directory
+    if not os.path.exists(self.directory):
+      raise IOError("Supplied path does not exist: " + self.directory)
+    if not os.path.isdir(self.directory):
+      raise IOError("Supplied path is not a directory: " + self.directory)
+
     self._defineCase()        # filename prefix
     self._defineFiles()       # define all possible hr file variants
     self._detectCalculation() # check which hr files we have -> calculation type
