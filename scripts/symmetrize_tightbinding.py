@@ -17,7 +17,7 @@ def parse_args(args=None):
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
 
-if __name__ == '__main__':
+def main():
   logging.basicConfig()
   logger = logging.getLogger()
   args = parse_args()
@@ -246,3 +246,6 @@ if __name__ == '__main__':
   if bandmax > 1:
     logger.critical('\n\nInter-band hopping across unit cells cannot be safely generated this way.' +
                     '\nFilter out unwanted hopping parameters!')
+
+if __name__ == '__main__':
+  main()

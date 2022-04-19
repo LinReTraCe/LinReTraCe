@@ -105,6 +105,9 @@ class IrreducibleMesh(object):
     logger.info('Generated irreducible kmesh with {} irreducible kpoints.'.format(self.nkp))
     logger.info('kpoints:\n{}'.format(self.kpoints))
 
-if __name__ == '__main__':
+def main():
   logger.info('Testing irreducible mesh generation')
   mesh = IrreducibleMesh(50,20,1,shift=False)
+
+if __name__ == '__main__':
+  main()
