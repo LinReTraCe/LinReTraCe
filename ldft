@@ -128,7 +128,7 @@ class Program(object):
       try:
         btinterp = BoltztrapInterpolation(calc)
         btinterp.interpolate(self.args.interp)
-      except BaseException as e:
+      except Exception as e:
         self.log.exception(str(e))
         self.log.warning('Continuing without interpolation data.\n')
         btinterp = None

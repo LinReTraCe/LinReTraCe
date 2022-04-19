@@ -209,7 +209,7 @@ def main():
           if not args.compare: plt.title(outobj.fname)
           plt.show()
 
-    except BaseException as e:
+    except Exception as e:
       error('\nERROR: '+str(e)+'\n')
 
   ''' Input object commands '''
@@ -230,7 +230,7 @@ def main():
           plt.show()
       else:
         raise IOError('lrtc input file command not recognized')
-    except BaseException as e:
+    except Exception as e:
       error('\nERROR: '+str(e)+'\n')
 
 if __name__ == '__main__':
