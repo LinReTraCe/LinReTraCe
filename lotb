@@ -52,7 +52,6 @@ def parse_args(args=None):
   return parser.parse_args(args)
 
 
-if __name__ == '__main__':
   error = lambda string: sys.exit('\nlotb: {}'.format(string))
   args = parse_args()
   debug = args.debug
@@ -65,7 +64,7 @@ if __name__ == '__main__':
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 
-
+def main():
   try:
     tbdata = np.genfromtxt(args.tb_file)
     if (tbdata.shape[1] != 5):
@@ -142,3 +141,6 @@ if __name__ == '__main__':
     ax2.legend(loc='center right')
 
     plt.show()
+
+if __name__ == '__main__':
+  main()

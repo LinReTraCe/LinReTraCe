@@ -135,8 +135,7 @@ def setLogger():
   logger.addHandler(console)
   return logger
 
-if __name__ == '__main__':
-
+def main():
   logger = setLogger()
 
   '''           a1       a2       a3     '''
@@ -151,3 +150,6 @@ if __name__ == '__main__':
 
   test.loadData(multiplicity, energies, optical)
   test.outputData('test.hdf5')
+
+if __name__ == '__main__':
+  main()

@@ -163,7 +163,7 @@ class Program(object):
       self.log.info('User exit ...')
     except MemoryError:
       self.log.exception('Memory error: Initialized arrays require too much memory.')
-    except BaseException as e:
+    except Exception as e:
       self.log.exception(str(e))
 
 if __name__ == '__main__':

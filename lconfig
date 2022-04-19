@@ -25,8 +25,7 @@ def parse_args(args=None):
 
   return parser.parse_args(args)
 
-if __name__ == '__main__':
-
+def main():
   args = parse_args()
   config = {}
 
@@ -119,3 +118,6 @@ if __name__ == '__main__':
       cf.write(f"QuasiParticleWeight  = {config['mumode']['qp']}\n")
 
   print(f"\n\n{args.output} successfully created.")
+
+if __name__ == '__main__':
+  main()

@@ -47,10 +47,9 @@ class log_formatter(logging.Formatter):
     else:
       return '{}: {}: {}'.format(record.filename, record.levelname,record.msg) # more information
 
-if __name__ == '__main__':
+def main():
   error = lambda string: sys.exit('lwann: {}'.format(string))
   args = parse_args()
-  # args = parse_args('../t2g 1 --kmesh 20 20 20 --intra'.split())
   debug = args.debug
 
   ''' define logging '''
@@ -136,3 +135,6 @@ if __name__ == '__main__':
       ax2.legend(loc='center right')
 
     plt.show()
+
+if __name__ == '__main__':
+  main()

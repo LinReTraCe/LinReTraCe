@@ -224,7 +224,10 @@ def setLogger():
   logger.addHandler(console)
   return logger
 
-if __name__ == '__main__':
+def main():
   logger = setLogger()
   logger.warning('lscat only serves illustrative purposes (code snippets).')
   logger.warning('Copy lscat_template in your working directory and adjust for your purposes.\n\n')
+
+if __name__ == '__main__':
+  main()

@@ -78,7 +78,7 @@ def directionTransform(string, dims):
       raise ValueError("Invalid directional argument: {} -- incorrect direction".format(prevstring))
   raise ValueError("Invalid directional argument: {} -- incorrect argument length".format(prevstring))
 
-if __name__ == '__main__':
+def main():
   args = parse_args()
 
   ''' define logging '''
@@ -232,3 +232,6 @@ if __name__ == '__main__':
         raise IOError('lrtc input file command not recognized')
     except BaseException as e:
       error('\nERROR: '+str(e)+'\n')
+
+if __name__ == '__main__':
+  main()
