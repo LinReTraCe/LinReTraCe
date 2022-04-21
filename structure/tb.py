@@ -270,11 +270,11 @@ class TightBinding(Model):
       spacegroup = spglib.get_spacegroup(cell, symprec=1e-5)
       logger.info('Spglib: Detected spacegroup {}'.format(spacegroup))
 
-      logger.info('Spglib: Generating irreducible kpoints.')
+      logger.info('   Generating irreducible kpoints.')
       mapping, grid = spglib.get_ir_reciprocal_mesh(kgrid, cell, is_shift=is_shift)
       unique, counts = np.unique(mapping, return_counts=True)
       self.nkp  = len(unique)
-      logger.info('Spglib: Generated irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
+      logger.info('   Generated irreducible kmesh with {} irreducible kpoints.'.format(self.nkp))
       self.multiplicity = np.array(counts, dtype=int)
       self.weights      = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
       self.kpoints = grid[unique]
@@ -324,10 +324,10 @@ class TightBinding(Model):
 
       self.nsym = self.symop.shape[0]
       if non_standard:
-        logger.critical('\n\nSpglib: Detected non-standardized unit cell. Continuing by truncating rotations.' + \
-                        '\n        Validity of generated data can not be guaranteed.\n')
-      logger.info('Spglib: Found {} symmetry operations'.format(self.nsym))
-      logger.debug('Symmetry operation: \n{}'.format(self.symop))
+        logger.critical('\n\n   Detected non-standardized unit cell. Continuing by truncating rotations.' + \
+                        '\n   Validity of generated data can not be guaranteed.\n')
+      logger.info('   Found {} applicable symmetry operations.'.format(self.nsym))
+      logger.debug('Symmetry operations: \n{}'.format(self.symop))
     else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
