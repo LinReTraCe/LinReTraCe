@@ -353,13 +353,13 @@ class LRTCoutput(object):
       if magnetic:
         for icomb in args:
           if len(icomb) == 3 and str(icomb)[0] == '0': # gets added in the main file automatically
-            raise ValueError("Invalid directional argument: -- incorrect argument length [use e.g. xyz, uxxz'")
+            raise ValueError("Invalid directional argument: incorrect argument length [use e.g. xyz, uxxz]")
           if len(icomb) < 3 or len(icomb) > 4:
-            raise ValueError("Invalid directional argument: -- incorrect argument length [use e.g. xyz, uxxz'")
+            raise ValueError("Invalid directional argument: incorrect argument length [use e.g. xyz, uxxz]")
       else:
         for icomb in args:
           if len(icomb) < 2 or len(icomb) > 3:
-            raise ValueError("Invalid directional argument: -- incorrect argument length [use e.g. xx, uxy]")
+            raise ValueError("Invalid directional argument: incorrect argument length [use e.g. xx, uxy]")
 
     if response:
       outfull = self.data[command]
@@ -713,7 +713,7 @@ class LRTCoutput(object):
         self.dims = hfi['.unitcell/dims'][()]
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
         self.dimmask3 = np.logical_and(np.logical_and(self.dims[:,None], self.dims[None,:])[:,:,None], self.dims[None,None,:])
-        print('#   File: {} - Run mode: {} - {} dimensions: {}'.format(self.fname, self.mode, self.ndim, np.array(["x","y","z"])[self.dims]))
+        print('#   File: {} - Run mode: {} - {} crystal directions: {}'.format(self.fname, self.mode, self.ndim, np.array(["x","y","z"])[self.dims]))
     except:
       raise IOError('{} is not an LRTC output file.'.format(self.fname))
 
