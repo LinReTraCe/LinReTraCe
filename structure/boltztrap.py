@@ -212,7 +212,7 @@ class BoltztrapInterpolation(object):
     # - - 3
 
     # my index array to get exactly the values above on one axis
-    d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
+    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
     # this works but I dont know whether there are better ways to do this
     # looks rather hacky
@@ -253,7 +253,7 @@ class BoltztrapInterpolation(object):
     # - - 3
 
     # my index array to get exactly the values above on one axis
-    d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
+    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
     # this works but I dont know whether there are better ways to do this
     # looks rather hacky
@@ -282,7 +282,7 @@ class BoltztrapInterpolation(object):
     # the last two elements dont matter here, since its symmetric anyways
 
     # my index array
-    d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
+    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
     # some numpy magic to turn the 3x3 array into the only 6 necessary entries
     tmp = self.interp_curvatures[:,:,:nbands//2,:].transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
@@ -309,7 +309,7 @@ class BoltztrapInterpolation(object):
 
     logger.info('BoltzTrap2: Symmetrizing band derivatives.')
 
-    d2ksave = tuple((np.array([0,1,2,1,2,2]), np.array([0,1,2,0,0,1])))
+    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
     levmatrix = np.zeros((3,3,3), dtype=np.float64)
     for i in range(3):
