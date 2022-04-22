@@ -233,8 +233,12 @@ class TightBinding(Model):
       except:
         pass
 
+      ''' re-interpret sign of local energies '''
       ir = np.argwhere(np.sum(np.abs(self.rpoints-rvec[None,:]),axis=1)==0)[0][0]
       if np.all(rvec==np.zeros((3,), dtype=np.int)) and orb1==orb2:
+        if hop.imag:
+          logger.warning('\nDetected complex local intra-band energy, truncating!\n{} -> {}\n'.format(hop,hop.real))
+          hop = hop.real
         hop *= (-1)
       self.hr[ir,orb1-1,orb2-1] += -hop
 
