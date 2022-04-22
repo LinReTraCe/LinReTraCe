@@ -137,6 +137,9 @@ def setLogger():
 
 def main():
   logger = setLogger()
+  logger.info('Preprocessing of arbitrary e(k) data for LRTC')
+  logger.info('Please load your data accordingly with the \'main\' function of this script')
+  sys.exit(0)
 
   '''           a1       a2       a3     '''
   lattice = [[5,0,0], [0,5,0], [0,0,1]]

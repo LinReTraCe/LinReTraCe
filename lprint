@@ -25,16 +25,22 @@ error = lambda string: sys.exit('lprint: {}'.format(string))
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='''Argument parser for LRTC input and LRTC output data
-           " lprint <file> list "  --- list all physical quantities
-           " lprint <file> olist " --- list all onsager coefficients
-           -------------------------------------------
-           " lprint <inputfile> info "         --- structural information of input file
-           " lprint -p <inputfile> dos "       --- plot density of states
-           -------------------------------------------
-           " lprint <outputfile> config "      --- config information of lrtc run
-           " lprint -p <outputfile> mu "       --- plot chemical potential of latest lrtc run
-           " lprint <outputfile> c-total uyy " --- print total conductivity of spin up in yy direction
-           " lprint <outputfile> s-intra xx  " --- print intra seebeck (spin summed) in xx direction''',
+  -------------------------------------------
+  " lprint <inputfile> info "          --- structural information of input file
+  " lprint -p <inputfile> dos "        --- plot density of states
+  -------------------------------------------
+  " lprint <outputfile> list "         --- list all physical quantities
+  " lprint <outputfile> olist "        --- list all onsager coefficients
+  -------------------------------------------
+  " lprint <outputfile> config "       --- config information of lrtc run
+  " lprint -p <outputfile> mu "        --- plot chemical potential of latest lrtc run
+  " lprint -p <outputfile> electrons holes impurity "
+                                       --- plot activated electrons/holes/impurity contribution
+                                           useful in semiconductors
+  " lprint <outputfile> c-total uyy "  --- print total conductivity of spin up in yy direction
+  " lprint <outputfile> s-intra xx "   --- print intra seebeck (spin summed) in xx direction
+  " lprint <outputfile> rh-intra xyz " --- print intra hall coefficient (spin summed)
+                                           in xy plane with magnetic-field applied in z-direction.''',
     formatter_class=argparse.RawTextHelpFormatter,
     epilog="That's the end of the help")
   parser.add_argument('file',    help='LRTC input/output file')
