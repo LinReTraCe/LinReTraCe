@@ -281,7 +281,7 @@ class LRTCinput(object):
       distance = np.abs(special1-special2) * nk
       if np.any(kshift): distance *= 2 # necessary due to the shifted spacing
       distance = distance[distance>0]
-      npoints = np.lcm.reduce(distance.astype(int))+1
+      npoints = np.gcd.reduce(distance.astype(int))+1
 
       ''' generate path with optimal spacing and dimension selection '''
       path       = cell.bandpath(stringpath, pbc=dims_int, npoints=npoints)
@@ -294,6 +294,7 @@ class LRTCinput(object):
       else:
         xoffset += k_distances[istring-1]
 
+      before = len(kptsindex)
       xticks.append(xoffset)
       for i, ikpt in enumerate(kpts):
         if istring > 0 and i == 0: continue # to avoid double points from path overlap
@@ -312,6 +313,8 @@ class LRTCinput(object):
               kptsindex.append(symindex)
               kptsplotx.append(xoffset + i/(float(npts)-1) * k_distances[istring])
               break
+      after = len(kptsindex)
+      logger.debug('      {} created points'.format(after-before))
 
     ''' last point of the ticks '''
     xticks.append(xoffset+k_distances[-1])
