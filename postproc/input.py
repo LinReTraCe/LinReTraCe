@@ -190,9 +190,17 @@ class LRTCinput(object):
     print('') # empty line before next CLI input
 
   def outputPath(self, plot, pathstring=None):
-    if not plot:
-      logger.critical('Band paths have to be used with -p (--plot) option.')
-    else:
+    '''
+      output or plot high-symmetry path
+      if pathstring is None: return all avaiable high-symmetry points
+      if pathstring is provided we check for consistency and generate the result.
+      since for irreducible calculations we only have limited k-points available
+      we employ symmetries to map back into the avaible points
+      the path length is automatically generated via the greates common denominator
+      to 'hit' the largest number of possible k-point in the BZ.
+    '''
+
+    if plot:
       import matplotlib.pyplot as plt
 
     with h5py.File(self.fname,'r') as h5:
@@ -206,6 +214,7 @@ class LRTCinput(object):
       dims     = h5['.unitcell/dims'][()]
       nsym     = h5['.unitcell/nsym'][()]
       symop    = h5['.unitcell/symop'][()]
+      mudft    = h5['.bands/mu'][()]
 
       if spins == 1:
         energies = h5['energies'][()]
@@ -216,6 +225,7 @@ class LRTCinput(object):
         energies[0,...] = energiesup
         energies[1,...] = energiesdn
 
+    ''' help arrays '''
     nk = np.array([nkx,nky,nkz], dtype=int)
     nkindex = np.array([nkx*nky*nkz,nky*nkz,nkz])
     dims = list(dims.astype(int))
@@ -227,6 +237,7 @@ class LRTCinput(object):
     index = np.array(index,dtype=int)
 
 
+    ''' retrieve the special points via ASE '''
     cell = ase.cell.Cell(rvec)
     special = cell.bandpath('', pbc=dims)
     fullspecial = []
@@ -238,6 +249,7 @@ class LRTCinput(object):
       logger.info('Provide k-path in form of trailing argument, e.g. -- path {}'.format(fullspecial))
       return
 
+    ''' check for consistency '''
     for ispecial in pathstring:
       if ispecial not in fullspecial:
         logger.critical('Provided special point not available.')
@@ -248,19 +260,22 @@ class LRTCinput(object):
     kptsindex  = []
     kptsplotx  = []
     xticks     = []
+
+    ''' iterate over all the sub strings that connect 2 special points '''
     for istring, stringpath in enumerate(substrings):
 
-      ''' get optimal spacing '''
       special1, special2 = special.special_points[stringpath[0]], special.special_points[stringpath[1]]
       kspecial1 = np.einsum('ji,j->i',kvec,special1)
       kspecial2 = np.einsum('ji,j->i',kvec,special2)
-
       k_distances.append(np.sqrt(np.sum((kspecial1-kspecial2)**2)))
+
+      ''' get optimal spacing '''
       distance = np.abs(special1-special2) * nk
       npoints = np.gcd.reduce(distance[dims].astype(int))+1
 
+      ''' generate path with optimal spacing and dimension selection '''
       path       = cell.bandpath(stringpath, pbc=dims, npoints=npoints)
-      kpts       = np.array(path.kpts) % 1
+      kpts       = np.array(path.kpts) % 1 # back to BZ
       npts       = len(kpts)
 
       if istring == 0:
@@ -275,6 +290,7 @@ class LRTCinput(object):
         if not np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
           continue
 
+        ''' map back into available points '''
         symkpt = np.einsum('nji,j->ni',symop,ikpt) % 1
         for isym in range(symkpt.shape[0]):
           if np.allclose((symkpt[isym]*nk),np.around(symkpt[isym]*nk)):
@@ -289,6 +305,7 @@ class LRTCinput(object):
     kptsindex  = np.array(kptsindex, dtype=int)
     arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
 
+    ''' get energies and plot / output to stdout '''
     for ispin in range(spins):
       bandpath = []
       for iarray in arrayindex:
@@ -308,5 +325,11 @@ class LRTCinput(object):
         plt.xticks(xticks, [str(i) for i in pathstring])
         for xval in xticks:
           plt.axvline(x=xval, color='gray', lw=0.5, ls='-', zorder=-1)
+      else:
+        np.savetxt(self.textpipe, np.hstack((np.array(kptsplotx)[:,None],bandpath)), \
+                   comments='', \
+                   header='# k [Ang^(-1)], bands [eV] - {}'.format('' if spins==1 else ['up','dn'][ispin]))
     if plot:
+      plt.ylabel(r'$\varepsilon(\mathbf{k})$ [eV]', fontsize=12)
+      plt.axhline(y=mudft, color='gray', lw=1, ls='--', zorder=-1)
       plt.show()
