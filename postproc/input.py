@@ -225,6 +225,15 @@ class LRTCinput(object):
         energies[0,...] = energiesup
         energies[1,...] = energiesdn
 
+    ''' detect gamma point -> if not we have a shifted mesh '''
+    for ikpt in kpoints:
+      if np.allclose(ikpt,np.zeros(3)):
+        kshift = np.zeros(3)
+        break
+    else:
+      kshift = np.array([1./nkx,1./nky,1./nkz], dtype=np.float64) / 2.
+    logger.debug('kmesh shift: {}'.format(kshift))
+
     ''' help arrays '''
     nk = np.array([nkx,nky,nkz], dtype=int)
     nkindex = np.array([nkx*nky*nkz,nky*nkz,nkz])
@@ -233,9 +242,8 @@ class LRTCinput(object):
     ''' create "hashing" index '''
     index = []
     for ikpt in kpoints:
-      index.append(np.sum(np.around(ikpt*nkindex)))
+      index.append(np.sum(np.around((ikpt-kshift)*nkindex)))
     index = np.array(index,dtype=int)
-
 
     ''' retrieve the special points via ASE '''
     cell = ase.cell.Cell(rvec)
@@ -271,6 +279,7 @@ class LRTCinput(object):
 
       ''' get optimal spacing '''
       distance = np.abs(special1-special2) * nk
+      if np.any(kshift): distance *= 2 # necessary due to the shifted spacing
       distance = distance[distance>0]
       npoints = np.gcd.reduce(distance.astype(int))+1
 
@@ -289,14 +298,15 @@ class LRTCinput(object):
       for i, ikpt in enumerate(kpts):
         if istring > 0 and i == 0: continue # to avoid double points from path overlap
         ''' only continue with point on the grid '''
-        if not np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
+        if not np.allclose(((ikpt-kshift)*nk),np.around((ikpt-kshift)*nk), atol=0.001):
           continue
 
         ''' map back into available points '''
         symkpt = np.einsum('nji,j->ni',symop,ikpt) % 1
         for isym in range(symkpt.shape[0]):
-          if np.allclose((symkpt[isym]*nk),np.around(symkpt[isym]*nk)):
-            symindex = np.sum(np.around(symkpt[isym]*nkindex))
+          genkpt = symkpt[isym] - kshift
+          if np.allclose((genkpt*nk),np.around(genkpt*nk)):
+            symindex = np.sum(np.around(genkpt*nkindex))
             if symindex in index:
               kptsindex.append(symindex)
               kptsplotx.append(xoffset + i/(float(npts)-1) * k_distances[istring])
