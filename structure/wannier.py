@@ -232,8 +232,8 @@ class Wannier90Calculation(DftCalculation):
     self.irreducible = not (self.nkx*self.nky*self.nkz == self.nkp)
     self.kpoints = self.kpoints / divisor[None,:]
 
-    logger.info("  Wien2K number of dimensions: {}".format(self.ndim))
-    logger.info("  Wien2K number of k-points: {}".format(self.nkp))
+    logger.info("   Wien2K number of dimensions: {}".format(self.ndim))
+    logger.info("   Wien2K number of k-points: {}".format(self.nkp))
 
   def _readWien2kStruct(self):
     '''
@@ -253,14 +253,14 @@ class Wannier90Calculation(DftCalculation):
       if self.iatms == 0:
         raise IOError('Wien2k {}: Reading number of inequivalent atoms failed.'.format(str(self.fstruct)))
       else:
-        logger.info("  Number of inequivalent atoms: {}".format(self.iatms))
+        logger.info("   Number of inequivalent atoms: {}".format(self.iatms))
 
       struct.seek(0)
       # get the number of symmetry operations
       for line in struct:
         if 'NUMBER OF SYMMETRY OPERATIONS' in line:
           self.nsym = int(line[:4])
-          logger.info("  Number of symmetry operations: {}".format(self.nsym))
+          logger.info("   Number of symmetry operations: {}".format(self.nsym))
           break
       else:
         raise IOError('Wien2k {}: Reading number of symmetry operations failed.'.format(str(self.fstruct)))
@@ -633,12 +633,12 @@ class Wannier90Calculation(DftCalculation):
     max_vecs = np.array([np.max(np.abs(self.rvec[:,i])) for i in range(3)]) # maximal entries
     ratio = sum_vecs / max_vecs
     self.ortho = np.all(np.isclose(ratio, ratio[0]))
-    logger.info('   orthogonal lattice: {}'.format(self.ortho))
+    logger.info('   Orthogonal lattice: {}'.format(self.ortho))
 
     # V = (axb . c)
     self.vol = np.abs(np.dot(np.cross(self.rvec[0,:], self.rvec[1,:]),self.rvec[2,:]))
     self.vol *= self.lengthscale**3
-    logger.info('   deduced volume: {}'.format(self.vol))
+    logger.info('   Deduced volume: {}'.format(self.vol))
 
 
     self.kvec = []
@@ -660,7 +660,7 @@ class Wannier90Calculation(DftCalculation):
       while ( not nnkp.readline().startswith('begin kpoints')):
         pass
       self.nkp = int(nnkp.readline())
-      logger.info('   number of kpoints: {}'.format(self.nkp))
+      logger.info('   Number of kpoints: {}'.format(self.nkp))
       for i in range(self.nkp):
         line = nnkp.readline()
         kx, ky, kz = float(line[:14]), float(line[14:28]), float(line[28:42])
@@ -673,7 +673,7 @@ class Wannier90Calculation(DftCalculation):
       while ( not nnkp.readline().startswith('begin projections')):
         pass
       self.nproj = int(nnkp.readline())
-      logger.info('   number of projections: {}'.format(self.nproj))
+      logger.info('   Number of projections: {}'.format(self.nproj))
       self.plist = []
       for i in range(self.nproj):
         line = nnkp.readline()
@@ -698,7 +698,7 @@ class Wannier90Calculation(DftCalculation):
         hr.readline() # 'written on ...' line
         nproj = int(hr.readline())
         self.nrp = int(hr.readline())
-        logger.info('   number of rpoints: {}'.format(self.nrp))
+        logger.info('   Number of rpoints: {}'.format(self.nrp))
         if (self.nproj != nproj):
           raise IOError('Inconsistent number of projections between case.nnkp anc case_hr.dat')
 
