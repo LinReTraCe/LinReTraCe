@@ -232,7 +232,7 @@ class LRTCinput(object):
         break
     else:
       kshift = np.array([1./nkx,1./nky,1./nkz], dtype=np.float64) / 2.
-    logger.debug('kmesh shift: {}'.format(kshift))
+    logger.info('Momentum shift: {}'.format(kshift))
 
     ''' help arrays '''
     nk = np.array([nkx,nky,nkz], dtype=int)
@@ -281,7 +281,7 @@ class LRTCinput(object):
       distance = np.abs(special1-special2) * nk
       if np.any(kshift): distance *= 2 # necessary due to the shifted spacing
       distance = distance[distance>0]
-      npoints = np.gcd.reduce(distance.astype(int))+1
+      npoints = np.lcm.reduce(distance.astype(int))+1
 
       ''' generate path with optimal spacing and dimension selection '''
       path       = cell.bandpath(stringpath, pbc=dims_int, npoints=npoints)
@@ -298,6 +298,7 @@ class LRTCinput(object):
       for i, ikpt in enumerate(kpts):
         if istring > 0 and i == 0: continue # to avoid double points from path overlap
         ''' only continue with point on the grid '''
+        temp = (ikpt-kshift) % 1
         if not np.allclose(((ikpt-kshift)*nk),np.around((ikpt-kshift)*nk), atol=0.001):
           continue
 
@@ -316,6 +317,9 @@ class LRTCinput(object):
     xticks.append(xoffset+k_distances[-1])
     kptsindex  = np.array(kptsindex, dtype=int)
     arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
+
+    if len(arrayindex) == 0:
+      raise ValueError('Band path was unable to reach any k-point')
 
     ''' get energies and plot / output to stdout '''
     logging.disable( sys.maxsize if sys.version_info >= (3,0) else sys.maxint)
