@@ -15,6 +15,8 @@ else:
 import scipy.optimize
 import numpy as np
 
+import structure.symmetries.C1
+
 class Converged(Exception):
   def __init__(self, mu):
     super(Converged, self).__init__(self)
@@ -57,9 +59,9 @@ class ElectronicStructure(ABC):
                                #      second entry -> x y z
 
     # symmetries
-    self.nsym           = 0    # number of symmetry operations
-    self.symop          = None # symmetry operations
-    self.invsymop       = None # inverse symmetre operations
+    self.nsym           = structure.symmetries.C1.nsym
+    self.symop          = structure.symmetries.C1.symop
+    self.invsymop       = structure.symmetries.C1.invsymop
 
     self.ndim           = -1   # number of dimensions
     self.dims           = np.array([False,False,False]) # valid dimension, i.e. k_i > 1

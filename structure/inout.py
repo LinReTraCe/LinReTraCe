@@ -59,6 +59,9 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     h5out['.unitcell/ortho']      = escalc.ortho
     h5out['.unitcell/rvec']       = escalc.rvec
     h5out['.unitcell/kvec']       = escalc.kvec
+    h5out['.unitcell/nsym']       = escalc.nsym
+    h5out['.unitcell/symop']      = escalc.symop
+
 
     h5out['.bands/charge']        = float(escalc.charge)
     h5out['.bands/energyBandMax'] = int(escalc.energyBandMax)
