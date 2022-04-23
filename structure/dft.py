@@ -70,7 +70,8 @@ class DftCalculation(ElectronicStructure, ABC):
 
     self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
     logger.info('  Space group: {}'.format(self.spacegroup))
-    self.symop_ase = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations()
+    self.symop_ase    = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations()
+    self.invsymop_ase = np.linalg.inv(self.symop_ase)
     self.nsym_ase  = self.symop_ase.shape[0]
     logger.info('  Symmetry operations: {}'.format(self.nsym_ase))
     logger.debug('  Symmetry matrices:\n{}'.format(self.symop_ase))

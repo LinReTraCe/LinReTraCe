@@ -41,6 +41,10 @@ class VaspCalculation(DftCalculation):
     self._checkFiles()
     logger.info("Files sucessfully loaded.")
     self._extractASEinformation()
+    ''' we only extract symmetries via ASE '''
+    self.nsym = self.nsym_ase
+    self.symop = self.symop_ase
+    self.invsymop = self.invsymop_ase
 
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):
