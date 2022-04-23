@@ -228,7 +228,7 @@ class LRTCinput(object):
     ''' help arrays '''
     nk = np.array([nkx,nky,nkz], dtype=int)
     nkindex = np.array([nkx*nky*nkz,nky*nkz,nkz])
-    dims = list(dims.astype(int))
+    dims_int = list(dims.astype(int))
 
     ''' create "hashing" index '''
     index = []
@@ -239,7 +239,7 @@ class LRTCinput(object):
 
     ''' retrieve the special points via ASE '''
     cell = ase.cell.Cell(rvec)
-    special = cell.bandpath('', pbc=dims)
+    special = cell.bandpath('', pbc=dims_int)
     fullspecial = []
     for descr, coord in special.special_points.items():
       fullspecial.append(descr)
@@ -271,12 +271,14 @@ class LRTCinput(object):
 
       ''' get optimal spacing '''
       distance = np.abs(special1-special2) * nk
-      npoints = np.gcd.reduce(distance[dims].astype(int))+1
+      distance = distance[distance>0]
+      npoints = np.gcd.reduce(distance.astype(int))+1
 
       ''' generate path with optimal spacing and dimension selection '''
-      path       = cell.bandpath(stringpath, pbc=dims, npoints=npoints)
+      path       = cell.bandpath(stringpath, pbc=dims_int, npoints=npoints)
       kpts       = np.array(path.kpts) % 1 # back to BZ
       npts       = len(kpts)
+      logger.debug('path: {} - {} distance - {} points'.format(stringpath,distance,npts))
 
       if istring == 0:
         xoffset = 0
@@ -306,6 +308,7 @@ class LRTCinput(object):
     arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
 
     ''' get energies and plot / output to stdout '''
+    logging.disable( sys.maxsize if sys.version_info >= (3,0) else sys.maxint)
     for ispin in range(spins):
       bandpath = []
       for iarray in arrayindex:
@@ -333,3 +336,4 @@ class LRTCinput(object):
       plt.ylabel(r'$\varepsilon(\mathbf{k})$ [eV]', fontsize=12)
       plt.axhline(y=mudft, color='gray', lw=1, ls='--', zorder=-1)
       plt.show()
+    logging.disable(logging.NOTSET)
