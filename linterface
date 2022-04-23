@@ -43,7 +43,7 @@ class StructureFromArrays(ElectronicStructure):
     self.dims       = np.array([ik>1 for ik in [self.nkx,self.nky,self.nkz]])
     self.ndim       = np.sum(self.dims.astype(int))
 
-  def loadData(self, multiplicity, energies, optical, boptical=None, mu=None):
+  def loadData(self, multiplicity, energies, optical, boptical=None, mu=None, kpoints=None):
     ''' read in
       kmesh multiplicity : shape [nkp] float64
         nkp: number of kpoints
@@ -60,8 +60,10 @@ class StructureFromArrays(ElectronicStructure):
                   6 if not        -- xx yy zz xz xz yz
 
       optional: boptical : shape [spins, nkp, bands, 3, 3, 3]
-      optical : mu : set chemical potential to specific value or search it
+      optional: mu : set chemical potential to specific value or search it
                      important for gapped systems
+      optional: kpoints : shape [nkp, 3]
+                  the values should be in fractions of the reciprocal lattice vectors: 0 <= value < 1
     '''
 
     self.multiplicity = np.array(multiplicity, dtype=int)
@@ -81,7 +83,10 @@ class StructureFromArrays(ElectronicStructure):
     else:
       self.irreducible = True
 
-    self.kpoints = np.zeros((self.nkp,3), dtype=np.float64) # we dont care about the point info
+    if kpoints is None:
+      self.kpoints = np.zeros((self.nkp,3), dtype=np.float64) # we dont care about the point info
+    else:
+      self.kpoints = np.array(self.kpoints, dtype=np.float64)
 
     self.spins, _, self.energyBandMax = energies.shape
 
