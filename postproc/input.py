@@ -100,6 +100,7 @@ class LRTCinput(object):
       print('  lattice (rows) [Ang]:\n{}'.format(h5['.unitcell/rvec'][()]))
       print('  volume: {0:.4f} [Ang^3]'.format(h5['.unitcell/volume'][()]))
       print('  orthogonal: {}'.format(h5['.unitcell/ortho'][()]))
+      print('  symmetries: {}'.format(h5['.unitcell/nsym'][()]))
 
       print('\nOPTICAL DATA')
       if spins==1:
