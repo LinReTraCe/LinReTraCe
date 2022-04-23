@@ -147,14 +147,7 @@ class VaspCalculation(DftCalculation):
       logger.info("  Momentum grid: {} {} {}".format(*divisor))
       self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
       self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
-
       self.irreducible = not (self.nkx*self.nky*self.nkx == self.nkp)
-      if not self.irreducible:
-        self.nsym     = 1
-        self.symop    = np.zeros((1,3,3), dtype=np.float64)
-        self.invsymop = np.zeros((1,3,3), dtype=np.float64)
-        self.symop[0,:,:] = np.diag((1,1,1))
-        self.invsymop[0,:,:] = np.diag((1,1,1))
     except Exception:
       raise IOError('Error occured during read-in of k-point divisors {}'.format(str(self.fvasprun)))
 

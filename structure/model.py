@@ -39,10 +39,6 @@ class Model(ElectronicStructure, ABC):
     self.weightsum      = 2  # always spin-unpolarized (paramagnetic)
     self.spins          = 1
 
-    self.nsym           = structure.symmetries.C1.nsym
-    self.symop          = structure.symmetries.C1.symop
-    self.invsymop       = structure.symmetries.C1.invsymop
-
     ''' this should always be there for models '''
     self.opticdiag      = True
     self.bopticdiag     = True

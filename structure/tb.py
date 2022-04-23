@@ -346,9 +346,6 @@ class TightBinding(Model):
       self.multiplicity = np.ones((self.nkp), dtype=int)
       self.weights      = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
 
-      self.symop = np.array(self.symop)
-      self.invsymop = np.linalg.inv(self.symop)
-      self.nsym = self.symop.shape[0]
       logger.info('Reducible grid: {} symmetry operation'.format(self.nsym))
 
   def _computeHk(self):
