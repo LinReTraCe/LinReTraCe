@@ -75,6 +75,7 @@ for istring, stringpath in enumerate(substrings):
 
   print('points on path: {}'.format(npts))
   for i, ikpt in enumerate(kpts):
+    if istring > 0 and i == 0: continue # to avoid double points from path overlap
     ''' only continue with point on the grid '''
     if not np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
       continue
@@ -85,13 +86,12 @@ for istring, stringpath in enumerate(substrings):
         symindex = np.sum(np.around(symkpt[isym]*nkindex))
         if symindex in index:
           kptsindex.append(symindex)
-          kptsplotx.append(xoffset + i/float(npts) * k_distances[istring])
+          kptsplotx.append(xoffset + i/(float(npts)-1) * k_distances[istring])
           break
 
 
 ''' last point of the ticks '''
-xoffset += k_distances[istring-1]
-xticks.append(xoffset)
+xticks.append(xoffset+k_distances[-1])
 
 kptsindex  = np.array(kptsindex, dtype=int)
 arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
@@ -105,4 +105,6 @@ for iband in range(bandpath.shape[1]):
   plt.plot(kptsplotx,bandpath[:,iband], **style)
 
 plt.xticks(xticks, [str(i) for i in pathstring])
+for xval in xticks:
+  plt.axvline(x=xval, color='gray', lw=0.5, ls='-', zorder=-1)
 plt.show()
