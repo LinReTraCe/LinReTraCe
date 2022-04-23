@@ -43,55 +43,55 @@ for descr, coord in special.special_points.items():
 
 pathstring = 'GKMG'
 substrings = [ pathstring[i:i+2] for i in range(len(pathstring)-1) ]
+k_distances = []
 
 kptsindex  = []
 kptsplotx  = []
-xticks = []
-xticklabels = []
+xticks     = []
 for istring, stringpath in enumerate(substrings):
-  xticks.append(len(kptsindex)-1)
-  if xticks[-1] < 0: xticks[-1] = 0
-  path       = cell.bandpath(stringpath, pbc=dims, npoints=101)
-  print(path)
-  kpts       = np.array(path.kpts) % 1
 
-  xbegin = np.sqrt(np.sum(kpts[0]**2))
+  ''' get optimal spacing '''
+  special1, special2 = special.special_points[stringpath[0]], special.special_points[stringpath[1]]
+  kspecial1 = np.einsum('ji,j->i',kvec,special1)
+  kspecial2 = np.einsum('ji,j->i',kvec,special2)
+
+
+  print(special1, ' --> ', special2)
+  k_distances.append(np.sqrt(np.sum((kspecial1-kspecial2)**2)))
+
+  distance = np.abs(special1-special2) * nk
+  npoints = np.gcd.reduce(distance[dims].astype(int))+1
+
+  path       = cell.bandpath(stringpath, pbc=dims, npoints=npoints)
+  kpts       = np.array(path.kpts) % 1
+  npts       = len(kpts)
+
   if istring == 0:
     xoffset = 0
   else:
-    xoffset  += np.sqrt(np.sum(kpts[-1]**2))
+    xoffset += k_distances[istring-1]
 
-  if istring != (len(substrings)-1):
-    kpts = kpts[:-1,:]
+  xticks.append(xoffset)
+
+  print('points on path: {}'.format(npts))
+  for i, ikpt in enumerate(kpts):
+    ''' only continue with point on the grid '''
+    if not np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
+      continue
+
+    symkpt = np.einsum('nji,j->ni',symop,ikpt) % 1
+    for isym in range(symkpt.shape[0]):
+      if np.allclose((symkpt[isym]*nk),np.around(symkpt[isym]*nk)):
+        symindex = np.sum(np.around(symkpt[isym]*nkindex))
+        if symindex in index:
+          kptsindex.append(symindex)
+          kptsplotx.append(xoffset + i/float(npts) * k_distances[istring])
+          break
 
 
-  print('points on path: {}'.format(len(kpts)))
-
-  kptsfilter = []
-  ''' corresponding to an actual grid position '''
-  for ikpt in kpts:
-    if np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
-      kptsfilter.append(ikpt)
-
-  before = len(kptsindex)
-  for ikpt in kptsfilter:
-    ikptindex = np.sum(np.around(ikpt*nkindex))
-    if ikptindex in index:
-      kptsindex.append(ikptindex)
-    else:
-      symkpt = np.einsum('nji,j->ni',symop,ikpt) % 1
-      for isym in range(symkpt.shape[0]):
-        if np.allclose((symkpt[isym]*nk),np.around(symkpt[isym]*nk), rtol = 0.01, atol = 0.01):
-          symindex = np.sum(np.around(symkpt[isym]*nkindex))
-          if symindex in index:
-            kptsindex.append(symindex)
-            kptsplotx.append(xoffset + np.sqrt(np.sum((np.array(ikpt)-kpts[0])**2)))
-            break
-  after = len(kptsindex)
-
-  print('points added {}'.format(after-before))
-
-xticks.append(len(kptsindex)-1)
+''' last point of the ticks '''
+xoffset += k_distances[istring-1]
+xticks.append(xoffset)
 
 kptsindex  = np.array(kptsindex, dtype=int)
 arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
@@ -102,7 +102,7 @@ bandpath = np.array(bandpath, dtype=np.float64)
 
 style = {'lw':3, 'ls':'-', 'color':'k'}
 for iband in range(bandpath.shape[1]):
-  plt.plot(bandpath[:,iband], **style)
+  plt.plot(kptsplotx,bandpath[:,iband], **style)
 
 plt.xticks(xticks, [str(i) for i in pathstring])
 plt.show()
