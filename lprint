@@ -230,10 +230,14 @@ def main():
           inpobj.outputDOS(args.plot)
         else:
           inpobj.outputDOS(args.plot, *args.output[1:])
-
         if args.plot:
           plt.title(inpobj.fname)
           plt.show()
+      elif cmd == 'path':
+        if cmdlength == 1:
+          inpobj.outputPath(args.plot)
+        else:
+          inpobj.outputPath(args.plot, args.output[1])
       else:
         raise IOError('lrtc input file command not recognized')
     except Exception as e:

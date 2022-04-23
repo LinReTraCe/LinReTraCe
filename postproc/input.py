@@ -12,6 +12,7 @@ import numpy as np
 with warnings.catch_warnings():
   warnings.filterwarnings("ignore",category=FutureWarning)
   import h5py
+import ase
 
 from structure import es
 from structure.dos import calcDOS
@@ -54,6 +55,7 @@ class LRTCinput(object):
     print(barlength*u'\u2500')
     print('{:<12}  {}'.format('info', 'band structure, optical information'))
     print('{:<12}  {}'.format('dos',  'density of states / number of states'))
+    print('{:<12}  {}'.format('path', 'band structure along high symmetry path'))
     print(barlength*u'\u2500')
 
   def outputStructure(self):
@@ -120,7 +122,8 @@ class LRTCinput(object):
     Print DOS/NOS
     '''
 
-    import matplotlib.pyplot as plt
+    if plot:
+      import matplotlib.pyplot as plt
 
     broadening = float(broadening)
     npoints = int(npoints)
@@ -185,3 +188,125 @@ class LRTCinput(object):
                      header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
 
     print('') # empty line before next CLI input
+
+  def outputPath(self, plot, pathstring=None):
+    if not plot:
+      logger.critical('Band paths have to be used with -p (--plot) option.')
+    else:
+      import matplotlib.pyplot as plt
+
+    with h5py.File(self.fname,'r') as h5:
+      spins    = h5['.bands/ispin'][()]
+      rvec     = h5['.unitcell/rvec'][()]
+      kvec     = h5['.unitcell/kvec'][()]
+      nkx      = h5['.kmesh/nkx'][()]
+      nky      = h5['.kmesh/nky'][()]
+      nkz      = h5['.kmesh/nkz'][()]
+      kpoints  = h5['.kmesh/points'][()] % 1
+      dims     = h5['.unitcell/dims'][()]
+      nsym     = h5['.unitcell/nsym'][()]
+      symop    = h5['.unitcell/symop'][()]
+
+      if spins == 1:
+        energies = h5['energies'][()]
+      else:
+        energiesup = h5['up/energies'][()]
+        energiesdn = h5['dn/energies'][()]
+        energies = np.zeros((2,energiesup.shape[0],energiesup.shape[1]), dtype=np.float64)
+        energies[0,...] = energiesup
+        energies[1,...] = energiesdn
+
+    nk = np.array([nkx,nky,nkz], dtype=int)
+    nkindex = np.array([nkx*nky*nkz,nky*nkz,nkz])
+    dims = list(dims.astype(int))
+
+    ''' create "hashing" index '''
+    index = []
+    for ikpt in kpoints:
+      index.append(np.sum(np.around(ikpt*nkindex)))
+    index = np.array(index,dtype=int)
+
+
+    cell = ase.cell.Cell(rvec)
+    special = cell.bandpath('', pbc=dims)
+    fullspecial = []
+    for descr, coord in special.special_points.items():
+      fullspecial.append(descr)
+      logger.info('special point: {} {}'.format(descr, coord))
+    fullspecial = ''.join(fullspecial)
+    if pathstring is None:
+      logger.info('Provide k-path in form of trailing argument, e.g. -- path {}'.format(fullspecial))
+      return
+
+    for ispecial in pathstring:
+      if ispecial not in fullspecial:
+        logger.critical('Provided special point not available.')
+        return
+
+    substrings = [pathstring[i:i+2] for i in range(len(pathstring)-1)]
+    k_distances = []
+    kptsindex  = []
+    kptsplotx  = []
+    xticks     = []
+    for istring, stringpath in enumerate(substrings):
+
+      ''' get optimal spacing '''
+      special1, special2 = special.special_points[stringpath[0]], special.special_points[stringpath[1]]
+      kspecial1 = np.einsum('ji,j->i',kvec,special1)
+      kspecial2 = np.einsum('ji,j->i',kvec,special2)
+
+      k_distances.append(np.sqrt(np.sum((kspecial1-kspecial2)**2)))
+      distance = np.abs(special1-special2) * nk
+      npoints = np.gcd.reduce(distance[dims].astype(int))+1
+
+      path       = cell.bandpath(stringpath, pbc=dims, npoints=npoints)
+      kpts       = np.array(path.kpts) % 1
+      npts       = len(kpts)
+
+      if istring == 0:
+        xoffset = 0
+      else:
+        xoffset += k_distances[istring-1]
+
+      xticks.append(xoffset)
+      for i, ikpt in enumerate(kpts):
+        if istring > 0 and i == 0: continue # to avoid double points from path overlap
+        ''' only continue with point on the grid '''
+        if not np.allclose((ikpt*nk),np.around(ikpt*nk), atol=0.001):
+          continue
+
+        symkpt = np.einsum('nji,j->ni',symop,ikpt) % 1
+        for isym in range(symkpt.shape[0]):
+          if np.allclose((symkpt[isym]*nk),np.around(symkpt[isym]*nk)):
+            symindex = np.sum(np.around(symkpt[isym]*nkindex))
+            if symindex in index:
+              kptsindex.append(symindex)
+              kptsplotx.append(xoffset + i/(float(npts)-1) * k_distances[istring])
+              break
+
+    ''' last point of the ticks '''
+    xticks.append(xoffset+k_distances[-1])
+    kptsindex  = np.array(kptsindex, dtype=int)
+    arrayindex = np.where(index[None,:]==kptsindex[:,None])[1]
+
+    for ispin in range(spins):
+      bandpath = []
+      for iarray in arrayindex:
+        if spins==1:
+          bandpath.append(energies[iarray,:])
+        else:
+          bandpath.append(energies[ispin,iarray,:])
+      bandpath = np.array(bandpath, dtype=np.float64)
+
+      if plot:
+        if ispin == 0:
+          style = {'lw':3, 'ls':'-', 'color':'k'}
+        else:
+          style = {'lw':3, 'ls':'-', 'color':'red'}
+        for iband in range(bandpath.shape[1]):
+          plt.plot(kptsplotx,bandpath[:,iband], **style)
+        plt.xticks(xticks, [str(i) for i in pathstring])
+        for xval in xticks:
+          plt.axvline(x=xval, color='gray', lw=0.5, ls='-', zorder=-1)
+    if plot:
+      plt.show()
