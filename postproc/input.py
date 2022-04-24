@@ -257,6 +257,10 @@ class LRTCinput(object):
       logger.info('Provide k-path in form of trailing argument, e.g. -- path {}'.format(fullspecial))
       return
 
+    if len(pathstring.strip()) < 2:
+      logger.info('Provide k-path with at least 2 special points.')
+      return
+
     ''' check for consistency '''
     for ispecial in pathstring:
       if ispecial not in fullspecial:
