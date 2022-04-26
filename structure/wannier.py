@@ -334,8 +334,9 @@ class Wannier90Calculation(DftCalculation):
       if peierlscorrection:
         # Jan's code snippet
         # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-        distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3
-        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances)
+        # correction term: +1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+        distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
         hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
