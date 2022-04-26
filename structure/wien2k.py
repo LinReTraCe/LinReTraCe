@@ -13,6 +13,13 @@ import ase.io
 from structure.dft import DftCalculation
 from structure     import units
 
+class CustomError(Exception):
+  def __init__(self, message):
+    super(CustomError, self).__init__(self)
+    self.message = message
+  def __str__(self):
+    return self.message
+
 class Wien2kCalculation(DftCalculation):
   '''
   Wien2k calculation class which can load all possible Wien2K calculations
@@ -416,7 +423,7 @@ class Wien2kCalculation(DftCalculation):
           entries = int(line[10:11])
           bentries = np.zeros((entries,), dtype=np.float64)
           if (entries % 3 != 0):
-            raise CustomError("Wien2k symmat file {}: Number of entries must be divisable by 3".format(str(i)))
+            raise CustomError("Wien2k symmat file {}: Number of entries must be divisable by 3.\nCurrent optic configuration: {}".format(str(i),line.strip()))
 
           symm = np.ones((entries,), dtype=np.float64)
           ''' Im (band1, band2) = - Im(band2, band1) '''

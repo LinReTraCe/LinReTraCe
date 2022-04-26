@@ -21,13 +21,6 @@ from structure.aux import progressBar
 from structure.es  import ElectronicStructure
 from structure     import units
 
-class CustomError(Exception):
-  def __init__(self, message):
-    super(CustomError, self).__init__(self)
-    self.message = message
-  def __str__(self):
-    return self.message
-
 class DftCalculation(ElectronicStructure, ABC):
   '''
   Abstract Base Class for a generic DFTCalculation.
