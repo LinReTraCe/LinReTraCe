@@ -275,6 +275,12 @@ class LRTCinput(object):
 
     ''' iterate over all the sub strings that connect 2 special points '''
     for istring, stringpath in enumerate(substrings):
+      if stringpath[0] == stringpath[1]:
+        logger.critical('Detected duplicate special-points next to each other.\n{0}\n{1}{2}'.format(pathstring,' '*istring,'--'))
+        return
+
+    ''' iterate over all the sub strings that connect 2 special points '''
+    for istring, stringpath in enumerate(substrings):
 
       special1, special2 = special.special_points[stringpath[0]], special.special_points[stringpath[1]]
       kspecial1 = np.einsum('ji,j->i',kvec,special1)
