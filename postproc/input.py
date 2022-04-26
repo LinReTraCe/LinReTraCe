@@ -335,6 +335,8 @@ class LRTCinput(object):
       raise ValueError('Band path was unable to reach any k-point')
 
     ''' get energies and plot / output to stdout '''
+    for pos, pt in zip(xticks, pathstring):
+      logger.info('point {} - momentum on path {}'.format(pt,pos))
     logging.disable( sys.maxsize if sys.version_info >= (3,0) else sys.maxint)
     for ispin in range(spins):
       bandpath = []
