@@ -113,7 +113,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%input_mu_hdf5         = ''
   algo%lBField               = .false.
   algo%rootMethod            = 2     ! 0 -> secant; 1 -> linint; 2 -> ridders; 3 -> bisection
-  algo%muFermi               = .false. ! we evaluate the occupation with the digamma function
+  algo%muFermi               = .true. ! we evaluate the occupation with the digamma function
   algo%lQuad                 = .false.
   algo%lNominalDoping        = .false.
 
@@ -181,7 +181,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   else
     if (index('mu',to_lower(trim(str_temp))) .ne. 0) then
       algo%lMUMODE = .true.
-      algo%muFermi = .true. ! change default value in mu-mode ... important for carrier concentration
     else if (index('temp',to_lower(trim(str_temp))) .ne. 0) then
       algo%lTMODE = .true.
     endif
