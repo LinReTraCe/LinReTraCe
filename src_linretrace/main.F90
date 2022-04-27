@@ -1,6 +1,6 @@
 program main
   use Mparams
-  use Maux
+  use Mauxiliary
   use Mroot
   use Mtypes
   use Mmpi_org

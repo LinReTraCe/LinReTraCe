@@ -3,7 +3,7 @@ module Mroot
   use Mparams
   use Mtypes
   use Mfermi
-  use Maux
+  use Mauxiliary
 
   interface ndeviation
     module procedure ndeviation_D, ndeviation_Q

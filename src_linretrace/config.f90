@@ -2,7 +2,7 @@ module Mconfig
   use Mlookup
   use Mtypes
   use Mparams
-  use Maux
+  use Mauxiliary
   implicit none
 
 contains

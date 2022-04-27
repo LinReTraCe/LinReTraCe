@@ -1,4 +1,4 @@
-module Maux
+module Mauxiliary
   use Mmpi_org
 #ifdef MPI
   use mpi

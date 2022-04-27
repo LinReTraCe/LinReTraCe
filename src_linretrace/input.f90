@@ -1,7 +1,7 @@
 module Minput
   use Mparams
   use Mtypes
-  use Maux
+  use Mauxiliary
   use hdf5
   use hdf5_wrapper
   implicit none
