@@ -21,8 +21,7 @@ FermiOccupation    = (default = T)                     # T: Fermi function to de
                                                        # F: Digamma function to determine occupation
                                                        # Affects chemical potential, carrier concentration and total energies
 
-NominalDoping      = (default = F)                     # T: Interpret [TempMode] 'Doping' and [[Impurities]] densities
-                                                       # as nominal doping [per unitcell] instead of volume doping [cm-3]
+
 ________________________________________________________________________________
 [TempMode]                                             # RunMode = temp
 ConstantMu         = (default = None)                  # Fix Chemical potential for all temperatures
@@ -30,6 +29,8 @@ OldMuHdf5          = (default = None)                  # Use chemical potentials
 OldMuText          = (default = None)                  # Use chemical potentials from text file (compatible with lprint mu)
 NImp               = (default = 0)                     # number of additional impurity levels
 Doping             = (default = 0)                     # Additional doping [cm-3] or [per unitcell] depending on [General] NominalDoping
+NominalDoping      = (default = F)                     # T: Interpret 'Doping' and [[Impurities]] densities
+                                                       # as nominal doping [per unitcell] instead of volume doping [cm-3]
 
 [[Scattering]]
 ScatteringFile     = (default = None)                  # if existent use all the quantities from this HDF5 file only

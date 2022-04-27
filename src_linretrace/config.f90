@@ -154,7 +154,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   !--------------------------------------------------------------------------------
-  allocate(dictionary(14))
+  allocate(dictionary(12))
   dictionary(1) = 'EnergyFile'
   dictionary(2) = 'OutputFile'
   dictionary(3) = 'RunMode'
@@ -167,7 +167,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   dictionary(10) = 'Boltzmann'
   dictionary(11) = 'BFieldMode'
   dictionary(12) = 'FermiOccupation'
-  dictionary(13) = 'NominalDoping'
   call spell_check(search_start,search_end, '[General]', dictionary, er, erstr)
   deallocate(dictionary)
   if (er /= 0) call stop_with_message(stdout, erstr)
@@ -199,7 +198,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   endif
 
   call bool_find('FermiOccupation', algo%muFermi, search_start, search_end, found)
-  call bool_find('NominalDoping', algo%lNominalDoping, search_start, search_end, found)
 
   call bool_find('Boltzmann', algo%lBoltzmann, search_start, search_end, found)
   ! call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
@@ -341,12 +339,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
 
     !--------------------------------------------------------------------------------
-    allocate(dictionary(5))
+    allocate(dictionary(6))
     dictionary(1) = 'ConstantMu'
     dictionary(2) = 'OldMuHdf5'
     dictionary(3) = 'OldMuText'
     dictionary(4) = 'NImp'
     dictionary(5) = 'Doping'
+    dictionary(6) = 'NominalDoping'
     call spell_check(search_start,search_end, '[TempMode]', dictionary, er, erstr)
     deallocate(dictionary)
     if (er /= 0) call stop_with_message(stdout, erstr)
@@ -377,6 +376,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       endif
     endif
 
+    call bool_find('NominalDoping', algo%lNominalDoping, search_start, search_end, found)
     call float_find('Doping', edisp%doping, search_start, search_end, found)
     if (found) then
       if (edisp%doping /= 0.d0) then
