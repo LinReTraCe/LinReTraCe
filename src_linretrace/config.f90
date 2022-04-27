@@ -117,13 +117,15 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lQuad                 = .false.
   algo%lNominalDoping        = .false.
 
-  algo%lScatteringFile = .false.
-  algo%lScatteringText = .false.
-
+  algo%lScatteringFile      = .false.
+  algo%lScatteringText      = .false.
+  algo%lImpurities          = .false.
   algo%lInterbandQuantities = .false.
   algo%lIntrabandQuantities = .true.
 
   algo%lRedoMudft     = .false.
+  algo%lOldmuHdf5     = .false.
+  algo%lOldmuText     = .false.
 
   ! algo%lEnergyOutput  = .false.
   algo%lBoltzmann     = .true.
