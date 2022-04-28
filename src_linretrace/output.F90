@@ -953,12 +953,13 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
         sumstyle = '/ksum'
         allocate(s_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
         allocate(s_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+        s_partial_sum = 0.q0
       case (3) ! bsum
         sumstyle = '/bsum'
         allocate(s_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
         allocate(s_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+        s_partial_sum = 0.q0
     end select
-    s_partial_sum = 0.q0
     s_partial_sum_dp = 0.d0
     select case (algo%fullOutput)
       case (1) ! shift the optical range into the full energy band range
@@ -1026,7 +1027,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
     end select
 #else
-    s_gather = s_partial_sum_dp
+    if (algo%fullOutput == 2) then
+      s_gather = s_partial_sum
+    else
+      s_gather = s_partial_sum_dp
+    endif
 #endif
     deallocate(s_partial_sum_dp)
 
@@ -1038,11 +1043,12 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       case (2) ! ksum
         allocate(a_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
         allocate(a_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+        a_partial_sum = 0.q0
       case (3) ! bsum
         allocate(a_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
         allocate(a_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+        a_partial_sum = 0.q0
     end select
-    a_partial_sum = 0.q0
     a_partial_sum_dp = 0.d0
     select case (algo%fullOutput)
       case (1) ! shift the optical range into the full energy band range
@@ -1110,7 +1116,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
     end select
 #else
-    a_gather = a_partial_sum_dp
+    if (algo%fullOutput == 2) then
+      a_gather = a_partial_sum
+    else
+      a_gather = a_partial_sum_dp
+    endif
 #endif
     deallocate(a_partial_sum_dp)
 
@@ -1122,11 +1132,12 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       case (2) ! ksum
         allocate(x_partial_sum(3,3,edisp%nband_max,edisp%ispin,1))
         allocate(x_partial_sum_dp(3,3,edisp%nband_max,edisp%ispin,1))
+        x_partial_sum = 0.q0
       case (3) ! bsum
         allocate(x_partial_sum(3,3,1,edisp%ispin,ikstr:ikend))
         allocate(x_partial_sum_dp(3,3,1,edisp%ispin,ikstr:ikend))
+        x_partial_sum = 0.q0
     end select
-    x_partial_sum = 0.q0
     x_partial_sum_dp = 0.d0
     select case (algo%fullOutput)
       case (1) ! shift the optical range into the full energy band range
@@ -1194,7 +1205,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                          MPI_COMM_WORLD, mpierr)
     end select
 #else
-    x_gather = x_partial_sum_dp
+    if (algo%fullOutput == 2) then
+      x_gather = x_partial_sum
+    else
+      x_gather = x_partial_sum_dp
+    endif
 #endif
     deallocate(x_partial_sum_dp)
 
@@ -1298,12 +1313,13 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
           sumstyle = '/ksum'
           allocate(sB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
           allocate(sB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+          sB_partial_sum = 0.q0
         case (3) ! bsum
           sumstyle = '/bsum'
           allocate(sB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
           allocate(sB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+          sB_partial_sum = 0.q0
       end select
-      sB_partial_sum = 0.q0
       sB_partial_sum_dp = 0.d0
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
@@ -1375,7 +1391,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
       end select
 #else
-      sB_gather = sB_partial_sum_dp
+      if (algo%fullOutput == 2) then
+        sB_gather = sB_partial_sum
+      else
+        sB_gather = sB_partial_sum_dp
+      endif
 #endif
       deallocate(sB_partial_sum_dp)
 
@@ -1389,12 +1409,13 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
           sumstyle = '/ksum'
           allocate(aB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
           allocate(aB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+          aB_partial_sum = 0.q0
         case (3) ! bsum
           sumstyle = '/bsum'
           allocate(aB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
           allocate(aB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+          aB_partial_sum = 0.q0
       end select
-      aB_partial_sum = 0.q0
       aB_partial_sum_dp = 0.d0
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
@@ -1466,7 +1487,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
       end select
 #else
-      aB_gather = aB_partial_sum_dp
+      if (algo%fullOutput == 2) then
+        aB_gather = aB_partial_sum
+      else
+        aB_gather = aB_partial_sum_dp
+      endif
 #endif
       deallocate(aB_partial_sum_dp)
 
@@ -1479,12 +1504,13 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
           sumstyle = '/ksum'
           allocate(xB_partial_sum(3,3,3,edisp%nband_max,edisp%ispin,1))
           allocate(xB_partial_sum_dp(3,3,3,edisp%nband_max,edisp%ispin,1))
+          xB_partial_sum = 0.q0
         case (3) ! bsum
           sumstyle = '/bsum'
           allocate(xB_partial_sum(3,3,3,1,edisp%ispin,ikstr:ikend))
           allocate(xB_partial_sum_dp(3,3,3,1,edisp%ispin,ikstr:ikend))
+          xB_partial_sum = 0.q0
       end select
-      xB_partial_sum = 0.q0
       xB_partial_sum_dp = 0.d0
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
@@ -1556,7 +1582,11 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                            MPI_COMM_WORLD, mpierr)
       end select
 #else
-      xB_gather = xB_partial_sum_dp
+      if (algo%fullOutput == 2) then
+        xB_gather = xB_partial_sum
+      else
+        xB_gather = xB_partial_sum_dp
+      endif
 #endif
       deallocate(xB_partial_sum_dp)
 
