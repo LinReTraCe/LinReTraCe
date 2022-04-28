@@ -235,6 +235,8 @@ class LRTCoutput(object):
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
           tosave = self.invert(tosave)
+        elif command.startswith('cB-'): # Hall conducitivity
+          tosave = itotal[0]
         elif command.startswith('rh-'): # Hall coefficient
           tosave = np.einsum('...ij,...jkz,...kl->...ilz', self.invert(itotal[0]), itotal[1], self.invert(itotal[0]))
         elif command.startswith('n-'): # Nernst coefficient
@@ -341,6 +343,15 @@ class LRTCoutput(object):
     if settings.plot:
       import matplotlib.pyplot as plt
 
+    if self.mode == 'mu' and settings.convolute:
+      from scipy import signal
+      muaxis = self.mu
+      nmu = muaxis.shape[0]
+      murange = np.max(muaxis) - np.min(muaxis)
+      std_translated = float(settings.convolute[0]) * nmu / murange # translate from eV to scipy
+      gauss_window = signal.gaussian(nmu,std_translated)
+      logger.info('Convoluting with: {} [eV] standard deviation.'.format(settings.convolute[0]))
+
     self.saveData(command, *args)
     self.headerwritten = False
 
@@ -416,6 +427,8 @@ class LRTCoutput(object):
                   outarray = outspinsum[:,idir1,idir2,idir3]
 
               outarray *= settings.scale
+              if settings.convolute:
+                outarray = signal.convolve(outarray, gauss_window, mode='same') / sum(gauss_window)
 
               if settings.plot:
                 plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
@@ -550,6 +563,7 @@ class LRTCoutput(object):
         print('tmin [K]: {}\ntmax [K]: {}'.format(self.temp[0],self.temp[-1]))
       elif self.mode == 'mu':
         print('mumin [eV]: {}\nmumax [eV]: {}'.format(self.mu[0],self.mu[-1]))
+        print('temperature [K]: {}'.format(self.temp[0]))
 
       print(barlength*u'\u2500')
 
