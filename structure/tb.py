@@ -29,7 +29,7 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def computeData(self, tbfile, charge, mu=None):
+  def computeData(self, tbfile, charge, mu=None, mushift=False):
     self.tbfile       = tbfile
     self.charge       = charge
 
@@ -56,6 +56,13 @@ class TightBinding(Model):
     self.opticalBandMax = self.energyBandMax
 
     self._calcFermiLevel(mu)
+    if mushift:
+      logger.info('Shifting energies -> Chemical Potential === 0.')
+      self.energies[0][...] -= self.mu
+      # dont forget about possible valence and conduction energies ... np.nan + value = np.nan
+      self.ecb[0] -= self.mu
+      self.evb[0] -= self.mu
+      self.mu = 0.0
 
   def _computeOrthogonality(self):
     '''

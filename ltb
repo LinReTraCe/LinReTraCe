@@ -68,7 +68,8 @@ end real_lattice
   # optional
   parser.add_argument('-o', '--output', default=None, help='Output file name')
   parser.add_argument('-p', '--plot', default=False, action='store_true', help='Plot bands / DOS / NOS')
-  parser.add_argument('--shift', default=False, help='shift k-grid by half a k-point', action='store_true')
+  parser.add_argument('--kshift', default=False, help='shift k-grid by half a k-point', action='store_true')
+  parser.add_argument('--mushift', default=False, help='shift energies such that the chemical potential is at mu = 0', action='store_true')
   parser.add_argument('--intraonly', default=False, help='only save intra-band elements', action='store_true')
   parser.add_argument('--intra', type=float, help='set all intra-band elements to given value')
   parser.add_argument('--inter', type=float, help='set all inter-band elements to given value')
@@ -97,7 +98,7 @@ def main():
                       nky=args.nky, \
                       nkz=args.nkz, \
                       irreducible=irr, \
-                      kshift=args.shift)
+                      kshift=args.kshift)
   except:
     error(str(e)+'\nExit.')
 
@@ -105,7 +106,8 @@ def main():
   try:
     tb.computeData(tbfile=args.tb_file, \
                    charge=args.filling, \
-                   mu=args.mu)
+                   mu=args.mu,
+                   mushift=args.mushift)
   except Exception as e:
     error(str(e)+'\nExit.')
 
