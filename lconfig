@@ -89,7 +89,8 @@ def main():
     elif config['mode'] == 2:
       cf.write(f"RunMode         =  mu\n")
     cf.write(f"EnergyFile      =  {config['energyfile']}\n")
-    cf.write(f"OutputFile      =  {config['outputfile']}\n")
+    if config['outputfile']:
+      cf.write(f"OutputFile      =  {config['outputfile']}\n")
     cf.write(f"BFieldMode      =  {str(config['bfield'])[0]}\n")
     cf.write(f"Interband       =  {str(config['inter'])[0]}\n")
     cf.write(f"Intraband       =  {str(config['intra'])[0]}\n")
