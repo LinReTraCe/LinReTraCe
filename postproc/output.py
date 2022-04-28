@@ -343,14 +343,14 @@ class LRTCoutput(object):
     if settings.plot:
       import matplotlib.pyplot as plt
 
-    if self.mode == 'mu' and settings.convolute:
+    if self.mode == 'mu' and settings.convolve:
       from scipy import signal
       muaxis = self.mu
       nmu = muaxis.shape[0]
       murange = np.max(muaxis) - np.min(muaxis)
-      std_translated = float(settings.convolute[0]) * nmu / murange # translate from eV to scipy
+      std_translated = float(settings.convolve[0]) * nmu / murange # translate from eV to scipy
       gauss_window = signal.gaussian(nmu,std_translated)
-      logger.info('Convoluting with: {} [eV] standard deviation.'.format(settings.convolute[0]))
+      logger.info('Convoluting with: {} [eV] standard deviation.'.format(settings.convolve[0]))
 
     self.saveData(command, *args)
     self.headerwritten = False
@@ -427,7 +427,7 @@ class LRTCoutput(object):
                   outarray = outspinsum[:,idir1,idir2,idir3]
 
               outarray *= settings.scale
-              if settings.convolute:
+              if settings.convolve:
                 outarray = signal.convolve(outarray, gauss_window, mode='same') / sum(gauss_window)
 
               if settings.plot:

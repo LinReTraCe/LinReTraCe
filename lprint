@@ -52,7 +52,7 @@ def parse_args(args=None):
   parser.add_argument('--gap',           help='Plot the band gap in combination with mu', default=False, action='store_true')
   parser.add_argument('--scale',         help='Scale all quantities by factor', default=1, type=float)
   parser.add_argument('--imag',          help='Plot the imaginary parts as well', default=False, action='store_true') # plot the imaginary parts in addition to the real part
-  parser.add_argument('--convolute',     nargs=1, help='Convolute mu-mode output with Gaussian of standard deviation [eV]', type=float) # convolue mu-mode result with gaussian with sigma = value
+  parser.add_argument('--convolve',      nargs=1, help='Convolve mu-mode output with Gaussian of standard deviation [eV]', type=float) # convolue mu-mode result with gaussian with sigma = value
   parser.add_argument('--diag',          help=argparse.SUPPRESS, default=False, action='store_true') # only use the diagonal parts (when no directions supplied
   parser.add_argument('--debug',         help=argparse.SUPPRESS, default=False, action='store_true')
 
@@ -132,7 +132,7 @@ def main():
   settings.diag      = args.diag
   settings.scale     = args.scale
   settings.compare   = args.compare # if option unused default = None
-  settings.convolute = args.convolute
+  settings.convolve  = args.convolve
 
   ''' Output object commands '''
   if outobj is not None:
