@@ -1033,8 +1033,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       s_gather = s_partial_sum_dp
     endif
 #endif
-    deallocate(s_partial_sum_dp)
-
+    if (allocated(s_partial_sum)) deallocate(s_partial_sum)
+    if (allocated(s_partial_sum_dp)) deallocate(s_partial_sum_dp)
 
     ! L12
     select case (algo%fullOutput)
@@ -1122,7 +1122,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       a_gather = a_partial_sum_dp
     endif
 #endif
-    deallocate(a_partial_sum_dp)
+    if (allocated(a_partial_sum)) deallocate(a_partial_sum)
+    if (allocated(a_partial_sum_dp)) deallocate(a_partial_sum_dp)
 
 
     ! L12
@@ -1211,7 +1212,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       x_gather = x_partial_sum_dp
     endif
 #endif
-    deallocate(x_partial_sum_dp)
+    if (allocated(x_partial_sum)) deallocate(x_partial_sum)
+    if (allocated(x_partial_sum_dp)) deallocate(x_partial_sum_dp)
 
 
     if (myid .eq. master) then
@@ -1397,7 +1399,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
         sB_gather = sB_partial_sum_dp
       endif
 #endif
-      deallocate(sB_partial_sum_dp)
+      if (allocated(sB_partial_sum)) deallocate(sB_partial_sum)
+      if (allocated(sB_partial_sum_dp)) deallocate(sB_partial_sum_dp)
 
 
       ! L12B
@@ -1493,7 +1496,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
         aB_gather = aB_partial_sum_dp
       endif
 #endif
-      deallocate(aB_partial_sum_dp)
+      if (allocated(aB_partial_sum)) deallocate(aB_partial_sum)
+      if (allocated(aB_partial_sum_dp)) deallocate(aB_partial_sum_dp)
 
       ! L22B
       select case (algo%fullOutput)
@@ -1588,7 +1592,8 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
         xB_gather = xB_partial_sum_dp
       endif
 #endif
-      deallocate(xB_partial_sum_dp)
+      if (allocated(xB_partial_sum)) deallocate(xB_partial_sum)
+      if (allocated(xB_partial_sum_dp)) deallocate(xB_partial_sum_dp)
 
 
       if (myid .eq. master) then
