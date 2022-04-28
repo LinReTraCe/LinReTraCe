@@ -116,6 +116,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%muFermi               = .true. ! we evaluate the occupation with the digamma function
   algo%lQuad                 = .false.
   algo%lNominalDoping        = .false.
+  algo%muSearch              = .true.
 
   algo%lScatteringFile      = .false.
   algo%lScatteringText      = .false.
@@ -249,6 +250,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
 
   if (algo%lMUMODE) then
+    algo%musearch = .false.
 
     call group_find('[MuMode]', search_start, search_end)
     if (search_start .eq. 0) then
@@ -355,8 +357,6 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     call float_find('ConstantMu', pot%mu_config, search_start, search_end, found)
     if (found) then
       algo%muSearch = .false.
-    else
-      algo%muSearch = .true.
     endif
 
     call string_find('OldMuHdf5', algo%input_mu_hdf5, search_start, search_end, found)
