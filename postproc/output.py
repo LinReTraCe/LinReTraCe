@@ -92,15 +92,15 @@ class LRTCoutput(object):
     # 'raw' direct quantities
     # dos is only listed here so the 'list' command shows is, we use a different method to calculate it
 
-    self.datasets.update({'dos':        (True, '.structure/energies',             'Density of States',                                                 False, False)})
-    self.datasets.update({'energy':     (True, '.quantities/energy',              'Total of energy of the system [eV]',                                False, False)})
-    self.datasets.update({'mu':         (True, '.quantities/mu',                  'Chemical potential [eV]',                                           False, False)})
-    self.datasets.update({'occupation': (True, '.quantities/occupation',          'Total occupation in the system',                                    False, False)})
-    self.datasets.update({'carrier':    (True, '.quantities/carrier',             'Carrier concentration in the system w.r.t. neutral charge [cm^-3]', False, False)})
-    self.datasets.update({'electrons':  (True, '.quantities/electrons',           'Thermally activated electrons',                                     False, False)})
-    self.datasets.update({'holes':      (True, '.quantities/holes',               'Thermally activated holes',                                         False, False)})
-    self.datasets.update({'impurity':   (True, '.quantities/imp_contribution',    'Thermally activated impurity electrons',                            False, False)})
-    self.datasets.update({'doping':     (True, '.quantities/doping_contribution', 'Additional system doping',                                          False, False)})
+    self.datasets.update({'dos':        (True, '.structure/energies',             'Density of States',                                    False, False)})
+    self.datasets.update({'energy':     (True, '.quantities/energy',              'Total of energy of the system [eV]',                   False, False)})
+    self.datasets.update({'mu':         (True, '.quantities/mu',                  'Chemical potential [eV]',                              False, False)})
+    self.datasets.update({'occupation': (True, '.quantities/occupation',          'Total occupation in the system',                       False, False)})
+    self.datasets.update({'carrier':    (True, '.quantities/carrier',             'Carrier concentration w.r.t. neutral charge [cm^-3]',  False, False)})
+    self.datasets.update({'electrons':  (True, '.quantities/electrons',           'Thermally activated electrons',                        False, False)})
+    self.datasets.update({'holes':      (True, '.quantities/holes',               'Thermally activated holes',                            False, False)})
+    self.datasets.update({'impurity':   (True, '.quantities/imp_contribution',    'Thermally activated impurity electrons',               False, False)})
+    self.datasets.update({'doping':     (True, '.quantities/doping_contribution', 'Additional system doping',                             False, False)})
 
 
     # 'raw' Onsager coefficients
@@ -115,11 +115,11 @@ class LRTCoutput(object):
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients
-    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','tc','tr','rh','n','muh','mut'], \
-            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
-            ['resistivity', 'conductivity','peltier', 'seebeck', 'thermal conductivity', 'thermal resistivity', 'hall', 'nernst', 'hall mobility', 'thermal mobility'], \
-            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(m*K)]','[m*K/W]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
-            [False,False,False,False,False,False,True,True,True,True]):
+    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','tc','tr','cB','rh','n','muh','mut'], \
+            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
+            ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
+            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(m*K)]','[m*K/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
+            [False,False,False,False,False,False,True,True,True,True,True]):
       for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
@@ -129,7 +129,9 @@ class LRTCoutput(object):
             for j in iireq:
               requirement.append(i+'-'+j+iB)
 
-          description = '{} {} {} {}'.format(iLdescr,ii,iBdescr,unit)
+          quantity_description = '{} {}'.format(iLdescr,iBdescr) #  resistivitiy Boltzmann
+          type_description = '({})'.format(ii)
+          description = '{0:<35} {1:<8} {2:>15}'.format(quantity_description, type_description, unit)
           self.datasets.update({key : (False, requirement, description, True, magnetic)})
 
 
@@ -468,7 +470,7 @@ class LRTCoutput(object):
     full=True  lists all datasets
     '''
 
-    barlength = 55
+    barlength = 80
 
     print('\n{:<12}  {}'.format('Key', 'Description [unit]'))
     print(barlength*u'\u2500')
