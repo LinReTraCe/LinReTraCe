@@ -245,6 +245,7 @@ class TightBinding(Model):
       if orb1==orb2:
         if hop.imag:
           raise IOError('\nDetected complex intra-band values \n{} in line \n{}\nFix input file.'.format(hop,self.tbdata[i]))
+      if np.all(rvec==np.zeros((3,), dtype=np.int)) and orb1==orb2:
         hop *= (-1)
       self.hr[ir,orb1-1,orb2-1] += -hop
 
