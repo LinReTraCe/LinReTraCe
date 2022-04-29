@@ -55,9 +55,9 @@ def main():
     config['scatfile']     = str(input('   scattering file: '))
     config['scatoffset']   = input('   additional offset: ')
     if not config['scatoffset']:
-      config['scatoffset'] = float(config['scatoffset'])
+      config['scatoffset'] = 0
     else:
-      config['scatoffset'] = 0.0
+      config['scatoffset'] = float(config['scatoffset'])
   else:
     config['scatfile'] = False
     if config['mode'] == 1:  # TEMP MODE
