@@ -266,7 +266,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     !--------------------------------------------------------------------------------
     allocate(dictionary(10))
     dictionary(1)  = 'ScatteringFile'
-    dictionary(2)  = 'ScatteringImpurity'
+    dictionary(2)  = 'ScatteringOffset'
     dictionary(3)  = 'Temperature'
     dictionary(4)  = 'MuMinimum'
     dictionary(5)  = 'MuMaximum'
@@ -280,7 +280,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     if (er /= 0) call stop_with_message(stdout, erstr)
     !--------------------------------------------------------------------------------
 
-    call float_find('ScatteringImpurity', sct%gamimp, search_start, search_end, found)
+    call float_find('ScatteringOffset', sct%gamimp, search_start, search_end, found)
     call string_find('ScatteringFile', algo%input_scattering_hdf5, subsearch_start, subsearch_end, found)
     if (found) then
       algo%lScatteringFile = .true.
@@ -416,7 +416,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     allocate(dictionary(16))
     dictionary(1) = 'ScatteringFile'
     dictionary(2) = 'ScatteringText'
-    dictionary(3) = 'ScatteringImpurity'
+    dictionary(3) = 'ScatteringOffset'
     dictionary(4) = 'TMinimum'
     dictionary(5) = 'TMaximum'
     dictionary(6) = 'TPoints'
