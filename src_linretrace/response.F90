@@ -165,9 +165,9 @@ subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   deallocate(enrgy)
 
-  call response_intra_optical_weights(resp, edisp, info)
+  call response_intra_optical_weights(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(resp, edisp, info)
+    call response_peierls_weights(algo, resp, edisp, info)
   endif
 
 
@@ -330,6 +330,9 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                       * (enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2))
         endif
 
+        if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+          cycle
+        endif
 
         ! multiply optical elements
         do idir = 1,edisp%iOptical
@@ -452,9 +455,9 @@ subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
 
   deallocate(enrgy)
 
-  call response_intra_optical_weights(resp, edisp, info)
+  call response_intra_optical_weights(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(resp, edisp, info)
+    call response_peierls_weights(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km
@@ -524,9 +527,9 @@ subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
 
   deallocate(enrgy)
 
-  call response_intra_optical_weights_Q(resp, edisp, info)
+  call response_intra_optical_weights_Q(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(resp, edisp, info)
+    call response_peierls_weights_Q(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km_Q
@@ -638,6 +641,9 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
+        if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+          cycle
+        endif
 
         ! multiply optical elements
         do idir = 1,edisp%iOptical
@@ -799,6 +805,9 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
+        if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+          cycle
+        endif
 
         ! multiply optical elements
         do idir = 1,edisp%iOptical
@@ -857,15 +866,19 @@ end subroutine response_inter_Boltzmann_km_Q
 
 
 ! multiply optical elements onto quantities without B-Field
-subroutine response_intra_optical_weights(resp, edisp, info)
+subroutine response_intra_optical_weights(algo, resp, edisp, info)
   implicit none
-  type (response_dp) :: resp
-
+  type(algorithm)    :: algo
+  type(response_dp)  :: resp
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
   integer :: index1(9), index2(9)
   integer :: iband, idir
+
+  if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+    return
+  endif
 
   !( 1 4+i7 5+i8 )
   !( - 2    6+i9 )
@@ -934,15 +947,19 @@ subroutine response_intra_optical_weights(resp, edisp, info)
 
 end subroutine response_intra_optical_weights
 
-subroutine response_peierls_weights(resp, edisp, info)
+subroutine response_peierls_weights(algo, resp, edisp, info)
   implicit none
-  type (response_dp) :: resp
-
+  type(algorithm)    :: algo
+  type(response_dp)  :: resp
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
   integer :: iband
   integer :: i,j,k
+
+  if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+    return
+  endif
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
     do i=1,3
@@ -976,15 +993,19 @@ subroutine response_peierls_weights(resp, edisp, info)
 
 end subroutine
 
-subroutine response_peierls_weights_Q(resp, edisp, info)
+subroutine response_peierls_weights_Q(algo, resp, edisp, info)
   implicit none
-  type (response_qp) :: resp
-
+  type(algorithm)    :: algo
+  type(response_qp)  :: resp
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
   integer :: iband
   integer :: i,j,k
+
+  if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+    return
+  endif
 
   do iband = edisp%nbopt_min, edisp%nbopt_max
     do i=1,3
@@ -1512,9 +1533,9 @@ subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   deallocate(enrgy)
 
-  call response_intra_optical_weights_Q(resp, edisp, info)
+  call response_intra_optical_weights_Q(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(resp, edisp, info)
+    call response_peierls_weights_Q(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_km_Q
@@ -1675,6 +1696,9 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                       * (enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2))
         endif
 
+        if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+          cycle
+        endif
 
         ! multiply optical elements
         do idir = 1,edisp%iOptical
@@ -1730,15 +1754,19 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_km_Q
 
-subroutine response_intra_optical_weights_Q(resp, edisp, info)
+subroutine response_intra_optical_weights_Q(algo, resp, edisp, info)
   implicit none
-  type (response_qp) :: resp
-
+  type(algorithm)    :: algo
+  type(response_qp)  :: resp
   type(energydisp)   :: edisp
   type(runinfo)      :: info
 
   integer :: index1(9), index2(9)
   integer :: iband, idir
+
+  if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
+    return
+  endif
 
   !( 1 4+i7 5+i8 )
   !( - 2    6+i9 )
