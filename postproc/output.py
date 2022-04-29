@@ -447,7 +447,7 @@ class LRTCoutput(object):
 
                   else:
                     np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
+                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
                 else:
                   auxarray = np.zeros((self.nT,4), dtype=np.int)
                   auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=np.int)
@@ -461,7 +461,7 @@ class LRTCoutput(object):
 
                   else:
                     np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i %2i', comments='', header='\n')
+                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
 
               # we have plotted it now, now break the idir3 loop
               # if this is not done we do it twice more
