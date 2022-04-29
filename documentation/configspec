@@ -35,6 +35,9 @@ NominalDoping      = (default = F)                     # T: Interpret 'Doping' a
 [[Scattering]]
 ScatteringFile     = (default = None)                  # if existent use all the quantities from this HDF5 file only
 ScatteringText     = (default = None)                  # if existent use all the quantities from this TEXT file only
+                                                       # unpolarized: 3 columns: Temp Gamma(T) Z(T)
+                                                       # polarized:   5 columns: Temp GammaUp(T) GammaDn(T) ZUp(T) ZDn(T)
+                                                       # allows for arbitrary temperature dependence, however no momentum / band dependence
 ScatteringOffset   = (default = 0)                     # in combination with ScatteringFile or ScatterintText
                                                        # adds an additional constant scattering rate
 
