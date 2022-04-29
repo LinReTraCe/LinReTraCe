@@ -3290,8 +3290,6 @@ module hdf5_wrapper
       call h5awrite_f(attr_id, logical_id, 0, dims, hdf_err)
     endif
 
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
 
   end subroutine
@@ -3309,8 +3307,6 @@ module hdf5_wrapper
     call h5screate_simple_f(0, dims, dspace_id, hdf_err)
     call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_integer, dspace_id, attr_id, hdf_err)
     call h5awrite_f(attr_id, h5t_native_integer, attr, dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
@@ -3327,8 +3323,6 @@ module hdf5_wrapper
     call h5screate_simple_f(0, dims, dspace_id, hdf_err)
     call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_real, dspace_id, attr_id, hdf_err)
     call h5awrite_f(attr_id, h5t_native_real, attr, dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
@@ -3345,8 +3339,6 @@ module hdf5_wrapper
     call h5screate_simple_f(0, dims, dspace_id, hdf_err)
     call h5acreate_f(obj_id, trim(adjustl(attrname)), h5t_native_double, dspace_id, attr_id, hdf_err)
     call h5awrite_f(attr_id, h5t_native_double, attr, dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
@@ -3371,10 +3363,7 @@ module hdf5_wrapper
     call h5oopen_f(ifile, trim(adjustl(location)), obj_id, hdf_err)
     call h5acreate_f(obj_id, trim(adjustl(attrname)), type_id, dspace_id, attr_id, hdf_err)
     call h5awrite_f(attr_id, type_id, trim(attr), dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
-    call h5tclose_f(type_id, hdf_err)
 
   end subroutine
 
@@ -3394,8 +3383,6 @@ module hdf5_wrapper
     ! and it has to be in this order
     call h5awrite_f(attr_id, complex_id_sp, aimag(attr), dims, hdf_err)
     call h5awrite_f(attr_id, complex_id_sp, real(attr), dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
@@ -3414,8 +3401,6 @@ module hdf5_wrapper
     ! same story here
     call h5awrite_f(attr_id, complex_id_dp, aimag(attr), dims, hdf_err)
     call h5awrite_f(attr_id, complex_id_dp, real(attr), dims, hdf_err)
-    call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
@@ -3511,12 +3496,9 @@ module hdf5_wrapper
     call h5tcopy_f(h5t_native_character, type_id, hdf_err)
     call h5tset_size_f(type_id, strg_size, hdf_err)
     call h5screate_f(h5s_scalar_f, dspace_id, hdf_err)
-
     call h5aread_f(attr_id, type_id, attr, dims, hdf_err)
 
     call h5aclose_f(attr_id, hdf_err)
-    call h5sclose_f(dspace_id, hdf_err)
-    call h5tclose_f(type_id, hdf_err)
     call h5oclose_f(obj_id, hdf_err)
   end subroutine
 
