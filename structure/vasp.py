@@ -10,9 +10,9 @@ import numpy as np
 import ase.io
 
 
-from structure.aux import progressBar
-from structure.dft import DftCalculation
-from structure     import units
+from structure.auxiliary import progressBar
+from structure.dft       import DftCalculation
+from structure           import units
 
 class VaspCalculation(DftCalculation):
   '''

@@ -7,12 +7,12 @@ import sys
 import logging
 logger = logging.getLogger(__name__)
 
-from structure.aux   import progressBar
-from structure.dft   import DftCalculation
-from structure.es    import ElectronicStructure
-from structure.inout import h5output
-from structure.aux   import levicivita
-from structure.units import bohr2angstrom
+from structure.auxiliary import progressBar
+from structure.dft       import DftCalculation
+from structure.es        import ElectronicStructure
+from structure.inout     import h5output
+from structure.auxiliary import levicivita
+from structure.units     import bohr2angstrom
 
 import numpy as np
 

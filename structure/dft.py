@@ -17,9 +17,9 @@ else:
 import numpy as np
 import ase.spacegroup
 
-from structure.aux import progressBar
-from structure.es  import ElectronicStructure
-from structure     import units
+from structure.auxiliary import progressBar
+from structure.es        import ElectronicStructure
+from structure           import units
 
 class DftCalculation(ElectronicStructure, ABC):
   '''

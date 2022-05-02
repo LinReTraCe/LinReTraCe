@@ -7,9 +7,9 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import spglib
 
-from structure.aux   import levicivita
-from structure.aux   import progressBar
-from structure.model import Model
+from structure.auxiliary import levicivita
+from structure.auxiliary import progressBar
+from structure.model     import Model
 import structure.symmetries.C1
 
 class TightBinding(Model):

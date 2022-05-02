@@ -5,7 +5,7 @@ import os
 import logging
 logger = logging.getLogger(__name__)
 
-from structure.aux import progressBar
+from structure.auxiliary import progressBar
 
 import numpy as np
 import ase.io

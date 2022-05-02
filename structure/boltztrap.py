@@ -17,11 +17,11 @@ from BoltzTraP2 import serialization
 from BoltzTraP2.misc import ffloat
 import ase.spacegroup
 
-from structure.aux    import progressBar
-from structure.wien2k import Wien2kCalculation
-from structure.vasp   import VaspCalculation
-from structure        import units
-from structure.aux    import levicivita
+from structure.auxiliary import progressBar
+from structure.wien2k    import Wien2kCalculation
+from structure.vasp      import VaspCalculation
+from structure           import units
+from structure.auxiliary import levicivita
 
 class MetaW2kLoader(BTP.GenericWien2kLoader):
   '''

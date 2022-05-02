@@ -13,8 +13,8 @@ except ImportError:
 
 from   structure.model import Model
 
-from   structure.aux import levicivita
-from   structure.aux import progressBar
+from   structure.auxiliary import levicivita
+from   structure.auxiliary import progressBar
 
 import structure.symmetries.C1
 
