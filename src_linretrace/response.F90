@@ -474,7 +474,7 @@ subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
     if (algo%lBoltzmannFermi) then
       resp%sB_full(1,1,1,:,:,info%ik) = polygamma2fermi(enrgy,info%betaQ) &
                                       * 3.q0 * sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**3 * info%betaQ &
-                                      / (16.d0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
+                                      / (16.q0 * piQ**4 * sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2)
     else
       do is=1,edisp%ispin
         do iband=edisp%nbopt_min,edisp%nbopt_max
@@ -725,11 +725,11 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
         ! use the intra-band limit .....
           calc_sigma = polygamma2fermi(enrgy(iband1,is),info%betaQ) &
                      * sct%zqp(iband1,info%ik,is)**2 * info%betaQ &
-                     / (4.d0 * piQ**3 * sct%gam(iband1,info%ik,is))
+                     / (4.q0 * piQ**3 * sct%gam(iband1,info%ik,is))
 
           calc_alpha = calc_sigma * enrgy(iband1,is)
 
-          calc_xi    = calc_sigma * enrgy(iband1,is)**2
+          calc_xi    = calc_sigma * (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2)
 
         else
 
@@ -739,7 +739,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
 
           calc_sigma = calc_sigma &
                      + polygamma2fermi(enrgy(iband2,is), info%betaQ) &
-                     * (enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2) &
+                     * (enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
                      * sct%gam(iband1,info%ik,is)
 
           calc_sigma = calc_sigma &
@@ -747,7 +747,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
                      * info%betaQ
 
           calc_sigma = calc_sigma &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
@@ -767,7 +767,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
                      * info%betaQ
 
           calc_alpha = calc_alpha &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
           calc_xi    = polygamma2fermi(enrgy(iband1,is), info%betaQ) &
@@ -780,7 +780,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
                      + polygamma2fermi(enrgy(iband2,is), info%betaQ) &
                      * ( (enrgy(iband2,is)**2-sct%gam(iband2,info%ik,is)**2) &
                          * (enrgydiff(is)**2 +sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2) &
-                       - 4.d0 * sct%gam(iband2,info%ik,is)**2 * enrgy(iband2,is) * (-enrgydiff(is)) ) &
+                       - 4.q0 * sct%gam(iband2,info%ik,is)**2 * enrgy(iband2,is) * (-enrgydiff(is)) ) &
                      * sct%gam(iband1,info%ik,is)
 
           calc_xi    = calc_xi &
@@ -788,7 +788,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
                      * info%betaQ
 
           calc_xi    = calc_xi &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
@@ -1615,7 +1615,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
           calc_sigma = calc_sigma * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * info%betaQ &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
 
@@ -1629,7 +1629,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
           calc_alpha = calc_alpha * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * info%betaQ &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
           calc_xi    = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
@@ -1642,7 +1642,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
           calc_xi    = calc_xi * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * info%beta &
-                     / (2.d0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
+                     / (2.q0 * piQ**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
         endif
 
