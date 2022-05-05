@@ -8,9 +8,9 @@ from argparse import RawTextHelpFormatter
 
 import numpy as np
 
-from structure.inout import h5output
-from structure.tb    import TightBinding
-from structure.aux   import LogFormatter
+from structure.inout     import h5output
+from structure.tb        import TightBinding
+from structure.auxiliary import LogFormatter
 
 '''
 ltb: Pre-processing of tight-binding structures for the LRTC code

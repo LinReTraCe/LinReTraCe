@@ -10,7 +10,7 @@ from structure.dftdetect import DftDetection
 from structure.inout     import h5output
 from structure.trunc     import truncate
 from structure.trunc     import TruncationError
-from structure.aux       import LogFormatter
+from structure.auxiliary import LogFormatter
 
 try:
   from structure.boltztrap import BoltztrapInterpolation

@@ -4,9 +4,9 @@ from __future__ import print_function, division, absolute_import
 import sys
 import logging
 
-from  structure.es import ElectronicStructure
-from  structure.inout import h5output
-from  structure.aux import LogFormatter
+from  structure.es        import ElectronicStructure
+from  structure.inout     import h5output
+from  structure.auxiliary import LogFormatter
 
 import numpy as np
 

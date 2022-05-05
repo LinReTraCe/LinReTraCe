@@ -4,9 +4,9 @@ from __future__ import print_function, division, absolute_import
 import sys
 import argparse
 
-from structure.aux   import LogFormatter
-from postproc.output import *
-from postproc.input  import *
+from structure.auxiliary import LogFormatter
+from postproc.output     import LRTCoutput
+from postproc.input      import LRTCinput
 
 '''
 lprint: Post-processing of LRTC HDF5 files
