@@ -3,6 +3,7 @@
 from __future__ import print_function, division, absolute_import
 import sys
 import argparse
+import logging
 
 from structure.auxiliary import LogFormatter
 from postproc.output     import LRTCoutput
