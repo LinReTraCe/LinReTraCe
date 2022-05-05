@@ -114,7 +114,7 @@ class LRTCoutput(object):
 
             quantity_description = '{} {}'.format(iL,iBdescr) #  resistivitiy Boltzmann
             type_description = '({})'.format(ii)
-            unitplus = unit + '{}'.format(' (m**2/(V*s)' if iM else '')
+            unitplus = '[' + unit + '{}]'.format(' (m**2/(V*s)' if iM else '')
             description = '{0:<35} {1:<8} {2:>15}'.format(quantity_description, type_description, unitplus)
             # description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
