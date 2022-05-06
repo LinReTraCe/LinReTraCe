@@ -836,7 +836,7 @@ program main
       if (algo%lInterbandQuantities) then
         call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic) ! optional
         if (algo%lBoltzmann) then
-          call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
       endif
     else
