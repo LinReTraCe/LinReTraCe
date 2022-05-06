@@ -850,7 +850,7 @@ program main
         ! here we don't have the Bfield quantities ... no optical elements yet
         call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic) ! optional
         if (algo%lBoltzmann) then
-          call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
       endif
     endif
