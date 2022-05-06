@@ -91,6 +91,7 @@ program main
 
   ! preprocess energy file, get the scalars and see which datasets are available
   call read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
+  ! if the magnetic mode is activated and we have the full elements available we calculate the inter-band contribution
   inter_magnetic = (algo%lBfield .and. edisp%lBFullMoments)
 
   ! quick checks if run-options are in agreement with provided data
@@ -834,7 +835,7 @@ program main
         endif
       endif
       if (algo%lInterbandQuantities) then
-        call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic) ! optional
+        call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic)
         if (algo%lBoltzmann) then
           call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
@@ -848,7 +849,7 @@ program main
       endif
       if (algo%lInterbandQuantities) then
         ! here we don't have the Bfield quantities ... no optical elements yet
-        call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic) ! optional
+        call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic)
         if (algo%lBoltzmann) then
           call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
