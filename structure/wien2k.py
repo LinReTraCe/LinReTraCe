@@ -284,8 +284,8 @@ class Wien2kCalculation(DftCalculation):
         struct.readline() # skip
         self.invsymop[isym] = np.linalg.inv(self.symop[isym])
 
-      if struct.readline() != "": # exactly at the EOF
-        raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
+      # if struct.readline() != "": # exactly at the EOF
+      #   raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
 
       logger.debug('Symmetry operations:\n {}'.format(self.symop))
 
