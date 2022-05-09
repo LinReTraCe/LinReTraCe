@@ -50,6 +50,7 @@ program main
   real(8) :: time
   real(8), allocatable :: gap_file(:)
   logical :: gapped_file
+  logical :: inter_magnetic
 
   ! quantities saved on the Temperature grid
   ! and derived quantities
@@ -90,6 +91,8 @@ program main
 
   ! preprocess energy file, get the scalars and see which datasets are available
   call read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
+  ! if the magnetic mode is activated and we have the full elements available we calculate the inter-band contribution
+  inter_magnetic = (algo%lBfield .and. edisp%lBFullMoments)
 
   ! quick checks if run-options are in agreement with provided data
   if (algo%lBfield .and. .not. edisp%lBIntraMoments) then
@@ -393,12 +396,29 @@ program main
                                        edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
     do ik = ikstr,ikend
       info%ik = ik ! save into the runinformation datatype
-      call read_full_optical_elements(ifile_energy, edisp, sct, info)  ! load them into edisp%Moptk
+      call read_full_optical_elements(ifile_energy, edisp, info)  ! load them into edisp%Moptk
       edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
     enddo
     deallocate(edisp%Moptk)
     call hdf5_close_file(ifile_energy)
   endif
+
+  ! load the magnetic full elements for each processes k-range
+  if (algo%lInterBandQuantities .and. algo%lBfield .and. edisp%lBFullMoments) then
+    call hdf5_open_file(algo%input_energies, ifile_energy, rdonly=.true.)
+    allocate(edisp%MBopt(3,3,3,edisp%nbopt_min:edisp%nbopt_max, &
+                               edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+    allocate(edisp%MBoptk(3,3,3,edisp%nbopt_min:edisp%nbopt_max, &
+                                edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+    do ik = ikstr,ikend
+      info%ik = ik ! save into the runinformation datatype
+      call read_full_magnetic_elements(ifile_energy, edisp, info)  ! load them into edisp%Moptk
+      edisp%MBopt(:,:,:,:,:,:,ik) = edisp%MBoptk
+    enddo
+    deallocate(edisp%MBoptk)
+    call hdf5_close_file(ifile_energy)
+  endif
+
 
   if (myid .eq. master) then
     write(stdout,*) 'ENERGY INPUT'
@@ -815,9 +835,9 @@ program main
         endif
       endif
       if (algo%lInterbandQuantities) then
-        call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+        call output_response_Q(qresp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic)
         if (algo%lBoltzmann) then
-          call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
       endif
     else
@@ -829,9 +849,9 @@ program main
       endif
       if (algo%lInterbandQuantities) then
         ! here we don't have the Bfield quantities ... no optical elements yet
-        call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, .false.)
+        call output_response_D(resp_inter, "inter", edisp, algo, info, temp, kmesh, inter_magnetic)
         if (algo%lBoltzmann) then
-          call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, .false.)
+          call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
       endif
     endif

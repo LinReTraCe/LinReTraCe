@@ -78,9 +78,9 @@ class ElectronicStructure(ABC):
     self.opticalMoments  = []    # list for full optical elements
     # same thing for the b-field quantities
     self.bopticdiag      = False
-    self.bopticalDiag    = []
+    self.BopticalDiag    = []
     self.bopticfull      = False
-    self.bopticalMoments = []   # list for full optical elements
+    self.BopticalMoments = []   # list for full optical elements
     self.opticalBandMin  = 0    # band interval minimum for optical elements
     self.opticalBandMax  = 0    # band interval maximum for optical elements
 

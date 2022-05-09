@@ -111,7 +111,12 @@ class LRTCoutput(object):
             key = '{}{}-{}{}'.format(iL,iM,ii,iB) # L11B-intraBoltz
             if key[-1] == '-': key = key[:-1]
             internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip()) # L11B/intraBoltzmann/sum
-            description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
+
+            quantity_description = '{} {}'.format(iL,iBdescr) #  resistivitiy Boltzmann
+            type_description = '({})'.format(ii)
+            unitplus = '[' + unit + '{}]'.format(' 1/T' if iM else '')
+            description = '{0:<35} {1:<8} {2:>15}'.format(quantity_description, type_description, unitplus)
+            # description  = '{} {} {}{} [{}{}]'.format(iL,ii,iBdescr,iMdescr, unit, ' (m*m)/(V*s)' if iM else '') # m^2/(Vs) = 1/T
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients

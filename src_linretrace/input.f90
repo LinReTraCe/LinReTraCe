@@ -759,11 +759,10 @@ subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
 
 end subroutine
 
-subroutine read_full_optical_elements(ifile, edisp, sct, info)
+subroutine read_full_optical_elements(ifile, edisp, info)
   implicit none
   integer(hid_t)   :: ifile
   type(energydisp) :: edisp
-  type(scattering) :: sct
   type(runinfo)    :: info
 
   real(8), allocatable :: darr3(:,:,:)
@@ -787,6 +786,34 @@ subroutine read_full_optical_elements(ifile, edisp, sct, info)
     deallocate(darr3)
   endif
 
+end subroutine
+
+subroutine read_full_magnetic_elements(ifile, edisp, info)
+  implicit none
+  integer(hid_t)   :: ifile
+  type(energydisp) :: edisp
+  type(runinfo)    :: info
+
+  complex(8), allocatable :: zarr5(:,:,:,:,:)
+  character(len=128)   :: string
+
+  if (edisp%ispin == 1) then
+    if (allocated(zarr5)) deallocate(zarr5)
+    write(string,'("kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,1) = zarr5
+    deallocate(zarr5)
+  else
+    if (allocated(zarr5)) deallocate(zarr5)
+    write(string,'("up/kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,1) = zarr5
+    deallocate(zarr5)
+    write(string,'("dn/kPoint/",I10.10,"/momentsBfield")') info%ik
+    call hdf5_read_data(ifile, string, zarr5)
+    edisp%MBoptk(:,:,:,:,:,2) = zarr5
+    deallocate(zarr5)
+  endif
 end subroutine
 
 subroutine read_full_magnetic_optical_elements(ifile, edisp, sct, info)
