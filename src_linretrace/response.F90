@@ -447,23 +447,29 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
             ! and read them via Fortran -> implicit transposition
             ! we have to use 2 - 1 here
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is,info%ik)
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik)
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik)
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik)
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,is,info%ik)
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_sigma &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi     * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi &
+                * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ci
           endif
         enddo
         if (algo%lBfield .and. edisp%lBFullMoments) then
@@ -471,13 +477,16 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
           do idir2=1,3
           do idir3=1,3
             resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB &
+                         * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB &
+                         * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB &
+                         * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
           enddo
           enddo
           enddo
@@ -887,13 +896,16 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
+            resp%s_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_sigma &
+                * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
 
             resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
+            resp%a_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_alpha &
+                * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
 
             resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
+            resp%x_full(index1(idir),index2(idir),iband1,:,info%ik) + calc_xi &
+                * edisp%Mopt(idir,iband2,iband1,:,info%ik) * ci
           endif
         enddo !idir
         if (algo%lBfield .and. edisp%lBFullMoments) then
@@ -901,13 +913,16 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
           do idir2=1,3
           do idir3=1,3
             resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
           enddo
           enddo
           enddo
@@ -1178,13 +1193,16 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
           do idir2=1,3
           do idir3=1,3
             resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
           enddo
           enddo
           enddo
@@ -2170,7 +2188,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik)
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi    * edisp%Mopt(idir,iband2,iband1,is,info%ik)
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi * edisp%Mopt(idir,iband2,iband1,is,info%ik)
           else
             ! here we ADD the complex part to the response
             resp%s_full(index1(idir),index2(idir),iband1,is,info%ik) = &
@@ -2180,7 +2198,7 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
             resp%a_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_alpha * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ciQ
 
             resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) = &
-            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi     * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ciQ
+            resp%x_full(index1(idir),index2(idir),iband1,is,info%ik) + calc_xi * edisp%Mopt(idir,iband2,iband1,is,info%ik) * ciQ
           endif
         enddo
         if (algo%lBfield .and. edisp%lBFullMoments) then
@@ -2188,13 +2206,16 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
           do idir2=1,3
           do idir3=1,3
             resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%aB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_alphaB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
 
             resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
-            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+            resp%xB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_xiB &
+                * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
           enddo
           enddo
           enddo
