@@ -120,11 +120,11 @@ class LRTCoutput(object):
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients
-    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','tc','tr','cB','rh','n','muh','mut'], \
-            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
-            ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
-            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(m*K)]','[m*K/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
-            [False,False,False,False,False,False,True,True,True,True,True]):
+    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','pf','tc','tr','cB','rh','n','muh','mut'], \
+            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
+            ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
+            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(m*K)]','[m*K/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
+            [False,False,False,False,False,False,False,True,True,True,True,True]):
       for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
@@ -233,6 +233,10 @@ class LRTCoutput(object):
           tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1])
         elif command.startswith('s-'): # seebeck
           tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
+        elif command.startswith('pf-'): # power factor
+          seeb = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
+          cond = itotal[0]
+          tosave = np.einsum('...ij,...jk,...kl->...il',seeb,seeb,cond) # S**2 * conductivitiy
         elif command.startswith('tc-'): # thermal conductivity
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
