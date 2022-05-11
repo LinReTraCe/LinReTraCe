@@ -14,16 +14,8 @@ from structure.wannier import wannier90hamiltonian # wannier90 hk file
 from structure.wannier import hamiltonian_matrix    # hk in matrix form
 
 '''
-lwann : Pre-processing of Wannier90 folder and Wannier90 Hamiltonian files
+lwann : Pre-processing of Wannier90 calculations
 '''
-
-__author__     = 'Matthias Pickem'
-__maintainer__ = 'Matthias Pickem'
-__email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.1'
-__status__     = 'Dev'
-__license__    = 'GPLv3'
-__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
 
 def parse_args(args=None):
   parser = argparse.ArgumentParser(

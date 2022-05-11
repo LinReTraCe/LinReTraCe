@@ -8,14 +8,6 @@ import sys
 lconfig: Interactive setup for simplistic config files for the LRTC main code
 '''
 
-__author__     = 'Matthias Pickem'
-__maintainer__ = 'Matthias Pickem'
-__email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.1'
-__status__     = 'Dev'
-__license__    = 'GPLv3'
-__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
-
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='''Argument parser for the ''',

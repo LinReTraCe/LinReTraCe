@@ -16,14 +16,6 @@ from structure.auxiliary import LogFormatter
 ltb: Pre-processing of tight-binding structures for the LRTC code
 '''
 
-__author__     = 'Matthias Pickem'
-__maintainer__ = 'Matthias Pickem'
-__email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.3'
-__status__     = 'Dev'
-__license__    = 'GPLv3'
-__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
-
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='Argument parser for the TB pre-processing for LRTC', \
@@ -40,7 +32,8 @@ tb_file:
 begin hopping
 # x  y  z  orbital1 orbital2 hopping.real [hopping.imag]
   0 +1  0  1        1        0.25
-  0 -1  0  1        1        0.25 0.005
+  0 -1  0  1        1        0.25
+ +1 +1  0  1        2        0.05 0.005
 ...
 end hopping
 

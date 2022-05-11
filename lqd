@@ -13,14 +13,6 @@ from structure.quadratic import Quadratic
 lqd: Pre-processing of a quadradic dispersion for the LRTC code
 '''
 
-__author__     = 'Matthias Pickem'
-__maintainer__ = 'Matthias Pickem'
-__email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.3'
-__status__     = 'Dev'
-__license__    = 'GPLv3'
-__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
-
 def main()
   error = lambda string: sys.exit('lqd: {}'.format(string))
 

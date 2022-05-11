@@ -13,14 +13,6 @@ from postproc.input      import LRTCinput
 lprint: Post-processing of LRTC HDF5 files
 '''
 
-__author__     = 'Matthias Pickem'
-__maintainer__ = 'Matthias Pickem'
-__email__      = 'matthias.pickem@gmail.com'
-__version__    = '0.2'
-__status__     = 'Dev'
-__license__    = 'GPLv3'
-__credits__    = ['Matthias Pickem', 'Emanuele Maggio', 'Jan M. Tomczak']
-
 error = lambda string: sys.exit('lprint: {}'.format(string))
 
 def parse_args(args=None):
