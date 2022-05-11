@@ -1,6 +1,0 @@
-features that will be integrated
-
-* quad chemical potential -- save + print + use
-* if quad chemical refinement below lower boundary set it to middle of the gap
-* scattering rate on specific energy window
-* temperature steps with logarithmic steps
