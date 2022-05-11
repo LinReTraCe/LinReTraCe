@@ -112,7 +112,7 @@ class LRTCoutput(object):
             if key[-1] == '-': key = key[:-1]
             internalpath = '{}{}/{}{}/sum'.format(iL,iM,ii,iBdescr.strip()) # L11B/intraBoltzmann/sum
 
-            quantity_description = '{} {}'.format(iL,iBdescr) #  resistivitiy Boltzmann
+            quantity_description = '{}{} Onsager {}'.format(iL,iM if iM else ' ',iBdescr) #  resistivitiy Boltzmann
             type_description = '({})'.format(ii)
             unitplus = '[' + unit + '{}]'.format(' 1/T' if iM else '')
             description = '{0:<35} {1:<8} {2:>15}'.format(quantity_description, type_description, unitplus)
@@ -120,7 +120,7 @@ class LRTCoutput(object):
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients
-    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','pf','tc','tr','cB','rh','n','muh','mut'], \
+    for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','pf','tc','tr','cb','rh','n','muh','mut'], \
             [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
             ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
             ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(m*K)]','[m*K/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
@@ -244,7 +244,7 @@ class LRTCoutput(object):
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
           tosave = self.invert(tosave)
-        elif command.startswith('cB-'): # Hall conducitivity
+        elif command.startswith('cb-'): # Hall conducitivity
           tosave = itotal[0]
         elif command.startswith('rh-'): # Hall coefficient
           tosave = np.einsum('...ij,...jkz,...kl->...ilz', self.invert(itotal[0]), itotal[1], self.invert(itotal[0]))
@@ -494,7 +494,7 @@ class LRTCoutput(object):
 
     barlength = 80
 
-    print('\n{:<12}  {}'.format('Key', 'Description [unit]'))
+    print('\n{:<18}  {}'.format('Key', 'Description'))
     print(barlength*u'\u2500')
 
     # quantities
@@ -508,16 +508,28 @@ class LRTCoutput(object):
       # raw responses
       for (key, value) in self.owned.items():
         raw_dset, path, description, response, magnetic = value
-        if response and raw_dset:
+        if response and raw_dset and "Boltzmann" not in description:
           print('{:<18}  {}'.format(key, description))
       print(barlength*u'\u2500')
+      if self.boltz:
+        for (key, value) in self.owned.items():
+          raw_dset, path, description, response, magnetic = value
+          if response and raw_dset and "Boltzmann" in description:
+            print('{:<18}  {}'.format(key, description))
+        print(barlength*u'\u2500')
     else:
       # derived responses
       for (key, value) in self.owned.items():
         raw_dset, requirements, description, response, magnetic = value
-        if response and not raw_dset:
+        if response and not raw_dset and "Boltzmann" not in description:
           print('{:<18}  {}'.format(key, description))
       print(barlength*u'\u2500')
+      if self.boltz:
+        for (key, value) in self.owned.items():
+          raw_dset, requirements, description, response, magnetic = value
+          if response and not raw_dset and "Boltzmann" in description:
+            print('{:<18}  {}'.format(key, description))
+        print(barlength*u'\u2500')
 
   def outputConfig(self):
     '''
@@ -654,18 +666,22 @@ class LRTCoutput(object):
         if exist:
           self.owned.update({key:value})
     # now we iterate through the derived datasets
+    self.boltz = False
     for (key, value) in self.datasets.items():
-      raw_dset, requirements, desdcription, response, magnetic = value
+      raw_dset, requirements, description, response, magnetic = value
 
       if raw_dset:
         continue
-      allcontained = True
       for ireq in requirements:
         if ireq not in self.owned:
-          allcontained = False
           break
-      if allcontained:
+      else:
         self.owned.update({key:value})
+        if "Boltzmann" in description:
+          self.boltz = True
+
+    if self.boltz:
+      logger.debug('Detected Boltzmann container.')
 
     if logger.isEnabledFor(logging.DEBUG):
       print('Owned datasets:')

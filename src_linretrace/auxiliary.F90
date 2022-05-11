@@ -16,7 +16,7 @@ subroutine main_greeting(ounit)
   write(ounit,*)'#  LinReTraCe --- Linear Response Transport Centre  #'
   write(ounit,*)'#####################################################'
   write(ounit,*)'#       M. Pickem, E. Maggio and J.M. Tomczak       #'
-  write(ounit,*)'#       (v1.1.0 Mai 2022)                           #'
+  write(ounit,*)'#       (v1.1.1 Mai 2022)                           #'
   write(ounit,*)'#####################################################'
   write(ounit,*)
 end subroutine main_greeting
