@@ -38,7 +38,7 @@ HDF5    += -L/opt/hdf5-1.13.1_gcc/lib -lhdf5_fortran -lhdf5hl_fortran
 The compilation is done with `make`, creating the `bin` subfolder in which the binary `linretrace` will be moved into.
 
 ## Workflow
-![LinReTraCe workflow!](/documentation/workflow.pdf)
+![LinReTraCe workflow](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/flowchart.png?raw=true "LinReTraCe workflow")
 
 ### Energy file
 The core dependency of LinReTraCe is the energy file, where all the necessary band energies as well as optical elements (among other auxiliary data) are stored. In order to prepare this file one of the following interfaces can be used:
@@ -121,6 +121,7 @@ lists all the available datasets, which then can be retrieved by providing the c
 
 `lprint -p <LRTCoutput file> s-intra xx yy`
 plots, e.g., the xx and yy components of the intra-band Seebeck tensor
+
 `lprint -p <LRTCoutput file> rh-intra xyz`
 plots the Hall coefficient in the xy-plane (magnetic-field in z-direction)
 ## License
@@ -129,8 +130,11 @@ This project is licensed under the GNU General Public License v3 which can be fo
 
 ## Authors
 Matthias Pickem\*, Emanuele Maggio, Jan M. Tomczak\*
+
 \* Corresponding authors:
+
 matthias[dot]pickem[at]gmail[dot]com
+
 tomczak[dot]jm[at]gmail[dot]com
 
 ## Acknowledgements
