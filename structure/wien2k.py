@@ -90,6 +90,7 @@ class Wien2kCalculation(DftCalculation):
   # define the files which we might use
   def _defineFiles(self):
     self.fscf        = self.case + '.scf'
+    self.fin2        = self.case + '.in2' # fallback
     self.fstruct     = self.case + '.struct'
     self.fklist      = self.case + '.klist'
 
@@ -199,7 +200,11 @@ class Wien2kCalculation(DftCalculation):
 
 
   def readData(self):
-    self._readScf()
+    try:
+      self._readScf()
+    except IOError:
+      logger.warning("Wien2K case.scf file not found. Falling back to case.in2")
+      self._readIn2()
     self._readStruct()
     self._readKlist()
     self._readEnergies()
@@ -241,6 +246,18 @@ class Wien2kCalculation(DftCalculation):
         else:
           raise IOError('Wien2k {}: Did not find Crystal Cell Volume (:VOL)'.format(str(self.fscf)))
       logger.info('  Unit cell volume: {} [Angstrom^3]'.format(self.vol))
+
+  def _readIn2(self):
+    '''
+      read case.in2: fallback file if scf file is not present
+      (e.g. if save lapw was used)
+    '''
+    logger.info("Reading: {}".format(self.fin2))
+    with open(str(self.fin2), 'r') as in2:
+      in2.readline() # gargabe
+      line = in2.readline()
+      self.charge = float(line[8:16])
+    logger.info('  Number of electrons: {}'.format(self.charge))
 
   def _readStruct(self):
     '''

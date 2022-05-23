@@ -48,6 +48,7 @@ class DftDetection(object):
     if not os.path.isdir(self.path):
       return None
 
+    # try to find scf file
     scf = os.path.join(self.path,'*.scf')
     files = glob.glob(scf)
     if len(files) >= 1:
@@ -58,8 +59,19 @@ class DftDetection(object):
       temp = purescf.split('.')  # abc.def.scf -> [abc,def,scf]
       case = '.'.join(temp[:-1]) # abc.def
       return {'dft': Wien2kCalculation, 'case': case}
-    else:
-      return None
+
+    # fallback: try to find in2 file
+    in2 = os.path.join(self.path,'*.in2')
+    files = glob.glob(in2)
+    if len(files) >= 1:
+      if len(files) > 1:
+        logger.warn('Detected more than 1 in2 file in provided folder: Choosing {}'.format(files[0]))
+      purein2 = os.path.basename(files[0])
+      temp = purein2.split('.')  # abc.def.scf -> [abc,def,scf]
+      case = '.'.join(temp[:-1]) # abc.def
+      return {'dft': Wien2kCalculation, 'case': case}
+
+    return None
 
   def _checkVASPcalculation(self):
     '''
