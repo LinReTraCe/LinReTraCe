@@ -90,7 +90,8 @@ class Wien2kCalculation(DftCalculation):
   # define the files which we might use
   def _defineFiles(self):
     self.fscf        = self.case + '.scf'
-    self.fin2        = self.case + '.in2' # fallback
+    self.fin2        = self.case + '.in2'  # fallback
+    self.fin2c       = self.case + '.in2c' # fallback
     self.fstruct     = self.case + '.struct'
     self.fklist      = self.case + '.klist'
 
@@ -253,10 +254,16 @@ class Wien2kCalculation(DftCalculation):
       (e.g. if save lapw was used)
     '''
     logger.info("Reading: {}".format(self.fin2))
-    with open(str(self.fin2), 'r') as in2:
-      in2.readline() # gargabe
-      line = in2.readline()
-      self.charge = float(line[8:16])
+    try:
+      with open(str(self.fin2), 'r') as in2:
+        in2.readline() # gargabe
+        line = in2.readline()
+        self.charge = float(line[8:16])
+    except IOError:
+      with open(str(self.fin2c), 'r') as in2:
+        in2.readline() # gargabe
+        line = in2.readline()
+        self.charge = float(line[8:16])
     logger.info('  Number of electrons: {}'.format(self.charge))
 
   def _readStruct(self):
