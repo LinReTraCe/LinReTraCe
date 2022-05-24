@@ -42,31 +42,20 @@ class DftDetection(object):
   def _checkW2Kcalculation(self):
     '''
     Detect the Wien2K calculation by the existance of the
-    scf file -> also extract the case prename
+    struct file -> also extract the case prename
     '''
 
     if not os.path.isdir(self.path):
       return None
 
-    # try to find scf file
-    scf = os.path.join(self.path,'*.scf')
-    files = glob.glob(scf)
+    struct = os.path.join(self.path,'*.struct')
+    files = glob.glob(struct)
     if len(files) >= 1:
       if len(files) > 1:
-        logger.warn('Detected more than 1 scf file in provided folder: Choosing {}'.format(files[0]))
+        logger.warn('Detected more than 1 struct file in provided folder: Choosing {}'.format(files[0]))
 
-      purescf = os.path.basename(files[0])
-      temp = purescf.split('.')  # abc.def.scf -> [abc,def,scf]
-      case = '.'.join(temp[:-1]) # abc.def
-      return {'dft': Wien2kCalculation, 'case': case}
-
-    # fallback: try to find in2 file
-    in2 = os.path.join(self.path,'*.in2*')
-    files = glob.glob(in2)
-    if len(files) >= 1:
-      # there is definitely more than one file
-      purein2 = os.path.basename(files[0])
-      temp = purein2.split('.')  # abc.def.scf -> [abc,def,scf]
+      purestruct = os.path.basename(files[0])
+      temp = purestruct.split('.')  # abc.def.scf -> [abc,def,scf]
       case = '.'.join(temp[:-1]) # abc.def
       return {'dft': Wien2kCalculation, 'case': case}
 
