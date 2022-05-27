@@ -48,14 +48,25 @@ class DftDetection(object):
     if not os.path.isdir(self.path):
       return None
 
-    struct = os.path.join(self.path,'*.struct')
-    files = glob.glob(struct)
+    scf = os.path.join(self.path,'*.scf')
+    files = glob.glob(scf)
     if len(files) >= 1:
       if len(files) > 1:
-        logger.warn('Detected more than 1 struct file in provided folder: Choosing {}'.format(files[0]))
+        logger.warn('Detected more than 1 scf file in provided folder: Choosing {}'.format(files[0]))
 
-      purestruct = os.path.basename(files[0])
-      temp = purestruct.split('.')  # abc.def.scf -> [abc,def,scf]
+      purescf = os.path.basename(files[0])
+      temp = purescf.split('.')  # abc.def.scf -> [abc,def,scf]
+      case = '.'.join(temp[:-1]) # abc.def
+      return {'dft': Wien2kCalculation, 'case': case}
+
+    in2 = os.path.join(self.path,'*.in2*')
+    files = glob.glob(in2)
+    if len(files) >= 1:
+      if len(files) > 1:
+        logger.warn('Detected more than 1 scf file in provided folder: Choosing {}'.format(files[0]))
+
+      purein2 = os.path.basename(files[0])
+      temp = purein2.split('.')  # abc.def.scf -> [abc,def,scf]
       case = '.'.join(temp[:-1]) # abc.def
       return {'dft': Wien2kCalculation, 'case': case}
 
