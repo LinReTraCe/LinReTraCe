@@ -10,7 +10,7 @@ Moreover we provide an interface to generate generalized tight-binding models as
 At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code, required for the calculation of accurate, artefact-free transport coefficients for both realistic electronic structures as well as models that are fully converged down to the lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
 In order to obtain all the required and optional packages to run the pre- and postprocessing at its full functionality simply install the dependencies with either pip
 
-`pip install matplotlib h5py numpy scipy ase spglib boltztrap`
+`pip install matplotlib h5py numpy scipy ase spglib boltztrap2`
 
 or use one of many other popular Python package manager like [anaconda3](https://www.anaconda.com).
 
@@ -41,21 +41,21 @@ The compilation is done with `make`, creating the `bin` subfolder in which the b
 ![LinReTraCe workflow](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/flowchart.png?raw=true "LinReTraCe workflow")
 
 ### Energy file
-The core dependency of LinReTraCe is the energy file, where all the necessary band energies as well as optical elements (among other auxiliary data) are stored. In order to prepare this file one of the following interfaces can be used:
+The center point of LinReTraCe's input is the energy file, where all the necessary band energies as well as optical elements (among other auxiliary data) are stored. In order to prepare this file one of the following interfaces can be used:
 
-**Wien2K** and **VASP** are interfaced with `ldft`:
+**WIEN2k** and **VASP** are interfaced with `ldft`:
 
 `ldft <wien2k folder> --optic --output wien2k_structure.hdf5`
 
 `ldft <vasp folder> --interp --output vasp_structure.hdf5`
 
-In the Wien2K example we make use of the dipole matrix elements from the optic subpackage (`x optic`) whereas in the VASP example we interface the BoltzTraP2 band interpolation scheme via `--interp`. There the Peierls approximation is used based on optical elements consisting of band velocities and curvatures. For a full description, see `ldft --help`.
+In the WIEN2k example we make use of the dipole matrix elements from the optic subpackage (`x optic`) whereas in the VASP example we interface the BoltzTraP2 band interpolation scheme via `--interp`. There the Peierls approximation is used based on optical elements consisting of band velocities and curvatures. For a full description, see the code publication and `ldft --help`.
 
 **Wannier90** is interfaced with `lwann`:
 
 `lwann <wannier90 folder> --output wannier90_structure.hdf5`
 
-Please note that we provide the possibility to expand the reducible grid with `--kmesh nkx nky nkz` as well as sub-interface generic Wien2K momemtum grids if the required `case.struct` and `case.klist` files are provided:
+Please note that we provide the possibility to expand the reducible grid with `--kmesh nkx nky nkz` as well as sub-interface generic WIEN2k momemtum grids if the required `case.struct` and `case.klist` files are provided:
 `lwann <wannier90 folder> --wien2k --output wannier90_wien2k.hdf5`
 
 General **tight-binding models** are created with `ltb`. Simply provide a text file with the corresponding hopping parameters, atomic positions and lattice vectors and execute:
@@ -87,11 +87,9 @@ end real_lattice
 ```
 Please note that we use the convention employed by the strongly correlated electron systems community, where a positive hopping leads a reduction of the energy, i.e.
 
-```
-H(\mathbf{k}) = -\sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} (1-2\delta_{\mathbf{R},\mathbf{0}}\delta_{l,l'}) H_{ll'}(\mathbf{R})
-```
+$$ H(\mathbf{k}) = -\sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} (1-2\delta_{\mathbf{R},\mathbf{0}}\delta_{l,l'}) H_{ll'}(\mathbf{R}) $$
 
-If instead one wants to provide energies and optical elements that cannot be created with the above tools we provide a **generic interface** `linterface` that contains the class `StructureFromArrays` that supports the load-in of the required data (multiplicity, energies, optical elements, ...).
+If instead one wants to provide energies and optical elements that cannot be created with the above tools we provide a **generic interface** `linterface` that contains the class `StructureFromArrays` that supports the load-in of the necessary data (multiplicity, energies, optical elements, ...).
 
 ### Scattering File
 Arbitrary (momentum, band, and spin dependent) scattering rates (quasi particle weights and energy shifts) are supported through a custom HDF5 scattering file. The workflow to create a custom file follows
@@ -133,9 +131,9 @@ Matthias Pickem\*, Emanuele Maggio, Jan M. Tomczak\*
 
 \* Corresponding authors:
 
-matthias[dot]pickem[at]gmail[dot]com
+matthias [dot] pickem [at] gmail [dot] com
 
-tomczak[dot]jm[at]gmail[dot]com
+tomczak [dot] jm [at] gmail [dot] com
 
 ## Acknowledgements
 LinReTraCe was funded by the Austrian Science Fund (FWF) through project P 30213.
