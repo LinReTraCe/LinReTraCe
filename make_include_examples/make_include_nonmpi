@@ -1,8 +1,4 @@
 FC   = gfortran
 FCDG = gfortran
-
 FFLAGS = -O3
-
-LAPACK= -L/lib/lapack/lapack-3.7.1/ -llapack
-BLAS= -L/lib/blas/BLAS-3.7.1/ -lblas
 HDF5 = -I/opt/hdf5-1.8.16_gcc/include -L/opt/hdf5-1.8.16_gcc/lib -lhdf5_fortran -lhdf5hl_fortran
