@@ -4,10 +4,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import logging
 
-import numpy as np
-
-from  scattering.fullscattering import FullScattering
-# from scattering import dmftloader
+from   scattering.fullscattering import FullScattering
 
 '''
 lscat: user script to create more elaborate scattering data
@@ -216,9 +213,72 @@ def setLogger():
   return logger
 
 def main():
-  logger = setLogger()
-  logger.warning('lscat only serves illustrative purposes (code snippets).')
-  logger.warning('Copy lscat_template in your working directory and adjust for your purposes.\n\n')
+  import shutil
+  template = '''#! /usr/bin/env python
+
+from __future__ import print_function, division, absolute_import
+import numpy as np
+from  scattering.fullscattering import FullScattering
+
+\'\'\' define object via lrtc energy file \'\'\'
+scatobj = FullScattering('tb-60-60-60-irr.hdf5')
+
+\'\'\' get dependencies \'\'\'
+spins, nkp, nbands = scatobj.getDependencies()
+kgrid              = scatobj.getMomentumGrid() # [ nkp, 3 ]
+energies           = scatobj.getEnergies()     # [ spins, nkp, nbands ]
+mudft              = scatobj.mudft             # DFT chemical potential
+
+\'\'\' define temperature grid:
+    tmin: minimum temperature [K]
+    tmax: maximum temperature [K]
+    nt  : number of temperature steps
+    optional tlog: True  - logarithmic steps
+                   False - linear steps
+                   (default: False)
+\'\'\'
+nt = 100 # steps
+scatobj.defineTemperatures(tmin = 10, \\
+                           tmax = 300, \\
+                           nt   = nt, \\
+                           tlog = True)
+
+\'\'\' or chemical potential grid:
+    temp:  temperature [K]
+    mumin: minimum chemical potential [eV]
+    mumax: maximum chemical potential [eV]
+    nmu  : number of chemical potential steps
+    optional mlog : True  - logarithmic steps
+                    False - linear steps
+                    (default: False)
+    optional muabs: True  - provided mumin/mumax values are absolute values
+                    False - provided mumin/mumax values are relative to DFT chemical potential
+                    (default: False)
+\'\'\'
+# scatobj.defineChemicalPotentials(temp = 300, \\
+#                                  mumin = -3, \\
+#                                  mumax = +3, \\
+#                                  nmu   = nt, \\
+#                                  mlog  = False, \\
+#                                  muabs = False)
+
+\'\'\' define Gamma, Z and energy shift dependence \'\'\'
+gamma = np.ones((nt, spins, nkp, nbands), dtype=np.float64)
+gamma *= 1e-3
+qpweight = np.ones_like(gamma, dtype=np.float64)
+bandshift = np.zeros_like(gamma, dtype=np.float64)
+
+\'\'\' create output.
+    note that qpweight and bandshift are optional parameters
+    if qpweight is not provided it will be set to a default of Z=1 for all points
+\'\'\'
+scatobj.defineScatteringRates(gamma)
+# scatobj.defineScatteringRates(gamma, qpweight=qpweight, bandshift=bandshift)
+scatobj.createOutput('scattering_file.hdf5')'''
+  with open('lscat.template','w') as scat:
+    scat.write(template)
+    scat.flush()
+  print('Saved lscat.template into your currently active directory')
 
 if __name__ == '__main__':
   main()
