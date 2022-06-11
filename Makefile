@@ -18,3 +18,10 @@ pristine:
 ctags:
 	ctags -R --exclude=src_linretrace/digamma --exclude=src_pp --exclude=src_linretrace/deprecated
 
+install: bin/linretrace
+	echo "Creating bin folder in $HOME"
+	mkdir -p ${HOME}/bin
+	cp bin/linretrace ${HOME}/bin
+	@echo
+	@echo "In order to make linretrace available add the following line to your .bashrc:"
+	@echo "export PATH=\"${HOME}/bin:\$$PATH\" >> ~/.bashrc"
