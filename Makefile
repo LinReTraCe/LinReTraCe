@@ -19,7 +19,7 @@ ctags:
 	ctags -R --exclude=src_linretrace/digamma --exclude=src_pp --exclude=src_linretrace/deprecated
 
 install: bin/linretrace
-	echo "Creating bin folder in $HOME"
+	@echo "Creating bin folder in \$$HOME:"
 	mkdir -p ${HOME}/bin
 	cp bin/linretrace ${HOME}/bin
 	@echo
