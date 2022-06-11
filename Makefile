@@ -24,4 +24,8 @@ install: bin/linretrace
 	cp bin/linretrace ${HOME}/bin
 	@echo
 	@echo "In order to make linretrace available add the following line to your .bashrc:"
-	@echo "export PATH=\"${HOME}/bin:\$$PATH\" >> ~/.bashrc"
+	@echo "echo 'export PATH=\"${HOME}/bin:\$$PATH\"' >> ~/.bashrc"
+	@echo
+	@echo "and reload the bashrc via:"
+	@echo "source \$$HOME/.bashrc"
+	@echo
