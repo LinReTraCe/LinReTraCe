@@ -22,6 +22,7 @@ install: bin/linretrace
 	@echo "Creating bin folder in \$$HOME:"
 	mkdir -p ${HOME}/bin
 	cp bin/linretrace ${HOME}/bin
+	@echo "Installation complete."
 	@echo
 	@echo "In order to make linretrace available execute the following command:"
 	@echo "  echo 'export PATH=\"${HOME}/bin:\$$PATH\"' >> ~/.bashrc"
