@@ -213,7 +213,6 @@ def setLogger():
   return logger
 
 def main():
-  import shutil
   template = '''#! /usr/bin/env python
 
 from __future__ import print_function, division, absolute_import
@@ -275,10 +274,10 @@ bandshift = np.zeros_like(gamma, dtype=np.float64)
 scatobj.defineScatteringRates(gamma)
 # scatobj.defineScatteringRates(gamma, qpweight=qpweight, bandshift=bandshift)
 scatobj.createOutput('scattering_file.hdf5')'''
-  with open('lscat.template','w') as scat:
+  with open('lscat_template','w') as scat:
     scat.write(template)
     scat.flush()
-  print('Saved lscat.template into your currently active directory')
+  print('\nSaved lscat_template into your currently active directory.')
 
 if __name__ == '__main__':
   main()
