@@ -1,32 +1,33 @@
 # LinReTraCe
-[<img src="https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/logo.png?raw=true" width="196" height="196">](https://sites.google.com/view/tomczak-group/projects/linretrace)
+<!-- [<img src="https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/logo.png?raw=true" width="196" height="196">](https://sites.google.com/view/tomczak-group/projects/linretrace) -->
 
-The Linear Response Transport Centre (LinReTraCe) is a package for the simulation of transport properties driven by carriers with finite lifetimes. The underlying theory, described in [PRB:105.085139](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.105.085139) ([arxiv:2112.07604](https://arxiv.org/abs/2112.07604)), establishes a comprehensive and thermodynamically consistent phenomenology capable of reproducing qualitatively correct full temperature profiles in metals as well as semicondcutors. A comprehensive code documentation including implementation details, benchmarks and test cases is described in [arxiv:2206.06097](https://arxiv.org/abs/2206.06097).
+The [Linear Response Transport Centre](https://sites.google.com/view/tomczak-group/projects/linretrace) (LinReTraCe) is a package for the simulation of transport properties driven by carriers with finite lifetimes. The underlying theory, described in [PRB:105.085139](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.105.085139) ([arxiv:2112.07604](https://arxiv.org/abs/2112.07604)), establishes a comprehensive and thermodynamically consistent phenomenology capable of reproducing qualitatively correct full temperature profiles in metals as well as semiconductors. A comprehensive code documentation including implementation details, benchmarks, and test cases is described in [arxiv:2206.06097](https://arxiv.org/abs/2206.06097)
+and a step-by-step installation guide is available in the [userguide](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/userguide.pdf).
 
-The code package provides several interfaces to commonly used electronic structure codes, including [Wien2K](http://susi.theochem.tuwien.ac.at), [VASP](https://vasp.at), as well as maximally localized Wannier functions from [Wannier90](http://www.wannier.org). The DFT input can further be supplemented with the band interpolation scheme of [BoltzTraP2](https://gitlab.com/sousaw/BoltzTraP2).
+The code package provides several interfaces to common electronic structure codes, including [Wien2K](http://susi.theochem.tuwien.ac.at), [VASP](https://vasp.at), as well as maximally localized Wannier functions from [Wannier90](http://www.wannier.org). The DFT input can also be supplied with the band interpolation scheme of [BoltzTraP2](https://gitlab.com/sousaw/BoltzTraP2).
 
-Moreover we provide an interface to generate generalized tight-binding models as well as a Python3 interface where source agnostic data can be supplied via specifically shaped arrays.
+Moreover, we provide an interface to create general tight-binding models, as well as a Python3 interface where source-agnostic data can be supplied via specifically shaped arrays.
 
 ## Prerequisites
 
-At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code, required for the calculation of accurate, artefact-free transport coefficients for both realistic electronic structures as well as models that are fully converged down to the lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
-In order to obtain all the required and optional packages to run the pre- and postprocessing at its full functionality simply install the dependencies with either [pip](https://pypi.org/project/pip/)
+At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code for the calculation of accurate, artefact-free transport coefficients of, both, realistic electronic structures as well as models and with high precision down to lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
+In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies with either [pip](https://pypi.org/project/pip/)
 
 `pip install matplotlib h5py numpy scipy ase spglib`
 
 `pip install boltztrap2`
 
-or use one of many other popular Python package manager like [anaconda3](https://www.anaconda.com).
+or use one of many other popular Python package managers like [anaconda3](https://www.anaconda.com).
 
-The Python interface of LinReTraCe can then be either executed directly from the source folder or installed via
+The Python interface of LinReTraCe can then either bei executed directly from the source folder or installed globally via
 
 `python setup.py install`
 
 ## Compilation
 
-The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of the authors. There an installation guide and test code is provided, if needed. To maximize the scalabilty of the code we highly recommend making use of the MPI implementation, however a single core installation will continue to be supported.
+The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed. To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
 
-To compile the code a special `make_config` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
+To compile the code, a special `make_config` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
 ```
 FC       = mpiifort       # Main Fortran compiler
 FCDG     = ifort          # Fortran Compiler for the Special functions
@@ -144,4 +145,4 @@ matthias [dot] pickem [at] gmail [dot] com
 tomczak [dot] jm [at] gmail [dot] com
 
 ## Acknowledgements
-LinReTraCe was funded by the Austrian Science Fund (FWF) through project P 30213.
+[LinReTraCe](https://sites.google.com/view/tomczak-group/projects/linretrace) was funded by the Austrian Science Fund (FWF) through project [P 30213](https://pf.fwf.ac.at/de/wissenschaft-konkret/project-finder/40827).
