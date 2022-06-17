@@ -49,9 +49,10 @@ class DftDetection(object):
       return None
 
     scf = os.path.join(self.path,'*.scf')
-    files = glob.glob(scf)
+    files = glob.glob(scf).sort()
     if len(files) >= 1:
       if len(files) > 1:
+        files.sort() # this is necessary for minimization jobs where there are multiple scfs: a.scf - a_1.scf - a_2.scf - etc.
         logger.warn('Detected more than 1 scf file in provided folder: Choosing {}'.format(files[0]))
 
       purescf = os.path.basename(files[0])
