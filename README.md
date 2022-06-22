@@ -27,6 +27,10 @@ The Python interface of LinReTraCe can then either bei executed directly from th
 
 The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed. To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
 
+To obtain the LinReTraCe source, clone this repository:
+
+`git clone https://github.com/linretrace/linretrace.git`
+
 To compile the code, a special `make_config` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
 ```
 FC       = mpiifort       # Main Fortran compiler
