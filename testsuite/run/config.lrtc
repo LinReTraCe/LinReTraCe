@@ -1,0 +1,19 @@
+[General]
+RunMode         =  mu
+EnergyFile      =  testsuite/run/Si_input.hdf5
+OutputFile      =  testsuite/run/Si_output.hdf5
+BFieldMode      =  T
+Interband       =  F
+Intraband       =  T
+Boltzmann       =  T
+QuadResponse    =  T
+FermiOccupation =  T
+
+[MuMode]
+[[Scattering]]
+Temperature = 300.0
+MuMinimum = -5.0
+MuMaximum = 5.0
+MuPoints  = 100
+ScatteringRate       = 1e-05
+QuasiParticleWeight  = 1.0
