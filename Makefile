@@ -18,6 +18,14 @@ pristine:
 ctags:
 	ctags -R --exclude=src_linretrace/digamma --exclude=src_pp --exclude=src_linretrace/deprecated
 
+test: bin/linretrace
+	./ldft testsuite/Si --interp 3 --output testsuite/Si_input.hdf5
+	./bin/linretrace testsuite/config.lrtc
+	./lprint -p testsuite/Si_output.hdf5 c-intra xx yy zz
+	./lprint -p testsuite/Si_output.hdf5 s-intra xx yy zz
+	rm testsuite/Si_input.hdf5
+	rm testsuite/Si_output.hdf5
+
 install: bin/linretrace
 	@echo "Creating bin folder in \$$HOME:"
 	mkdir -p ${HOME}/bin
