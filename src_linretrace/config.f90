@@ -7,6 +7,7 @@ module Mconfig
 
 contains
 
+! read config file, set default flags
 subroutine read_config(algo, edisp, sct, temp, pot, imp)
   implicit none
   type(algorithm)   :: algo
@@ -48,6 +49,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     call stop_with_message(stderr, 'The program has to be executed with exactly one argument. (Name of config file)')
   end if
 
+  ! use first argument in execution as config file name
   call getarg(1,config_file)
 
   open(unit=10,file=trim(config_file),action='read',iostat=stat)
@@ -86,7 +88,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       endif
   enddo read_temp
 
-  ! rewrite everything to a new clean string array
+  ! write config into a continous array
   allocate(file_save(lines-empty))
   j=1
   read_save: do i=1,lines
@@ -145,7 +147,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%ldoping        = .false.
 
   !--------------------------------------------------------------------------------
-  !--------------------------------------------------------------------------------
+  !------ For each group, scan through each possible entry
   !--------------------------------------------------------------------------------
 
   ! search for General stuff + Allocation of values
@@ -249,6 +251,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   deallocate(outputmethod)
 
 
+  ! MU MODE CONFIGURATION
   if (algo%lMUMODE) then
     algo%musearch = .false.
 
@@ -334,6 +337,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
     endif
   endif
 
+  ! TEMP MODE CONFIGURATION
   if (algo%lTMODE) then
 
     call group_find('[TempMode]', search_start, search_end)
@@ -751,6 +755,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 end subroutine read_config
 
 
+! check provided file names for existance
 subroutine check_files(algo)
   implicit none
   type(algorithm) :: algo

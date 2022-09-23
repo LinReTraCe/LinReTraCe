@@ -3,8 +3,12 @@ module Mlookup
 
   ! config file auxiliary variables
   integer :: lines
+
+  ! comment character within config file
   character(len=1), parameter     :: cmnt = '#'
+  ! seperator character within config file
   character(len=1), parameter     :: separator = '='
+  ! multivalue separator character within config file
   character(len=1), parameter     :: multseparator = ' ' ! space
   ! where we save the whole config file
   character(len=256), allocatable :: file_temp(:), file_save(:)
@@ -17,6 +21,7 @@ module Mlookup
 
   contains
 
+  ! find entry that needs to be saved as string
   subroutine string_find(search_string, save_string, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     character(len=256), intent(inout) :: save_string ! keep default string
@@ -40,6 +45,7 @@ module Mlookup
     enddo
   end subroutine string_find
 
+  ! find entry that needs to be saved as integer
   subroutine int_find(search_string, save_int, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     integer, intent(inout) :: save_int ! keep default values
@@ -64,6 +70,8 @@ module Mlookup
     enddo
   end subroutine int_find
 
+  ! find entry that needs to be saved as multiple integers
+  ! automatically detects how many integers there are and saves it into the provided, unallocated array
   subroutine intn_find(search_string, int_array, search_start, search_end, found)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -126,6 +134,7 @@ module Mlookup
     enddo
   end subroutine intn_find
 
+  ! find entry that needs to be saved as floating number
   subroutine float_find(search_string, save_float, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     real(8), intent(inout) :: save_float ! keep default values
@@ -150,6 +159,8 @@ module Mlookup
     enddo
   end subroutine float_find
 
+  ! find entry that needs to be saved as multiple floats
+  ! automatically detects how many integers there are and saves it into the provided, unallocated array
   subroutine floatn_find(search_string, float_array, search_start, search_end, found)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -212,6 +223,7 @@ module Mlookup
     enddo
   end subroutine floatn_find
 
+  ! find entry that needs to be saved as boolean (logical)
   subroutine bool_find(search_string, save_bool, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     logical, intent(inout) :: save_bool
@@ -236,6 +248,7 @@ module Mlookup
     enddo
   end subroutine bool_find
 
+  ! find Group ([...]) in config file and saves the start and end line numbers
   subroutine group_find(search_string, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(out) :: save_start, save_end
@@ -272,6 +285,7 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine group_find
 
+  ! find SubGroup ([[...]]) in config file and saves the start and end line numbers
   subroutine subgroup_find(search_string, search_start, search_end, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -310,6 +324,7 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine subgroup_find
 
+  ! find SubSubGroup ([[[...]]]) in config file and saves the start and end line numbers
   subroutine subsubgroup_find(search_string, search_start, search_end, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -348,6 +363,9 @@ module Mlookup
   ! https://github.com/abinitiodga/adga
   ! + some adjustment regarding boundaries
   ! GPLv3 code
+  ! spell check within provided group with the help of a dictionary
+  ! the dictionary provides all allowed keywords
+  ! if any inconsistency are found, return an error code + appropriate message
   subroutine spell_check(search_start, search_end, grname, dictionary, er, erstr)
     character(*), intent(in) :: grname
     character(*), intent(in) :: dictionary(:)

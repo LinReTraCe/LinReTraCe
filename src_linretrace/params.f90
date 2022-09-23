@@ -1,20 +1,26 @@
 module Mparams
   implicit none
 
-  ! mathematical constants
+  ! complex i
   complex(8),  parameter :: ci      = (0.d0,1.d0)
+  ! mathematical constant pi
   real(8),     parameter :: pi      = 3.1415926535897932384626433832795028841971693993751D0
 
+  ! complex i (quad)
   complex(16), parameter :: ciQ     = (0.q0,1.q0)
+  ! mathematical constant pi (quad)
   real(16),    parameter :: piQ     = 3.1415926535897932384626433832795028841971693993751Q0
 
-  ! physical constants
+  ! boltzmann constant
   real(8),     parameter :: kB      = 8.6173324D-5 ! eV/K
+  ! plancks constant in eV * s
   real(8),     parameter :: hbarevs = (4.135667516D-15)/(2.d0*pi) !evs
+  ! plancks constant in J * s
   real(8),     parameter :: hbarjs  = (6.62607D-34)/(2.d0*pi) !Js
+  ! elementary charge in C
   real(8),     parameter :: echarge = 1.6021766208d-19 ! C
 
-  ! numerical parameters
+  ! numerical parameters used within the code
   real(8),     parameter :: ndev    = 5D-13
   real(16),    parameter :: ndevQ   = 5Q-14
   real(16),    parameter :: ndevVQ  = 5Q-19
@@ -24,7 +30,7 @@ module Mparams
   real(8),     parameter :: small   = 1D-11
   real(16),    parameter :: smallQ  = 1Q-18
 
-  ! fortran specifier
+  ! fortran input/output specifier in a unix environment
   integer,     parameter :: stdout = 6
   integer,     parameter :: stdin  = 5
   integer,     parameter :: stderr = 0

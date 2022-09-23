@@ -23,6 +23,8 @@ module Mroot
 
   contains
 
+! if band shifts are applied onto the input DFT energy range
+! we have to re-determine the chemical potential of the system
 subroutine find_mu_DFT(edisp,kmesh,pot)
   implicit none
   type(energydisp) :: edisp
@@ -371,6 +373,11 @@ end subroutine find_mu_DFT
 !  ! endif
 !end subroutine find_mu_D
 
+
+
+! determine the chemical potentail with the preset algorithm
+! if the system is gapped and it is determined that the standard accuracy is not good enough
+! apply the refinement algorithm after the fact.
 subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
@@ -596,6 +603,9 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
 
 end subroutine find_mu
 
+! refinement algorithm of the chemical potential
+! essentially balances the thermally activated electrons / holes in the system
+! if the chemical potential is inside a fully gapped system
 subroutine find_mu_refine(mu_in, mu_out, refine_abort, niitact, edisp, sct, kmesh, imp, algo, info)
   implicit none
   ! passed variables
@@ -758,7 +768,9 @@ end subroutine
 
 
 
-! we keep this, since this is used once in main
+! determine the deviation of the calculated total occupation from the demanded occupation
+! returns the difference between the two numbers
+! -- double precision
 subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
@@ -797,6 +809,9 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   target_zero = edisp%nelect - occ_tot
 end subroutine ndeviation_D
 
+! determine the deviation of the calculated total occupation from the demanded occupation
+! returns the difference between the two numbers
+! -- quad precision
 subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
@@ -836,6 +851,8 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   target_zero=real(edisp%nelect,16) - occ_tot
 end subroutine ndeviation_Q
 
+! determine the occupation of the full system via the digamma function
+! -- double precision
 subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
@@ -876,6 +893,8 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 end subroutine occ_digamma_D
 
 
+! determine the occupation of the full system via the digamma function
+! -- quad precision
 subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
@@ -915,6 +934,8 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_digamma_Q
 
+! determine the occupation of the full system via the fermi function
+! -- double precision
 subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
@@ -951,6 +972,8 @@ subroutine occ_fermi_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 end subroutine occ_fermi_D
 
 
+! determine the occupation of the full system via the fermi function
+! -- quad precision
 subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   implicit none
 
@@ -984,6 +1007,8 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_fermi_Q
 
+! determine the difference between the thermally activated electrons and holes in the system
+! -- quad precision
 subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   implicit none
 
@@ -1095,6 +1120,8 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   return
 end subroutine occ_refine
 
+! determine the correction of the occupation, caused by the impurity states
+! -- double precision
 subroutine occ_impurity_D(occimp, mu, imp, info)
   real(8), intent(in)    :: mu
   real(8), intent(inout) :: occimp
@@ -1154,6 +1181,8 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
 
 end subroutine occ_impurity_D
 
+! determine the correction of the occupation, caused by the impurity states
+! -- quad precision
 subroutine occ_impurity_Q(occimp, mu, imp, info)
   real(16), intent(in)    :: mu
   real(16), intent(inout) :: occimp
@@ -1213,6 +1242,8 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
 
 end subroutine occ_impurity_Q
 
+! determine the occupation of the system for DFT (T=0)
+! i.e. n(eps < mu) = 1; n(eps > mu) 0
 subroutine occ_DFT(mu, occ_tot, edisp, kmesh)
   implicit none
 

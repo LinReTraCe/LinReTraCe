@@ -12,7 +12,7 @@ program main
   use hdf5
   implicit none
 
-  type(algorithm)   :: algo
+  type(algorithm)   :: algo    ! contains run flags and file names
   type(kpointmesh)  :: kmesh   ! contains k-point mesh specifiers and logical switches on how to get the mesh from
   type(energydisp)  :: edisp   ! contains the band dispersion energy and the optical matrix elements
   type(dosgrid)     :: dos     ! DOS, integrated DOS, Fermi level
@@ -20,18 +20,21 @@ program main
   type(temperature) :: temp    ! temperature quantities
   type(potential)   :: pot     ! chemical potential quantities
   type(runinfo)     :: info    ! runtime information for the calculation routines, temps, betas, etc.
-  type(impurity)    :: imp
+  type(impurity)    :: imp     ! impurity information
 
+  ! response data double precision
   type(response_dp) :: resp_intra
   type(response_dp) :: resp_intra_Boltzmann
   type(response_dp) :: resp_inter
   type(response_dp) :: resp_inter_Boltzmann
 
+  ! response data quad precision
   type(response_qp) :: qresp_intra
   type(response_qp) :: qresp_intra_Boltzmann
   type(response_qp) :: qresp_inter
   type(response_qp) :: qresp_inter_Boltzmann
 
+  ! HDF5 file identifier
   integer(hid_t)    :: ifile_scatter_hdf5
   integer(hid_t)    :: ifile_energy
   integer(hid_t)    :: ifile_output

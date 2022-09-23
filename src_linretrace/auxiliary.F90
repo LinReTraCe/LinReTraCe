@@ -8,6 +8,7 @@ module Mauxiliary
 
 contains
 
+! introductory message at program start
 subroutine main_greeting(ounit)
   implicit none
   integer, intent(in) :: ounit
@@ -21,6 +22,7 @@ subroutine main_greeting(ounit)
   write(ounit,*)
 end subroutine main_greeting
 
+! logging for master core
 subroutine log_master(ounit, string)
   implicit none
   integer, intent(in)          :: ounit
@@ -30,6 +32,7 @@ subroutine log_master(ounit, string)
   endif
 end subroutine
 
+! abort routine
 subroutine stop_with_message(ounit, erstr, er)
   implicit none
   integer, intent(in)           :: ounit
@@ -53,6 +56,7 @@ subroutine stop_with_message(ounit, erstr, er)
    stop
 end subroutine stop_with_message
 
+! string method to uppercase string
 function to_upper(strIn) result(strOut)
 ! Adapted from http://www.star.le.ac.uk/~cgp/fortran.html (25 May 2012)
 ! Original author: Clive Page
@@ -71,6 +75,7 @@ function to_upper(strIn) result(strOut)
   end do
 end function to_upper
 
+! string method to lowercase string
 function to_lower(strIn) result(strOut)
 ! Adapted from http://www.star.le.ac.uk/~cgp/fortran.html (25 May 2012)
 ! Original author: Clive Page

@@ -8,6 +8,8 @@ module Minput
 
 contains
 
+! preprocessing of input LRTC energy file
+! read in auxiliary data like kmesh, structure, band (gap) information
 subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   implicit none
   type(algorithm)      :: algo
@@ -276,6 +278,7 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
 
 end subroutine
 
+! read energies and _diagonal_ optical elements from LRTC energy file
 subroutine read_energy(algo, edisp)
   implicit none
   type(algorithm)  :: algo
@@ -359,6 +362,8 @@ subroutine read_energy(algo, edisp)
 
 end subroutine
 
+! preprocessing of HDF5 scattering file
+! read in of auxiliary data and check for consistency with LRTC input file
 subroutine read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
@@ -447,6 +452,8 @@ subroutine read_preproc_scattering_hdf5(algo, kmesh, edisp, sct, pot, temp)
 
 end subroutine
 
+! preprocessing of TEXT scattering file
+! read in of auxiliary data and check for consistency with LRTC input file
 subroutine read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
   implicit none
   type(algorithm)              :: algo
@@ -574,6 +581,9 @@ subroutine read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
 
 end subroutine
 
+! read in of scattering information
+! gets loaded for each step of the temperature/chemical potential range
+! this step is saved at info%iStep
 subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
   implicit none
   integer(hid_t)   :: ifile
@@ -759,6 +769,8 @@ subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
 
 end subroutine
 
+! read in of full optical elements M(k,n,m)
+! gets loaded for the current momentum point, saved in info%ik
 subroutine read_full_optical_elements(ifile, edisp, info)
   implicit none
   integer(hid_t)   :: ifile
@@ -788,6 +800,8 @@ subroutine read_full_optical_elements(ifile, edisp, info)
 
 end subroutine
 
+! read in of full optical elements M^B(k,n,m)
+! gets loaded for the current momentum point, saved in info%ik
 subroutine read_full_magnetic_elements(ifile, edisp, info)
   implicit none
   integer(hid_t)   :: ifile
@@ -816,38 +830,8 @@ subroutine read_full_magnetic_elements(ifile, edisp, info)
   endif
 end subroutine
 
-subroutine read_full_magnetic_optical_elements(ifile, edisp, sct, info)
-  ! currently unused subroutine which will be used to load in the full magnetic
-  ! field optical elements
-  implicit none
-  integer(hid_t)   :: ifile
-  type(energydisp) :: edisp
-  type(scattering) :: sct
-  type(runinfo)    :: info
-
-  complex(8), allocatable :: zarr5(:,:,:,:,:)
-  character(len=128)   :: string
-
-  if (edisp%ispin == 1) then
-    if (allocated(zarr5)) deallocate(zarr5)
-    write(string,'("kPoint/",I10.10,"/momentsBfield")') info%ik
-    call hdf5_read_data(ifile, string, zarr5)
-    edisp%MBoptk(:,:,:,:,:,1) = zarr5
-    deallocate(zarr5)
-  else
-    if (allocated(zarr5)) deallocate(zarr5)
-    write(string,'("up/kPoint/",I10.10,"/momentsBfield")') info%ik
-    call hdf5_read_data(ifile, string, zarr5)
-    edisp%MBoptk(:,:,:,:,:,1) = zarr5
-    deallocate(zarr5)
-    write(string,'("dn/kPoint/",I10.10,"/momentsBfield")') info%ik
-    call hdf5_read_data(ifile, string, zarr5)
-    edisp%MBoptk(:,:,:,:,:,2) = zarr5
-    deallocate(zarr5)
-  endif
-
-end subroutine
-
+! read in old mu(T) data from old output file
+! check for consistency with provided config information
 subroutine read_muT_hdf5(algo, temp, mu)
   implicit none
   type(algorithm)   :: algo
@@ -873,6 +857,8 @@ subroutine read_muT_hdf5(algo, temp, mu)
 
 end subroutine read_muT_hdf5
 
+! read in old mu(T) data from text file
+! check for consistency with provided config information
 subroutine read_muT_text(algo, temp, mu)
   implicit none
   type(algorithm)   :: algo

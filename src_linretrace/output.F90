@@ -7,6 +7,8 @@ module Moutput
 
   contains
 
+! output all auxiliary data to the LRTC HDF5 output file
+! includes, configuration details, input structure details, scattering rate details
 subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   implicit none
   type(algorithm)   :: algo
@@ -208,6 +210,17 @@ end subroutine
 ! end subroutine
 
 
+
+! main routine for the output of double precision response data
+! this subroutine gets called at each step of the temperature/chemical_potential loop
+!
+! perform partial (band, momentum) summation, if required
+! perform full (band, momentum) summation
+! apply pre, post- factors to achieve SI units
+!
+! if a full / partial output is used, write it to the HDF5 file
+! save fully summed quantities in appropriate array and write it at the final step of the temperature
+! / chemical potential loop
 subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
   implicit none
   type (response_dp)  :: resp
@@ -837,6 +850,16 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 end subroutine
 
 
+! main routine for the output of quad precision response data
+! this subroutine gets called at each step of the temperature/chemical_potential loop
+!
+! perform partial (band, momentum) summation, if required
+! perform full (band, momentum) summation
+! apply pre, post- factors to achieve SI units
+!
+! if a full / partial output is used, write it to the HDF5 file
+! save fully summed quantities in appropriate array and write it at the final step of the temperature
+! / chemical potential loop
 subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfield)
   ! for the quad precision we don't have a full output
   ! since the implemented MPI routines only support double-precision

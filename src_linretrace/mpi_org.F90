@@ -45,6 +45,7 @@ module Mmpi_org
     return
   end subroutine prepare_chmyid
 
+  ! distribute momentum points among all processes
   subroutine mpi_genkstep(nk)
     implicit none
     integer, intent(in) :: nk

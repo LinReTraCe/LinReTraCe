@@ -30,6 +30,7 @@ module Mfermi
 !________________________________________________________
 ! fermi function in different precisions
 
+  ! fermi function: energy, beta in double precision
   pure elemental function fermi_dp(eps,beta) result(f)
     implicit none
     real(8), intent(in) :: eps
@@ -38,6 +39,7 @@ module Mfermi
     f = 1.d0 / (1.d0 + EXP(beta*eps))
   end function fermi_dp
 
+  ! fermi function: energy, beta in quad precision
   pure elemental function fermi_qp(eps,beta) result(f)
     implicit none
     real(16), intent(in) :: eps
@@ -46,6 +48,7 @@ module Mfermi
     f = 1.q0 / (1.q0 + EXP(eps*beta))
   end function fermi_qp
 
+  ! fermi function: energy in double precision, beta in quad precision
   pure elemental function fermi_dpqp(eps,beta) result(f)
     implicit none
     real(8), intent(in)  :: eps
@@ -54,6 +57,7 @@ module Mfermi
     f = 1.q0 / (1.q0 + EXP(beta*eps))
   end function fermi_dpqp
 
+  ! fermi function: energy in quad precision, beta in double precision
   pure elemental function fermi_qpdp(eps,beta) result(f)
     implicit none
     real(16), intent(in) :: eps

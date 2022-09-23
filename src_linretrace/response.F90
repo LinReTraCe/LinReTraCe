@@ -20,6 +20,7 @@ module Mresponse
 
   contains
 
+! intialize provided response data to 0
 subroutine initresp(algo, dresp)
   implicit none
   type(algorithm)   :: algo
@@ -42,6 +43,7 @@ subroutine initresp(algo, dresp)
   endif
 end subroutine initresp
 
+! intialize provided response data to 0 (quad)
 subroutine initresp_qp (algo, qresp)
   implicit none
   type(algorithm)   :: algo
@@ -64,6 +66,8 @@ subroutine initresp_qp (algo, qresp)
   endif
 end subroutine initresp_qp
 
+! calculate the intra band response functions for the assigned momentum range
+! -- double precision
 subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_dp)   :: resp
@@ -165,14 +169,17 @@ subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   deallocate(enrgy)
 
+  ! after calculating the kernels we finally multiply with the appropriate directional optical elements
   call response_intra_optical_weights(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(algo, resp, edisp, info)
+    call response_intra_magnetic_optical_weights(algo, resp, edisp, info)
   endif
 
 
 end subroutine response_intra_km
 
+! calculate the inter band response functions for the assigned momentum range
+! -- double precision
 subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_dp)  :: resp
@@ -517,6 +524,8 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_km
 
+! calculate the intra band response functions for the assigned momentum range
+! Boltzmann approximation -- double precision
 subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_dp)      :: resp
@@ -588,11 +597,13 @@ subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights(algo, resp, edisp, info)
+    call response_intra_magnetic_optical_weights(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km
 
+! calculate the intra band response functions for the assigned momentum range
+! Boltzmann approximation -- quad precision
 subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_qp)    :: resp
@@ -662,11 +673,13 @@ subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights_Q(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(algo, resp, edisp, info)
+    call response_intra_magnetic_optical_weights_Q(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_Boltzmann_km_Q
 
+! calculate the inter band response functions for the assigned momentum range
+! Boltzmann approximation -- double precision
 subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_dp)  :: resp
@@ -954,6 +967,8 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_Boltzmann_km
 
+! calculate the inter band response functions for the assigned momentum range
+! Boltzmann approximation -- quad precision
 subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_qp)   :: resp
@@ -1235,6 +1250,7 @@ end subroutine response_inter_Boltzmann_km_Q
 
 
 ! multiply optical elements onto quantities without B-Field
+! double precision response
 subroutine response_intra_optical_weights(algo, resp, edisp, info)
   implicit none
   type(algorithm)    :: algo
@@ -1316,7 +1332,9 @@ subroutine response_intra_optical_weights(algo, resp, edisp, info)
 
 end subroutine response_intra_optical_weights
 
-subroutine response_peierls_weights(algo, resp, edisp, info)
+! multiply optical elements onto quantities with B-Field
+! double precision response
+subroutine response_intra_magnetic_optical_weights(algo, resp, edisp, info)
   implicit none
   type(algorithm)    :: algo
   type(response_dp)  :: resp
@@ -1362,7 +1380,9 @@ subroutine response_peierls_weights(algo, resp, edisp, info)
 
 end subroutine
 
-subroutine response_peierls_weights_Q(algo, resp, edisp, info)
+! multiply optical elements onto quantities with B-Field
+! quad precision response
+subroutine response_intra_magnetic_optical_weights_Q(algo, resp, edisp, info)
   implicit none
   type(algorithm)    :: algo
   type(response_qp)  :: resp
@@ -1408,6 +1428,7 @@ subroutine response_peierls_weights_Q(algo, resp, edisp, info)
 
 end subroutine
 
+! allocate empty response data types -- double precision
 subroutine dpresp_alloc(algo, edisp, temp, dpresp)
   implicit none
   type(algorithm)   :: algo
@@ -1447,6 +1468,7 @@ subroutine dpresp_alloc(algo, edisp, temp, dpresp)
 
 end subroutine dpresp_alloc
 
+! allocate empty response data types -- quad precision
 subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   implicit none
   type(algorithm)   :: algo
@@ -1484,6 +1506,8 @@ subroutine qpresp_alloc(algo, edisp, temp, qpresp)
   endif
 end subroutine qpresp_alloc
 
+! evaluate polygamma function on the assigned momentum range
+! evaluates psi_1, psi_2, and psi_3 in double precision
 subroutine calc_polygamma_D(PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type(algorithm)  :: algo
@@ -1519,6 +1543,8 @@ subroutine calc_polygamma_D(PolyGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_polygamma_D
 
+! evaluate polygamma function on the assigned momentum range
+! evaluates psi_1, psi_2, and psi_3 in quad precision
 subroutine calc_polygamma_Q(PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type(algorithm)  :: algo
@@ -1554,6 +1580,8 @@ subroutine calc_polygamma_Q(PolyGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_polygamma_Q
 
+! evaluate the total energy of the system
+! with the occupation number determined via the digamma function
 subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: energy_tot
 
@@ -1610,6 +1638,8 @@ subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, i
 
 end subroutine
 
+! evaluate the total energy of the system
+! with the occupation number determined via the fermi function
 subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: energy_tot
 
@@ -1657,6 +1687,8 @@ subroutine calc_total_energy_fermi(energy_tot, edisp, sct, kmesh, imp, algo, inf
 
 end subroutine
 
+! evaluate the thermaly activated electrons / holes in the system
+! with the occupation number determined via the digamma function
 subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
@@ -1730,6 +1762,8 @@ subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmes
 
 end subroutine
 
+! evaluate the thermaly activated electrons / holes in the system
+! with the occupation number determined via the fermi function
 subroutine calc_elecholes_fermi(electrons_total, holes_total, edisp, sct, kmesh, imp, algo, info)
   real(8), intent(out) :: electrons_total
   real(8), intent(out) :: holes_total
@@ -1801,6 +1835,8 @@ subroutine calc_elecholes_fermi(electrons_total, holes_total, edisp, sct, kmesh,
 
 end subroutine
 
+! calculate the intra band response functions for the assigned momentum range
+! -- quad precision
 subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_qp)    :: resp
@@ -1904,11 +1940,13 @@ subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   call response_intra_optical_weights_Q(algo, resp, edisp, info)
   if (algo%lBfield) then
-    call response_peierls_weights_Q(algo, resp, edisp, info)
+    call response_intra_magnetic_optical_weights_Q(algo, resp, edisp, info)
   endif
 
 end subroutine response_intra_km_Q
 
+! calculate the inter band response functions for the assigned momentum range
+! -- quad precision
 subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_qp)   :: resp
@@ -2246,6 +2284,8 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine response_inter_km_Q
 
+! multiply optical elements onto quantities without B-Field
+! quad precision response
 subroutine response_intra_optical_weights_Q(algo, resp, edisp, info)
   implicit none
   type(algorithm)    :: algo
@@ -2327,11 +2367,10 @@ subroutine response_intra_optical_weights_Q(algo, resp, edisp, info)
 
 end subroutine response_intra_optical_weights_Q
 
+! for a given B-field quantities identified by
+! dir1 dir2 dir
+! return the required directions for the band derivatives / curvatures
 subroutine levicivita_peierls(dir1,dir2,dir3, sign1,vdir1,mdir1,sign2,vdir2,mdir2)
-  ! for a given B-field quantities identified by
-  ! dir1 dir2 dir
-  ! return the required directions for the band derivatives / curvatures
-
   implicit none
   integer, intent(in)  :: dir1,dir2,dir3
   integer, intent(out) :: sign1,vdir1,mdir1, sign2,vdir2,mdir2
