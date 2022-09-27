@@ -7,14 +7,14 @@ include ../../make_include
 LIBS= -lquadmath
 
 .PHONY: all
-all: hdf5 quad
+all: hdf5 prec
 
 hdf5:
-	$(FC) $(FFLAGS) $(HDF5) 01_test_hdf5.f90 -o $(PROG)
+	$(FCDG) $(FFLAGS) $(HDF5) 01_test_hdf5.f90 -o $(PROG)
 	./$(PROG)
 
-quad:
-	$(FC) $(FFLAGS) $(LIBS) 02_test_lquad.f90 -o $(PROG)
+prec:
+	$(FCDG) $(FFLAGS) $(LIBS) 02_test_precision.f90 -o $(PROG)
 	./$(PROG)
 
 .PHONY: clean
