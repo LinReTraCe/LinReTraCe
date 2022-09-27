@@ -1,9 +1,8 @@
-program fortrantest
+program hdf5test
   use hdf5
   implicit none
 
-
-  write(*,*) 'HDF5 Tests'
+  write(*,*) 'begin HDF5 tests'
   call hdf5_interface()
   call hdf5_file()
 
@@ -49,6 +48,8 @@ program fortrantest
     else
       write(*,*) 'success'
     endif
+
+  write(*,*) 'end HDF5 Tests'
   end subroutine
 
 end program

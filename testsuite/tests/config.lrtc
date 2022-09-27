@@ -1,7 +1,7 @@
 [General]
 RunMode         =  mu
-EnergyFile      =  testsuite/run/Si_input.hdf5
-OutputFile      =  testsuite/run/Si_output.hdf5
+EnergyFile      =  testsuite/tests/Si_input.hdf5
+OutputFile      =  testsuite/tests/Si_output.hdf5
 BFieldMode      =  T
 Interband       =  F
 Intraband       =  T
