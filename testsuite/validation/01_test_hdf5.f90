@@ -4,6 +4,7 @@ program hdf5test
 
   write(*,*) 'begin HDF5 tests'
   call hdf5_interface()
+  call hdf5_version()
   call hdf5_file()
   call hdf5_logical() ! implicitly tests for version of HDF5 library
   call hdf5_complex()
@@ -16,11 +17,31 @@ program hdf5test
     integer :: hdf_err
     write(*,'(A)', advance='no') '    opening HDF5 interface:'
     call h5open_f(hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
     endif
+  end subroutine
+
+  subroutine hdf5_version()
+    implicit none
+    integer :: hdf_err
+    integer :: majnum, minnum, relnum
+    call h5get_libversion_f(majnum, minnum, relnum, hdf_err)
+    write(*,*) '   fetching HDF5 version:'
+    write(*,*) '   ', majnum, minnum, relnum
+    write(*,'(A)', advance='no') '      version > 1.12:'
+    if ((majnum .eq. 1) .and. (minnum .ge. 12)) then
+      write(*,*) 'success'
+    else
+      write(*,*) 'failed'
+      write(*,*) '-------------------------------------'
+      write(*,*) 'Please update to appropriate version.'
+      write(*,*) '-------------------------------------'
+      stop
+    endif
+
   end subroutine
 
   subroutine hdf5_file()
@@ -30,7 +51,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '    creating HDF5 file:'
     call h5fcreate_f('test.hdf5', h5f_acc_trunc_f, ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -38,7 +59,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '    opening HDF5 file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -46,7 +67,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '    closing HDF5 file:'
     call h5fclose_f(ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -85,7 +106,7 @@ program hdf5test
     call h5tcreate_f(h5t_compound_f, type_sized, complex_id_i_dp, hdf_err)
     call h5tinsert_f(complex_id_i_dp, "i", zero, h5t_native_double, hdf_err)
     call h5pclose_f(plist_id, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -93,7 +114,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '      opening file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -108,7 +129,7 @@ program hdf5test
     call h5dwrite_f(dset_id, complex_id_i_dp, aimag(darray), dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -132,7 +153,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '      closing file:'
     call h5fclose_f(ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -160,7 +181,7 @@ program hdf5test
     call h5tcreate_f(h5t_enum_f, type_sized, logical_id, hdf_err)
     call h5tenum_insert_f(logical_id, "FALSE", zero, hdf_err)
     call h5tenum_insert_f(logical_id, "TRUE", one, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -168,7 +189,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '      opening file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -182,7 +203,7 @@ program hdf5test
     call h5dwrite_f(dset_id, logical_id, darray, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -203,7 +224,7 @@ program hdf5test
 
     write(*,'(A)', advance='no') '      closing file:'
     call h5fclose_f(ifile, hdf_err)
-    if (hdf_err) then
+    if (hdf_err > 0) then
       write(*,*) 'failed'
     else
       write(*,*) 'success'
