@@ -165,14 +165,18 @@ program hdf5test
     implicit none
     integer, parameter             :: logical_size = 1
     integer(hid_t)                 :: grp_id, logical_id, dset_id, ifile, dspace_id
+    integer(hid_t)                 :: dset_space_id
     integer, parameter             :: zero = 0
     integer, parameter             :: one = 1
     integer(size_t)                :: type_sized
     integer                        :: hdf_err
-    integer(8), dimension(0)       :: dims
-    integer(hsize_t), dimension(0) :: dset_dims
+    integer(8), dimension(1)       :: dims
+    integer(hsize_t), dimension(1) :: dset_dims, dset_maxdims
 
-    integer(logical_size)    :: darray = 1
+    ! in the hdf5 wrapper the incoming logical data gets converted to integer
+    ! which then gets written as HDF5 enumerations
+    ! to shortcut this process we simply create an integer array
+    integer(logical_size), allocatable :: darrayi(:)
 
     write(*,'(A)', advance='yes') '    logical datatype tests.'
     write(*,'(A)', advance='no')  '      creating logical enumeration:'
@@ -195,12 +199,17 @@ program hdf5test
       write(*,*) 'success'
     endif
 
+    allocate(darrayi(3))
+    darrayi = 1
+    dims(1) = 3
+
     write(*,'(A)', advance='no') '      writing logical to file:'
     ! writing logical 0D array
-    call h5screate_simple_f(0, dims, dspace_id, hdf_err)
     grp_id = ifile ! write into root
+    call h5screate_f(h5s_simple_f, dspace_id, hdf_err)
+    call h5sset_extent_simple_f(dspace_id, 1, dims, dims, hdf_err)
     call h5dcreate_f(grp_id, 'logical', logical_id, dspace_id, dset_id, hdf_err)
-    call h5dwrite_f(dset_id, logical_id, darray, dims, hdf_err)
+    call h5dwrite_f(dset_id, logical_id, darrayi, dims, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
     if (hdf_err > 0) then
@@ -209,14 +218,19 @@ program hdf5test
       write(*,*) 'success'
     endif
 
+    deallocate(darrayi)
 
     write(*,'(A)', advance='no') '      reading logical from file:'
     ! writing logical 0D array
-    darray = 123
     call h5dopen_f(ifile, 'logical', dset_id, hdf_err)
-    call h5dread_f(dset_id, logical_id, darray, dset_dims, hdf_err)
+    call h5dget_space_f(dset_id, dset_space_id, hdf_err)
+    call h5sget_simple_extent_dims_f(dset_space_id, dset_dims, dset_maxdims, hdf_err)
+    allocate(darrayi(dset_dims(1)))
+    call h5dread_f(dset_id, logical_id, darrayi, dset_dims, hdf_err)
+    call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
-    if (darray == 1) then
+
+    if (darrayi(1) == 1 .and. darrayi(2) == 1 .and. darrayi(3) == 1) then
       write(*,*) 'success'
     else
       write(*,*) 'failed'
