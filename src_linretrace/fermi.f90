@@ -12,15 +12,18 @@ module Mfermi
     module procedure omfermi_dp, omfermi_qp, omfermi_dpqp, omfermi_qpdp
   end interface omfermi
 
-  ! fermi - 1/2
+  ! fermi function - 0.5
   interface fermimhalf
     module procedure fermi2_dp, fermi2_qp, fermi2_dpqp, fermi2_qpdp
   end interface fermimhalf
 
+  ! substitution of Re psi_1 in the Gamma -> 0 limit
+  ! -> Re[psi_1[0.5 + beta/2pi * (i*a)]] ==  pi**2 / 2 / cosh(beta * eps / 2)**2
   interface polygamma2fermi
     module procedure polygamma2fermi_dp, polygamma2fermi_qp
   end interface polygamma2fermi
 
+  ! -> Re[psi_1[0.5 + beta/2pi * (gamma + i*a)]]
   interface polygamma2psi1
     module procedure polygamma2psi1_dp, polygamma2psi1_qp
   end interface polygamma2psi1

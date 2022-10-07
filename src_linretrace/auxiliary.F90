@@ -17,12 +17,12 @@ subroutine main_greeting(ounit)
   write(ounit,*)'#  LinReTraCe --- Linear Response Transport Centre  #'
   write(ounit,*)'#####################################################'
   write(ounit,*)'#       M. Pickem, E. Maggio and J.M. Tomczak       #'
-  write(ounit,*)'#       (v1.1.5 June 2022)                          #'
+  write(ounit,*)'#       v1.1.6 October 2022                         #'
   write(ounit,*)'#####################################################'
   write(ounit,*)
 end subroutine main_greeting
 
-! logging for master core
+! logging function for master core
 subroutine log_master(ounit, string)
   implicit none
   integer, intent(in)          :: ounit
@@ -32,7 +32,7 @@ subroutine log_master(ounit, string)
   endif
 end subroutine
 
-! abort routine
+! (MPI) abort routine -- prints error string string and code and stops the program
 subroutine stop_with_message(ounit, erstr, er)
   implicit none
   integer, intent(in)           :: ounit

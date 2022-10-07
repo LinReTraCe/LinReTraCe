@@ -22,6 +22,9 @@ module Mlookup
   contains
 
   ! find entry that needs to be saved as string
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in save_string
+  ! if not found: found is set to .false. (save_string contains garbage)
   subroutine string_find(search_string, save_string, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     character(len=256), intent(inout) :: save_string ! keep default string
@@ -46,6 +49,9 @@ module Mlookup
   end subroutine string_find
 
   ! find entry that needs to be saved as integer
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in save_int
+  ! if not found: found is set to .false. (save_string contains garbage)
   subroutine int_find(search_string, save_int, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     integer, intent(inout) :: save_int ! keep default values
@@ -70,8 +76,11 @@ module Mlookup
     enddo
   end subroutine int_find
 
-  ! find entry that needs to be saved as multiple integers
+  ! find entry that needs to be saved as MULTIPLE integer
   ! automatically detects how many integers there are and saves it into the provided, unallocated array
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in save_int
+  ! if not found: found is set to .false. (save_int contains garbage)
   subroutine intn_find(search_string, int_array, search_start, search_end, found)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -135,6 +144,9 @@ module Mlookup
   end subroutine intn_find
 
   ! find entry that needs to be saved as floating number
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in save_float
+  ! if not found: found is set to .false. (save_float contains garbage)
   subroutine float_find(search_string, save_float, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     real(8), intent(inout) :: save_float ! keep default values
@@ -161,6 +173,9 @@ module Mlookup
 
   ! find entry that needs to be saved as multiple floats
   ! automatically detects how many integers there are and saves it into the provided, unallocated array
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in float_array
+  ! if not found: found is set to .false. (float_array is not allocated)
   subroutine floatn_find(search_string, float_array, search_start, search_end, found)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -224,6 +239,9 @@ module Mlookup
   end subroutine floatn_find
 
   ! find entry that needs to be saved as boolean (logical)
+  ! search_string gets searched between search_start <= ... <= search_end
+  ! if found:  found is set to .true. and entry is saved in save_bool
+  ! if not found: found is set to .false. (save_bool is not allocated)
   subroutine bool_find(search_string, save_bool, search_start, search_end, found)
     character(*), intent(in)  :: search_string
     logical, intent(inout) :: save_bool
@@ -248,7 +266,10 @@ module Mlookup
     enddo
   end subroutine bool_find
 
-  ! find Group ([...]) in config file and saves the start and end line numbers
+  ! find Group ([...]) in config file
+  ! save the start and end line numbers
+  ! of the lines below until the next Group in save_start, save_end
+  ! these numbers are then used for the above subroutines to look for parameters
   subroutine group_find(search_string, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(out) :: save_start, save_end
@@ -285,7 +306,10 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine group_find
 
-  ! find SubGroup ([[...]]) in config file and saves the start and end line numbers
+  ! find SubGroup ([[...]]) in config file within Group range: search_start <= .. <= search_end
+  ! save the start and end line numbers
+  ! of the lines below until the next (Sub) Group in save_start, save_end
+  ! these numbers are then used to look for parameters
   subroutine subgroup_find(search_string, search_start, search_end, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -324,7 +348,10 @@ module Mlookup
     ! save_start -> 0: not found; -1: found, but empty
   end subroutine subgroup_find
 
-  ! find SubSubGroup ([[[...]]]) in config file and saves the start and end line numbers
+  ! find SubSubGroup ([[[...]]]) in config file within SubGroup range: search_start <= .. <= search_end
+  ! save the start and end line numbers
+  ! of the lines below until the next (Sub) (Sub) Group in save_start, save_end
+  ! these numbers are then used to look for parameters
   subroutine subsubgroup_find(search_string, search_start, search_end, save_start, save_end)
     character(*), intent(in) :: search_string
     integer, intent(in) :: search_start, search_end
@@ -363,8 +390,8 @@ module Mlookup
   ! https://github.com/abinitiodga/adga
   ! + some adjustment regarding boundaries
   ! GPLv3 code
-  ! spell check within provided group with the help of a dictionary
-  ! the dictionary provides all allowed keywords
+  ! spell check within provided lines search_start <= ... search_end
+  ! with the help of a dictionary where all allowed keywords are documented
   ! if any inconsistency are found, return an error code + appropriate message
   subroutine spell_check(search_start, search_end, grname, dictionary, er, erstr)
     character(*), intent(in) :: grname

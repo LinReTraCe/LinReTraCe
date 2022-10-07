@@ -1,9 +1,9 @@
 module Mparams
   implicit none
 
-  ! complex i
+  ! complex i (double)
   complex(8),  parameter :: ci      = (0.d0,1.d0)
-  ! mathematical constant pi
+  ! mathematical constant pi (double)
   real(8),     parameter :: pi      = 3.1415926535897932384626433832795028841971693993751D0
 
   ! complex i (quad)
@@ -11,14 +11,14 @@ module Mparams
   ! mathematical constant pi (quad)
   real(16),    parameter :: piQ     = 3.1415926535897932384626433832795028841971693993751Q0
 
-  ! boltzmann constant
-  real(8),     parameter :: kB      = 8.6173324D-5 ! eV/K
+  ! boltzmann constant in eV / K
+  real(8),     parameter :: kB      = 8.6173324D-5
   ! plancks constant in eV * s
-  real(8),     parameter :: hbarevs = (4.135667516D-15)/(2.d0*pi) !evs
+  real(8),     parameter :: hbarevs = (4.135667516D-15)/(2.d0*pi)
   ! plancks constant in J * s
-  real(8),     parameter :: hbarjs  = (6.62607D-34)/(2.d0*pi) !Js
+  real(8),     parameter :: hbarjs  = (6.62607D-34)/(2.d0*pi)
   ! elementary charge in C
-  real(8),     parameter :: echarge = 1.6021766208d-19 ! C
+  real(8),     parameter :: echarge = 1.6021766208d-19
 
   ! numerical parameters used within the code
   real(8),     parameter :: ndev    = 5D-13

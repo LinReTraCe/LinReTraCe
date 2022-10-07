@@ -14,7 +14,7 @@ module Mmpi_org
 
   contains
 
-  ! initialize mpi environment
+! initialize mpi environment
   subroutine mpi_initialize()
     implicit none
 #ifdef MPI
@@ -27,7 +27,7 @@ module Mmpi_org
 #endif
   end subroutine mpi_initialize
 
-  ! close mpi environment
+! close mpi environment
   subroutine mpi_close()
     implicit none
 #ifdef MPI
@@ -37,6 +37,7 @@ module Mmpi_org
 #endif
   end subroutine mpi_close
 
+! help function to write core ID to string
   subroutine prepare_chmyid(myid,chmyid)
     implicit none
     integer, intent(in) :: myid
@@ -45,7 +46,7 @@ module Mmpi_org
     return
   end subroutine prepare_chmyid
 
-  ! distribute momentum points among all processes
+! distribute momentum points among all processes
   subroutine mpi_genkstep(nk)
     implicit none
     integer, intent(in) :: nk

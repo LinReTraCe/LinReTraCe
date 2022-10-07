@@ -8,6 +8,11 @@ module Mconfig
 contains
 
 ! read config file, set default flags
+! algorithm datatype   : run flags
+! scattering datatype  : scattering / quasiparticle coefficients
+! temperature datatype : (inverse) temperature array
+! potential datatype   : chemical potential array
+! impurity dataype     : doping information
 subroutine read_config(algo, edisp, sct, temp, pot, imp)
   implicit none
   type(algorithm)   :: algo
@@ -45,6 +50,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   logical :: found
   logical :: impfound
 
+  ! abort if program is not executed properly
   if (iargc() .ne. 1) then
     call stop_with_message(stderr, 'The program has to be executed with exactly one argument. (Name of config file)')
   end if
@@ -52,12 +58,13 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   ! use first argument in execution as config file name
   call getarg(1,config_file)
 
+  ! open config file
   open(unit=10,file=trim(config_file),action='read',iostat=stat)
   if (stat .ne. 0) then
     call stop_with_message(stderr, 'Config file could not be opened') ! send to stderr
   endif
 
-  ! line counting
+  ! config file preprocessing: line counting
   lines=0
   read_count: do
     read(10,'(A)',END=200) str_temp ! read whole line as string, doesnt skip empty lines
@@ -69,7 +76,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
 
   allocate(file_temp(lines))
 
-  ! remove empty lines and comment strings
+  ! config file preprocessing: remove empty lines and comment strings
   empty=0
   read_temp: do i=1,lines
     read(10,'(A)') str_temp
@@ -88,7 +95,8 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       endif
   enddo read_temp
 
-  ! write config into a continous array
+  ! config file preprocessing: write config into a continous array
+  ! config file: saved in file_save : has exactly _lines_ entries
   allocate(file_save(lines-empty))
   j=1
   read_save: do i=1,lines
@@ -102,8 +110,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   lines=lines-empty
   close(unit=10)
 
-
-  ! setting up defaults
+  ! config preprocessing: setting up defaults
   algo%lTMODE         = .false.
   algo%lMUMODE        = .false.
 
