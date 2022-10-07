@@ -11,7 +11,7 @@ all: prec hdf5
 
 prec:
 	$(FCDG) $(FFLAGS) $(LIBS) -c 01_test_precision.f90 -o 01_test_precision.o
-	$(FCDG) 01_test_precision.o -o $(PROG) $(FFLAGS) $(HDF5)
+	$(FCDG) 01_test_precision.o -o $(PROG) $(FFLAGS)
 	./$(PROG)
 
 hdf5:
