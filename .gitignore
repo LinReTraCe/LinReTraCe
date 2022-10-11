@@ -11,6 +11,7 @@
 
 # other text files
 *.dat
+*.txt
 
 # old backup files
 bkp*/**
@@ -26,6 +27,7 @@ inp.*
 make_include
 bin/**
 bin
+testsuite/validation/test
 
 # tag files
 tags

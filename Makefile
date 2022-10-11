@@ -40,7 +40,7 @@ clean:
 pristine:
 	cd src_linretrace/; make clean
 	cd src_linretrace/digamma; make clean
-	rmdir bin
+	rm -rf bin
 
 ctags:
 	ctags -R --exclude=src_linretrace/digamma --exclude=src_pp --exclude=src_linretrace/deprecated
@@ -52,10 +52,13 @@ validate-clean:
 	cd testsuite/validation; make clean
 
 test: bin/linretrace
+	@ rm -f testsuite/tests/Si_input.hdf5
 	./ldft testsuite/tests/Si --interp 3 --output testsuite/tests/Si_input.hdf5
 	./bin/linretrace testsuite/tests/config.lrtc
+	sh testsuite/tests/comparison.sh
 	./lprint -p testsuite/tests/Si_output.hdf5 c-intra xx yy zz
 	./lprint -p testsuite/tests/Si_output.hdf5 s-intra xx yy zz
+
 
 test-clean:
 	rm -f testsuite/tests/Si_input.hdf5
