@@ -2,7 +2,7 @@
 <!-- [<img src="https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/logo.png?raw=true" width="196" height="196">](https://sites.google.com/view/tomczak-group/projects/linretrace) -->
 
 The [Linear Response Transport Centre](https://sites.google.com/view/tomczak-group/projects/linretrace) (LinReTraCe) is a package for the simulation of transport properties driven by carriers with finite lifetimes. The underlying theory, described in [PRB:105.085139](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.105.085139) ([arxiv:2112.07604](https://arxiv.org/abs/2112.07604)), establishes a comprehensive and thermodynamically consistent phenomenology capable of reproducing qualitatively correct full temperature profiles in metals as well as semiconductors. A comprehensive code documentation including implementation details, benchmarks, and test cases is described in [arxiv:2206.06097](https://arxiv.org/abs/2206.06097)
-and a step-by-step installation guide is available in the [userguide](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/userguide.pdf).
+and a step-by-step installation guide is available in the [tutorial](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/tutorial.pdf).
 
 The code package provides several interfaces to common electronic structure codes, including [Wien2K](http://susi.theochem.tuwien.ac.at), [VASP](https://vasp.at), as well as maximally localized Wannier functions from [Wannier90](http://www.wannier.org). The DFT input can also be supplied with the band interpolation scheme of [BoltzTraP2](https://gitlab.com/sousaw/BoltzTraP2).
 
