@@ -17,7 +17,7 @@ prec:
 hdf5:
 	$(FCDG) $(FFLAGS) $(HDF5) -c 02_test_hdf5.f90 -o 02_test_hdf5.o
 	$(FCDG) 02_test_hdf5.o -o $(PROG) $(FFLAGS) $(HDF5)
-	./$(PROG)
+	sh run.sh
 
 .PHONY: clean
 clean :
