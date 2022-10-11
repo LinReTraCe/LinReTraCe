@@ -1,31 +1,46 @@
 program hdf5test
   use hdf5
   implicit none
+  logical :: error = .false.
 
   write(*,*) 'begin HDF5 tests'
-  call hdf5_interface()
-  call hdf5_version()
-  call hdf5_file()
-  call hdf5_logical() ! implicitly tests for version of HDF5 library
-  call hdf5_complex()
+  call hdf5_interface(error)
+  call hdf5_version(error)
+  call hdf5_file(error)
+  call hdf5_logical(error) ! implicitly tests for version of HDF5 library
+  call hdf5_complex(error)
   write(*,*) 'end HDF5 Tests'
+  if (.not. error) then
+    write(*,*) '-----------'
+    write(*,*) 'SUCCESSFUL.'
+    write(*,*) '-----------'
+    write(*,*)
+  else
+    write(*,*) '-----------'
+    write(*,*) 'FAILED.'
+    write(*,*) '-----------'
+    write(*,*)
+  endif
 
   contains
 
-  subroutine hdf5_interface()
+  subroutine hdf5_interface(error)
     implicit none
+    logical, intent(inout) :: error
     integer :: hdf_err
     write(*,'(A)', advance='no') '    opening HDF5 interface:'
     call h5open_f(hdf_err)
     if (hdf_err > 0) then
       write(*,*) 'failed'
+      error = .true.
     else
       write(*,*) 'success'
     endif
   end subroutine
 
-  subroutine hdf5_version()
+  subroutine hdf5_version(error)
     implicit none
+    logical, intent(inout) :: error
     integer :: hdf_err
     integer :: majnum, minnum, relnum
     call h5get_libversion_f(majnum, minnum, relnum, hdf_err)
@@ -35,6 +50,7 @@ program hdf5test
     if ((majnum .eq. 1) .and. (minnum .ge. 12)) then
       write(*,*) 'success'
     else
+      error = .true.
       write(*,*) 'failed'
       write(*,*) '-------------------------------------'
       write(*,*) 'Please update to appropriate version.'
@@ -44,14 +60,16 @@ program hdf5test
 
   end subroutine
 
-  subroutine hdf5_file()
+  subroutine hdf5_file(error)
     implicit none
+    logical, intent(inout) :: error
     integer(hid_t) ifile
     integer :: hdf_err
 
     write(*,'(A)', advance='no') '    creating HDF5 file:'
     call h5fcreate_f('test.hdf5', h5f_acc_trunc_f, ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -60,6 +78,7 @@ program hdf5test
     write(*,'(A)', advance='no') '    opening HDF5 file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -68,6 +87,7 @@ program hdf5test
     write(*,'(A)', advance='no') '    closing HDF5 file:'
     call h5fclose_f(ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -75,8 +95,9 @@ program hdf5test
 
   end subroutine
 
-  subroutine hdf5_complex()
+  subroutine hdf5_complex(error)
     implicit none
+    logical, intent(inout)         :: error
     integer                        :: hdf_err
     integer(size_t), parameter     :: zero = 0
     integer(hid_t)                 :: complex_id_r_dp, complex_id_i_dp, complex_id_dp
@@ -107,6 +128,7 @@ program hdf5test
     call h5tinsert_f(complex_id_i_dp, "i", zero, h5t_native_double, hdf_err)
     call h5pclose_f(plist_id, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -115,6 +137,7 @@ program hdf5test
     write(*,'(A)', advance='no') '      opening file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -130,6 +153,7 @@ program hdf5test
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -148,12 +172,14 @@ program hdf5test
     if (real(darray) == 0.d0 .and. aimag(darray) == 2.d0) then
       write(*,*) 'success'
     else
+      error = .true.
       write(*,*) 'failed'
     endif
 
     write(*,'(A)', advance='no') '      closing file:'
     call h5fclose_f(ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -161,8 +187,9 @@ program hdf5test
 
   end subroutine
 
-  subroutine hdf5_logical()
+  subroutine hdf5_logical(error)
     implicit none
+    logical, intent(inout)         :: error
     integer, parameter             :: logical_size = 1
     integer(hid_t)                 :: grp_id, logical_id, dset_id, ifile, dspace_id
     integer(hid_t)                 :: dset_space_id
@@ -186,6 +213,7 @@ program hdf5test
     call h5tenum_insert_f(logical_id, "FALSE", zero, hdf_err)
     call h5tenum_insert_f(logical_id, "TRUE", one, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -194,13 +222,16 @@ program hdf5test
     write(*,'(A)', advance='no') '      opening file:'
     call h5fopen_f('test.hdf5', h5f_acc_rdwr_f, ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
     endif
 
     allocate(darrayi(3))
-    darrayi = 1
+    darrayi(1) = 1
+    darrayi(2) = 0
+    darrayi(3) = 1
     dims(1) = 3
 
     write(*,'(A)', advance='no') '      writing logical to file:'
@@ -213,6 +244,7 @@ program hdf5test
     call h5dclose_f(dset_id, hdf_err)
     call h5sclose_f(dspace_id, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'
@@ -230,15 +262,17 @@ program hdf5test
     call h5sclose_f(dset_space_id, hdf_err)
     call h5dclose_f(dset_id, hdf_err)
 
-    if (darrayi(1) == 1 .and. darrayi(2) == 1 .and. darrayi(3) == 1) then
+    if (darrayi(1) == 1 .and. darrayi(2) == 0 .and. darrayi(3) == 1) then
       write(*,*) 'success'
     else
+      error = .true.
       write(*,*) 'failed'
     endif
 
     write(*,'(A)', advance='no') '      closing file:'
     call h5fclose_f(ifile, hdf_err)
     if (hdf_err > 0) then
+      error = .true.
       write(*,*) 'failed'
     else
       write(*,*) 'success'

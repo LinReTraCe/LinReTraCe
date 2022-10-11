@@ -931,6 +931,6 @@ program main
     call hdf5_close_file(ifile_scatter_hdf5)
   endif
 
-  call mpi_close()
   call hdf5_finalize()
+  call mpi_close()
 end program main

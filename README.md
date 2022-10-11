@@ -29,7 +29,7 @@ The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/s
 
 To obtain the LinReTraCe source, clone this repository:
 
-`git clone https://github.com/linretrace/linretrace.git`
+`git clone https://github.com/linretrace/linretrace`
 
 To compile the code, a special `make_config` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
 ```
@@ -48,7 +48,7 @@ FFLAGS   = -O3
 HDF5     = -I/opt/hdf5-1.13.1_gcc/include
 HDF5    += -L/opt/hdf5-1.13.1_gcc/lib -lhdf5_fortran -lhdf5hl_fortran
 ```
-The compilation is done with `make`, creating the `bin` subfolder in which the binary `linretrace` will be moved into.
+The configuration can be checked via `make validate` and the compilation is done with `make`, creating the `bin` subfolder in which the binary `linretrace` will be moved into.
 
 ## Workflow
 ![LinReTraCe workflow](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/flowchart.png?raw=true "LinReTraCe workflow")

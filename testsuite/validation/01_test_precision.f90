@@ -5,6 +5,10 @@ program precisiontest
   call double()
   call quad()
   write(*,*) 'end quadruple precision tests'
+  write(*,*) '-----------'
+  write(*,*) 'SUCCESSFUL.'
+  write(*,*) '-----------'
+  write(*,*)
 
   contains
 
