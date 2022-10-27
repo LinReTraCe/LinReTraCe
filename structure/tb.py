@@ -257,6 +257,7 @@ class TightBinding(Model):
       else:
         self.orbitals = None
 
+
     ''' validate orbital list '''
     if orbitals_exist:
       orbital_set = set()
@@ -275,6 +276,8 @@ class TightBinding(Model):
         orbitals[orbital_id-1,:] = rx, ry, rz
       self.orbitals = orbitals
 
+    if self.orbitals is not None:
+      logger.info('   Detected orbital positions.')
     logger.debug('orbital list: \n{}'.format(self.orbitals))
 
     hrset = set()
@@ -459,22 +462,28 @@ class TightBinding(Model):
     if self.orbitals is not None:
       # Jan's code snippet
       # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-      # correction term: +1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+      # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
       distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
       ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-      hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+      hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
       hvk += hvk_correction
 
     if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''
       import random
-      ik = random.randint(1,self.nkp-1) # avoid gamma point
+      if self.nkp > 1:
+        ik = random.randint(1,self.nkp-1) # avoid gamma point
+      else:
+        ik = 0
       print('\n\n Randomly chosen k-points: {}'.format(ik))
       print('irreducible k: {}'.format(self.kpoints[ik,:]))
       print('irreducible hk: {}'.format(hk[ik,:,:]))
       print('irreducible hvk: {}'.format(hvk[ik,:,:,:]))
+      if self.orbitals is not None:
+        print('irreducible hvk correction: {}'.format(hvk_correction[ik,:,:,:]))
       print('irreducible hck: {}'.format(hck[ik,:,:,:]))
       print('multiplicity k: {}\n\n'.format(self.multiplicity[ik]))
+
 
       ''' generate all connected points via tranposed symmetry operations '''
       ''' on these explitily generated k-points .. apply the energy, velocity and curvature equations '''
