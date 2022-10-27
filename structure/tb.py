@@ -96,6 +96,8 @@ class TightBinding(Model):
     '''
 
     logger.info("Reading: {}".format(self.tbfile))
+
+    ''' read atom block '''
     self.atoms = []
     with open(str(self.tbfile),'r') as data:
       while True:
@@ -126,6 +128,7 @@ class TightBinding(Model):
     self.atoms = np.array(self.atoms, dtype=np.float64)
     logger.debug('   atoms: \n{}'.format(self.atoms))
 
+    ''' read real_lattice block '''
     self.rvec = []
     with open(str(self.tbfile),'r') as data:
       while True:
@@ -154,6 +157,7 @@ class TightBinding(Model):
       raise IOError('Provided real_lattice is not a properly defined 3x3 matrix')
     logger.debug('   real_lattice (rows): \n{}'.format(self.rvec))
 
+    ''' read hopping block '''
     self.tbdata = []
     bandmin = bandmax = None
     with open(str(self.tbfile),'r') as data:
@@ -214,6 +218,64 @@ class TightBinding(Model):
 
     self.energyBandMax  = bandmax
     logger.info('   Number of bands: {}'.format(self.energyBandMax))
+
+
+    ''' read optional orbitals block '''
+    self.orbitals = []
+    orbitals_exist = False
+    with open(str(self.tbfile),'r') as data:
+      while True:
+        line = data.readline()
+        if line:
+          line = line.strip()
+          if line.startswith('begin orbitals'):
+            orbitals_exist = True
+            break
+        else:
+          orbitals_exist = False # optional
+          break
+
+      if orbitals_exist:
+        while True:
+          line = data.readline()
+          if line:
+            line = line.strip()
+            if len(line)==0 or line.startswith('#'): continue
+            if line.startswith('end orbitals'): break
+
+            comment = line.find('#')
+            if comment != -1: line = line[:comment]
+            orbital_id, rx, ry, rz = [float(i) for i in line.split()]
+            if abs(np.rint(orbital_id) - orbital_id) > 1e-6: raise IOError('Invalid atom description: {}'.format(line))
+            if rx < 0 or rx > 1: raise IOError('Invalid atom description: {}'.format(line))
+            if ry < 0 or ry > 1: raise IOError('Invalid atom description: {}'.format(line))
+            if rz < 0 or rz > 1: raise IOError('Invalid atom description: {}'.format(line))
+            orbital_id = int(orbital_id)
+            self.orbitals.append([orbital_id, rx, ry, rz])
+          else:
+            raise IOError('ltb is not at the "end orbitals" marker after reading'.format(str(self.tbdata)))
+      else:
+        self.orbitals = None
+
+    ''' validate orbital list '''
+    if orbitals_exist:
+      orbital_set = set()
+      for orbital in self.orbitals:
+        orbital_id = orbital[0]
+        if orbital_id < 1 or orbital_id > self.energyBandMax:
+          raise IOError('Provided orbital list contains orbital outside provided hopping range')
+        orbital_set.add(orbital_id)
+      if len(orbital_set) != self.energyBandMax:
+        raise IOError('Provided orbital list does not contain all necessary orbitals.')
+
+      ''' rewrite into ordered numpy array '''
+      orbitals = np.zeros((self.energyBandMax,3), dtype=np.float64)
+      for orbital in self.orbitals:
+        orbital_id, rx, ry, rz = orbital
+        orbitals[orbital_id-1,:] = rx, ry, rz
+      self.orbitals = orbitals
+
+    logger.debug('orbital list: \n{}'.format(self.orbitals))
 
     hrset = set()
     rset  = set()
@@ -394,6 +456,14 @@ class TightBinding(Model):
       prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
     hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
 
+    if self.orbitals is not None:
+      # Jan's code snippet
+      # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+      # correction term: +1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+      distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+      ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
+      hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+      hvk += hvk_correction
 
     if logger.isEnabledFor(logging.DEBUG):
       ''' irreducible point '''

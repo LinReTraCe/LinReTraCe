@@ -49,6 +49,13 @@ begin real_lattice
   0 5 0
   0 0 1
 end real_lattice
+
+OPTIONAL:
+begin orbitals
+# orbital (from hopping) x y z
+  1                      0 0 0
+...
+end orbitals
 ''')
 
   # mandatory
