@@ -879,7 +879,8 @@ class LRTCoutput(object):
 
     spins = True if len(data.shape)==4 else False
 
-    if self.ndim < 3 and self.ndim > 0: # treat 0D identical to 3D
+    ''' sub select values for valid directions '''
+    if self.ndim < 3 and self.ndim > 0: # 1D and 2D
       # select direction combinations
       if spins:
         outputmasked = data[:,:,self.dimmask2].copy()
@@ -887,33 +888,43 @@ class LRTCoutput(object):
       else:
         outputmasked = data[:,self.dimmask2].copy()
         outputmasked = outputmasked.reshape((data.shape[0],self.ndim,self.ndim))
-    elif self.ndim == 3:
+    elif self.ndim == 3: # 3D
       outputmasked = data
-    elif self.ndim == 0:
+    elif self.ndim == 0: # 0D
       outputmasked = data
-      # there cannot be mixed directions in 0D per definition
+      # there cannot be mixed directions in 0D per definition -> override 0
       outputmasked[...,[0,0,1,1,2,2],[1,2,0,2,0,1]] = 0.0
 
-
-    # always applied on the last two elements
-    # inverted = np.linalg.inv(outputmasked)
-
-    inverted = np.full_like(outputmasked, fill_value=np.nan, dtype=np.complex128)
-    if spins:
-      for i in range(outputmasked.shape[0]):
-        for j in range(outputmasked.shape[1]):
+    ''' invert provided masked values '''
+    if self.ndim > 0:
+      inverted = np.full_like(outputmasked, fill_value=np.nan, dtype=np.complex128)
+      if spins:
+        for i in range(outputmasked.shape[0]):
+          for j in range(outputmasked.shape[1]):
+            try:
+              inverted[i,j,:,:] = np.linalg.inv(outputmasked[i,j,:,:])
+            except:
+              pass
+      else:
+        for i in range(outputmasked.shape[0]):
           try:
-            inverted[i,j,:,:] = np.linalg.inv(outputmasked[i,j,:,:])
+            inverted[i,:,:] = np.linalg.inv(outputmasked[i,:,:])
           except:
             pass
-    else:
-      for i in range(outputmasked.shape[0]):
-        try:
-          inverted[i,:,:] = np.linalg.inv(outputmasked[i,:,:])
-        except:
-          pass
+    else: # 0D : avoid inversion routines
+      inverted = np.full_like(outputmasked, fill_value=0., dtype=np.complex128)
+      if spins:
+        for i in range(outputmasked.shape[0]):
+          for j in range(outputmasked.shape[1]):
+            inverted[i,j,[0,1,2],[0,1,2]] = 1. / outputmasked[i,j,[0,1,2],[0,1,2]]
+      else:
+        for i in range(outputmasked.shape[0]):
+          inverted[i,[0,1,2],[0,1,2]] = 1. / outputmasked[i,[0,1,2],[0,1,2]]
 
+      ''' hotfix for weird behavior in 0D '''
+      inverted = np.nan_to_num(inverted, nan=0.0)
 
+    ''' for 2D and 3D : expand inverted values back to 3 x 3 array '''
     if self.ndim < 3 and self.ndim > 0:
       returned = np.zeros_like(data, dtype=np.complex128)
       ii = -1
