@@ -363,7 +363,24 @@ class Wien2kCalculation(DftCalculation):
     self.nkp = self.kpoints.shape[0]
     self.irreducible = not (self.nkx*self.nky*self.nkz == self.nkp)
 
+
+    '''
+        the kx ky kz refer to cartesian coordinates
+        we need to transform them back to 'internal' ones where
+        each k-value refers to a fraction of the reciprocal lattice vector
+    '''
+
+    # Gx = np.max(np.abs(self.kvec[:,0])) # maximum x entry
+    # Gy = np.max(np.abs(self.kvec[:,1])) # maximum y entry
+    # Gz = np.max(np.abs(self.kvec[:,2])) # maximum z entry
+    # -> numpy version of that code:
+    G = np.array([np.max(np.abs(self.kvec[:,i])) for i in range(3)])
+
     for i in range(self.nkp):
+      self.kpoints[i,:] *= G / divisor # -> Cartesian
+      # solve G x = cartesian to get internal
+      # multiply and divide by divisor to maximize accuracy
+      self.kpoints[i,:] = np.around(np.linalg.solve(self.kvec, self.kpoints[i,:]) * divisor).astype(int)
       self.kpoints[i,:] /= divisor
 
 

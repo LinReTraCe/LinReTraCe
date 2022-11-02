@@ -230,7 +230,25 @@ class Wannier90Calculation(DftCalculation):
     self.weights = self.weightsum * self.multiplicity / float(np.sum(self.multiplicity))
     self.nkp = self.kpoints.shape[0]
     self.irreducible = not (self.nkx*self.nky*self.nkz == self.nkp)
-    self.kpoints = self.kpoints / divisor[None,:]
+
+    '''
+        the kx ky kz refer to cartesian coordinates
+        we need to transform them back to 'internal' ones where
+        each k-value refers to a fraction of the reciprocal lattice vector
+    '''
+
+    # Gx = np.max(np.abs(self.kvec[:,0])) # maximum x entry
+    # Gy = np.max(np.abs(self.kvec[:,1])) # maximum y entry
+    # Gz = np.max(np.abs(self.kvec[:,2])) # maximum z entry
+    # -> numpy version of that code:
+    G = np.array([np.max(np.abs(self.kvec[:,i])) for i in range(3)])
+
+    for i in range(self.nkp):
+      self.kpoints[i,:] *= G / divisor # -> Cartesian
+      # solve G x = cartesian to get internal
+      # multiply and divide by divisor to maximize accuracy
+      self.kpoints[i,:] = np.around(np.linalg.solve(self.kvec, self.kpoints[i,:]) * divisor).astype(int)
+      self.kpoints[i,:] /= divisor
 
     logger.info("   Wien2K number of dimensions: {}".format(self.ndim))
     logger.info("   Wien2K number of k-points: {}".format(self.nkp))
@@ -334,10 +352,10 @@ class Wannier90Calculation(DftCalculation):
       if peierlscorrection:
         # Jan's code snippet
         # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-        # correction term: +1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+        # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
         distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
         ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-        hvk_correction = 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+        hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
       # eigk  : self.nkp, self.nproj
