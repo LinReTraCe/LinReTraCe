@@ -29,9 +29,10 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def computeData(self, tbfile, charge, mu=None, mushift=False):
+  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False):
     self.tbfile       = tbfile
     self.charge       = charge
+    self.corronly     = corronly
 
     self._readTb()
     self._computeOrthogonality() # sets self.ortho
@@ -458,6 +459,9 @@ class TightBinding(Model):
     for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
       prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
     hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
+
+    if self.corronly:
+      hvk[...] = 0.0
 
     if self.orbitals is not None:
       # Jan's code snippet
