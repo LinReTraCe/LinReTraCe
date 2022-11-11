@@ -548,14 +548,14 @@ class TightBinding(Model):
             through the application of rotations pairs of colums and rows can be interchanged '''
         red_ek, red_U = np.linalg.eig(red_hk)
         red_ek = red_ek.real
-        self.energies[0][ikp,:] = red_ek[0,:]
 
         for isym in range(self.nsym):
           ekk, Uk = red_ek[isym,:], red_U[isym,:,:]
-          idx = ekk.argsort()[::-1]
+          idx = ekk.argsort()
           red_ek[isym,:] = ekk[idx]
           red_U[isym,:,:] = Uk[:,idx]
 
+        self.energies[0][ikp,:] = red_ek[0,:]
         red_Uinv = np.linalg.inv(red_U)
 
         ''' transform velocity hamiltonian into Kohn Sham basis '''
@@ -600,7 +600,7 @@ class TightBinding(Model):
 
       for ik in range(self.nkp):
         ekk, Uk = ek[ik,:], U[ik,:,:]
-        idx = ekk.argsort()[::-1]
+        idx = ekk.argsort()
         ek[ik,:] = ekk[idx]
         U[ik,:,:] = Uk[:,idx]
 
