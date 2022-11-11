@@ -393,6 +393,11 @@ class TightBinding(Model):
               if isym[j,i] != 0: to_add = False
               if isym[i,j] != 0: to_add = False # redundant I think
 
+        ''' avoid duplicates '''
+        for jsym in self.symop:
+          if np.allclose(isym,jsym):
+            to_add = False
+
         if to_add:
           self.symop.append(isym)
 
