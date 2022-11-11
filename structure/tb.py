@@ -427,7 +427,16 @@ class TightBinding(Model):
       via H(r) and primitive lattice vectors
     '''
 
-    logger.info('Calculating Hamiltonian')
+    logger.info('Calculating Hamiltonian and Optical elements')
+
+    ''' r vector for hv(k) in Cartesian coordinates'''
+    prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rpoints)
+    prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+
+    ''' r.r matrix for hc(k) in Cartesian coordinates -- we only need the upper triangle '''
+    for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+      prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+
     # hamiltonian H(k)
     hk = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
     # hamiltonian derivative d_dk H(k)
@@ -436,46 +445,6 @@ class TightBinding(Model):
     # hamiltonian double derivative d2_dk2 H(k)
     # 6: xx yy zz xy xz yz
     hck = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,6), dtype=np.complex128)
-
-    ''' FOURIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
-
-    rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints,self.rpoints)
-    ee = np.exp(1j * rdotk)
-    hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
-
-    ''' this solves the problem of almost singular matrices
-        the eigenvalue routine then ignores a full 0 matrix -> thats what we want '''
-    hk[np.abs(hk) < 1e-14] = 0.0
-
-    ''' FOURIERTRANSFORM hvk(j) = sum_r i . r_j e^{i r.k} * weight(r) * h(r) '''
-    ''' self.rvec[i,j] is the jth entry of the ith vector (aka rows)
-        -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
-        with the x/y/z entries (columns) of the rvec matrix
-    '''
-    prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rpoints)
-    hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
-
-    ''' FOURIERTRANSFORM hvk(j) = sum_r - r_j e^{i r.k} * weight(r) * h(r) '''
-    prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
-    for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
-      prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
-    hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
-
-    if self.corronly:
-      hvk[...] = 0.0
-
-    if self.orbitals is not None:
-      # Jan's code snippet
-      # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-      # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
-      distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
-      ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-      hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
-      hvk += hvk_correction
-
-
-    ''' setup optical elements '''
-    logger.info('Calculating optical elements from derivatives')
 
     # devine levicity matrix so we can use it in einsteinsummations
     levmatrix = np.zeros((3,3,3), dtype=np.float64)
@@ -592,6 +561,38 @@ class TightBinding(Model):
           self.opticalDiag[0]  = self.opticalDiag[0][...,:6]
 
     else:
+
+      ''' FOURIERTRANSFORM h(k) '''
+      rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints,self.rpoints)
+      ee = np.exp(1j * rdotk)
+      hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
+
+      ''' this solves the problem of almost singular matrices
+          the eigenvalue routine then ignores a full 0 matrix -> thats what we want '''
+      hk[np.abs(hk) < 1e-14] = 0.0
+
+      ''' FOURIERTRANSFORM hvk(alpha) = sum_r complex_i . r_alpha . e^{i r.k} * weight(r) * h(r) '''
+      ''' self.rvec[i,j] is the jth entry of the ith vector (aka rows)
+          -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
+          with the x/y/z entries (columns) of the rvec matrix
+      '''
+      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
+
+      ''' FOURIERTRANSFORM hvk(alpha,beta) = - sum_r r_alpha . r_beta . e^{i r.k} * weight(r) * h(r) '''
+      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
+
+      if self.corronly:
+        hvk[...] = 0.0
+
+      if self.orbitals is not None:
+        # Jan's code snippet
+        # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+        # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+        distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
+        hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+        hvk += hvk_correction
+
       ''' this transforms all k points at once '''
       ek, U = np.linalg.eig(hk)
 
