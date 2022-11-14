@@ -28,6 +28,8 @@ make_include
 bin/**
 bin
 testsuite/validation/test
+build/**
+build
 
 # tag files
 tags

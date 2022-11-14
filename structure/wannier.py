@@ -299,7 +299,7 @@ class Wannier90Calculation(DftCalculation):
       logger.debug('Symmetry operations')
       logger.debug(self.symop)
 
-  def diagData(self, peierlscorrection=True):
+  def computeHamiltonian(self, peierlscorrection=True):
     ''' calculate e(r), v(r), c(r)
         we need to generate:
           self.energies[[nkp,nband]]
@@ -311,17 +311,24 @@ class Wannier90Calculation(DftCalculation):
           self.BopticalMoments[[nkp,nband,nband,3,3,3]] + write output function
     '''
 
-    logger.info('Calculating and diagonalizing H(k), v(k), c(k)')
-    for ispin in range(self.spins):
+    logger.info('Calculating Hamiltonian')
 
-      ''' decorator for progress bar '''
-      if self.spins == 1:
-        prefix = ''
-      else:
-        if ispin == 0:
-          prefix = 'up:'
-        else:
-          prefix = 'dn:'
+    ''' r vector for hv(k) in Cartesian coordinates'''
+    prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rlist)
+    prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
+
+    ''' r.r matrix for hc(k) in Cartesian coordinates -- we only need the upper triangle '''
+    for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
+      prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
+
+    # devine levicity matrix so we can use it in einsteinsummations
+    levmatrix = np.zeros((3,3,3), dtype=np.float64)
+    for i in range(3):
+      for j in range(3):
+        for k in range(3):
+          levmatrix[i,j,k] = levicivita(i,j,k)
+
+    for ispin in range(self.spins):
 
       # hamiltonian H(r)
       hr = self.hrlist[ispin] # self.nrp, self.nproj, self.nproj
@@ -334,108 +341,70 @@ class Wannier90Calculation(DftCalculation):
       # 6: xx yy zz xy xz yz
       hck = np.zeros((self.nkp,self.nproj,self.nproj,6), dtype=np.complex128)
 
-      ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
-      rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints, self.rlist) # no scaling to recip vector / lattice vectors here ?
-      ee = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
-      hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
 
-      ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rlist)
-      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
+      if self.irreducible:
 
-      ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-      prefactor_r2 = np.zeros((6,self.nrp), dtype=np.float64)
-      for idir, i, j in zip(range(6), [0,1,2,0,0,1], [0,1,2,1,2,2]):
-        prefactor_r2[idir,:] = prefactor_r[i,:] * prefactor_r[j,:]
-      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,hr)
-
-      if peierlscorrection:
-        # Jan's code snippet
-        # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-        # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
-        distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
-        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-        hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
-        hvk += hvk_correction
-
-      # eigk  : self.nkp, self.nproj
-      # U     : self.nkp, self.nproj, self.nproj
-      #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
-      # inv(U) @ hk @ U = ek
-
-      ''' this transforms all k points at once '''
-      ek, U = np.linalg.eig(hk)
-
-      ''' Sort eigenvalues from smallest to largest
-          Required for detection of possible gaps '''
-      for ik in range(self.nkp):
-        ekk, Uk = ek[ik,:], U[ik,:,:]
-        idx = ekk.argsort()
-        ek[ik,:] = ekk[idx]
-        U[ik,:,:] = Uk[:,idx]
-
-      ''' the velocities and curvatures are ordered according to e(k)
-          due to the reordering of U '''
-      Uinv = np.linalg.inv(U)
-      vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
-      ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
-
-      if np.any(np.abs(ek.imag) > 1e-5):
-        logger.warn('Detected complex energies ... truncating')
-      ''' apparently complex velocities and curvatures are allowed now '''
-      # if np.any(np.abs(hvk.imag) > 1e-5):
-      #   logger.warn('Detected complex velocities ... truncating')
-      # if np.any(np.abs(hck.imag) > 1e-5):
-      #   logger.warn('Detected complex curvatures ... truncating')
-
-      ek = ek.real
-      self.energies.append(ek)
-      self.velocities.append(vk)
-      self.curvatures.append(ck)
-
-  def calcOptical(self):
-    '''
-      from the velocities and curvatures : calculate
-      the optical elements and b-field optical elements
-    '''
-
-    logger.info('Calculating optical elements from derivatives')
-    # devine levicity matrix so we can use it in einsteinsummations
-    levmatrix = np.zeros((3,3,3), dtype=np.float64)
-    for i in range(3):
-      for j in range(3):
-        for k in range(3):
-          levmatrix[i,j,k] = levicivita(i,j,k)
-
-    if self.irreducible: # requires symmetry operations
-      for ispin in range(self.spins):
         if self.ortho:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
         else:
           loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
         loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
 
-        rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
-        rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+        loc_ek = np.zeros((self.nkp,self.nproj), dtype=np.float64)
+
         for ikp in range(self.nkp):
           progressBar(ikp+1,self.nkp,status='k-points')
 
-          vel     = self.velocities[0][ikp,:,:,:] # bands, bands, 3
-          cur     = self.curvatures[0][ikp,:,:,:] # bands, bands, 6
+          ''' generate reducible k-points and bring back to first BZ'''
+          redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
+          redk = redk%1
 
-          # put the curvatures into matrix form
-          curmat  = np.zeros((self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
-          curmat[:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:]
-          curmat[:,:, [1,2,2], [0,0,1]] = curmat[:,:, [0,0,1], [1,2,2]]
+          ''' generate hamiltonian '''
+          red_rdotk = 2*np.pi*np.einsum('ni,ri->nr',redk,self.rlist)
+          red_ee = np.exp(1j * red_rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
+          red_hk = np.einsum('nr,rij->nij', red_ee, hr)
+          red_hk[np.abs(red_hk) < 1e-14] = 0.0
 
-          # generate the transformed velocities and curvatures
-          vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
-          vk_conj = np.conjugate(vk)
-          ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
+          red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,hr)
 
-          # take the mean over the squares
-          vk2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
-          vk2 = np.mean(vk2,axis=2)
+          if peierlscorrection:
+            # Jan's code snippet
+            # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+            # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+            distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+            ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
+            hvk_correction = - 1j * red_hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+            red_hvk += hvk_correction
+
+          ''' generate curvature hamiltonian '''
+          red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,hr)
+          red_hck_mat  = np.zeros((self.nsym,self.nproj,self.nproj,3,3), dtype=np.complex128)
+          red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
+          red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
+
+
+          ''' diagonalize all hamiltonians of the symmetry connected k-points '''
+          red_ek, red_U = np.linalg.eig(red_hk)
+          red_ek = red_ek.real
+
+          for isym in range(self.nsym):
+            ekk, Uk = red_ek[isym,:], red_U[isym,:,:]
+            idx = ekk.argsort()
+            red_ek[isym,:] = ekk[idx]
+            red_U[isym,:,:] = Uk[:,idx]
+
+          loc_ek[ikp,:] = red_ek[0,:]
+          red_Uinv = np.linalg.inv(red_U)
+
+          ''' transform velocity hamiltonian into Kohn Sham basis '''
+          vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U)
+          velconj = np.conjugate(vel)
+          ''' transform curvature hamiltonian into Kohn Sham basis '''
+          curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U)
+
+          ''' take the mean over the opt matrix (velocity squares) '''
+          vk2 = velconj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
+          vk2 = np.mean(vk2,axis=0)
 
           if self.ortho:
             loc_opticalMoments[ikp,...] = vk2[...,:3].real
@@ -443,28 +412,91 @@ class Wannier90Calculation(DftCalculation):
             loc_opticalMoments[ikp,:,:,:6] = vk2.real
             loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
 
+          ''' take the mean over the optb matrix '''
           #           epsilon_cij v_a v_j c_bi -> abc
-          mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk_conj,vk,ck)
-          mb = np.mean(mb,axis=2)
+          mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,velconj,vel,curmat)
+          mb = np.mean(mb,axis=0)
           loc_BopticalMoments[ikp,...] = mb
 
+        self.energies.append(loc_ek)
 
         self.opticalMoments.append(loc_opticalMoments)
-        self.BopticalMoments.append(loc_BopticalMoments)
         self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),:])
+
+        self.BopticalMoments.append(loc_BopticalMoments)
         self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
 
-    else:
-      for ispin in range(self.spins):
-        vel = self.velocities[ispin] # nkp, nproj, nproj, 3
-        vel_conj = np.conjugate(vel)
-        cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
+      else:
+        ''' reducible grid : evalutate h(k) hv(k) hc(k)
+            on full grid -> done '''
+
+        ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+        rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints, self.rlist) # no scaling to recip vector / lattice vectors here ?
+        ee = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
+        hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
+
+        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+        hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
+
+        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+        hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,hr)
+
+        if peierlscorrection:
+          # Jan's code snippet
+          # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+          # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+          distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+          ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
+          hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
+          hvk += hvk_correction
+
+        # eigk  : self.nkp, self.nproj
+        # U     : self.nkp, self.nproj, self.nproj
+        #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
+        # inv(U) @ hk @ U = ek
+
+        ''' this transforms all k points at once '''
+        ek, U = np.linalg.eig(hk)
+
+        ''' Sort eigenvalues from smallest to largest
+            Required for detection of possible gaps '''
+        for ik in range(self.nkp):
+          ekk, Uk = ek[ik,:], U[ik,:,:]
+          idx = ekk.argsort()
+          ek[ik,:] = ekk[idx]
+          U[ik,:,:] = Uk[:,idx]
+
+        ''' the velocities and curvatures are ordered according to e(k)
+            due to the reordering of U '''
+        Uinv = np.linalg.inv(U)
+        vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
+        ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
+
+        if np.any(np.abs(ek.imag) > 1e-5):
+          logger.warn('Detected complex energies ... truncating')
+        ''' apparently complex velocities and curvatures are allowed now '''
+        # if np.any(np.abs(hvk.imag) > 1e-5):
+        #   logger.warn('Detected complex velocities ... truncating')
+        # if np.any(np.abs(hck.imag) > 1e-5):
+        #   logger.warn('Detected complex curvatures ... truncating')
+
+        ''' energies, velocities, curvatures '''
+        ek = ek.real
+        self.energies.append(ek)
+        self.velocities.append(vk)
+        self.curvatures.append(ck)
+
+
+        ''' calculate optical elements'''
+        vk_conj = np.conjugate(vk)
+        cur = ck
 
         # transform into matrix form
         curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
         curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
         curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
-        vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
+        vel2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
+
         if self.ortho:
           vel2 = vel2[:,:,:,:3].real
         else:
@@ -472,15 +504,19 @@ class Wannier90Calculation(DftCalculation):
           vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
           vel2[:,:,:,:6] = temp.real
           vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+
         self.opticalMoments.append(vel2)
         vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
         self.opticalDiag.append(vel2diag)
 
           #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel_conj,vel,curmat)
+        mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vk_conj,vk,curmat)
         self.BopticalMoments.append(mb)
         mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
         self.BopticalDiag.append(mbdiag)
+
+
+    ''' after spin loop : truncate possible unnecessary data '''
     if not self.ortho:
       truncate = True
       for ispin in range(self.spins):
@@ -490,6 +526,84 @@ class Wannier90Calculation(DftCalculation):
         for ispin in range(self.spins):
           self.opticalMoments[ispin]  = self.opticalMoments[ispin][...,:6]
           self.opticalDiag[ispin]     = self.opticalDiag[ispin][...,:6]
+
+  # def calcOptical(self):
+  #   '''
+  #     from the velocities and curvatures : calculate
+  #     the optical elements and b-field optical elements
+  #   '''
+
+  #   logger.info('Calculating optical elements from derivatives')
+
+  #   if self.irreducible: # requires symmetry operations
+  #     for ispin in range(self.spins):
+
+  #       rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+  #       rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.kvec),self.invsymop,self.kvec)
+  #       for ikp in range(self.nkp):
+  #         progressBar(ikp+1,self.nkp,status='k-points')
+
+  #         vel     = self.velocities[0][ikp,:,:,:] # bands, bands, 3
+  #         cur     = self.curvatures[0][ikp,:,:,:] # bands, bands, 6
+
+  #         # put the curvatures into matrix form
+  #         curmat  = np.zeros((self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+  #         curmat[:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:]
+  #         curmat[:,:, [1,2,2], [0,0,1]] = curmat[:,:, [0,0,1], [1,2,2]]
+
+  #         # generate the transformed velocities and curvatures
+  #         vk = np.einsum('nij,bpj->bpni',rotsymop,vel)
+  #         vk_conj = np.conjugate(vk)
+  #         ck = np.einsum('nij,bpjk,nkl->bpnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
+
+  #         # take the mean over the squares
+  #         vk2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
+  #         vk2 = np.mean(vk2,axis=2)
+
+  #         if self.ortho:
+  #           loc_opticalMoments[ikp,...] = vk2[...,:3].real
+  #         else:
+  #           loc_opticalMoments[ikp,:,:,:6] = vk2.real
+  #           loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
+
+  #         #           epsilon_cij v_a v_j c_bi -> abc
+  #         mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,vk_conj,vk,ck)
+  #         mb = np.mean(mb,axis=2)
+  #         loc_BopticalMoments[ikp,...] = mb
+
+
+  #       self.opticalMoments.append(loc_opticalMoments)
+  #       self.BopticalMoments.append(loc_BopticalMoments)
+  #       self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),:])
+  #       self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
+
+  #   else:
+  #     for ispin in range(self.spins):
+  #       vel = self.velocities[ispin] # nkp, nproj, nproj, 3
+  #       vel_conj = np.conjugate(vel)
+  #       cur = self.curvatures[ispin] # nkp, nproj, nproj, 6
+
+  #       # transform into matrix form
+  #       curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
+  #       curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
+  #       curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
+  #       vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
+  #       if self.ortho:
+  #         vel2 = vel2[:,:,:,:3].real
+  #       else:
+  #         temp = vel2.copy()
+  #         vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
+  #         vel2[:,:,:,:6] = temp.real
+  #         vel2[:,:,:,6:] = temp[:,:,:,:3].imag
+  #       self.opticalMoments.append(vel2)
+  #       vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
+  #       self.opticalDiag.append(vel2diag)
+
+  #         #           epsilon_cij v_a v_j c_bi -> abc
+  #       mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel_conj,vel,curmat)
+  #       self.BopticalMoments.append(mb)
+  #       mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
+  #       self.BopticalDiag.append(mbdiag)
 
 
   def outputData(self, fname, mu=None, intraonly=False):

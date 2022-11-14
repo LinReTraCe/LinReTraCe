@@ -66,8 +66,7 @@ def main():
         ham.expandKmesh(np.array(args.kmesh, dtype=int))
       elif args.wien2k:
         ham.readWien2k()
-      ham.diagData(peierlscorrection = not args.nocorrection)
-      ham.calcOptical()
+      ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
       if args.charge:
         ham.outputData(args.output, intraonly=args.intraonly)
       else:

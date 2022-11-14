@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='linretrace',
-      version='1.1',
+      version='1.2',
       description='Linear Response Transport Centre',
       author='Matthias Pickem',
       author_email='matthias.pickem@gmail.com',
