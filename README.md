@@ -31,7 +31,7 @@ To obtain the LinReTraCe source, clone this repository:
 
 `git clone https://github.com/linretrace/linretrace`
 
-To compile the code, a special `make_config` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
+To compile the code, a special `make_include` file needs to be saved in the main linretrace folder. An examplary configuration that enables MPI looks as follows
 ```
 FC       = mpiifort       # Main Fortran compiler
 FCDG     = ifort          # Fortran Compiler for the Special functions
