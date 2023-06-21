@@ -455,11 +455,6 @@ class Wannier90Calculation(DftCalculation):
         #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
         # inv(U) @ hk @ U = ek
 
-        self.hk  = hk
-        self.hvk = hvk
-        self.hck = hck
-
-
         ''' this transforms all k points at once '''
         ek, U = np.linalg.eig(hk)
 
@@ -471,12 +466,18 @@ class Wannier90Calculation(DftCalculation):
           ek[ik,:] = ekk[idx]
           U[ik,:,:] = Uk[:,idx]
 
-        self.Ukohnsham = U
-
         ''' the velocities and curvatures are ordered according to e(k)
             due to the reordering of U '''
         Uinv = np.linalg.inv(U)
-        self.Uinvkohnsham = Uinv
+
+        ''' save the full hamiltonian and its derivatives
+            if in debug mode and only for the reducible structure '''
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+          self.hk  = hk
+          self.hvk = hvk
+          self.hck = hck
+          self.Ukohnsham = U
+          self.Uinvkohnsham = Uinv
 
         vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
         ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)

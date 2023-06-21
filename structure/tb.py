@@ -660,7 +660,7 @@ class TightBinding(Model):
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag
 
-    if not self.irreducible:
+    if not self.irreducible and logging.getLogger().isEnabledFor(logging.DEBUG):
       self.hk           = hk
       self.hvk          = hvk
       self.hck          = hck
