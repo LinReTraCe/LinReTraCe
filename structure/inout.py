@@ -68,6 +68,16 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     h5out['.bands/ispin']         = int(escalc.spins)
     h5out['.bands/mu']            = float(escalc.mu)
 
+    ''' for tightbinding setups and wannier90
+        also output H(k), Hv(k), Hc(k) and U(k) '''
+
+    if escalc.hk is not None:
+      h5out['.tightbinding/hk']   = escalc.hk
+      h5out['.tightbinding/hvk']  = escalc.hvk
+      h5out['.tightbinding/hck']  = escalc.hck
+      h5out['.tightbinding/U']    = escalc.Ukohnsham
+      h5out['.tightbinding/Uinv'] = escalc.Uinvkohnsham
+
     for ispin in range(escalc.spins):
       if escalc.spins == 1:
         prefix = '/'

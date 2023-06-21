@@ -84,6 +84,13 @@ class ElectronicStructure(ABC):
     self.opticalBandMin  = 0    # band interval minimum for optical elements
     self.opticalBandMax  = 0    # band interval maximum for optical elements
 
+    # if used as model / wannier90 calculation we save those
+    self.hk              = None
+    self.hvk             = None
+    self.hck             = None
+    self.Ukohnsham       = None
+    self.Uinvkohnsham    = None
+
   def _defineDimensions(self):
     '''
     Count dimension as every k-axis with more than one k-point

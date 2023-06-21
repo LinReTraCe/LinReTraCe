@@ -61,7 +61,7 @@ class IrreducibleMesh(object):
     kpoints = np.array(kpoints)
     if self.shift: kpoints += self._kmeshshift[None,:]
 
-    unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=np.int)
+    unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=int)
     mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.float64)
     irrk    = 0
 

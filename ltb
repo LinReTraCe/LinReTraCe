@@ -23,11 +23,15 @@ def parse_args(args=None):
     epilog='''
 tb_file:
   begin hopping:      hopping parameter [eV]
-                      sign convention e(k) ~ -t * (1-2.delta_(R,0).dleta_(l,l')) e^{ikR}
+                      sign convention e(k) ~ -t * (1-2.delta_(R,0).delta(l,l')) e^{ikR}
   begin atoms:        fractional atomic positions inside unit cell
+                      # used to determine the unit cell symmetries only
   begin real_lattice: lattice vectors [Angstrom]
                       each row = 1 vector, each column = Cartesian x/y/z component
-
+  optional:
+  begin orbitals:     fractional atomic positions of the orbitals
+                      referenced in 'begin hopping'.
+                      # used for the multi-cell peierls correction
 
 begin hopping
 # x  y  z  orbital1 orbital2 hopping.real [hopping.imag]

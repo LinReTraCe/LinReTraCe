@@ -146,11 +146,11 @@ class VaspCalculation(DftCalculation):
     try:
       arr = self.xmlroot.find('kpoints/generation/v[@name="divisions"]')
       divisor = arr.text.split()
-      divisor = np.array(divisor, dtype=np.int)
+      divisor = np.array(divisor, dtype=int)
       self.nkx, self.nky, self.nkz = divisor
       logger.info("  Momentum grid: {} {} {}".format(*divisor))
-      self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
-      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
+      self.dims = np.logical_not(divisor == np.ones(3, dtype=int))
+      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=int))
       self.irreducible = not (self.nkx*self.nky*self.nkx == self.nkp)
     except Exception:
       raise IOError('Error occured during read-in of k-point divisors {}'.format(str(self.fvasprun)))

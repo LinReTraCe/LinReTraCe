@@ -61,8 +61,8 @@ class DmftRenormalization(object):
             data[3] = cutoff
           myGamma[ikp].append(data[3])
 
-      self.bands = np.array(self.bands, dtype=np.int)
-      self.multiplicity = np.array(self.multiplicity, dtype=np.int)
+      self.bands = np.array(self.bands, dtype=int)
+      self.multiplicity = np.array(self.multiplicity, dtype=int)
       self.energyBandMax = self.bands.min() # only take common bands
 
       self.zqp         = np.empty((self.nkp, self.energyBandMax), dtype=np.float64)

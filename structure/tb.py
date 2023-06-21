@@ -293,7 +293,7 @@ class TightBinding(Model):
 
     self.nrp = len(rset)
     logger.info('   Number of unique r-points: {}'.format(self.nrp))
-    self.rpoints = np.array(list(rset), dtype=np.int)
+    self.rpoints = np.array(list(rset), dtype=int)
     logger.debug(' Unique r-points:\n{}'.format(self.rpoints))
 
     self.hr = np.zeros((self.nrp,self.energyBandMax,self.energyBandMax), dtype=np.complex128)
@@ -311,10 +311,21 @@ class TightBinding(Model):
       if orb1==orb2:
         if hop.imag:
           raise IOError('\nDetected complex intra-band values \n{} in line \n{}\nFix input file.'.format(hop,self.tbdata[i]))
-      if np.all(rvec==np.zeros((3,), dtype=np.int)) and orb1==orb2:
+      if np.all(rvec==np.zeros((3,), dtype=int)) and orb1==orb2:
         hop *= (-1)
       self.hr[ir,orb1-1,orb2-1] += -hop
 
+    ''' check sparsity of h(r) matrix '''
+    zeros = None
+    for i in np.arange(self.nrp):
+      if zeros is None:
+        zeros = (self.hr[i] == 0)
+      else:
+        zeros = np.logical_or(zeros, (self.hr[i] == 0))
+    number_zeros = zeros.sum()
+    self.sparse = number_zeros / self.energyBandMax**2
+
+    logger.debug('Sparsity of H(R) matrix: {0:.2f} %'.format(self.sparse * 100))
     logger.debug('Tight binding parameter set:\n{}'.format(self.hr))
 
   def _setupKmesh(self):
@@ -324,11 +335,11 @@ class TightBinding(Model):
       otherwise create the usual reducible cell
     '''
 
-    kgrid = np.array([self.nkx,self.nky,self.nkz], dtype=np.int)
+    kgrid = np.array([self.nkx,self.nky,self.nkz], dtype=int)
     if self.kshift:
       is_shift = np.array([int(i) for i in self.dims], dtype=np.float64)
     else:
-      is_shift = np.array([0,0,0], dtype=np.int)
+      is_shift = np.array([0,0,0], dtype=int)
 
     ''' define k-grid, shift if required '''
     if self.irreducible:
@@ -598,6 +609,7 @@ class TightBinding(Model):
         hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
         hvk += hvk_correction
 
+
       ''' this transforms all k points at once '''
       ek, U = np.linalg.eig(hk)
 
@@ -648,6 +660,12 @@ class TightBinding(Model):
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag
 
+    if not self.irreducible:
+      self.hk           = hk
+      self.hvk          = hvk
+      self.hck          = hck
+      self.Ukohnsham    = U
+      self.Uinvkohnsham = Uinv
 
   def _checkSymmetriesTightbinding(self):
 

@@ -444,8 +444,8 @@ class LRTCoutput(object):
                 if settings.imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
               else:
                 if idir3 is None:
-                  auxarray = np.zeros((self.nT,3), dtype=np.int)
-                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1], dtype=np.int)
+                  auxarray = np.zeros((self.nT,3), dtype=int)
+                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1], dtype=int)
 
                   if not self.headerwritten:
                     np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
@@ -458,8 +458,8 @@ class LRTCoutput(object):
                     np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
                                fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
                 else:
-                  auxarray = np.zeros((self.nT,4), dtype=np.int)
-                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=np.int)
+                  auxarray = np.zeros((self.nT,4), dtype=int)
+                  auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=int)
 
                   if not self.headerwritten:
                     np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \

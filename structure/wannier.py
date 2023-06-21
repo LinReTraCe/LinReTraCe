@@ -185,7 +185,7 @@ class Wannier90Calculation(DftCalculation):
       divisor.append(int(firstline[pos1:pos1+3]))
       divisor.append(int(firstline[pos1+3:pos1+6]))
       divisor.append(int(firstline[pos1+6:pos1+9]))
-      divisor = np.array(divisor, dtype=np.int)
+      divisor = np.array(divisor, dtype=int)
 
       raise_error = False
       if self.nkx == self.nky and divisor[0] != divisor[1]:
@@ -204,8 +204,8 @@ class Wannier90Calculation(DftCalculation):
 
       self.nkx, self.nky, self.nkz = divisor
       # determine dimension whether we find '1's in the divisor
-      self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
-      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
+      self.dims = np.logical_not(divisor == np.ones(3, dtype=int))
+      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=int))
 
       # now we reset the file
       klist.seek(0)
@@ -455,6 +455,11 @@ class Wannier90Calculation(DftCalculation):
         #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
         # inv(U) @ hk @ U = ek
 
+        self.hk  = hk
+        self.hvk = hvk
+        self.hck = hck
+
+
         ''' this transforms all k points at once '''
         ek, U = np.linalg.eig(hk)
 
@@ -466,9 +471,13 @@ class Wannier90Calculation(DftCalculation):
           ek[ik,:] = ekk[idx]
           U[ik,:,:] = Uk[:,idx]
 
+        self.Ukohnsham = U
+
         ''' the velocities and curvatures are ordered according to e(k)
             due to the reordering of U '''
         Uinv = np.linalg.inv(U)
+        self.Uinvkohnsham = Uinv
+
         vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
         ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
 
@@ -889,8 +898,8 @@ class wannier90hamiltonian(ElectronicStructure):
     ''' parameter for reducible grids and unpolarized spin calculations '''
     self.spins = 1
     self.vol   = 1
-    self.multiplicity = np.ones((self.nkp,), dtype=np.int)
-    self.weights = 2 * np.ones((self.nkp,), dtype=np.int) / float(self.nkp)
+    self.multiplicity = np.ones((self.nkp,), dtype=int)
+    self.weights = 2 * np.ones((self.nkp,), dtype=int) / float(self.nkp)
     self.weightsum = 2
 
     self.optic       = True
@@ -930,7 +939,7 @@ class wannier90hamiltonian(ElectronicStructure):
       if header[0] == 'VERSION':
         warn("Version 2 headers are obsolete (specify in input file!)")
         nkpoints, natoms = map(int, nextline())
-        lines = np.array([nextline() for _ in range(natoms)], np.int)
+        lines = np.array([nextline() for _ in range(natoms)], int)
         nbands = np.sum(lines[:,:2])
         del lines, natoms
       elif len(header) != 3:
@@ -986,8 +995,8 @@ class hamiltonian_matrix(ElectronicStructure):
 
     self.spins = 1
     self.vol   = 1
-    self.multiplicity = np.ones((self.nkp,), dtype=np.int)
-    self.weights = 2 * np.ones((self.nkp,), dtype=np.int) / float(self.nkp)
+    self.multiplicity = np.ones((self.nkp,), dtype=int)
+    self.weights = 2 * np.ones((self.nkp,), dtype=int) / float(self.nkp)
     self.weightsum = 2
 
     self.optic       = True

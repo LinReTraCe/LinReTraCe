@@ -150,12 +150,12 @@ class OrthogonalTightBinding(Model):
     import spglib # we are protected by a try except from outside
 
     ''' define k-grid, shift if required '''
-    kgrid = np.array([self.nkx,self.nky,self.nkz], dtype=np.int)
+    kgrid = np.array([self.nkx,self.nky,self.nkz], dtype=int)
 
     if self.kshift:
       is_shift = np.array([int(i) for i in self.dims], dtype=np.float64)
     else:
-      is_shift = np.array([0,0,0], dtype=np.int)
+      is_shift = np.array([0,0,0], dtype=int)
 
     # primitive tight-binding lattice model
     lattice = np.array([[self.ax,0.0,0.0],\
@@ -234,8 +234,8 @@ class OrthogonalTightBinding(Model):
     kpoints = np.array(kpoints)
     if self.kshift: kpoints += self._kmeshshift[None,:]
 
-    unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=np.int)
-    mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=np.int)
+    unique  = np.ones((self.nkx*self.nky*self.nkz), dtype=int)
+    mult    = np.zeros((self.nkx*self.nky*self.nkz), dtype=int)
     irrk    = 0
 
     if self.irreducible:
