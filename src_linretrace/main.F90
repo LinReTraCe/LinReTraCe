@@ -757,12 +757,16 @@ program main
     if (algo%lIntraBandQuantities .or. algo%lInterBandQuantities) then
       if (algo%lQuad) then
         call calc_polygamma(PolyGammaQ, edisp, sct, kmesh, algo, info)
-        call initialize_response(algo, qresp_intra)
+        if (algo%lIntrabandQuantities) then
+          call initialize_response(algo, qresp_intra)
+        endif
         if (algo%lInterBandQuantities) then
           call initialize_response(algo, qresp_inter)
         endif
         if (algo%lBoltzmann) then
-          call initialize_response(algo, qresp_intra_Boltzmann)
+          if (algo%lIntrabandQuantities) then
+            call initialize_response(algo, qresp_intra_Boltzmann)
+          endif
           if (algo%lInterBandQuantities) then
             call initialize_response(algo, qresp_inter_Boltzmann)
           endif
@@ -771,13 +775,17 @@ program main
         call calc_polygamma(PolyGamma, edisp, sct, kmesh, algo, info)
         ! initialize the already allocated arrays to 0
         if (algo%lIntraBandQuantities) then
-          call initialize_response(algo, resp_intra)
+          if (algo%lIntrabandQuantities) then
+            call initialize_response(algo, resp_intra)
+          endif
           if(algo%lBoltzmann) then
             call initialize_response(algo, resp_intra_Boltzmann)
           endif
         endif
         if (algo%lInterBandQuantities) then
-          call initialize_response(algo, resp_inter)
+          if (algo%lIntrabandQuantities) then
+            call initialize_response(algo, resp_inter)
+          endif
           if (algo%lBoltzmann) then
             call initialize_response(algo, resp_inter_Boltzmann)
           endif
