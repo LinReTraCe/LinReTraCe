@@ -233,6 +233,8 @@ def main():
           inpobj.outputPath(args.plot)
         else:
           inpobj.outputPath(args.plot, args.output[1])
+      elif cmd == 'hk':
+        inpobj.outputHk()
       else:
         raise IOError('lrtc input file command not recognized')
     except Exception as e:

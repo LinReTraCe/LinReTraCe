@@ -56,6 +56,7 @@ class LRTCinput(object):
     print('{:<12}  {}'.format('info', 'band structure, optical information'))
     print('{:<12}  {}'.format('dos',  'density of states / number of states'))
     print('{:<12}  {}'.format('path', 'band structure along high symmetry path'))
+    print('{:<12}  {}'.format('hk',   'tight binding hamiltonian h(k), if available'))
     print(barlength*u'\u2500')
 
   def outputStructure(self):
@@ -188,6 +189,36 @@ class LRTCinput(object):
                      header='#  energy [eV], DOSup [eV^-1], DOSdn [eV^-1], NOSup, NOSdn')
 
     print('') # empty line before next CLI input
+
+  def outputHk(self):
+    '''
+      output hk in wannier90 format if the corresponding array
+      is available: at the moment output by ltb / lwann if reducible and debug
+    '''
+
+    try:
+      with h5py.File(self.fname,'r') as h5:
+        nkx      = h5['.kmesh/nkx'][()]
+        nky      = h5['.kmesh/nky'][()]
+        nkz      = h5['.kmesh/nkz'][()]
+        hk       = h5['.tightbinding/hk'][()]
+    except:
+      raise IOError('Provided file does not contain a Hamiltonian H(k)')
+
+    nk = hk.shape[0]
+    nb = hk.shape[1]
+
+    print('   {}  {}  {}'.format(nk,nb,nb))
+    ik = -1
+    for ikx in range(nkx):
+      for iky in range(nky):
+        for ikz in range(nkz):
+          ik += 1
+          print(' {}\t{}\t{}'.format(float(ikx)/20., float(iky)/20., float(ikz)/20.))
+          for iband1 in range(nb):
+            for iband2 in range(nb):
+              print('\t{}\t{}'.format(hk[ik,iband1,iband2].real,hk[ik,iband1,iband2].imag), end="")
+            print()
 
   def outputPath(self, plot, pathstring=None):
     '''
