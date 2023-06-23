@@ -5,6 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import numpy as np
+import scipy.linalg
 import spglib
 
 from structure.auxiliary import levicivita
@@ -413,7 +414,7 @@ class TightBinding(Model):
           self.symop.append(isym)
 
       self.symop = np.array(self.symop)
-      self.invsymop = np.linalg.inv(self.symop)
+      self.invsymop = scipy.linalg.inv(self.symop)
 
       self.nsym = self.symop.shape[0]
       if non_standard:
@@ -531,7 +532,7 @@ class TightBinding(Model):
         ''' to get a full one-to-one comparison
             we need to sort these now
             through the application of rotations pairs of colums and rows can be interchanged '''
-        red_ek, red_U = np.linalg.eig(red_hk)
+        red_ek, red_U = scipy.linalg.eigh(red_hk)
         red_ek = red_ek.real
 
         for isym in range(self.nsym):
@@ -541,7 +542,7 @@ class TightBinding(Model):
           red_U[isym,:,:] = Uk[:,idx]
 
         self.energies[0][ikp,:] = red_ek[0,:]
-        red_Uinv = np.linalg.inv(red_U)
+        red_Uinv = scipy.linalg.inv(red_U)
 
         ''' transform velocity hamiltonian into Kohn Sham basis '''
         vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U)
@@ -611,7 +612,7 @@ class TightBinding(Model):
 
 
       ''' this transforms all k points at once '''
-      ek, U = np.linalg.eig(hk)
+      ek, U = scipy.linalg.eigh(hk)
 
       ''' Sort eigenvalues from smallest to largest
           Required for detection of possible gaps '''
@@ -624,7 +625,7 @@ class TightBinding(Model):
 
       ''' the velocities and curvatures are ordered according to e(k)
           due to the reordering of U '''
-      Uinv = np.linalg.inv(U)
+      Uinv = scipy.linalg.inv(U)
 
       vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
       vel_conj = np.conjugate(vel)
