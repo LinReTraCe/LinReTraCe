@@ -384,7 +384,7 @@ class Wannier90Calculation(DftCalculation):
 
 
           ''' diagonalize all hamiltonians of the symmetry connected k-points '''
-          red_ek, red_U = np.linalg.eig(red_hk)
+          red_ek, red_U = np.linalg.eigh(red_hk)
           red_ek = red_ek.real
 
           for isym in range(self.nsym):
@@ -456,7 +456,7 @@ class Wannier90Calculation(DftCalculation):
         # inv(U) @ hk @ U = ek
 
         ''' this transforms all k points at once '''
-        ek, U = np.linalg.eig(hk)
+        ek, U = np.linalg.eigh(hk)
 
         ''' Sort eigenvalues from smallest to largest
             Required for detection of possible gaps '''
@@ -894,7 +894,7 @@ class wannier90hamiltonian(ElectronicStructure):
     self.energyBandMax = nbands
 
     ''' diagonalize hamiltonian and save the eigenvalues in hkdiag'''
-    self.hkdiag, _ = np.linalg.eig(hk)
+    self.hkdiag, _ = np.linalg.eigh(hk)
 
     ''' parameter for reducible grids and unpolarized spin calculations '''
     self.spins = 1
