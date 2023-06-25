@@ -214,11 +214,14 @@ class LRTCinput(object):
       for iky in range(nky):
         for ikz in range(nkz):
           ik += 1
-          print(' {}\t{}\t{}'.format(float(ikx)/20., float(iky)/20., float(ikz)/20.))
-          for iband1 in range(nb):
-            for iband2 in range(nb):
-              print('\t{}\t{}'.format(hk[ik,iband1,iband2].real,hk[ik,iband1,iband2].imag), end="")
-            print()
+          print(' {}\t{}\t{}'.format(float(ikx)/nkx, float(iky)/nky, float(ikz)/nkz))
+          if nb > 1:
+            for iband1 in range(nb):
+              for iband2 in range(nb):
+                print('\t{}\t{}'.format(hk[ik,iband1,iband2].real,hk[ik,iband1,iband2].imag), end="")
+              print()
+          else:
+            print('\t{}'.format(hk[ik,0,0].real))
 
   def outputPath(self, plot, pathstring=None):
     '''
