@@ -221,7 +221,7 @@ class LRTCinput(object):
                 print('\t{}\t{}'.format(hk[ik,iband1,iband2].real,hk[ik,iband1,iband2].imag), end="")
               print()
           else:
-            print('\t{}'.format(hk[ik,0,0].real))
+            print('\t{}\t{}'.format(hk[ik,0,0].real,0))
 
   def outputPath(self, plot, pathstring=None):
     '''
