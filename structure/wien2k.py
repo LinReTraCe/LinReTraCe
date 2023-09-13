@@ -331,12 +331,12 @@ class Wien2kCalculation(DftCalculation):
       divisor.append(int(firstline[pos1:pos1+3]))
       divisor.append(int(firstline[pos1+3:pos1+6]))
       divisor.append(int(firstline[pos1+6:pos1+9]))
-      divisor = np.array(divisor, dtype=np.int)
+      divisor = np.array(divisor, dtype=int)
 
       self.nkx, self.nky, self.nkz = divisor
       # determine dimension whether we find '1's in the divisor
-      self.dims = np.logical_not(divisor == np.ones(3, dtype=np.int))
-      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=np.int))
+      self.dims = np.logical_not(divisor == np.ones(3, dtype=int))
+      self.ndim = 3 - np.sum(divisor == np.ones(3, dtype=int))
 
 
       # now we reset the file
