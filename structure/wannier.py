@@ -28,11 +28,13 @@ class Wannier90Calculation(DftCalculation):
   intra + inter band magnetic optical elements ~ velocities**2 * curvature
   '''
 
-  def __init__(self, directory, charge, **kwargs):
+  def __init__(self, directory, charge, soc, **kwargs):
     logger.info("\nInitializing Wannier90 calculation.")
     super(Wannier90Calculation, self).__init__()
     self.directory = directory
     self.charge    = charge
+    self.soc       = soc
+
     if isinstance(self.charge, float):
       if self.charge < 0: raise ValueError('Provided charge must be >= 0')
 
@@ -691,6 +693,9 @@ class Wannier90Calculation(DftCalculation):
     else:
       raise IOError("Error: No matching hr file combinations found")
 
+    if self.soc:
+      logger.info("Detected spin-orbit coupling flag. Adjusting weights accordingly.")
+
   def _checkFiles(self):
     '''
       Check that all necessary files are existing files and are not empty
@@ -707,7 +712,10 @@ class Wannier90Calculation(DftCalculation):
       self.fhraccess = [self.fhrup, self.fhrdn]
       self.fwoutaccess = [self.fwoutup, self.fwoutdn]
     elif self.calctype == 2:
-      self.weightsum = 2
+      if self.soc:
+        self.weightsum = 1
+      else:
+        self.weightsum = 2
       self.spins = 1
       self.fhraccess = [self.fhr]
       self.fwoutaccess = [self.fwout]

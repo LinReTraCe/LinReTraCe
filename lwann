@@ -24,6 +24,7 @@ def parse_args(args=None):
   parser.add_argument('system', help='Folder of Wannier90 calculation')
   parser.add_argument('-c', '--charge', type=float, help='Number of electrons in the provided bands. If not provided determine it.')
   parser.add_argument('-o', '--output', help='Outputname of hdf5 (default="lrtc-wann.hdf5")', default='lrtc-wann.hdf5')
+  parser.add_argument('--soc', help='Wannier90 calculation includes spin-orbit coupling. Necessary only for spin unpolarized calculations.', default=False, action='store_true')
   group = parser.add_mutually_exclusive_group(required=False)
   group.add_argument('--kmesh', nargs=3, help='Custom k grid - must conform original grid (8x8x5 -> 20x20x5)')
   group.add_argument('--wien2k',  help='Use Wien2K k grid instead (case.struct, case.klist must be present in Wannier90 folder)', default=False, action='store_true')
@@ -60,7 +61,7 @@ def main():
       error(str(e)+"\nExit.")
   else:
     try:
-      ham = Wannier90Calculation(args.system, args.charge)
+      ham = Wannier90Calculation(args.system, args.charge, args.soc)
       ham.readData()
       if args.kmesh:
         ham.expandKmesh(np.array(args.kmesh, dtype=int))
