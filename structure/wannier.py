@@ -532,7 +532,7 @@ class Wannier90Calculation(DftCalculation):
     if not self.ortho:
       truncate = True
       for ispin in range(self.spins):
-        if np.any(np.abs(self.opticalMoments[...,6:]) > 1e-6):
+        if np.any(np.abs(self.opticalMoments[ispin][...,6:]) > 1e-6):
           truncate = False
       if truncate:
         for ispin in range(self.spins):
@@ -629,13 +629,19 @@ class Wannier90Calculation(DftCalculation):
     if mu is None:
       self._calcFermiLevel(mu)
     else:
-      self.charge = 0
-      self.charge_old = self._calcOccupation(mu)
+      # determine charge for mu = 0.0
+      self.charge = 0 # charge needs to be set to 0 in order for _calcOccupation to deliver the charge itself !
+      self.charge_old = self._calcOccupation(mu, raiseError=False)
       logger.warning('\n\nDetermined charge in the projection: {}'.format(self.charge_old))
+
+      # round to nearest integer (we expect an integer number of electrons from any type projection)
       self.charge = np.around(self.charge_old)
+
       if self.charge != self.charge_old:
         logger.warning('Rounding to nearest integer: {}\nIf this behavior is not intended provide the desired charge with --charge\n\n'.format(self.charge))
-        self._calcFermiLevel()
+        self._calcFermiLevel() # find new mu
+      else:
+        self._calcFermiLevel(mu) # if charges agree, mu = 0.0 is correct, just find the auxiliary info
     h5output(fname, self, self)
 
   def _defineCase(self):

@@ -110,7 +110,7 @@ class ElectronicStructure(ABC):
     self.dims = np.array(self.dims)
     logger.info('Detected {} dimensions.'.format(self.ndim))
 
-  def _calcOccupation(self, mu):
+  def _calcOccupation(self, mu, raiseError=False):
     '''
     Calculate the deviation of the occupation the the given charge in the system.
     Here we use the Fermi function at T=0 (theta function).
@@ -130,7 +130,7 @@ class ElectronicStructure(ABC):
 
     # this is a nasty work-around for the whole gap-thingy
     # to make sure we are where we want to be
-    if abs(dev) < np.min(self.weights)/2.:
+    if raiseError and (abs(dev) < np.min(self.weights)/2.):
       raise Converged(mu)
 
     return dev
@@ -162,7 +162,7 @@ class ElectronicStructure(ABC):
 
     if mu is None:
       try:
-        mu_sol = scipy.optimize.bisect(self._calcOccupation, x0, x1)
+        mu_sol = scipy.optimize.bisect(self._calcOccupation, x0, x1, args=(True,)) # raise Error if Converged
       except Converged as c: # work-around so we always get the band-gap correct
         mu_sol = c.mu
       except ValueError:
