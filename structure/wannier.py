@@ -71,6 +71,7 @@ class Wannier90Calculation(DftCalculation):
     except:
       logger.error('An error occured while reading case.wout*, defaulting to Angstrom')
       self.lengthscale = 1.0
+    self._readWin()
     self._readNnkp()
     self._readHr()
     logger.info("Files successfully read.")
@@ -641,7 +642,7 @@ class Wannier90Calculation(DftCalculation):
         logger.warning('Rounding to nearest integer: {}\nIf this behavior is not intended provide the desired charge with --charge\n\n'.format(self.charge))
         self._calcFermiLevel() # find new mu
       else:
-        self._calcFermiLevel(mu) # if charges agree, mu = 0.0 is correct, just find the auxiliary info
+        self._calcFermiLevel(mu) # if charges agree, input mu is correct, just find the auxiliary info
     h5output(fname, self, self)
 
   def _defineCase(self):
@@ -674,6 +675,7 @@ class Wannier90Calculation(DftCalculation):
 
     self.fnnkp   = self.case + '.nnkp'
 
+    self.fwin    = self.case + '.win'
     self.fwout   = self.case + '.wout'
     self.fwoutup = self.case + '.woutup'
     self.fwoutdn = self.case + '.woutdn'
@@ -759,6 +761,30 @@ class Wannier90Calculation(DftCalculation):
         raise IOError('Up and Dn files have two different length scales')
 
     self.lengthscale = self.lengthscale[0]
+
+  def _readWin(self):
+    '''
+      get fermi energy, if available
+    '''
+
+    if not os.path.isfile(self.fwin):
+      logger.debug("{} not available.".format(self.fwin))
+      self.efer = 0.0
+      return
+
+    self.efer = None
+    logger.info("Reading: {}".format(self.fwin))
+    with open(str(self.fwin),'r') as win:
+      for line in win:
+        if line.lstrip().startswith('fermi_energy'):
+          self.efer = float(line.split()[-1])
+          break
+
+    if self.efer is not None:
+      logger.info("   Fermi level: {} eV".format(self.efer))
+    else:
+      logger.info("   Fermi level not detected. Assuming 0 eV")
+      self.efer = 0.0
 
 
   def _readNnkp(self):

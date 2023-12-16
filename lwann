@@ -71,7 +71,7 @@ def main():
       if args.charge:
         ham.outputData(args.output, intraonly=args.intraonly)
       else:
-        ham.outputData(args.output, mu=0., intraonly=args.intraonly)
+        ham.outputData(args.output, mu=ham.efer, intraonly=args.intraonly)
     except Exception as e:
       error(str(e)+"\nExit.")
 
