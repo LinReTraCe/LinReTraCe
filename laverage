@@ -28,6 +28,7 @@ def parse_args(args=None):
   parser.add_argument('files', nargs='+',   help='Multiple LRTC input/output files to average over')
   parser.add_argument('--output',        default=None, help='Output file name (defaul: lrtc-average-input/output.hdf5)')
   parser.add_argument('--intraonly', default=False, action='store_true', help='Only average intra-band moments in input files')
+  parser.add_argument('--charge', default=None, help='New number of charges in the system (default: first file)')
   parser.add_argument('--debug',         help=argparse.SUPPRESS, default=False, action='store_true')
 
   return parser.parse_args(args)
@@ -151,6 +152,13 @@ def main():
             h5[prefix+'/kPoint/{:010}/moments'.format(ikp+1)] = momentsInter_average[ikp] / nfiles
             del h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)]
             h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)] = momentsInterBfield_average[ikp] / nfiles
+
+        if args.charge is not None:
+          charge = float(args.charge)
+          if charge < 0 or charge > 2 * bands:
+            error('Provided charge does not fit into the system')
+          del h5['.bands/charge']
+          h5['.bands/charge'] = charge
 
   if outobj is not None:
     print('Detected: {} output files'.format(nfiles))
