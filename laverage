@@ -1,0 +1,204 @@
+#! /usr/bin/env python3
+
+from __future__ import print_function, division, absolute_import
+import sys
+import shutil
+import argparse
+import logging
+
+import h5py
+
+from structure.auxiliary import LogFormatter
+from postproc.output     import LRTCoutput
+from postproc.input      import LRTCinput
+
+'''
+laverage: Pre-processing of LRTC HDF5 files
+          Averaging N similarly generated LRTC input/output files
+'''
+
+error = lambda string: sys.exit('laverage: {}'.format(string))
+
+def parse_args(args=None):
+  parser = argparse.ArgumentParser(
+    description='''Argument parser for averaging LRTC input or LRTC output data
+  ------------------------------------------- ''',
+    formatter_class=argparse.RawTextHelpFormatter,
+    epilog="That's the end of the help")
+  parser.add_argument('files', nargs='+',   help='Multiple LRTC input/output files to average over')
+  parser.add_argument('--output',        default=None, help='Output file name (defaul: lrtc-average-input/output.hdf5)')
+  parser.add_argument('--intraonly', default=False, action='store_true', help='Only average intra-band moments in input files')
+  parser.add_argument('--debug',         help=argparse.SUPPRESS, default=False, action='store_true')
+
+  return parser.parse_args(args)
+
+def main():
+  args = parse_args()
+
+  ''' define logging '''
+  logger = logging.getLogger()
+  logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
+  console = logging.StreamHandler()
+  console.setFormatter(LogFormatter())
+  console.setLevel(logging.DEBUG if args.debug else logging.INFO)
+  logger.addHandler(console)
+
+
+  ''' Initiate input / output objects '''
+  inpobj = outobj = None
+  try:
+    for ifile in args.files:
+      inpobj = LRTCinput(ifile)
+  except IOError as e1:
+    try:
+      for ifile in args.files:
+        outobj = LRTCoutput(ifile)
+    except IOError as e2:
+      error('\n'+'Provided files do not match')
+
+  ''' Go through the input files and average over inputs/outputs
+      with additional sanity checks '''
+  nfiles = len(args.files)
+
+  if inpobj is not None:
+    print('Detected: {} input files'.format(nfiles))
+
+    ''' sanity check k-points bands, spins '''
+    for i, ifile in enumerate(args.files):
+      with h5py.File(ifile) as h5:
+        nkp           = h5['.kmesh/nkp'][()]
+        kirr          = h5['.kmesh/irreducible'][()]
+        nkx, nky, nkz = h5['.kmesh/nkx'][()], h5['.kmesh/nky'][()], h5['.kmesh/nkz'][()]
+        spins         = h5['.bands/ispin'][()]
+        bands         = h5['.bands/energyBandMax'][()]
+
+        if i==0:
+          nkp_init = nkp; kirr_init = kirr; nkx_init = nkx; nky_init = nky; nkz_init = nkz
+          spins_init = spins; bands_init = bands
+        else:
+          if (nkp_init != nkp or kirr_init != kirr or nkx_init != nkx or nky_init != nky or nkz_init != nkz
+              or spins_init != spins or bands_init != bands):
+             error('\n Input files do not match')
+
+    ''' (arithmetic) averaging '''
+
+    ''' first use a copy of the first file as new average file '''
+    favg = args.output if args.output is not None else 'lrtc-average-input.hdf5'
+    shutil.copyfile(args.files[0], favg)
+
+    for ispin in range(spins):
+      if spins == 1:
+        prefix = '/'
+      else:
+        prefix = '/up/' if ispin == 0 else '/dn/'
+
+      energies_average              = None
+      momentsDiagonal_average       = None
+      momentsDiagonalBfield_average = None
+      momentsInter_average          = None
+      momentsInterBfield_average    = None
+
+      for i, ifile in enumerate(args.files):
+        with h5py.File(ifile) as h5:
+          if energies_average is None:
+            energies_average = h5[prefix+'energies'][()]
+          else:
+            energies_average += h5[prefix+'energies'][()]
+
+          if momentsDiagonal_average is None:
+            momentsDiagonal_average = h5[prefix+'momentsDiagonal'][()]
+          else:
+            momentsDiagonal_average += h5[prefix+'momentsDiagonal'][()]
+
+
+          if momentsDiagonalBfield_average is None:
+            momentsDiagonalBfield_average = h5[prefix+'momentsDiagonalBfield'][()]
+          else:
+            momentsDiagonalBfield_average += h5[prefix+'momentsDiagonalBfield'][()]
+
+          if not args.intraonly:
+            if momentsInter_average is None:
+              momentsInter_average = []
+              for ikp in range(nkp):
+                momentsInter_average.append(h5[prefix+'/kPoint/{:010}/moments'.format(ikp+1)][()])
+            else:
+              for ikp in range(nkp):
+                momentsInter_average[ikp] += h5[prefix+'/kPoint/{:010}/moments'.format(ikp+1)][()]
+
+            if momentsInterBfield_average is None:
+              momentsInterBfield_average = []
+              for ikp in range(nkp):
+                momentsInterBfield_average.append(h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)][()])
+            else:
+              for ikp in range(nkp):
+                momentsInterBfield_average[ikp] += h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)][()]
+
+      energies_average /= nfiles
+      momentsDiagonal_average /= nfiles
+      momentsDiagonalBfield_average /= nfiles
+
+      with h5py.File(favg, 'a') as h5:
+        del h5[prefix+'energies']
+        h5[prefix+'energies'] = energies_average
+        del h5[prefix+'momentsDiagonal']
+        h5[prefix+'momentsDiagonal'] = momentsDiagonal_average
+        del h5[prefix+'momentsDiagonalBfield']
+        h5[prefix+'momentsDiagonalBfield'] = momentsDiagonalBfield_average
+
+        if not args.intraonly:
+          for ikp in range(nkp):
+            del h5[prefix+'/kPoint/{:010}/moments'.format(ikp+1)]
+            h5[prefix+'/kPoint/{:010}/moments'.format(ikp+1)] = momentsInter_average[ikp] / nfiles
+            del h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)]
+            h5[prefix+'/kPoint/{:010}/momentsBfield'.format(ikp+1)] = momentsInterBfield_average[ikp] / nfiles
+
+  if outobj is not None:
+    print('Detected: {} output files'.format(nfiles))
+
+    ''' sanity check axis and contents '''
+
+    for i, ifile in enumerate(args.files):
+      with h5py.File(ifile) as h5:
+        tempaxis = h5['.quantities/tempAxis'][()]
+        if i==0:
+          laxis = len(tempaxis)
+          paths = []
+          for iL in ['L11', 'L12', 'L22']:
+            for ii in ['inter','intra']:
+              for iM in ['','B']:
+                for iB in ['','Boltzmann']:
+                  path = '{}{}/{}{}/sum'.format(iL,iM,ii,iB.strip()) # L11B/intraBoltzmann/sum
+                  if path in h5: paths.append(path)
+        else:
+          if len(tempaxis) != laxis: error('\n Output files do not match')
+          for path in paths:
+            if path not in h5: error('\n Output files do not match')
+
+
+    ''' (arithmetic) averaging '''
+
+    ''' first use a copy of the first file as new average file '''
+    favg = args.output if args.output is not None else 'lrtc-average-output.hdf5'
+    shutil.copyfile(args.files[0], favg)
+
+    LLs = []
+    for path in paths:
+      LLs.append(None)
+
+    for i, ifile in enumerate(args.files):
+      with h5py.File(ifile) as h5:
+
+        for j, path in enumerate(paths):
+          LL = h5[path][()]
+          if LLs[j] is None:
+            LLs[j] = LL
+          else:
+            LLs[j] += LL
+
+    with h5py.File(favg, 'a') as h5:
+      for j, path in enumerate(paths):
+        del h5[path]
+        h5[path] = LLs[j] / nfiles
+
+if __name__ == '__main__':
+  main()
