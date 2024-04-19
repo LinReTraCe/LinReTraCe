@@ -761,9 +761,9 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
 #endif
       deallocate(xB_partial_sum)
 
-      sB_gather = sB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
-      aB_gather = aB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
-      xB_gather = xB_gather * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
+      sB_gather = sB_gather * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A * m / (V**2 * s)
+      aB_gather = aB_gather * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**2 * m / V
+      xB_gather = xB_gather * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs) ! -> A**3 * m * s
 
       if (myid .eq. master) then
         write(string,'(I6.6)') info%iStep
@@ -822,9 +822,9 @@ subroutine output_response_D(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
   endif
 #endif
 
-    resp%sB_sum = resp%sB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-    resp%aB_sum = resp%aB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
-    resp%xB_sum = resp%xB_sum * 4.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%sB_sum = resp%sB_sum * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%aB_sum = resp%aB_sum * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
+    resp%xB_sum = resp%xB_sum * 2.d0 / 3.d0 * pi**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.d-10 / hbarevs)
 
     if (myid .eq. master) then
       ! gather the data in the arrays
@@ -1350,7 +1350,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
           sB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
-              resp%sB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              resp%sB_full * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (2) ! shift optical range + momentum sum
           do ik=ikstr,ikend
             sB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
@@ -1358,14 +1358,14 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                   resp%sB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
           enddo
           sB_partial_sum = sB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (3) ! band sum
           do iband=edisp%nbopt_min,edisp%nbopt_max
             sB_partial_sum(:,:,:,1,:,:) = &
                   sB_partial_sum(:,:,:,1,:,:) + resp%sB_full(:,:,:,iband,:,:)
           enddo
           sB_partial_sum_dp = sB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
           deallocate(sB_partial_sum)
       end select
       ! note that I put the unit factors to get the most out of the accuracy
@@ -1447,7 +1447,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
           aB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
-              resp%aB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              resp%aB_full * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (2) ! shift optical range + momentum sum
           do ik=ikstr,ikend
             aB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
@@ -1455,14 +1455,14 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                   resp%aB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
           enddo
           aB_partial_sum = aB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (3) ! band sum
           do iband=edisp%nbopt_min,edisp%nbopt_max
             aB_partial_sum(:,:,:,1,:,:) = &
                   aB_partial_sum(:,:,:,1,:,:) + resp%aB_full(:,:,:,iband,:,:)
           enddo
           aB_partial_sum_dp = aB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
           deallocate(aB_partial_sum)
       end select
       ! note that I put the unit factors to get the most out of the accuracy
@@ -1543,7 +1543,7 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
       select case (algo%fullOutput)
         case (1) ! shift the optical range into the full energy band range
           xB_partial_sum_dp(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,:) = &
-              resp%xB_full * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              resp%xB_full * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (2) ! shift optical range + momentum sum
           do ik=ikstr,ikend
             xB_partial_sum(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,1) = &
@@ -1551,14 +1551,14 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
                   resp%xB_full(:,:,:,edisp%nbopt_min:edisp%nbopt_max,:,ik) * kmesh%weightQ(ik)
           enddo
           xB_partial_sum = xB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
         case (3) ! band sum
           do iband=edisp%nbopt_min,edisp%nbopt_max
             xB_partial_sum(:,:,:,1,:,:) = &
                   xB_partial_sum(:,:,:,1,:,:) + resp%xB_full(:,:,:,iband,:,:)
           enddo
           xB_partial_sum_dp = xB_partial_sum &
-              * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+              * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
           deallocate(xB_partial_sum)
       end select
       ! note that I put the unit factors to get the most out of the accuracy
@@ -1684,12 +1684,12 @@ subroutine output_response_Q(resp, gname, edisp, algo, info, temp, kmesh, lBfiel
     qixarrB = aimag(resp%xB_sum)
 #endif
 
-    qrsarrB = qrsarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qisarrB = qisarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qraarrB = qraarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qiaarrB = qiaarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qrxarrB = qrxarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
-    qixarrB = qixarrB * 4.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qrsarrB = qrsarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qisarrB = qisarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qraarrB = qraarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qiaarrB = qiaarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qrxarrB = qrxarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
+    qixarrB = qixarrB * 2.q0 / 3.q0 * piQ**2 * ( echarge / (kmesh%vol*hbarevs)) * (1.q-10 / hbarevs)
 
     ! should work=?
     if (myid .eq. master) then
