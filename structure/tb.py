@@ -29,10 +29,11 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False):
+  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False):
     self.tbfile       = tbfile
     self.charge       = charge
     self.corronly     = corronly
+    self.vector       = vector
 
     self._readTb()
     self._computeOrthogonality() # sets self.ortho
@@ -660,7 +661,8 @@ class TightBinding(Model):
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag
 
-    if not self.irreducible and logging.getLogger().isEnabledFor(logging.DEBUG):
+    # if not self.irreducible and logging.getLogger().isEnabledFor(logging.DEBUG):
+    if not self.irreducible and self.vector:
       self.hk           = hk
       self.hvk          = hvk
       self.hck          = hck
