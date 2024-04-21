@@ -1,9 +1,47 @@
 #! /usr/bin/env python
 
+#    Parts of this python file have been adopted directly from the source code
+#    of BoltzTraP2. More specifically, the DFTData class, used
+#    to load in DFT data, has been modified to be initializable
+#    via our internal data.
+#    For Licensing purposes, the following Header is required:
+
+#    BoltzTraP2, a program for interpolating band structures and calculating
+#                semi-classical transport coefficients.
+#    Copyright (C) 2017-2024 Georg K. H. Madsen <georg.madsen@tuwien.ac.at>
+#    Copyright (C) 2017-2024 Jesús Carrete <jesus.carrete.montana@tuwien.ac.at>
+#    Copyright (C) 2017-2024 Matthieu J. Verstraete <matthieu.verstraete@ulg.ac.be>
+#    Copyright (C) 2018-2019 Genadi Naydenov <gan503@york.ac.uk>
+#    Copyright (C) 2020 Gavin Woolman <gwoolma2@staffmail.ed.ac.uk>
+#    Copyright (C) 2020 Roman Kempt <roman.kempt@tu-dresden.de>
+#    Copyright (C) 2022 Robert Stanton <stantor@clarkson.edu>
+#
+#    This file is part of BoltzTraP2.
+#
+#    BoltzTraP2 is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    BoltzTraP2 is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with BoltzTraP2.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+#    Copyright (C) 2024 Matthias Pickem <matthias.pickem@gmail.com>
+#    Adapted to be used directly for interpolation purposes
+#    in the LinReTraCe code available at github.com/linretrace
+#
+
 from __future__ import print_function, division, absolute_import
 import sys
 import os
 import logging
+import math
 logger = logging.getLogger(__name__)
 
 import numpy as np
@@ -15,6 +53,7 @@ from BoltzTraP2 import sphere
 from BoltzTraP2 import fite
 from BoltzTraP2 import serialization
 from BoltzTraP2.misc import ffloat
+from BoltzTraP2.units import Angstrom
 import ase.spacegroup
 
 from structure.auxiliary import progressBar
@@ -22,37 +61,6 @@ from structure.wien2k    import Wien2kCalculation
 from structure.vasp      import VaspCalculation
 from structure           import units
 from structure.auxiliary import levicivita
-
-class MetaW2kLoader(BTP.GenericWien2kLoader):
-  '''
-  BoltzTrap Custom Wien2k Loader.
-  After setting the class variables one can register the Loader
-  und use the provided custom files.
-  The usual Wien2kLoader can only access the energy and energyso files.
-  We also want to access up and dn files in spin-polarized calculations.
-  '''
-
-  # define class variables
-  weightsum = None
-  fscf      = None
-  fstruct   = None
-  fenergy   = None
-
-  # access them here
-  def __init__(self, directory):
-      super(MetaW2kLoader, self).__init__(MetaW2kLoader.case, \
-                                       MetaW2kLoader.weightsum, \
-                                       MetaW2kLoader.fscf, \
-                                       MetaW2kLoader.fstruct, \
-                                       MetaW2kLoader.fenergy)
-
-  @classmethod
-  def setfiles(cls, case, weightsum, fscf, fstruct, fenergy):
-    cls.case      = case
-    cls.weightsum = weightsum
-    cls.fscf      = fscf
-    cls.fstruct   = fstruct
-    cls.fenergy   = fenergy
 
 
 
@@ -79,66 +87,49 @@ class BoltztrapInterpolation(object):
     self.bopticfull    = False # we only have the intra band data
 
   def interpolate(self, niter):
+    logger.info('BoltzTrap2 - Licensed under GPLv3.')
     logger.info('BoltzTrap2: Interpolating band-structure.')
     logger.info('BoltzTrap2: Requesting interpolation parameter: {}'.format(niter))
     self.niter = niter
 
-    if isinstance(self.dftcalc, Wien2kCalculation):
-      for ispin in range(self.dftcalc.spins):
+    '''
+      we require the spacegroup operations
+      if the DFT Calculation does not provide them, we have to ask for space group
+      from which they can be generated via the ase module
 
-        # set class energy files
-        MetaW2kLoader.setfiles(self.dftcalc.case, self.dftcalc.weightsum, self.dftcalc.fscf, \
-                               self.dftcalc.fstruct, self.dftcalc.fenergyaccess[ispin])
-        # and register the new loader
-        BTP.register_loader(str(self.dftcalc.case), MetaW2kLoader)
-        # interpolate and save
-        self._interp()
-        # self._rotate()
-        if self.dftcalc.spinorbit and self.dftcalc.spins == 2:
-          self._save1_separate()
+      the interactive interface is there as a fail safe.
+    '''
+
+    if isinstance(self.dftcalc, VaspCalculation) and self.dftcalc.irreducible:
+      logger.info('\n\nASE detected spacegroup number: {}'.format(self.dftcalc.spacegroup))
+      logger.info('If this is correct, skip by pressing enter.')
+      logger.info('Otherwise, enter the new space group in the range 1-230.')
+      inputmethod = input if sys.version_info >= (3, 0) else raw_input
+      spacegroup = inputmethod('Spacegroup [1-230]: ')
+      try:
+        if len(spacegroup.strip()) == 0:
+          sg = self.dftcalc.spacegroup
         else:
-          self._save1()
+          sg = int(spacegroup)
+      except Exception as e:
+        raise IOError('Input invalid.')
+      asespacegroup = ase.spacegroup.Spacegroup(sg)
+      self.dftcalc.symop = asespacegroup.get_rotations()
+      logger.info('  Spacegroup: {}'.format(sg))
+      self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
+      self.dftcalc.nsym = self.dftcalc.symop.shape[0]
+      logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
 
-        # otherwise we would loop a second time over the same file
-        if self.dftcalc.spinorbit and self.dftcalc.spins == 2:
-          break
-
-    elif isinstance(self.dftcalc, VaspCalculation):
-
-      if self.dftcalc.irreducible:
-        logger.info('\n\nASE detected spacegroup number: {}'.format(self.dftcalc.spacegroup))
-        logger.info('If this is correct, skip by pressing enter or enter number in range 1-230')
-        inputmethod = input if sys.version_info >= (3, 0) else raw_input
-        spacegroup = inputmethod('Spacegroup [1-230]: ')
-        try:
-          if len(spacegroup.strip()) == 0:
-            sg = self.dftcalc.spacegroup
-          else:
-            sg = int(spacegroup)
-        except Exception as e:
-          raise IOError('Input invalid.')
-        asespacegroup = ase.spacegroup.Spacegroup(sg)
-        self.dftcalc.symop = asespacegroup.get_rotations()
-        logger.info('  Spacegroup: {}'.format(sg))
-        self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
-        self.dftcalc.nsym = self.dftcalc.symop.shape[0]
-        logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
-
-      BTP.register_loader("VASP", BTP.VASPLoader)
-      self._interp()
-
-      if (self.dftcalc.spins == 1): # this also works for spins==1 and non-collinear!
-        self._save1()
-      else:
-        self._save2() # we have to split the interpolated arrays we get from BTP
-    else:
-      raise IOError('BoltztrapInterpolation: Received object that is not supported.')
+    for ispin in range(self.dftcalc.spins):
+      ''' provide the boltztrap module with the data for spin: ispin
+          and append the resulting velocities / curvatures to the internal list '''
+      self._interp(ispin)
 
     self._symmetrize()
     logger.info('BoltzTrap2: Interpolation successful.')
 
 
-  def _interp(self):
+  def _interp(self, spin):
     '''
     Standard BoltzTrap2 Library interface to interpolate
     the band energies, band velocities and band curvatures
@@ -151,7 +142,15 @@ class BoltztrapInterpolation(object):
     if disable:
       logging.disable( sys.maxsize if sys.version_info >= (3,0) else sys.maxint)
 
-    self.data = BTP.DFTData(self.dftcalc.directory, derivatives=False) # ignore mommat2 files
+    ''' Under GPLv3 licensed and modified BoltzTraP2 DFTData class
+        We adopted the __init__ method which we feed with our electronic structure data
+    '''
+    self.data = DFTData(self.dftcalc.aseobject, self.dftcalc.weightsum, self.dftcalc.kpoints, \
+                        self.dftcalc.mu, self.dftcalc.energies[spin], self.dftcalc.charge)
+
+    # this was the old direct access
+    # self.data = BTP.DFTData(self.dftcalc.directory, derivatives=False) # ignore mommat2 files
+
     self.equivalences = sphere.get_equivalences(self.data.atoms, self.data.magmom, \
                                                 self.niter * len(self.data.kpoints))
 
@@ -165,6 +164,32 @@ class BoltztrapInterpolation(object):
 
     if disable:
       logging.disable(logging.NOTSET)
+
+
+    # we get the energies on the Hartree scale -> rescale to eV
+    self.energies.append(self.interp_energies.transpose(1,0) * units.hartree2eV)
+    self.velocities.append(self.interp_velocities.transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
+
+    # here we dont save unnecessary information
+    # because d2/dxdy = d2/dydx
+    #
+    # 1 4 5
+    # - 2 6
+    # - - 3
+
+    # my index array to get exactly the values above on one axis
+    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
+
+    # this works but I dont know whether there are better ways to do this
+    # looks rather hacky
+    tmp = self.interp_curvatures.transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
+    tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
+    for i in range(tmp.shape[0]):
+      for j in range(tmp.shape[1]):
+        view = tmp[i,j,:,:]
+        tmp2[i,j,:] = view[d2ksave]
+
+    self.curvatures.append(tmp2)
 
   # def _rotate(self):
 
@@ -193,113 +218,115 @@ class BoltztrapInterpolation(object):
   #       cur = self.interp_curvatures[:,:,iband,ikp]
   #       self.interp_curvatures[:,:,iband,ikp] = invvecs @ cur @ vecs
 
-  def _save1(self):
-    '''
-    Saving the energies, velocities and curvatures by simply
-    appending them to the lists we initialized at init time
-    '''
+  #  old save routines, before the boltztrap2 interface was simplified
 
-    # we get the energies on the Hartree scale
-    # rescaling to eV!
-    self.energies.append(self.interp_energies.transpose(1,0) * units.hartree2eV)
-    self.velocities.append(self.interp_velocities.transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
+  #def _save(self):
+  #  '''
+  #  Saving the energies, velocities and curvatures by simply
+  #  appending them to the lists we initialized at init time
+  #  '''
 
-    # here we dont save unnecessary information
-    # because d2/dxdy = d2/dydx
-    #
-    # 1 4 5
-    # - 2 6
-    # - - 3
+  #  # we get the energies on the Hartree scale
+  #  # rescaling to eV!
+  #  self.energies.append(self.interp_energies.transpose(1,0) * units.hartree2eV)
+  #  self.velocities.append(self.interp_velocities.transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
 
-    # my index array to get exactly the values above on one axis
-    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
+  #  # here we dont save unnecessary information
+  #  # because d2/dxdy = d2/dydx
+  #  #
+  #  # 1 4 5
+  #  # - 2 6
+  #  # - - 3
 
-    # this works but I dont know whether there are better ways to do this
-    # looks rather hacky
-    tmp = self.interp_curvatures.transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
-    tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
-    for i in range(tmp.shape[0]):
-      for j in range(tmp.shape[1]):
-        view = tmp[i,j,:,:]
-        tmp2[i,j,:] = view[d2ksave]
+  #  # my index array to get exactly the values above on one axis
+  #  d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
-    self.curvatures.append(tmp2)
+  #  # this works but I dont know whether there are better ways to do this
+  #  # looks rather hacky
+  #  tmp = self.interp_curvatures.transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
+  #  tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
+  #  for i in range(tmp.shape[0]):
+  #    for j in range(tmp.shape[1]):
+  #      view = tmp[i,j,:,:]
+  #      tmp2[i,j,:] = view[d2ksave]
 
-  def _save1_separate(self):
-    '''
-    Identical to _save1 only applied to cases where we have spin orbit coupling
-    Wien2K saves the data in one file (energyso or energysoup) where the 'spins' alternate
-    We perform this only for spin-polarized calculations with spin -orbit coupling where it makes
-    sense to separate out the energies
+  #  self.curvatures.append(tmp2)
 
-    For unpolarized SOC calculations leave them as is.
-    '''
+  #def _save1_separate(self):
+  #  '''
+  #  Identical to _save1 only applied to cases where we have spin orbit coupling
+  #  Wien2K saves the data in one file (energyso or energysoup) where the 'spins' alternate
+  #  We perform this only for spin-polarized calculations with spin -orbit coupling where it makes
+  #  sense to separate out the energies
 
-    # we get the energies on the Hartree scale
-    # rescaling to eV!
-    self.interp_energies = self.interp_energies.transpose(1,0) * units.hartree2eV
-    self.energies.append(self.interp_energies[:,::2])
-    self.energies.append(self.interp_energies[:,1::2])
+  #  For unpolarized SOC calculations leave them as is.
+  #  '''
 
-    self.interp_velocities = self.interp_velocities.transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom
-    self.velocities.append(self.interp_velocities[:,::2,:])
-    self.velocities.append(self.interp_velocities[:,1::2,:])
+  #  # we get the energies on the Hartree scale
+  #  # rescaling to eV!
+  #  self.interp_energies = self.interp_energies.transpose(1,0) * units.hartree2eV
+  #  self.energies.append(self.interp_energies[:,::2])
+  #  self.energies.append(self.interp_energies[:,1::2])
 
-    # here we dont save unnecessary information
-    # because d2/dxdy = d2/dydx
-    #
-    # 1 4 5
-    # - 2 6
-    # - - 3
+  #  self.interp_velocities = self.interp_velocities.transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom
+  #  self.velocities.append(self.interp_velocities[:,::2,:])
+  #  self.velocities.append(self.interp_velocities[:,1::2,:])
 
-    # my index array to get exactly the values above on one axis
-    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
+  #  # here we dont save unnecessary information
+  #  # because d2/dxdy = d2/dydx
+  #  #
+  #  # 1 4 5
+  #  # - 2 6
+  #  # - - 3
 
-    # this works but I dont know whether there are better ways to do this
-    # looks rather hacky
-    tmp = self.interp_curvatures.transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
-    tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
-    for i in range(tmp.shape[0]):
-      for j in range(tmp.shape[1]):
-        view = tmp[i,j,:,:]
-        tmp2[i,j,:] = view[d2ksave]
+  #  # my index array to get exactly the values above on one axis
+  #  d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
-    self.curvatures.append(tmp2[:,::2])
-    self.curvatures.append(tmp2[:,1::2])
+  #  # this works but I dont know whether there are better ways to do this
+  #  # looks rather hacky
+  #  tmp = self.interp_curvatures.transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
+  #  tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
+  #  for i in range(tmp.shape[0]):
+  #    for j in range(tmp.shape[1]):
+  #      view = tmp[i,j,:,:]
+  #      tmp2[i,j,:] = view[d2ksave]
 
-  def _save2(self):
-    '''
-    In the case of a spin-dependent VASP calculation BTP2
-    creates arrays which lists the data in order energyup energydn.
-    We want them to be split, which is what this routines does
-    '''
+  #  self.curvatures.append(tmp2[:,::2])
+  #  self.curvatures.append(tmp2[:,1::2])
 
-    nbands = self.interp_energies.shape[0] # this is guaranteed to be even here
-    self.energies.append(self.interp_energies[:nbands//2,:].transpose(1,0) * units.hartree2eV)
-    self.energies.append(self.interp_energies[nbands//2:,:].transpose(1,0) * units.hartree2eV)
-    self.velocities.append(self.interp_velocities[:,:nbands//2,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
-    self.velocities.append(self.interp_velocities[:,nbands//2:,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
-    # the last two elements dont matter here, since its symmetric anyways
+  # def _save2(self):
+  #   '''
+  #   In the case of a spin-dependent VASP calculation BTP2
+  #   creates arrays which lists the data in order energyup energydn.
+  #   We want them to be split, which is what this routines does
+  #   '''
 
-    # my index array
-    d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
+  #   nbands = self.interp_energies.shape[0] # this is guaranteed to be even here
+  #   self.energies.append(self.interp_energies[:nbands//2,:].transpose(1,0) * units.hartree2eV)
+  #   self.energies.append(self.interp_energies[nbands//2:,:].transpose(1,0) * units.hartree2eV)
+  #   self.velocities.append(self.interp_velocities[:,:nbands//2,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
+  #   self.velocities.append(self.interp_velocities[:,nbands//2:,:].transpose(2,1,0) * units.hartree2eV * units.bohr2angstrom)
+  #   # the last two elements dont matter here, since its symmetric anyways
 
-    # some numpy magic to turn the 3x3 array into the only 6 necessary entries
-    tmp = self.interp_curvatures[:,:,:nbands//2,:].transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
-    tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
+  #   # my index array
+  #   d2ksave = tuple((np.array([0,1,2,0,0,1]), np.array([0,1,2,1,2,2])))
 
-    for i in range(tmp.shape[0]):
-      for j in range(tmp.shape[1]):
-        view = tmp[i,j,:,:]
-        tmp2[i,j,:] = view[d2ksave]
-    self.curvatures.append(tmp2)
+  #   # some numpy magic to turn the 3x3 array into the only 6 necessary entries
+  #   tmp = self.interp_curvatures[:,:,:nbands//2,:].transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
+  #   tmp2 = np.zeros((tmp.shape[0], tmp.shape[1], 6), dtype=np.float64)
 
-    tmp = self.interp_curvatures[:,:,nbands//2:,:].transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
-    for i in range(tmp.shape[0]):
-      for j in range(tmp.shape[1]):
-        view = tmp[i,j,:,:]
-        tmp2[i,j,:] = view[d2ksave]
-    self.curvatures.append(tmp2)
+  #   for i in range(tmp.shape[0]):
+  #     for j in range(tmp.shape[1]):
+  #       view = tmp[i,j,:,:]
+  #       tmp2[i,j,:] = view[d2ksave]
+  #   self.curvatures.append(tmp2)
+
+  #   tmp = self.interp_curvatures[:,:,nbands//2:,:].transpose(3,2,0,1) * units.hartree2eV * units.bohr2angstrom**2
+  #   for i in range(tmp.shape[0]):
+  #     for j in range(tmp.shape[1]):
+  #       view = tmp[i,j,:,:]
+  #       tmp2[i,j,:] = view[d2ksave]
+  #   self.curvatures.append(tmp2)
 
   def _symmetrize(self):
     '''
@@ -384,3 +411,189 @@ class BoltztrapInterpolation(object):
     # if we need the peierls approximation
     self.opticalBandMin = 0
     self.opticalBandMax = self.velocities[0].shape[1]
+
+
+class DFTData:
+    """
+      Objects of this class hold structural and dynamical information from DFT
+      results in any supported format.
+    """
+
+    def __init__(self, aseobject, weightsum, kpoints, mu, energies, charge):
+      """
+        Create BoltzTraP2 DFTData object given our electronicstructure objects
+
+         We provide the data as explicit arguments to avoid any spin related problems
+         INFO: We transform our internal units (eV) to the BoltzTraP units (Ha)
+         nota bene: 1 Hartree = 27.211407953 eV
+      """
+
+      self.sysname   = "DFT_to_BTP2"
+      self.atoms     = aseobject
+      self.dosweight = weightsum
+      self.kpoints   = kpoints.copy()
+      self.fermi     = mu * 0.0367492929 # eV to Hartree
+      self.ebands    = energies.T.copy() * 0.0367492929 # eV to Hartree
+      self.mommat    = None
+      self.magmom    = None
+      self.nelect    = charge
+      self.source    = "LinReTraCe"
+
+    # def __init__(self, directory, derivatives=False, *args, **kwargs):
+    #     """Create a DFTData object."""
+    #     for label, loader in loaders[::-1]:
+    #         BoltzTraP2.misc.info("looking for a {} calculation".format(label))
+    #         try:
+    #             loaded = loader(directory, *args, **kwargs)
+    #         except LoaderError as e:
+    #             BoltzTraP2.misc.info("error in {} loader: {}".format(label, e))
+    #             continue
+    #         self.source = label
+    #         break
+    #     else:
+    #         raise ValueError(
+    #             "no calculation found in directory {}".format(directory)
+    #         )
+    #     BoltzTraP2.misc.info(
+    #         "successfully loaded a {} calculation".format(self.source)
+    #     )
+    #     # Try to copy all relevant attributes from the loader
+    #     if derivatives:
+    #         try:
+    #             self.mommat = loaded.mommat
+    #         except AttributeError:
+    #             raise ValueError(
+    #                 "no derivative information found in directory {}".format(
+    #                     directory
+    #                 )
+    #             )
+    #     else:
+    #         try:
+    #             loaded.mommat
+    #         except AttributeError:
+    #             pass
+    #         else:
+    #             BoltzTraP2.misc.info(
+    #                 "derivative information will be discarded"
+    #             )
+    #         self.mommat = None
+    #     try:
+    #         self.sysname = loaded.sysname
+    #         self.atoms = loaded.atoms
+    #         self.dosweight = loaded.dosweight
+    #         self.kpoints = loaded.kpoints
+    #         self.fermi = loaded.fermi
+    #         self.ebands = loaded.ebands
+    #     except AttributeError:
+    #         raise ValueError(
+    #             "some essential piece of information was not loaded"
+    #         )
+
+    #     # Warn the user if the spin up and spin down Fermi energies
+    #     # are different in CASTEP.
+    #     try:
+    #         self.castep_fermi_mismatch = loaded.castep_fermi_mismatch
+    #         if self.castep_fermi_mismatch:
+    #             BoltzTraP2.misc.info(
+    #                 "CASTEP WARNING: "
+    #                 "Different spin up and spin down Fermi energy."
+    #                 "\nProceeding with spin up Fermi energy. Transport results might"
+    #                 " be inaccurate."
+    #             )
+    #     except AttributeError:
+    #         pass
+
+    #     BoltzTraP2.misc.info("Fermi energy:", self.fermi)
+    #     # If no initial magnetic moments are provided by the loader, assume a
+    #     # non-spin-polarized calculation.
+    #     try:
+    #         self.magmom = loaded.magmom
+    #     except AttributeError:
+    #         self.magmom = None
+    #         BoltzTraP2.misc.info("Assuming a non-spin-polarized calculation")
+    #     # If the number of valence electrons has not been set yet, compute it
+    #     # from the bands.
+    #     try:
+    #         self.nelect = loaded.nelect
+    #     except AttributeError:
+    #         degeneracies = BoltzTraP2.sphere.calc_reciprocal_degeneracies(
+    #             self.atoms, self.magmom, self.kpoints
+    #         )
+    #         weights = degeneracies.astype(np.float64) / degeneracies.sum()
+    #         occupancy = (loaded.ebands < loaded.fermi).astype(np.intc)
+    #         self.nelect = round(self.dosweight * (occupancy * weights).sum())
+
+    def bandana(self, emin=-np.inf, emax=np.inf):
+      bandmin = np.min(self.ebands, axis=1)
+      bandmax = np.max(self.ebands, axis=1)
+      ntoolow = np.count_nonzero(bandmax <= emin)
+      accepted = np.logical_and(bandmin < emax, bandmax > emin)
+      BoltzTraP2.misc.info("BANDANA output")
+      for iband in range(len(self.ebands)):
+          BoltzTraP2.misc.info(
+              iband, bandmin[iband], bandmax[iband], accepted[iband]
+          )
+      self.ebands = self.ebands[accepted]
+      if self.mommat is not None:
+          self.mommat = self.mommat[:, accepted, :]
+      # Removing bands may change the number of valence electrons
+      self.nelect -= self.dosweight * ntoolow
+      return accepted
+
+    def get_lattvec(self):
+      try:
+          self.lattvec
+      except AttributeError:
+          self.lattvec = self.atoms.get_cell().T * Angstrom
+      return self.lattvec
+
+    def get_volume(self):
+      try:
+          self.UCVol
+      except AttributeError:
+          lattvec = self.get_lattvec()
+          self.UCvol = np.abs(np.linalg.det(lattvec))
+      return self.UCvol
+
+    def get_formula_count(self):
+     """Return the number of irreducible formulas in the unit cell.
+
+     Useful for computing molar quantities.
+     """
+     counts = collections.Counter(self.atoms.get_chemical_symbols())
+     return functools.reduce(math.gcd, counts.values())
+
+
+
+
+# old class that defines the W2k loader for BoltzTraP2 from our internal file list
+# class MetaW2kLoader(BTP.GenericWien2kLoader):
+#   '''
+#   BoltzTrap Custom Wien2k Loader.
+#   After setting the class variables one can register the Loader
+#   und use the provided custom files.
+#   The usual Wien2kLoader can only access the energy and energyso files.
+#   We also want to access up and dn files in spin-polarized calculations.
+#   '''
+
+#   # define class variables
+#   weightsum = None
+#   fscf      = None
+#   fstruct   = None
+#   fenergy   = None
+
+#   # access them here
+#   def __init__(self, directory):
+#       super(MetaW2kLoader, self).__init__(MetaW2kLoader.case, \
+#                                        MetaW2kLoader.weightsum, \
+#                                        MetaW2kLoader.fscf, \
+#                                        MetaW2kLoader.fstruct, \
+#                                        MetaW2kLoader.fenergy)
+
+#   @classmethod
+#   def setfiles(cls, case, weightsum, fscf, fstruct, fenergy):
+#     cls.case      = case
+#     cls.weightsum = weightsum
+#     cls.fscf      = fscf
+#     cls.fstruct   = fstruct
+#     cls.fenergy   = fenergy

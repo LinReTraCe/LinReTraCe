@@ -123,7 +123,7 @@ class Program(object):
       except Exception as e:
         btinterp = None
         logging.disable(logging.NOTSET)
-        self.log.warning('Error in BoltzTrap interpolation.')
+        self.log.warning('Error in BoltzTrap2 interpolation.')
         self.log.warning('Continuing without interpolation data.\n')
     else:
       btinterp = None
