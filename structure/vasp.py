@@ -62,6 +62,7 @@ class VaspCalculation(DftCalculation):
     self._read_vol()
     self._read_kpointlist()
     self._read_kdivisors()
+    self._check_reducible()
     self._read_weights()
     self._read_energies()
     logger.info("Files successfully read.")
@@ -157,6 +158,13 @@ class VaspCalculation(DftCalculation):
 
     logger.info("  Irreducible grid: {}".format(str(self.irreducible)))
     logger.info("  Number of dimensions: {}".format(self.ndim))
+
+  def _check_reducible(self):
+    if not self.irreducible and self.nsym > 1:
+      logger.info("  Detected reducible grid: overwriting symmetry operations")
+      self.nsym = 1
+      self.symop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+      self.invsymop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
 
   def _read_weights(self):
     try:
