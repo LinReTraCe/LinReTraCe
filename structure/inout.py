@@ -112,6 +112,10 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
       if not escalc.opticdiag and velcalc is not None:
         peierls = True
 
+      if velcalc is not None:
+        h5out[prefix+'velocities'] = velcalc.velocities[ispin]
+        h5out[prefix+'curvatures'] = velcalc.curvatures[ispin]
+
       if (peierls and velcalc is not None):
         if escalc.opticfull:
           ''' if the full elements are present we need to truncate accordingly '''
