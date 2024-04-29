@@ -34,6 +34,7 @@ def parse_args(args=None):
   parser.add_argument('--abs',   help='Absolute energy levels in trunc option. Must include Fermi level.', default=False, action='store_true')
 
   parser.add_argument('--interp',   nargs='?', help='Interpolate band structure and calculate derivatives.Automatically creates optical elements if no others present.', const=3, default=False, type=int)
+  parser.add_argument('--mesh',     nargs=3, help='If --interp activated, allows for the generation of a finer mesh: nkx nky nkz', default=None)
   parser.add_argument('--peierls',  help='Enforce Peierls approximation (overwrites existing optical elements).', default=False, action='store_true')
 
   parser.add_argument('--debug',    help=argparse.SUPPRESS, default=False, action='store_true')
@@ -119,7 +120,7 @@ class Program(object):
       self.log.info('')
       try:
         btinterp = BoltztrapInterpolation(calc)
-        btinterp.interpolate(self.args.interp)
+        btinterp.interpolate(self.args.interp, self.args.mesh)
       except Exception as e:
         btinterp = None
         logging.disable(logging.NOTSET)
@@ -127,6 +128,27 @@ class Program(object):
         self.log.warning('Continuing without interpolation data.\n')
     else:
       btinterp = None
+
+    # Update mesh of the ElectronicStructure
+    if btinterp is not None and self.args.mesh:
+      if self.args.optic and not self.args.peierls:
+        raise IOError('Cannot use updated mesh with optics data.\n\nDisable --optic.')
+      calc.energies     = btinterp.energies
+      calc.nkp          = btinterp.nkp
+      calc.nkx          = btinterp.nkx
+      calc.nky          = btinterp.nky
+      calc.nkz          = btinterp.nkz
+      calc.nsym         = btinterp.nsym
+      calc.symop        = btinterp.symop
+      calc.invsymop     = btinterp.invsymop
+      calc.irreducible  = btinterp.irreducible
+      calc.kpoints      = btinterp.kpoints
+      calc.weights      = btinterp.weights
+      calc.multiplicity = btinterp.multiplicity
+      self.log.info('Updated momentum mesh:')
+      self.log.info('  Number of k-points: {}'.format(calc.nkp))
+      self.log.info('  Mesh: {} {} {}'.format(calc.nkx, calc.nky, calc.nkz))
+      self.log.info('  Irreducible: {}'.format(calc.irreducible))
 
     # Band truncation
     if self.args.trunc:

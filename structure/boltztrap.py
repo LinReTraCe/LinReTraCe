@@ -86,11 +86,15 @@ class BoltztrapInterpolation(object):
     self.bopticdiag    = True
     self.bopticfull    = False # we only have the intra band data
 
-  def interpolate(self, niter):
+  def interpolate(self, niter = 3, mesh = None):
     logger.info('BoltzTrap2 - Licensed under GPLv3.')
     logger.info('BoltzTrap2: Interpolating band-structure.')
     logger.info('BoltzTrap2: Requesting interpolation parameter: {}'.format(niter))
     self.niter = niter
+    if mesh is not None:
+      self.mesh = [int(i) for i in mesh]
+    else:
+      self.mesh = None
 
     '''
       we require the spacegroup operations
@@ -159,8 +163,33 @@ class BoltztrapInterpolation(object):
 
     self.lattvec = self.data.get_lattvec()
 
+    ''' If we provide a new mesh, use it instead of the original one
+        for the moment: this will be reducible
+        for spin polarized, avoid the second computation
+    '''
+
+    if self.mesh is not None and spin==0:
+      self.kpoints = []
+      for ikx in np.linspace(0,1,self.mesh[0],endpoint=False):
+        for iky in np.linspace(0,1,self.mesh[1],endpoint=False):
+          for ikz in np.linspace(0,1,self.mesh[2],endpoint=False):
+            self.kpoints.append([ikx,iky,ikz])
+
+      self.kpoints = np.array(self.kpoints, dtype=np.float64)
+      self.nkp = np.product(self.mesh)
+      self.nkx, self.nky, self.nkz = self.mesh
+      self.multiplicity = np.ones((self.nkp,), dtype=int)
+      self.weightsum = self.dftcalc.weightsum
+      self.weights = self.weightsum/self.multiplicity
+      self.irreducible = False
+      self.nsym = 1
+      self.symop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+      self.invsymop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+    elif self.mesh is None:
+      self.kpoints = self.data.kpoints
+
     self.interp_energies, self.interp_velocities, self.interp_curvatures = \
-        fite.getBands(self.data.kpoints, self.equivalences, self.lattvec, self.coeffs, curvature=True)
+        fite.getBands(self.kpoints, self.equivalences, self.lattvec, self.coeffs, curvature=True)
 
     if disable:
       logging.disable(logging.NOTSET)
