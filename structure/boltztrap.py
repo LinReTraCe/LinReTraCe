@@ -342,7 +342,7 @@ class BoltztrapInterpolation(object):
   #       tmp2[i,j,:] = view[d2ksave]
   #   self.curvatures.append(tmp2)
 
-  def _generate_mesh(self):
+  def _generate_mesh(self, shift=False):
     '''
     Generate new moentum mesh for which we generate
     energies / velocities / curvatures
@@ -352,14 +352,14 @@ class BoltztrapInterpolation(object):
     _kmeshy = np.linspace(0,1,self.mesh[1],endpoint=False)
     _kmeshz = np.linspace(0,1,self.mesh[2],endpoint=False)
 
-    # if self.kshift:
-    #   self._kmeshshift = []
-    #   for ik in [self.nkx,self.nky,self.nkz]:
-    #     if ik > 1:
-    #       self._kmeshshift.append(1./ik/2.)
-    #     else:
-    #       self._kmeshshift.append(0.0)
-    #   self._kmeshshift = np.array(self._kmeshshift, dtype=np.float64)
+    if shift:
+      self._kmeshshift = []
+      for ik in [self.mesh[0],self.mesh[1],self.mesh[2]]:
+        if ik > 1:
+          self._kmeshshift.append(1./ik/2.)
+        else:
+          self._kmeshshift.append(0.0)
+      self._kmeshshift = np.array(self._kmeshshift, dtype=np.float64)
 
     # the way these points are ordered is important for the indexing below
     kpoints = []
@@ -368,7 +368,7 @@ class BoltztrapInterpolation(object):
         for ikz in _kmeshz:
           kpoints.append([ikx,iky,ikz])
     kpoints = np.array(kpoints, dtype=np.float64)
-    # if self.kshift: kpoints += self._kmeshshift[None,:]
+    if shift: kpoints += self._kmeshshift[None,:]
 
     unique  = np.ones((self.mesh[0]*self.mesh[1]*self.mesh[2]), dtype=int)
     mult    = np.zeros((self.mesh[0]*self.mesh[1]*self.mesh[2]), dtype=int)
@@ -390,8 +390,8 @@ class BoltztrapInterpolation(object):
         knew = np.einsum('nji,j->ni',self.dftcalc.symop,kpoints[ik,:])
         kmod = knew%1
         # ''' in order to index properly and if kshift is applied , shift back '''
-        # if self.kshift:
-        #   kmod -= self._kmeshshift
+        if shift:
+          kmod -= self._kmeshshift
         ''' round to neareast integer '''
         kround = np.rint(kmod * np.array([self.mesh[0],self.mesh[1],self.mesh[2]])[None,:])
         ''' exact floating calculation '''
