@@ -169,22 +169,7 @@ class BoltztrapInterpolation(object):
     '''
 
     if self.mesh is not None and spin==0:
-      self.kpoints = []
-      for ikx in np.linspace(0,1,self.mesh[0],endpoint=False):
-        for iky in np.linspace(0,1,self.mesh[1],endpoint=False):
-          for ikz in np.linspace(0,1,self.mesh[2],endpoint=False):
-            self.kpoints.append([ikx,iky,ikz])
-
-      self.kpoints = np.array(self.kpoints, dtype=np.float64)
-      self.nkp = np.product(self.mesh)
-      self.nkx, self.nky, self.nkz = self.mesh
-      self.multiplicity = np.ones((self.nkp,), dtype=int)
-      self.weightsum = self.dftcalc.weightsum
-      self.weights = self.weightsum/self.multiplicity
-      self.irreducible = False
-      self.nsym = 1
-      self.symop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
-      self.invsymop = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+      self._generate_mesh()
     elif self.mesh is None:
       self.kpoints = self.data.kpoints
 
@@ -356,6 +341,99 @@ class BoltztrapInterpolation(object):
   #       view = tmp[i,j,:,:]
   #       tmp2[i,j,:] = view[d2ksave]
   #   self.curvatures.append(tmp2)
+
+  def _generate_mesh(self):
+    '''
+    Generate new moentum mesh for which we generate
+    energies / velocities / curvatures
+    '''
+
+    _kmeshx = np.linspace(0,1,self.mesh[0],endpoint=False)
+    _kmeshy = np.linspace(0,1,self.mesh[1],endpoint=False)
+    _kmeshz = np.linspace(0,1,self.mesh[2],endpoint=False)
+
+    # if self.kshift:
+    #   self._kmeshshift = []
+    #   for ik in [self.nkx,self.nky,self.nkz]:
+    #     if ik > 1:
+    #       self._kmeshshift.append(1./ik/2.)
+    #     else:
+    #       self._kmeshshift.append(0.0)
+    #   self._kmeshshift = np.array(self._kmeshshift, dtype=np.float64)
+
+    # the way these points are ordered is important for the indexing below
+    kpoints = []
+    for ikx in _kmeshx:
+      for iky in _kmeshy:
+        for ikz in _kmeshz:
+          kpoints.append([ikx,iky,ikz])
+    kpoints = np.array(kpoints, dtype=np.float64)
+    # if self.kshift: kpoints += self._kmeshshift[None,:]
+
+    unique  = np.ones((self.mesh[0]*self.mesh[1]*self.mesh[2]), dtype=int)
+    mult    = np.zeros((self.mesh[0]*self.mesh[1]*self.mesh[2]), dtype=int)
+    irrk    = 0
+
+    if self.dftcalc.irreducible and self.dftcalc.nsym > 1:
+      # logger.info('Generating irreducible kpoints:')
+
+      for ik in range(np.product(self.mesh)):
+        # progressBar(ik+1,self.nkp,status='k-points')
+
+        if unique[ik] == 0: continue # skip if we already went there via symmetry
+        irrk += 1    # new point -> increase irreducible counter
+        mult[ik] = 1 # reset multiplicity counter
+
+        ''' generate all the symmetry related k-points in the Brillouin zone
+            Python modulo via % is implemented as floored division -> -0.2 % 1 = 0.8
+        '''
+        knew = np.einsum('nji,j->ni',self.dftcalc.symop,kpoints[ik,:])
+        kmod = knew%1
+        # ''' in order to index properly and if kshift is applied , shift back '''
+        # if self.kshift:
+        #   kmod -= self._kmeshshift
+        ''' round to neareast integer '''
+        kround = np.rint(kmod * np.array([self.mesh[0],self.mesh[1],self.mesh[2]])[None,:])
+        ''' exact floating calculation '''
+        kexact = kmod * np.array([self.mesh[0],self.mesh[1],self.mesh[2]])[None,:]
+        ''' only use the values that transform properly on all three axes '''
+        mask = np.all(np.isclose(kround,kexact),axis=1)
+        ''' apply the mask to filter '''
+        kmask = kround[mask]
+        ''' get the hash index '''
+        kindex = (kmask[:,2] + \
+                  kmask[:,1] * self.mesh[2] + \
+                  kmask[:,0] * self.mesh[2] * self.mesh[1]).astype(int)
+        ''' remove the k-points connected via symmetry and increase the multiplicity accordingly '''
+        for ikk in kindex:
+          if ikk <= ik: continue
+          if unique[ikk]:
+            unique[ikk] = 0
+            mult[ik] += 1
+
+      self.nkp                     = irrk
+      self.nkx, self.nky, self.nkz = self.mesh
+      self.kpoints                 = kpoints[unique>0]
+      self.multiplicity            = mult[unique>0]
+      self.weights                 = self.dftcalc.weightsum * self.multiplicity / np.sum(self.multiplicity)
+      self.nsym                    = self.dftcalc.nsym
+      self.symop                   = self.dftcalc.symop
+      self.invsymop                = self.dftcalc.invsymop
+      self.irreducible             = True
+      logger.info('Generated new irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
+
+    else:
+      self.kpoints                 = kpoints
+      self.nkp                     = np.product(self.mesh)
+      self.nkx, self.nky, self.nkz = self.mesh
+      self.multiplicity            = np.ones((self.nkp,), dtype=int)
+      self.weightsum               = self.dftcalc.weightsum
+      self.weights                 = self.dftcalc.weightsum * self.multiplicity / np.sum(self.multiplicity)
+      self.irreducible             = False
+      self.nsym                    = 1
+      self.symop                   = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+      self.invsymop                = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
+      logger.info('Generated new reducible kmesh with {} irreducible kpoints'.format(self.nkp))
 
   def _symmetrize(self):
     '''
