@@ -104,7 +104,7 @@ class ElectronicStructure(ABC):
     i.e. wien2k outputkgen symmetries
     '''
 
-    transform = self.kvec.T @ self.symop @ self.rvec / 2. / np.pi
+    transform = self.kvec @ self.symop @ self.rvec.T / 2. / np.pi
     transform_int = np.rint(transform).astype(int)
 
     ''' this selects non-primitive cells '''
@@ -129,7 +129,7 @@ class ElectronicStructure(ABC):
     i.e. wien2k struct symmetries
     '''
 
-    transform = np.linalg.inv(self.kvec.T) @ self.momsymop @ np.linalg.inv(self.rvec) * 2. * np.pi
+    transform = np.linalg.inv(self.kvec) @ self.momsymop @ np.linalg.inv(self.rvec.T) * 2. * np.pi
     transform_int = np.rint(transform).astype(int)
 
     ''' this selects non-primitive cells '''
