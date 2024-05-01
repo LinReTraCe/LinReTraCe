@@ -150,6 +150,8 @@ class Program(object):
       self.log.info('  Number of k-points: {}'.format(calc.nkp))
       self.log.info('  Mesh: {} {} {}'.format(calc.nkx, calc.nky, calc.nkz))
       self.log.info('  Irreducible: {}'.format(calc.irreducible))
+      self.log.info('Updating chemical potential.')
+      calc._calcFermiLevel()
 
     # Band truncation
     if self.args.trunc:
