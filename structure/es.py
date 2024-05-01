@@ -102,11 +102,13 @@ class ElectronicStructure(ABC):
     here we calculate P_{mom}
     '''
 
-    # old behavior
-    self.momsymop = self.symop
+    transform = self.kvec.T @ self.symop @ self.rvec / 2. / np.pi
+    transform_int = np.rint(transform).astype(int)
 
-    # non-primitive behavior ?????
-    # self.momsymop = np.rint(self.kvec.T @ self.symop @ self.rvec / 2. / np.pi).astype(int)
+    if np.allclose(transform,transform_int):
+      self.momsymop = transform_int
+    else:
+      self.momsymop = self.symop
 
   def _defineDimensions(self):
     '''
