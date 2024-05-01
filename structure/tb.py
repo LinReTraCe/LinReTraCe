@@ -370,7 +370,7 @@ class TightBinding(Model):
       self.kpoints = (self.kpoints + is_shift.astype(np.float64)/2.) / kgrid[None,:].astype(np.float64)
 
       logger.debug('kpoints:\n{}'.format(self.kpoints))
-      ''' get symmetry and reduce unnecessary ones '''
+      ''' get (momentum) symmetry and reduce unnecessary ones '''
       # try:
       #   lattice, scaled_positions, numbers = spglib.standardize_cell(cell, symprec=1e-5)
       #   cell_standardized = (lattice, scaled_positions, numbers)
@@ -380,7 +380,7 @@ class TightBinding(Model):
       symsfull = symmetry['rotations']
 
       non_standard = False
-      self.symop = []
+      self.momsymop = []
       for ii in np.arange(symsfull.shape[0]):
         isym = symsfull[ii]
 
@@ -406,23 +406,25 @@ class TightBinding(Model):
               if isym[i,j] != 0: to_add = False # redundant I think
 
         ''' avoid duplicates '''
-        for jsym in self.symop:
+        for jsym in self.momsymop:
           if np.allclose(isym,jsym):
             to_add = False
 
         if to_add:
-          self.symop.append(isym)
+          self.momsymop.append(isym)
 
-      self.symop = np.array(self.symop)
-      self.invsymop = np.linalg.inv(self.symop)
-      self._computeMomentumSymmetries()
+      ''' NOTE: spglib provides directly the momentum symmetry matrices
+          the transformation in _computeMomentumSymmetries()
+          does not change these symmetry matrices in any of my tested cases '''
+      self.momsymop = np.array(self.momsymop)
+      self._computeSpaceSymmetries()
 
-      self.nsym = self.symop.shape[0]
+      self.nsym = self.momsymop.shape[0]
       if non_standard:
         logger.critical('\n\n   Detected non-standardized unit cell. Continuing by truncating rotations.' + \
                         '\n   Validity of generated data can not be guaranteed.\n')
       logger.info('   Found {} applicable symmetry operations.'.format(self.nsym))
-      logger.debug('Symmetry operations: \n{}'.format(self.symop))
+      logger.debug('Symmetry operations: \n{}'.format(self.momsymop))
     else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []
@@ -688,7 +690,7 @@ class TightBinding(Model):
       ''' Inter-atomic hopping cannot be safely check: skip it '''
       if band1_1 != band1_2: continue
 
-      rvecsym = np.einsum('nij,j->ni',self.symop,rvec1)
+      rvecsym = np.einsum('nij,j->ni',self.momsymop,rvec1)
 
       for isym in range(self.nsym):
         rvec_transformed = rvecsym[isym]
@@ -720,7 +722,7 @@ class TightBinding(Model):
       compare the momentum mesh to the unit cell symmetries
     '''
     nkvec = 1./np.array([self.nkx,self.nky,self.nkz], dtype=np.float64) # smallest possible k-spacing
-    transformed = np.abs(np.einsum('nij,j->ni',self.invsymop,nkvec))
+    transformed = np.abs(np.einsum('nij,j->ni',np.linalg.inv(self.momsymop),nkvec))
     spacing_exact = transformed / nkvec[None,:]
     spacing_round = np.rint(spacing_exact)
     conform = np.all(np.isclose(spacing_round,spacing_exact))

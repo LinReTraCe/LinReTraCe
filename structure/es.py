@@ -94,21 +94,58 @@ class ElectronicStructure(ABC):
 
   def _computeMomentumSymmetries(self):
     '''
-    Given the real space symmetry operations and the momentum and real space
-    matrices, we calculate the momentum symmetry operations
+    Given the __real space__ symmetry operations and the momentum and real space
+    vectors, we calculate the momentum symmetry operations
     which are necessary for irreducible grids
 
     k_red = P_{mom}^T k_irr
-    here we calculate P_{mom}
+    for which we here calculate P_{mom}
+
+    i.e. wien2k outputkgen symmetries
     '''
 
     transform = self.kvec.T @ self.symop @ self.rvec / 2. / np.pi
     transform_int = np.rint(transform).astype(int)
 
-    if np.allclose(transform,transform_int):
+    ''' this selects non-primitive cells '''
+    if np.allclose(transform,transform_int) and \
+       np.all(np.abs(transform_int) <= 1) and \
+       np.all(np.linalg.det(transform_int) == np.linalg.det(self.symop)):
       self.momsymop = transform_int
+      logger.debug(' Use transformed momentum matrices')
+      if np.all(transform_int == self.symop):
+        logger.debug('   n.b.: Transformation did not change matrices')
     else:
       self.momsymop = self.symop
+      logger.debug(' Use unchanged momentum matrices')
+      logger.debug('    n.b.: Transformation would have generated invalid matrices')
+
+  def _computeSpaceSymmetries(self):
+    '''
+    Given the __momentum__ space symmetry operations and the momentum and real space
+    vectors, we calculate the real space symmetry operations
+    which are necessary for velocity vector / curvature matrix rotations
+
+    i.e. wien2k struct symmetries
+    '''
+
+    transform = np.linalg.inv(self.kvec.T) @ self.momsymop @ np.linalg.inv(self.rvec) * 2. * np.pi
+    transform_int = np.rint(transform).astype(int)
+
+    ''' this selects non-primitive cells '''
+    if np.allclose(transform,transform_int) and \
+       np.all(np.abs(transform_int) <= 1) and \
+       np.all(np.linalg.det(transform_int) == np.linalg.det(self.momsymop)):
+      self.symop = transform_int
+      logger.debug(' Use transformed real space matrices')
+      if np.all(transform_int == self.momsymop):
+        logger.debug('   n.b.: Transformation did not change matrices')
+    else:
+      self.symop = self.momsymop
+      logger.debug(' Use unchanged real space matrices')
+      logger.debug('    n.b.: Transformation would have generated invalid matrices')
+
+    self.invsymop = np.linalg.inv(self.symop)
 
   def _defineDimensions(self):
     '''

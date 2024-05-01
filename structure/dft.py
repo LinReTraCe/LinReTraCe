@@ -66,8 +66,8 @@ class DftCalculation(ElectronicStructure, ABC):
     self.symop_ase    = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations()
     self.invsymop_ase = np.linalg.inv(self.symop_ase)
     self.nsym_ase  = self.symop_ase.shape[0]
-    logger.info('  Symmetry operations: {}'.format(self.nsym_ase))
-    logger.debug('  Symmetry matrices:\n{}'.format(self.symop_ase))
+    logger.info('  ASE Symmetry operations: {}'.format(self.nsym_ase))
+    logger.debug('  ASE Symmetry matrices:\n{}'.format(self.symop_ase))
 
     self._detectOrthogonality()
     logger.info('  Orthogonal crystal structure: {}'.format(str(self.ortho)))
