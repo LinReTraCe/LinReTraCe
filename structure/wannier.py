@@ -299,6 +299,7 @@ class Wannier90Calculation(DftCalculation):
       if struct.readline() != "": # exactly at the EOF
         raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
 
+      self._computeMomentumSymmetries()
       logger.debug('Symmetry operations')
       logger.debug(self.symop)
 
@@ -359,7 +360,7 @@ class Wannier90Calculation(DftCalculation):
           progressBar(ikp+1,self.nkp,status='k-points')
 
           ''' generate reducible k-points and bring back to first BZ'''
-          redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
+          redk = np.einsum('nji,j->ni',self.momsymop,self.kpoints[ikp]) # k_red = P^T . k_irr
           redk = redk%1
 
           ''' generate hamiltonian '''

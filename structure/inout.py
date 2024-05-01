@@ -113,12 +113,12 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
       if not escalc.opticdiag and velcalc is not None:
         peierls = True
 
-      if velcalc is not None:
-        try:
-          h5out[prefix+'velocities'] = velcalc.velocities[ispin]
-          h5out[prefix+'curvatures'] = velcalc.curvatures[ispin]
-        except:
-          pass
+      # if velcalc is not None:
+      #   try:
+      #     h5out[prefix+'velocities'] = velcalc.velocities[ispin]
+      #     h5out[prefix+'curvatures'] = velcalc.curvatures[ispin]
+      #   except:
+      #     pass
 
       if (peierls and velcalc is not None):
         if escalc.opticfull:
