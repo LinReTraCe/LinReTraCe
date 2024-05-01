@@ -61,6 +61,7 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     h5out['.unitcell/kvec']       = escalc.kvec
     h5out['.unitcell/nsym']       = escalc.nsym
     h5out['.unitcell/symop']      = escalc.symop
+    h5out['.unitcell/momsymop']   = escalc.momsymop
 
 
     h5out['.bands/charge']        = float(escalc.charge)
@@ -113,8 +114,11 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
         peierls = True
 
       if velcalc is not None:
-        h5out[prefix+'velocities'] = velcalc.velocities[ispin]
-        h5out[prefix+'curvatures'] = velcalc.curvatures[ispin]
+        try:
+          h5out[prefix+'velocities'] = velcalc.velocities[ispin]
+          h5out[prefix+'curvatures'] = velcalc.curvatures[ispin]
+        except:
+          pass
 
       if (peierls and velcalc is not None):
         if escalc.opticfull:

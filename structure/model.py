@@ -69,7 +69,9 @@ class Model(ElectronicStructure, ABC):
       ioptical = 9
 
     ''' generic array structure for spin unpolarized calculations '''
-    self.energies        = [np.zeros((self.nkp, self.energyBandMax,), dtype=np.float64)]
+    self.energies        = [np.zeros((self.nkp, self.energyBandMax), dtype=np.float64)]
+    self.velocities      = [np.zeros((self.nkp, self.energyBandMax, 3), dtype=np.float64)]
+    self.curvatures      = [np.zeros((self.nkp, self.energyBandMax, 6), dtype=np.float64)]
     self.opticalMoments  = [np.zeros((self.nkp, self.energyBandMax, self.energyBandMax, ioptical), dtype=np.float64)]
     self.opticalDiag     = [np.zeros((self.nkp, self.energyBandMax, ioptical), dtype=np.float64)]
     self.BopticalDiag    = [np.zeros((self.nkp, self.energyBandMax, 3, 3, 3), dtype=np.complex128)]

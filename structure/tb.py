@@ -415,6 +415,7 @@ class TightBinding(Model):
 
       self.symop = np.array(self.symop)
       self.invsymop = np.linalg.inv(self.symop)
+      self._computeMomentumSymmetries()
 
       self.nsym = self.symop.shape[0]
       if non_standard:
@@ -495,7 +496,7 @@ class TightBinding(Model):
         progressBar(ikp+1,self.nkp,status='k-points')
 
         ''' generate reducible k-points and bring back to first BZ'''
-        redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
+        redk = np.einsum('nji,j->ni',self.momsymop,self.kpoints[ikp]) # k_red = P^T . k_irr
         redk = redk%1
 
         ''' generate hamiltonian '''
@@ -639,7 +640,10 @@ class TightBinding(Model):
 
       if np.any(np.abs(ek.imag) > 1e-5):
         logger.warning('\n\nDetected complex energies ... truncating\n')
+
       self.energies[0][...] = ek.real
+      self.velocities[0][...] = vel[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      self.curvatures[0][...] = cur[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
 
       if self.ortho:
         vel2 = vel2[:,:,:,:3].real

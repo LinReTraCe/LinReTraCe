@@ -60,8 +60,9 @@ class ElectronicStructure(ABC):
 
     # symmetries
     self.nsym           = structure.symmetries.C1.nsym
-    self.symop          = structure.symmetries.C1.symop
-    self.invsymop       = structure.symmetries.C1.invsymop
+    self.symop          = structure.symmetries.C1.symop    # real space symmetry
+    self.invsymop       = structure.symmetries.C1.invsymop # inverse of real space symmetry
+    self.momsymop       = structure.symmetries.C1.symop    # momentum space symmetry for k-points
 
     self.ndim           = -1   # number of dimensions
     self.dims           = np.array([False,False,False]) # valid dimension, i.e. k_i > 1
@@ -90,6 +91,18 @@ class ElectronicStructure(ABC):
     self.hck             = None
     self.Ukohnsham       = None
     self.Uinvkohnsham    = None
+
+  def _computeMomentumSymmetries(self):
+    '''
+    Given the real space symmetry operations and the momentum and real space
+    matrices, we calculate the momentum symmetry operations
+    which are necessary for irreducible grids
+
+    k_red = P_{mom}^T k_irr
+    here we calculate P_{mom}
+    '''
+
+    self.momsymop = np.rint(self.kvec.T @ self.symop @ self.rvec / 2. / np.pi).astype(int)
 
   def _defineDimensions(self):
     '''

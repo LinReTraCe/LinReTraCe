@@ -207,6 +207,7 @@ class Wien2kCalculation(DftCalculation):
       logger.warning("Wien2K case.scf file not found. Falling back to case.in2")
       self._readIn2()
     self._readStruct()
+    self._computeMomentumSymmetries()
     self._readKlist()
     self._readEnergies()
     if (self.optic):
@@ -311,7 +312,7 @@ class Wien2kCalculation(DftCalculation):
       # if struct.readline() != "": # exactly at the EOF
       #   raise IOError('Wien2K {} is not at the EOF after reading'.format(str(self.fstruct)))
 
-      logger.debug('Symmetry operations:\n {}'.format(self.symop))
+    logger.debug('Symmetry operations:\n {}'.format(self.symop))
 
 
   def _readKlist(self):
@@ -386,6 +387,7 @@ class Wien2kCalculation(DftCalculation):
 
     logger.info("  Number of dimensions: {}".format(self.ndim))
     logger.info("  Number of k-points: {}".format(self.nkp))
+    logger.info("  Mesh: {} x {} x {}".format(self.nkx,self.nky,self.nkz))
 
   def _readEnergies(self):
     '''
