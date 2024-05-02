@@ -263,7 +263,7 @@ class LRTCoutput(object):
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
           tosave = self.invert(tosave)
-          ylabel = r'r'
+          ylabel = r'$r$'
         elif command.startswith('cb-'): # Hall conducitivity
           tosave = itotal[0]
           ylabel = r'$\sigma_B$'
@@ -290,11 +290,14 @@ class LRTCoutput(object):
         else:
           self.dataspinsum.update({command:tosave})
 
-    if self.ndim == 3:
+    if response and self.ndim == 3:
       return ylabel + ' ' + unit
-    else:
+    elif response:
       ''' for 2D and below we have no way of knowing what the unit is exactly '''
       return ylabel
+    else:
+      ''' no label for non-response quantities '''
+      return ''
 
 
   def plotBandgap(self):

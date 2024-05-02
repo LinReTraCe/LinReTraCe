@@ -16,8 +16,6 @@
 #    Copyright (C) 2020 Roman Kempt <roman.kempt@tu-dresden.de>
 #    Copyright (C) 2022 Robert Stanton <stantor@clarkson.edu>
 #
-#    This file is part of BoltzTraP2.
-#
 #    BoltzTraP2 is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
@@ -30,6 +28,8 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with BoltzTraP2.  If not, see <http://www.gnu.org/licenses/>.
+
+
 #
 #
 #    Copyright (C) 2024 Matthias Pickem <matthias.pickem@gmail.com>
