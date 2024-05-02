@@ -45,6 +45,7 @@ class VaspCalculation(DftCalculation):
     self.nsym = self.nsym_ase
     self.symop = self.symop_ase
     self.invsymop = self.invsymop_ase
+    self._computePrimitiveSymmetries()
 
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):
@@ -62,6 +63,7 @@ class VaspCalculation(DftCalculation):
     self._read_vol()
     self._read_kpointlist()
     self._read_kdivisors()
+    self._detectKshift()
     self._check_reducible()
     self._read_weights()
     self._read_energies()

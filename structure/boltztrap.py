@@ -122,6 +122,7 @@ class BoltztrapInterpolation(object):
       logger.info('  Spacegroup: {}'.format(sg))
       self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
       self.dftcalc.nsym = self.dftcalc.symop.shape[0]
+      self.dftcalc._computePrimitiveSymmetries()
       logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
 
     for ispin in range(self.dftcalc.spins):
@@ -167,12 +168,12 @@ class BoltztrapInterpolation(object):
       logging.disable(logging.NOTSET)
 
     ''' If we provide a new mesh, use it instead of the original one
-        for the moment: this will be reducible
+        we use the same 'type' as the dft calculation provides: reducibility / kshift
         for spin polarized, avoid the second computation
     '''
 
     if self.mesh is not None and spin==0:
-      self._generate_mesh()
+      self._generate_mesh(shift=self.dftcalc.kshift)
     elif self.mesh is None:
       self.kpoints = self.data.kpoints
 
@@ -391,7 +392,7 @@ class BoltztrapInterpolation(object):
         '''
         knew = np.einsum('nji,j->ni',self.dftcalc.symop,kpoints[ik,:])
         kmod = knew%1
-        # ''' in order to index properly and if kshift is applied , shift back '''
+        ''' in order to index properly and if kshift is applied , shift back '''
         if shift:
           kmod -= self._kmeshshift
         ''' round to neareast integer '''

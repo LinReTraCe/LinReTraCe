@@ -44,6 +44,7 @@ class ElectronicStructure(ABC):
     self.weights        = None # weights of the k-points
     self.weightsum      = 0    # sum of the weights
     self.kpoints        = None # list of the k-points ... shape [nkp,3] float64
+    self.kshift         = False
     self.irreducible    = False# irreducible or reducible k-grid
     self.ortho          = False
 
@@ -114,6 +115,19 @@ class ElectronicStructure(ABC):
     else:
       logger.debug(' Use unchanged momentum matrices')
       logger.debug('    n.b.: Transformation would have generated invalid matrices')
+
+    self.invsymop = np.linalg.inv(self.symop)
+
+  def _detectKshift(self):
+    '''
+    Given the current k-points, determine whether the Gamma-point is included
+    if included: not shifted
+    if not included: shifted
+    '''
+
+    gamma = np.zeros(3,)[None,:]
+    equals_zero  = np.all(self.kpoints == gamma, axis=1)
+    self.kshift = not np.any(equals_zero)
 
   def _defineDimensions(self):
     '''

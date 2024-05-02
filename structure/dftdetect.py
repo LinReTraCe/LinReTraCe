@@ -64,7 +64,7 @@ class DftDetection(object):
     files = glob.glob(in2)
     if len(files) >= 1:
       if len(files) > 1:
-        logger.warn('Detected more than 1 scf file in provided folder: Choosing {}'.format(files[0]))
+        logger.warn('Detected more than 1 in2 file in provided folder: Choosing {}'.format(files[0]))
 
       purein2 = os.path.basename(files[0])
       temp = purein2.split('.')  # abc.def.scf -> [abc,def,scf]

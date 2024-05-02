@@ -171,6 +171,7 @@ class Wannier90Calculation(DftCalculation):
     self._readWien2kStruct()
     self._computePrimitiveSymmetries()
     self._readWien2kKlist()
+    self._detectKshift()
 
   def _readWien2kKlist(self):
     '''

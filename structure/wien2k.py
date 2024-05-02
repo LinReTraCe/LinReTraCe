@@ -209,6 +209,7 @@ class Wien2kCalculation(DftCalculation):
     self._readStruct()
     self._computePrimitiveSymmetries()
     self._readKlist()
+    self._detectKshift()
     self._readEnergies()
     if (self.optic):
       self._readMoments()
