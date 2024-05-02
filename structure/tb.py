@@ -417,7 +417,6 @@ class TightBinding(Model):
           the transformation in _computeMomentumSymmetries()
           does not change these symmetry matrices in any of my tested cases '''
       self.symop = np.array(self.symop)
-      self._computeMomentumSymmetries()
 
       self.nsym = self.symop.shape[0]
       if non_standard:
@@ -498,7 +497,7 @@ class TightBinding(Model):
         progressBar(ikp+1,self.nkp,status='k-points')
 
         ''' generate reducible k-points and bring back to first BZ'''
-        redk = np.einsum('nji,j->ni',self.momsymop,self.kpoints[ikp]) # k_red = P^T . k_irr
+        redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
         redk = redk%1
 
         ''' generate hamiltonian '''
@@ -722,7 +721,7 @@ class TightBinding(Model):
       compare the momentum mesh to the unit cell symmetries
     '''
     nkvec = 1./np.array([self.nkx,self.nky,self.nkz], dtype=np.float64) # smallest possible k-spacing
-    transformed = np.abs(np.einsum('nij,j->ni',np.linalg.inv(self.symop),nkvec))
+    transformed = np.abs(np.einsum('nij,j->ni',self.invsymop,nkvec))
     spacing_exact = transformed / nkvec[None,:]
     spacing_round = np.rint(spacing_exact)
     conform = np.all(np.isclose(spacing_round,spacing_exact))

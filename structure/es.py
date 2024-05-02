@@ -62,7 +62,6 @@ class ElectronicStructure(ABC):
     self.nsym           = structure.symmetries.C1.nsym
     self.symop          = structure.symmetries.C1.symop    # real space symmetry
     self.invsymop       = structure.symmetries.C1.invsymop # inverse of real space symmetry
-    self.momsymop       = structure.symmetries.C1.symop    # momentum space symmetry for k-points
 
     self.ndim           = -1   # number of dimensions
     self.dims           = np.array([False,False,False]) # valid dimension, i.e. k_i > 1
@@ -92,60 +91,29 @@ class ElectronicStructure(ABC):
     self.Ukohnsham       = None
     self.Uinvkohnsham    = None
 
-  def _computeMomentumSymmetries(self):
+  def _computePrimitiveSymmetries(self):
     '''
-    Given the __real space__ symmetry operations and the momentum and real space
-    vectors, we calculate the momentum symmetry operations
-    which are necessary for irreducible grids
+    Given the __conventional space__ symmetry operations
+    we calculate the primitive symmetry operations
 
-    k_red = P_{mom}^T k_irr
-    for which we here calculate P_{mom}
-
-    i.e. wien2k outputkgen symmetries
+    this is necessary e.g. in wien2k (and ase <-> wien2k interface)
+    to get the correct matrices for the k-mesh
     '''
 
-    transform = self.kvec @ self.symop @ self.rvec.T / 2. / np.pi
+    transform = self.kvec @ self.symop @ np.linalg.inv(self.kvec)
     transform_int = np.rint(transform).astype(int)
 
     ''' this selects non-primitive cells '''
     if np.allclose(transform,transform_int) and \
        np.all(np.abs(transform_int) <= 1) and \
        np.all(np.linalg.det(transform_int) == np.linalg.det(self.symop)):
-      self.momsymop = transform_int
       logger.debug(' Use transformed momentum matrices')
       if np.all(transform_int == self.symop):
         logger.debug('   n.b.: Transformation did not change matrices')
+      self.symop = transform_int
     else:
-      self.momsymop = self.symop
       logger.debug(' Use unchanged momentum matrices')
       logger.debug('    n.b.: Transformation would have generated invalid matrices')
-
-  def _computeSpaceSymmetries(self):
-    '''
-    Given the __momentum__ space symmetry operations and the momentum and real space
-    vectors, we calculate the real space symmetry operations
-    which are necessary for velocity vector / curvature matrix rotations
-
-    i.e. wien2k struct symmetries
-    '''
-
-    transform = np.linalg.inv(self.kvec) @ self.momsymop @ np.linalg.inv(self.rvec.T) * 2. * np.pi
-    transform_int = np.rint(transform).astype(int)
-
-    ''' this selects non-primitive cells '''
-    if np.allclose(transform,transform_int) and \
-       np.all(np.abs(transform_int) <= 1) and \
-       np.all(np.linalg.det(transform_int) == np.linalg.det(self.momsymop)):
-      self.symop = transform_int
-      logger.debug(' Use transformed real space matrices')
-      if np.all(transform_int == self.momsymop):
-        logger.debug('   n.b.: Transformation did not change matrices')
-    else:
-      self.symop = self.momsymop
-      logger.debug(' Use unchanged real space matrices')
-      logger.debug('    n.b.: Transformation would have generated invalid matrices')
-
-    self.invsymop = np.linalg.inv(self.symop)
 
   def _defineDimensions(self):
     '''

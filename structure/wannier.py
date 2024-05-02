@@ -169,6 +169,7 @@ class Wannier90Calculation(DftCalculation):
     self.fklist = self.case+'.klist'
 
     self._readWien2kStruct()
+    self._computePrimitiveSymmetries()
     self._readWien2kKlist()
 
   def _readWien2kKlist(self):
@@ -360,7 +361,7 @@ class Wannier90Calculation(DftCalculation):
           progressBar(ikp+1,self.nkp,status='k-points')
 
           ''' generate reducible k-points and bring back to first BZ'''
-          redk = np.einsum('nji,j->ni',self.momsymop,self.kpoints[ikp]) # k_red = P^T . k_irr
+          redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
           redk = redk%1
 
           ''' generate hamiltonian '''

@@ -122,7 +122,6 @@ class BoltztrapInterpolation(object):
       logger.info('  Spacegroup: {}'.format(sg))
       self.dftcalc.invsymop = np.linalg.inv(self.dftcalc.symop)
       self.dftcalc.nsym = self.dftcalc.symop.shape[0]
-      self.dftcalc._computeMomentumSymmetries()
       logger.info('  Number of symmetry operations: {}'.format(self.dftcalc.nsym))
 
     for ispin in range(self.dftcalc.spins):
@@ -390,7 +389,7 @@ class BoltztrapInterpolation(object):
         ''' generate all the symmetry related k-points in the Brillouin zone
             Python modulo via % is implemented as floored division -> -0.2 % 1 = 0.8
         '''
-        knew = np.einsum('nji,j->ni',self.dftcalc.momsymop,kpoints[ik,:])
+        knew = np.einsum('nji,j->ni',self.dftcalc.symop,kpoints[ik,:])
         kmod = knew%1
         # ''' in order to index properly and if kshift is applied , shift back '''
         if shift:
@@ -426,7 +425,6 @@ class BoltztrapInterpolation(object):
       self.multiplicity            = mult[unique>0]
       self.weights                 = self.dftcalc.weightsum * self.multiplicity / np.sum(self.multiplicity)
       self.nsym                    = self.dftcalc.nsym
-      self.momsymop                = self.dftcalc.momsymop
       self.symop                   = self.dftcalc.symop
       self.invsymop                = self.dftcalc.invsymop
       self.irreducible             = True
@@ -441,7 +439,6 @@ class BoltztrapInterpolation(object):
       self.weights                 = self.dftcalc.weightsum * self.multiplicity / np.sum(self.multiplicity)
       self.irreducible             = False
       self.nsym                    = 1
-      self.momsymop                = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       self.symop                   = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       self.invsymop                = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       logger.info('Generated new reducible kmesh with {} irreducible kpoints'.format(self.nkp))

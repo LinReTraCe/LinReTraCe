@@ -139,7 +139,6 @@ class Program(object):
       calc.nky          = btinterp.nky
       calc.nkz          = btinterp.nkz
       calc.nsym         = btinterp.nsym
-      calc.momsymop     = btinterp.momsymop
       calc.symop        = btinterp.symop
       calc.invsymop     = btinterp.invsymop
       calc.irreducible  = btinterp.irreducible

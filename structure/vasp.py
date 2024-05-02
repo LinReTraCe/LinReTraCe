@@ -45,7 +45,6 @@ class VaspCalculation(DftCalculation):
     self.nsym = self.nsym_ase
     self.symop = self.symop_ase
     self.invsymop = self.invsymop_ase
-    self._computeMomentumSymmetries()
 
   def _checkFiles(self):
     if not os.path.isfile(self.fvasprun):

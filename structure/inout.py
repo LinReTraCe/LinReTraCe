@@ -61,7 +61,6 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     h5out['.unitcell/kvec']       = escalc.kvec
     h5out['.unitcell/nsym']       = escalc.nsym
     h5out['.unitcell/symop']      = escalc.symop
-    h5out['.unitcell/momsymop']   = escalc.momsymop
 
 
     h5out['.bands/charge']        = float(escalc.charge)

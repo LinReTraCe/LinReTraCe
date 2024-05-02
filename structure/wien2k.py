@@ -207,7 +207,7 @@ class Wien2kCalculation(DftCalculation):
       logger.warning("Wien2K case.scf file not found. Falling back to case.in2")
       self._readIn2()
     self._readStruct()
-    self._computeMomentumSymmetries()
+    self._computePrimitiveSymmetries()
     self._readKlist()
     self._readEnergies()
     if (self.optic):
