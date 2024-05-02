@@ -644,8 +644,8 @@ class TightBinding(Model):
         logger.warning('\n\nDetected complex energies ... truncating\n')
 
       self.energies[0][...] = ek.real
-      self.velocities[0][...] = vel[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
-      self.curvatures[0][...] = cur[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      # self.velocities[0][...] = vel[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      # self.curvatures[0][...] = cur[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
 
       if self.ortho:
         vel2 = vel2[:,:,:,:3].real
