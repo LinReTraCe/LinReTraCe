@@ -148,13 +148,15 @@ def main():
       else:
         ''' response / quantity plotting / output '''
         if cmdlength == 1:
+          number_commands = 1
           if args.compare:
             for cmpobj in compareobjs:
-              cmpobj.outputData(cmd, settings)
+              ylabel = cmpobj.outputData(cmd, settings)
           else:
-            outobj.outputData(cmd, settings)
+            ylabel = outobj.outputData(cmd, settings)
         else:
           # we iterate through the list and check the following arguments
+          number_commands = 0
           for i,icmd in enumerate(args.output):
             try:
               check = int(args.output[i])
@@ -164,7 +166,7 @@ def main():
                 check = directionTransform(args.output[i], outobj.dims)
                 continue
               except:
-                pass # interpret as command
+                number_commands += 1 # interpret as command and check for directions
 
             # check arguments afterward until we get to an error
             directions = []
@@ -182,9 +184,9 @@ def main():
             try:
               if args.compare:
                 for cmpobj in compareobjs:
-                  cmpobj.outputData(icmd, settings, *directions)
+                  ylabel = cmpobj.outputData(icmd, settings, *directions)
               else:
-                outobj.outputData(icmd, settings, *directions)
+                ylabel = outobj.outputData(icmd, settings, *directions)
             except Exception as e:
               if not args.nothrow:
                 raise e
@@ -192,11 +194,18 @@ def main():
         ''' finally, do some decorating '''
         if settings.plot:
           plt.xlabel(outobj.axislatex, fontsize=14)
+
+          ''' if we have one command, plot the y-axis label '''
+          if number_commands == 1:
+            plt.ylabel(ylabel, fontsize=14)
+
           if outobj.mode == 'mu':
             if args.axis:
               plt.axvline(x=0, ls='--', color='gray') # carrier concentration are differences to 0
             else:
               plt.axvline(x=outobj.mudft, ls='--', color='gray', label=r'$\mu_{\mathrm{DFT}}$') # fermi level
+
+        ''' for chemical potential plot '''
         try:
           if outobj.mode == 'temp' and cmd == 'mu'  and args.plot:
             plt.axhline(y=outobj.mudft, ls='--', color='black', label=r'$\mu_{\mathrm{DFT}}$')
@@ -205,6 +214,7 @@ def main():
         except:
           pass
 
+        ''' use file name as title if we only show one file '''
         if settings.plot:
           plt.legend(loc='best')
           if not args.compare: plt.title(outobj.fname)

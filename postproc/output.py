@@ -90,7 +90,7 @@ class LRTCoutput(object):
 
 
     # 'raw' direct quantities
-    # dos is only listed here so the 'list' command shows is, we use a different method to calculate it
+    # dos is only listed here so the 'list' command shows it, we use a different method to calculate it
 
     self.datasets.update({'dos':        (True, '.structure/energies',             'Density of States',                                    False, False)})
     self.datasets.update({'energy':     (True, '.quantities/energy',              'Total of energy of the system [eV]',                   False, False)})
@@ -123,7 +123,7 @@ class LRTCoutput(object):
     for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','pf','tc','tr','cb','rh','n','muh','mut'], \
             [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
             ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
-            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(m*K)]','[m*K/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
+            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(K*m)]','[K*m/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
             [False,False,False,False,False,False,False,True,True,True,True,True]):
       for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
@@ -185,11 +185,24 @@ class LRTCoutput(object):
       out = self._getQuantity(key)
       self.data.update({command:out})
 
+    ''' we massage the description to produce nice looking ylabels and units '''
+    if response and not derived:
+      description = self.owned[commands[0]][2]
+      ylabel = description.split()[0]
+      unit = description[description.find("["):]
+      unit  = unit[1:-1].replace(' ','\cdot').replace('*',' ')
+      unit = r'$[' + unit + r']$'
+
     # transform the data from onsager coefficients into physical observables
     if response and derived: # combine the saved data
       requirements = sorted(self.owned[command][1]) # so we have L11 L11B L12 L12B L22 L22B
       # print(requirements)
       # this sorting is vital for the array indexing below
+
+      unit  = self.owned[command][2].split()[-1]
+      ''' make the unit look nicer '''
+      unit  = unit[1:-1].replace('Ohm', r'\Omega').replace('*',' ')
+      unit = r'$[' + unit + r']$'
 
       combined = []
       combinedspinsum = []
@@ -227,36 +240,48 @@ class LRTCoutput(object):
 
         if command.startswith('c-'): # conductivity
           tosave = itotal[0]
+          ylabel = r'$\sigma$'
         elif command.startswith('r-'): # resistivity
           tosave = self.invert(itotal[0])
+          ylabel = r'$\rho$'
         elif command.startswith('p-'): # peltier
           tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1])
+          ylabel = r'$\Pi$'
         elif command.startswith('s-'): # seebeck
           tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
+          ylabel = r'$S$'
         elif command.startswith('pf-'): # power factor
           seeb = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
           cond = itotal[0]
           tosave = np.einsum('...ij,...jk,...kl->...il',seeb,seeb,cond) # S**2 * conductivitiy
+          ylabel = r'$PF$'
         elif command.startswith('tc-'): # thermal conductivity
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
+          ylabel = r'$\kappa_e$'
         elif command.startswith('tr-'): # thermal resistivity
           tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
           tosave /= temp
           tosave = self.invert(tosave)
+          ylabel = r'r'
         elif command.startswith('cb-'): # Hall conducitivity
           tosave = itotal[0]
+          ylabel = r'$\sigma_B$'
         elif command.startswith('rh-'): # Hall coefficient
           tosave = np.einsum('...ij,...jkz,...kl->...ilz', self.invert(itotal[0]), itotal[1], self.invert(itotal[0]))
+          ylabel = r'$R_H$'
         elif command.startswith('n-'): # Nernst coefficient
           tosave  = np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(itotal[0]), itotal[1], itotal[2], self.invert(itotal[0]))
           tosave -= np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(itotal[0]), itotal[3], itotal[0], self.invert(itotal[0]))
           tosave /= temp
           tosave *= (-1.)
+          ylabel = r'$\nu$'
         elif command.startswith('muh-'): # Hall mobility
           tosave  = np.einsum('...ij,...jkz->...ikz', self.invert(itotal[0]), itotal[1])
+          ylabel = r'$\mu_H$'
         elif command.startswith('mut-'): # Thermal mobility
           tosave  = np.einsum('...ij,...jkz->...ikz', self.invert(itotal[0]), itotal[1])
+          ylabel = r'$\mu_T$'
         else:
           raise IOError('Cannot recognize command')
 
@@ -264,6 +289,12 @@ class LRTCoutput(object):
           self.data.update({command:tosave})
         else:
           self.dataspinsum.update({command:tosave})
+
+    if self.ndim == 3:
+      return ylabel + ' ' + unit
+    else:
+      ''' for 2D and below we have no way of knowing what the unit is exactly '''
+      return ylabel
 
 
   def plotBandgap(self):
@@ -361,7 +392,7 @@ class LRTCoutput(object):
       gauss_window = signal.gaussian(nmu,std_translated)
       logger.info('Convoluting with: {} [eV] standard deviation.'.format(settings.convolve[0]))
 
-    self.saveData(command, *args)
+    ylabel = self.saveData(command, *args)
     self.headerwritten = False
 
     response = self.owned[command][3]
@@ -483,6 +514,12 @@ class LRTCoutput(object):
       else:
         np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray[:,None])), header='{}{}, {}'.format \
         (self.axisname,self.axisunit, self.owned[command][1]))
+
+
+    if ylabel is not None:
+      return ylabel
+    else:
+      return ''
 
 
   def outputList(self, onsager=False):
