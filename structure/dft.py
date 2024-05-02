@@ -61,8 +61,18 @@ class DftCalculation(ElectronicStructure, ABC):
     logger.debug('  reciprocal lattice [Ang^-1] (rows) :\n{}'.format(self.kvec))
     logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2. / np.pi))
 
-    self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
-    logger.info('  Space group: {}'.format(self.spacegroup))
+    try:
+      self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
+      logger.info('  Space group: {}'.format(self.spacegroup))
+    except:
+      logger.critical('\n\nCould not determine spacegroup via ASE.\nPlease provide it:')
+      inputmethod = input if sys.version_info >= (3, 0) else raw_input
+      try:
+        spacegroup = inputmethod('Spacegroup [1-230]: ')
+        logger.info('')
+        self.spacegroup = int(spacegroup)
+      except Exception as e:
+        raise IOError('Input invalid.')
     self.symop_ase    = ase.spacegroup.Spacegroup(self.spacegroup).get_rotations()
     self.invsymop_ase = np.linalg.inv(self.symop_ase)
     self.nsym_ase  = self.symop_ase.shape[0]
