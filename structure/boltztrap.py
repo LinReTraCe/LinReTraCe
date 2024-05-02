@@ -164,6 +164,9 @@ class BoltztrapInterpolation(object):
 
     self.lattvec = self.data.get_lattvec()
 
+    if disable:
+      logging.disable(logging.NOTSET)
+
     ''' If we provide a new mesh, use it instead of the original one
         for the moment: this will be reducible
         for spin polarized, avoid the second computation
@@ -177,8 +180,6 @@ class BoltztrapInterpolation(object):
     self.interp_energies, self.interp_velocities, self.interp_curvatures = \
         fite.getBands(self.kpoints, self.equivalences, self.lattvec, self.coeffs, curvature=True)
 
-    if disable:
-      logging.disable(logging.NOTSET)
 
 
     # we get the energies on the Hartree scale -> rescale to eV
@@ -375,6 +376,7 @@ class BoltztrapInterpolation(object):
     mult    = np.zeros((self.mesh[0]*self.mesh[1]*self.mesh[2]), dtype=int)
     irrk    = 0
 
+    mesh_warning = False
     if self.dftcalc.irreducible and self.dftcalc.nsym > 1:
       # logger.info('Generating irreducible kpoints:')
 
@@ -399,6 +401,8 @@ class BoltztrapInterpolation(object):
         kexact = kmod * np.array([self.mesh[0],self.mesh[1],self.mesh[2]])[None,:]
         ''' only use the values that transform properly on all three axes '''
         mask = np.all(np.isclose(kround,kexact),axis=1)
+        if not np.all(mask):
+          mesh_warning = True
         ''' apply the mask to filter '''
         kmask = kround[mask]
         ''' get the hash index '''
@@ -411,6 +415,10 @@ class BoltztrapInterpolation(object):
           if unique[ikk]:
             unique[ikk] = 0
             mult[ik] += 1
+
+      if mesh_warning:
+        logger.critical('\n\n############\nProvided momentum mesh does not conform with symmetry.\n' + \
+                        'Accuracy of results cannot be guaranteed.\n############\n')
 
       self.nkp                     = irrk
       self.nkx, self.nky, self.nkz = self.mesh
