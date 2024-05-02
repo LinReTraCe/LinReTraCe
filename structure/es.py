@@ -44,9 +44,9 @@ class ElectronicStructure(ABC):
     self.weights        = None # weights of the k-points
     self.weightsum      = 0    # sum of the weights
     self.kpoints        = None # list of the k-points ... shape [nkp,3] float64
-    self.kshift         = False
+    self.kshift         = False# shifted from gamma origin
     self.irreducible    = False# irreducible or reducible k-grid
-    self.ortho          = False
+    self.ortho          = False# orthogonal unit cell
 
     self.spins          = 1    # number of inequivalent spins we are considering
     self.charge         = 0    # charge in the given bands

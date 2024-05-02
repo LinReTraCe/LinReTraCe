@@ -49,6 +49,7 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
     if escalc.kpoints.dtype != np.float64:
       raise IOError('kpoints must be array of np.float64')
     h5out['.kmesh/points']        = escalc.kpoints
+    h5out['.kmesh/shift']         = escalc.kshift
     h5out['.kmesh/irreducible']   = escalc.irreducible
 
     h5out['.unitcell/volume']     = float(escalc.vol)
