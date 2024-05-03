@@ -1,2 +1,0 @@
-BoltzTraP2==20.7.1
-matplotlib==2.2.3

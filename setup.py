@@ -1,14 +1,20 @@
 #! /usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
+
+from pathlib import Path
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 setup(name='linretrace',
       version='1.3',
       description='Linear Response Transport Centre',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       author='Matthias Pickem',
       author_email='matthias.pickem@gmail.com',
       license='GPLv3',
       packages=['postproc','scattering','structure','structure.symmetries','structure.symmetries.onedim','structure.symmetries.twodim','structure.symmetries.threedim'],
-      install_requires=['numpy','scipy','h5py','matplotlib','ase','spglib','boltztrap2'],
+      install_requires=['numpy>=1.14','scipy>=1.10','h5py>=2.7','matplotlib>=2.2','ase>=3.17','spglib>=1.16','boltztrap2>=22.0','pyfftw'],
       scripts=['laverage','lconfig','ldft','lprint','ltb','lscat','lwann']
      )
