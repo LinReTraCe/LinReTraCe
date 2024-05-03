@@ -450,8 +450,8 @@ class OrthogonalTightBinding(Model):
         vk2 = vk[:,:,[0,1,2]] * vk[:,:,[0,1,2]]
         vk2 = np.mean(vk2,axis=1)
 
-        #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk,vk,ck)
+        #           epsilon_cij v_a v_i c_bj -> abc
+        mb = np.einsum('zij,bnx,bni,bnyj->bnxyz',levmatrix,vk,vk,ck)
         mb = np.mean(mb,axis=1)
 
         self.opticalMoments[0][ikp,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \
@@ -468,7 +468,7 @@ class OrthogonalTightBinding(Model):
       ck[:,:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = self.curvatures[0][:,:,:]
       ck[:,:, [0,0,1], [1,2,2]] = ck[:,:, [1,2,2], [0,0,1]]
 
-      mb = np.einsum('zij,pbx,pbj,pbyi->pbxyz',levmatrix,vk,vk,ck)
+      mb = np.einsum('zij,pbx,pbi,pbyj->pbxyz',levmatrix,vk,vk,ck)
 
       self.BopticalDiag[0][...] = mb
       self.opticalMoments[0][:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:] \

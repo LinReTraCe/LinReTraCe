@@ -563,8 +563,8 @@ class TightBinding(Model):
           loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
 
         ''' take the mean over the optb matrix '''
-        #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('zij,bpnx,bpnj,bpnyi->bpnxyz',levmatrix,velconj,vel,curmat)
+        #           epsilon_cij v_a v_i c_bj -> abc
+        mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat)
         mb = np.mean(mb,axis=0)
         loc_BopticalMoments[ikp,...] = mb
 
@@ -660,8 +660,8 @@ class TightBinding(Model):
       vel2diag            = vel2[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
       self.opticalDiag    = [vel2diag]
 
-      #           epsilon_cij v_a v_j c_bi -> abc
-      mb = np.einsum('cij,knma,knmj,knmbi->knmabc',levmatrix,vel_conj,vel,curmat)
+      #           epsilon_cij v_a v_i c_bj -> abc
+      mb = np.einsum('cij,knma,knmi,knmbj->knmabc',levmatrix,vel_conj,vel,curmat)
       self.BopticalMoments[0][...] = mb
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag

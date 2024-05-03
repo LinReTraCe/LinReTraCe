@@ -510,8 +510,8 @@ class BoltztrapInterpolation(object):
         vk2 = vk_conj[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
         vk2 = np.mean(vk2,axis=1).real # symmetrize over the squares
 
-        #           epsilon_cij v_a v_j c_bi -> abc
-        mb = np.einsum('zij,bnx,bnj,bnyi->bnxyz',levmatrix,vk_conj,vk,ck)
+        #           epsilon_cij v_a v_i c_bj -> abc
+        mb = np.einsum('zij,bnx,bni,bnyj->bnxyz',levmatrix,vk_conj,vk,ck)
         mb = np.mean(mb,axis=1)
 
         if ioptical==3:

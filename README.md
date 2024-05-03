@@ -13,11 +13,15 @@ Moreover, we provide an interface to create general tight-binding models, as wel
 At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code for the calculation of accurate, artefact-free transport coefficients of, both, realistic electronic structures as well as models and with high precision down to lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
 In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies via [pip](https://pypi.org/project/pip/)
 
+`pip install setuptools --upgrade`
+
 `pip install -e .`
 
 or use one of many other popular Python package managers like [anaconda3](https://www.anaconda.com) to load the dependencies
 
 `h5py numpy scipy ase spglib matplotlib boltztrap2 pyfftw`
+
+and execute the python executables directly.
 
 ## Compilation
 
