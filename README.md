@@ -11,21 +11,21 @@ Moreover, we provide an interface to create general tight-binding models, as wel
 ## Prerequisites
 
 At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code for the calculation of accurate, artefact-free transport coefficients of, both, realistic electronic structures as well as models and with high precision down to lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
-In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies via [pip](https://pypi.org/project/pip/)
+In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies via [pip](https://pypi.org/project/pip/). To avoid package incompatibilities with global installations, we highly recommend the usage of local environments. In the root folder of linretrace use
 
-`pip install setuptools --upgrade`
+`python -m venv pylrtc`
+
+`source pylrtc/bin/activate`
 
 `pip install -e .`
 
-or use one of many other popular Python package managers like [anaconda3](https://www.anaconda.com) to load the dependencies
+To return to your standard environment, simply use
 
-`h5py numpy scipy ase spglib matplotlib boltztrap2 pyfftw`
-
-and execute the python executables directly.
+`deactivate`
 
 ## Compilation
 
-The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed. To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
+The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed (Please note that one needs to register at the HDF5 file to download the tar ball). To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
 
 To obtain the LinReTraCe source, clone this repository:
 
