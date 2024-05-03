@@ -25,7 +25,7 @@ To return to your standard environment, simply use
 
 ## Compilation
 
-The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed (Please note that one needs to register at the HDF5 file to download the tar ball). To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
+The Fortran part of LinReTraCe requires a full [HDF5](https://www.hdfgroup.org/solutions/hdf5/) installation (`version >=1.12.1`) whose underlying HDF5 library calls are handled with an [HDF5 wrapper](https://github.com/linretrace/hdf5_wrapper) written by one of us. At the wrapper's page, an installation guide and test code for the HDF5 library is provided, if needed (Please note that one needs to register at the HDF5 site to download the tar ball). To maximize the scalabilty of the code, we recommend making use of the MPI implementation.
 
 To obtain the LinReTraCe source, clone this repository:
 

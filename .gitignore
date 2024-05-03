@@ -30,6 +30,9 @@ bin
 testsuite/validation/test
 build/**
 build
+dist
+dist/**
+linretrace.*
 
 # tag files
 tags
