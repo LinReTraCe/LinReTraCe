@@ -19,6 +19,10 @@ In order to obtain all required and optional packages for the running of the pre
 
 `pip install -e .`
 
+If you want to include the BoltzTraP2 features also use
+
+`pip install cmake packaging pyfftw boltztrap2`
+
 To return to your standard environment, simply use
 
 `deactivate`
