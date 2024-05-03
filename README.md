@@ -11,17 +11,13 @@ Moreover, we provide an interface to create general tight-binding models, as wel
 ## Prerequisites
 
 At its core, LinReTraCe is a highly efficient and scalable MPI parallalized Fortran code for the calculation of accurate, artefact-free transport coefficients of, both, realistic electronic structures as well as models and with high precision down to lowest temperatures. All the surrounding interfaces and tools are written in modern Python3.
-In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies with either [pip](https://pypi.org/project/pip/)
+In order to obtain all required and optional packages for the running of the pre- and postprocessing at its full functionality, simply install the dependencies via [pip](https://pypi.org/project/pip/)
 
-`pip install matplotlib h5py numpy scipy ase spglib`
+`pip install -e .`
 
-`pip install boltztrap2`
+or use one of many other popular Python package managers like [anaconda3](https://www.anaconda.com) to load the dependencies
 
-or use one of many other popular Python package managers like [anaconda3](https://www.anaconda.com).
-
-The Python interface of LinReTraCe can then either bei executed directly from the source folder or installed globally via
-
-`python setup.py install`
+`h5py numpy scipy ase spglib matplotlib boltztrap2 pyfftw`
 
 ## Compilation
 
@@ -48,7 +44,8 @@ FFLAGS   = -O3
 HDF5     = -I/opt/hdf5-1.13.1_gcc/include
 HDF5    += -L/opt/hdf5-1.13.1_gcc/lib -lhdf5_fortran -lhdf5hl_fortran
 ```
-The configuration can be checked via `make validate` and the compilation is done with `make`, creating the `bin` subfolder in which the binary `linretrace` will be moved into.
+The configuration can be checked via `make validate` and the compilation is done with `make linretrace`, creating the `bin` subfolder in which the binary `linretrace` will be moved into.
+An overview of validation, compilation, and testsuite is displayed via `make`.
 
 ## Workflow
 ![LinReTraCe workflow](https://github.com/LinReTraCe/LinReTraCe/blob/release/documentation/flowchart.png?raw=true "LinReTraCe workflow")
