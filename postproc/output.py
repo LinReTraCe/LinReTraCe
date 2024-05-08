@@ -839,7 +839,7 @@ class LRTCoutput(object):
     else:
       raise ValueError('no properly defined x-axis to plot')
 
-  def outputDOS(self, plot, broadening=0.02):
+  def outputDOS(self, plot, broadening=0.02, npoints=1001, emin=None, emax=None):
     '''
     Print DOS/NOS
     '''
@@ -853,14 +853,14 @@ class LRTCoutput(object):
 
       if spins==1:
         ene = h5['.structure/energies'][()]
-        dosaxis, dos, nos = calcDOS(ene, weights, gamma=broadening, windowsize=1.1)
+        dosaxis, dos, nos = calcDOS(ene, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del ene
       else:
         eneup = h5['.structure/energies/up'][()]
-        dosaxisup, dosup, nosup = calcDOS(eneup, weights, gamma=broadening, windowsize=1.1)
+        dosaxisup, dosup, nosup = calcDOS(eneup, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del eneup
         enedn = h5['.structure/energies/dn'][()]
-        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, gamma=broadening, windowsize=1.1)
+        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del enedn
 
       if plot:

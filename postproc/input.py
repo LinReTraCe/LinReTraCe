@@ -119,7 +119,7 @@ class LRTCinput(object):
         print('  inter magnetic elements  : {}'.format(str('up/kPoint/{:010}/momentsBfield'.format(1) in h5)))
 
 
-  def outputDOS(self, plot, broadening=0.02, npoints=1001):
+  def outputDOS(self, plot, broadening=0.02, npoints=1001, emin=None, emax=None):
     '''
     Print DOS/NOS
     '''
@@ -139,15 +139,15 @@ class LRTCinput(object):
       if spins==1:
         ene = h5['energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxis, dos, nos = calcDOS(ene, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
+        dosaxis, dos, nos = calcDOS(ene, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del ene
       else:
         eneup = h5['up/energies'][()]
         weights = h5['.kmesh/weights'][()]
-        dosaxisup, dosup, nosup = calcDOS(eneup, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
+        dosaxisup, dosup, nosup = calcDOS(eneup, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del eneup
         enedn = h5['dn/energies'][()]
-        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, npoints=npoints, gamma=broadening, windowsize=1.1)
+        dosaxisdn, dosdn, nosdn = calcDOS(enedn, weights, npoints=npoints, gamma=broadening, windowsize=1.1, emin=emin, emax=emax)
         del enedn
 
       if plot:

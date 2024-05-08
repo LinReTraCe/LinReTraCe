@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 import numpy as np
 
-def calcDOS(energies, weights, windowsize=1.2, npoints=1001, gamma=0.02):
+def calcDOS(energies, weights, windowsize=1.2, npoints=1001, gamma=0.02, emin=None, emax=None):
   '''
     calculate the density of states and number of states for a given energy array
     input:
@@ -15,23 +15,31 @@ def calcDOS(energies, weights, windowsize=1.2, npoints=1001, gamma=0.02):
       windowsize: dos size w.r.t. energy interval
       npoints: number of discretized energies
       gamma: energy broadening in the lorentzian used [eV]
+
+      emin, emax [eV]: if these two values are provided, ignore the windowsize
     output:
       dosaxis: energy axis shape [npoints]
       dos: density of states shape [npoints]
       nos: number of states shape [npoints]
   '''
 
-  globmin = np.min(energies)
-  globmax = np.max(energies)
+  if emin is not None and emax is not None:
+    globmin = float(emin)
+    globmax  = float(emax)
+    if globmin >= globmax:
+      raise IOError('DOS calculation: energy minimum is larger than energy maximum')
+  else:
+    globmin = np.min(energies)
+    globmax = np.max(energies)
 
-  if windowsize < 1:
-    windowsize = 1
-  increase = (windowsize-1)/2.
+    if windowsize < 1:
+      windowsize = 1
+    increase = (windowsize-1)/2.
 
-  # extend it a bit outwards
-  interval = globmax-globmin
-  globmin -= interval*increase
-  globmax += interval*increase
+    # extend it a bit outwards
+    interval = globmax-globmin
+    globmin -= interval*increase
+    globmax += interval*increase
 
   dosaxis = np.linspace(globmin,globmax,npoints,endpoint=True)
 

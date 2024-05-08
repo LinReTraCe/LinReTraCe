@@ -20,7 +20,7 @@ def parse_args(args=None):
     description='''Argument parser for LRTC input and LRTC output data
   -------------------------------------------
   " lprint <inputfile> info "          --- structural information of input file
-  " lprint -p <inputfile> dos "        --- plot density of states
+  " lprint -p <inputfile> dos "        --- plot density of states [broad, points, emin, emax]
   -------------------------------------------
   " lprint <outputfile> list "         --- list all physical quantities
   " lprint <outputfile> olist "        --- list all onsager coefficients
@@ -234,6 +234,9 @@ def main():
         if cmdlength == 1:
           inpobj.outputDOS(args.plot)
         else:
+          ''' multi-purpose : allowed arguments 1: broadening - 2: broadening npoints - 4: broadening npoints emin emax
+              if emin and emax are not provided: define the energywindow according to detected global minima and maxima
+          '''
           inpobj.outputDOS(args.plot, *args.output[1:])
         if args.plot:
           plt.title(inpobj.fname)
