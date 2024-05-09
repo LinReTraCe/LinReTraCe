@@ -16,14 +16,16 @@ all help default:
 	@echo "    HDF5: library includes and links ( HDF5 > 1.12 )"
 	@echo ""
 	@echo "  - make validate:       validation of make_include file"
-	@echo "  - make validate-clean: clean validation folder from temporary copilation objects"
+	@echo "  - make validate-clean: clean validation folder from temporary compilation objects"
 	@echo ""
 	@echo "  - make linretrace:     compilation of LinReTraCe"
 	@echo "  - make install:        copy the binary into your ${HOME}/bin folder"
 	@echo "  - make clean:          clean linretrace folder from temporary compilation objects"
 	@echo ""
 	@echo "  - make test:           run testsuite"
-	@echo "  - make test-clean:     clean test folder from temporary compilation objects"
+	@echo "  - make test-clean:     clean test folder from temporary input/output files"
+	@echo ""
+	@echo "  - make squeaky-clean:  run all three clean commands"
 	@echo ""
 
 linretrace: binR compile make_include
@@ -60,10 +62,13 @@ test: bin/linretrace
 	./lprint -p testsuite/tests/Si_output.hdf5 c-intra xx yy zz
 	./lprint -p testsuite/tests/Si_output.hdf5 s-intra xx yy zz
 
-
 test-clean:
-	rm -f testsuite/tests/Si_input.hdf5
-	rm -f testsuite/tests/Si_output.hdf5
+	cd testsuite/tests
+	rm -f Si_input.hdf5
+	rm -f Si_output.hdf5
+	rm -f Si_output.txt
+
+squeaky-clean: clean validate-clean test-clean
 
 install: bin/linretrace
 	@echo "Creating bin folder in \$$HOME:"
