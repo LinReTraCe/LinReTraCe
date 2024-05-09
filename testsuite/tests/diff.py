@@ -23,7 +23,7 @@ def main():
   close_seebeck      = np.allclose(seeb_out, seeb_comp, rtol=1e-4, atol=1e-6)
 
   print('Conductivity check: ', close_conductivity)
-  print('Seebeeck     check: ', close_seebeck)
+  print('Seebeck      check: ', close_seebeck)
 
   if close_conductivity and close_seebeck:
     return 0

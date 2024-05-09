@@ -13,17 +13,18 @@ all help default:
 	@echo "    FCDG : Corresponding Single Core Fortran Compiler (ifort, gfortran)"
 	@echo "    FFLAGS : Fortran Flags"
 	@echo "    FPPFLAGS: Fortran Preprocessor Flags"
-	@echo "    HDF5: HDF5 library includes ind links ( HDF5 > 1.12 )"
+	@echo "    HDF5: library includes and links ( HDF5 > 1.12 )"
 	@echo ""
 	@echo "  - make validate:       validation of make_include file"
-	@echo "  - make validate-clean: clean validation folder from temporary copilation objects."
+	@echo "  - make validate-clean: clean validation folder from temporary copilation objects"
 	@echo ""
 	@echo "  - make linretrace:     compilation of LinReTraCe"
-	@echo "  - make install:        copy the binary into your ${HOME}/bin folder."
-	@echo "  - make clean:          clean linretrace folder from temporary compilation objects."
+	@echo "  - make install:        copy the binary into your ${HOME}/bin folder"
+	@echo "  - make clean:          clean linretrace folder from temporary compilation objects"
 	@echo ""
 	@echo "  - make test:           run testsuite"
 	@echo "  - make test-clean:     clean test folder from temporary compilation objects"
+	@echo ""
 
 linretrace: binR compile make_include
 

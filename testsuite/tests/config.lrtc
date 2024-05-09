@@ -12,8 +12,8 @@ FermiOccupation =  T
 [MuMode]
 [[Scattering]]
 Temperature = 300.0
-MuMinimum = -1.5
-MuMaximum = 1.5
-MuPoints  = 100
+MuMinimum = -0.75
+MuMaximum = +0.75
+MuPoints  = 50
 ScatteringRate       = 1e-03
 QuasiParticleWeight  = 1.0

@@ -429,7 +429,7 @@ class BoltztrapInterpolation(object):
       self.symop                   = self.dftcalc.symop
       self.invsymop                = self.dftcalc.invsymop
       self.irreducible             = True
-      logger.info('Generated new irreducible kmesh with {} irreducible kpoints'.format(self.nkp))
+      logger.info('Generated new irreducible kmesh with {} kpoints'.format(self.nkp))
 
     else:
       self.kpoints                 = kpoints
@@ -442,7 +442,7 @@ class BoltztrapInterpolation(object):
       self.nsym                    = 1
       self.symop                   = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       self.invsymop                = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
-      logger.info('Generated new reducible kmesh with {} irreducible kpoints'.format(self.nkp))
+      logger.info('Generated new reducible kmesh with {} kpoints'.format(self.nkp))
 
   def _symmetrize(self):
     '''
