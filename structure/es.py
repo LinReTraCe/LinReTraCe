@@ -208,6 +208,8 @@ class ElectronicStructure(ABC):
     else:
       mu_sol = mu
 
+    if (self.nkp == 1 and abs(mu_sol) <= 1e-11):
+      mu_sol = 0
     self.mu = mu_sol
 
     self.gapped     = []
