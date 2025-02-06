@@ -313,11 +313,12 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
         else
 
           calc_sigma = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ci*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))) &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ci*sct%gam(iband2,info%ik,is)*enrgydiff(is)) &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
+
 
           calc_sigma = calc_sigma * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * info%beta &
                      / (2.d0 * pi**3 * ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) - sct%gam(iband2,info%ik,is))**2)) &
@@ -325,11 +326,11 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
 
           calc_alpha = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ci*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
                            * (enrgy(iband1,is)-ci*sct%gam(iband1,info%ik,is)) &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ci*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
                            * (enrgy(iband2,is)-ci*sct%gam(iband2,info%ik,is)) &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
@@ -338,11 +339,11 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
           calc_xi    = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ci*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
                            * (enrgy(iband1,is)-ci*sct%gam(iband1,info%ik,is))**2 &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ci*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ci*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
                            * (enrgy(iband2,is)-ci*sct%gam(iband2,info%ik,is))**2 &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
@@ -2079,10 +2080,10 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
         else
 
           calc_sigma = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ciQ*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))) &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ciQ*sct%gam(iband2,info%ik,is)*enrgydiff(is)) &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
           calc_sigma = calc_sigma * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is) * info%betaQ &
@@ -2091,11 +2092,11 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
 
           calc_alpha = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ciQ*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
                            * (enrgy(iband1,is)-ciQ*sct%gam(iband1,info%ik,is)) &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ciQ*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
                            * (enrgy(iband2,is)-ciQ*sct%gam(iband2,info%ik,is)) &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
@@ -2104,11 +2105,11 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                      / ( enrgydiff(is)**2 + (sct%gam(iband1,info%ik,is) + sct%gam(iband2,info%ik,is))**2)
 
           calc_xi    = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
+                             - 2*ciQ*(-enrgydiff(is))*sct%gam(iband1,info%ik,is)) &
                            * (enrgy(iband1,is)-ciQ*sct%gam(iband1,info%ik,is))**2 &
                            * sct%gam(iband2,info%ik,is) * PolyGamma(1,iband1,info%ik,is)) &
                      + real((enrgydiff(is)**2 + sct%gam(iband1,info%ik,is)**2 - sct%gam(iband2,info%ik,is)**2 &
-                             - 2*ciQ*sct%gam(iband2,info%ik,is)*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
+                             - 2*ciQ*enrgydiff(is)*sct%gam(iband2,info%ik,is)) &
                            * (enrgy(iband2,is)-ciQ*sct%gam(iband2,info%ik,is))**2 &
                            * sct%gam(iband1,info%ik,is) * PolyGamma(1,iband2,info%ik,is))
 
