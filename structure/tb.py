@@ -24,7 +24,7 @@ class TightBinding(Model):
 
   def __init__(self, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False):
     super(TightBinding, self).__init__(nkx,nky,nkz)
-    self.irreducible = irreducible  # generate irreducible grid instead of reducible
+    self.irreducible = irreducible and not (nkx * nky * nkz == 1) # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
