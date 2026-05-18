@@ -36,7 +36,10 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   call hdf5_read_data(ifile, "/.kmesh/nky",         kmesh%nky)
   call hdf5_read_data(ifile, "/.kmesh/nkz",         kmesh%nkz)
   call hdf5_read_data(ifile, "/.kmesh/weightsum",   kmesh%weightsum)
-  ! call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%weight)
+  call hdf5_read_data(ifile, "/.kmesh/irreducible", kmesh%irreducible)
+  if (.NOT.kmesh%irreducible) then ! weights needed for adaptive (non-uniform) k-mesh
+     call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%inputweight)
+  endif
   call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
   kmesh%minimal_weight = minval(kmesh%multiplicity) / real(kmesh%nkx*kmesh%nky*kmesh%nkz,8)
 

@@ -54,6 +54,7 @@ module Mtypes
     integer               :: weightsum
     real(8), allocatable  :: weight(:)
     real(16), allocatable :: weightQ(:)
+    real(8), allocatable  :: inputweight(:)
     integer, allocatable  :: multiplicity(:)
     real(8)               :: minimal_weight ! smalles occuring weight
     integer               :: nkp
@@ -63,6 +64,7 @@ module Mtypes
     real(8)               :: vol
     integer               :: ndim
     logical, allocatable  :: dims(:)
+    logical               :: irreducible
   end type
 
   ! energy dispersion and derived quantities

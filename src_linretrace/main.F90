@@ -129,12 +129,21 @@ program main
   ! define kpoint weights on the MPI range
   allocate(kmesh%weightQ(ikstr:ikend))
   allocate(kmesh%weight(ikstr:ikend))
-  nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
-  do ik=ikstr,ikend
-    ! these integer statements here ARE NECESSARY TO PRODCE THE REQUIRED ACCURACY
-    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
-    kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
-  enddo
+  if (kmesh%irreducible) then
+     nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
+     do ik=ikstr,ikend
+        ! these integer statements here ARE NECESSARY TO PRODUCE THE REQUIRED ACCURACY
+        kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
+        kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
+     enddo
+  else
+     nkred = kmesh%nkp ! required for the adaptive (non-uniform!) mesh
+     do ik=ikstr,ikend
+        ! these integer statements here ARE NECESSARY TO PRODUCE THE REQUIRED ACCURACY
+        kmesh%weightQ(ik) = real(kmesh%inputweight(ik),16) ! required for the adaptive (non-uniform!) mesh
+        kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
+     enddo
+  endif
 
   ! read the energies and diagonal optical elements
   if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
@@ -218,8 +227,13 @@ program main
       call read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
     else
       if (algo%steps .gt. 1) then
-        if (temp%tlogarithmic) then
-          temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(algo%steps-1)) ! logarithmic step
+         if (temp%tlogarithmic) then
+            if (temp%Tmin.gt.0) then
+               temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(algo%steps-1)) ! logarithmic step
+            else
+               ! If the desired T-mesh is logarithmic but Tmin=0, then keep T=0 included but start log-mesh at T=0.1K.
+               temp%dT = (temp%Tmax/1.d-1) ** (1.d0 / dble(algo%steps-2)) ! logarithmic step, excluding T=0
+            endif
         else
           temp%dT = (temp%Tmax-temp%Tmin)/dble(algo%steps-1) ! linear step
         endif
@@ -233,9 +247,16 @@ program main
 
       ! define Temperature grid
       if (temp%tlogarithmic) then
-        do iT=1,algo%steps
-           temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
-        enddo
+         if (temp%Tmin.gt.0) then
+            do iT=1,algo%steps
+               temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
+            enddo
+         else
+            temp%TT(1)=0.d0
+            do iT=2,algo%steps
+               temp%TT(iT)=1.d-1 * temp%dT**(real(iT-2,8))
+            enddo
+         endif
       else
         do iT=1,algo%steps
            temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
@@ -595,12 +616,31 @@ program main
     ! run time information
     info%iStep   = iStep
     info%Temp    = temp%TT(iStep)
-    info%beta    = 1.d0/(kB*info%Temp)
-    info%beta2p  = info%beta/(2.d0*pi)
-
     info%TempQ   = real(info%Temp,16)
-    info%betaQ   = 1.q0/(kB*info%TempQ)
-    info%beta2pQ = info%betaQ/(2.q0*piQ)
+
+    ! If T=0 then give finite value to beta, otherwise code won't run. If T less than 0, revert back to original
+    if (info%Temp==0.d0) then ! T=0 limiting Kubo Kernel functions are independent of beta, Boltzmann kernels will be set to NaN.
+       ! CAVEAT 1
+       ! The chemical potential search depends on beta. One could use the T-->0 heavyside/Log expression, but in order not to worsen
+       ! performance, a high-level procedure pointer will need to be put in place instead of low-level conditional expressions. TO DO
+       ! For now, we set beta to something finite, but gigantic.
+       ! CAVEAT 2
+       ! Kubo kernels then work for all K's and L's. In lprint sigma, rho, sigmaB, RH work.
+       ! But Seebeck and Nernst have a 1/T factor. Physically these quantitites are zero. Indeed, the Onsager coefficients decay with at least T^2.
+       ! Numerically, however, this produces S = -1/T * (L12/L11) = -1/0 * (0/finite) = NaN. Therefore, we set Seebeck, Nernst etc to zero in
+       ! lprint (postproc/output.py).
+      info%beta    = 1.d50
+      info%beta2p  = 1.d50
+
+      info%betaQ   = 1.q50
+      info%beta2pQ = 1.q50
+    else
+      info%beta    = 1.d0/(kB*info%Temp)
+      info%beta2p  = info%beta/(2.d0*pi)
+
+      info%betaQ   = 1.q0/(kB*info%TempQ)
+      info%beta2pQ = info%betaQ/(2.q0*piQ)
+    endif
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature

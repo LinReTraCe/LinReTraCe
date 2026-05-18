@@ -285,6 +285,15 @@ class LRTCoutput(object):
         else:
           raise IOError('Cannot recognize command')
 
+        # Zero out T=0 entries for quantities that carry a 1/T prefactor
+        # (Seebeck, power factor, thermal conductivity/resistivity, Nernst)
+        # Physically these vanish as T->0 (Onsager coefficients decay with at least T^2), but numerically we get NaN from 0/0.
+        if command.startswith(('s-', 'pf-', 'tc-', 'tr-', 'n-')):
+          t0_mask = (self.temp == 0.0)          # shape: (nT,)
+          # Broadcast the mask to the shape of tosave
+          slices = (slice(None),) + (np.newaxis,) * (tosave.ndim - 1)
+          tosave = np.where(t0_mask[slices], 0.0, tosave)
+
         if i==0:
           self.data.update({command:tosave})
         else:

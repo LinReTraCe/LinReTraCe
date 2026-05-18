@@ -80,10 +80,53 @@ subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   complex(8)           :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
   real(8), allocatable :: enrgy(:,:)
+  real(8), allocatable :: gam(:,:), Z(:,:), combi(:,:)  ! tmp variables for the T=0 Kernels
+  real(8), parameter :: tol = 1.d-16
 
+
+  ! variable dictionary
+  ! code      SciPost
+  ! ---------------------
+  ! s_full    K11
+  ! a_full    K12
+  ! x_full    K22
+  ! sB_full   K11B ...
+  
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)  
   ! first we write the kernel into the 1 1 component
-  enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%mu)
+
+  ! For T=0 we use the analytical limits of the polygamma functions
+  if (abs(info%Temp) <= abs(tol)) then
+     allocate(  gam(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     allocate(    z(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     allocate(combi(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     
+     gam = sct%gam(edisp%nbopt_min:edisp%nbopt_max, info%ik, :)
+     Z   = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
+     combi = Z/pi * gam * (enrgy**2 + gam**2)
+     
+     resp%s_full(1,1,:,:,info%ik) = combi**2 
+
+     !If we set the tolerance tol of the if statement to something small but finite, we could use the next order in the low-T expansion:
+     !resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik)  - &
+     !     ((2.d0 *(kB**2)*(gam**2)*(-5.d0 *enrgy**2+gam**2)*(info%Temp)**2)/(3.d0*(enrgy**2+gam**2)**4))
+     !resp%s_full(1,1,:,:,info%ik) = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * resp%s_full(1,1,:,:,info%ik) / 1
+     
+     resp%a_full(1,1,:,:,info%ik) = 0
+     resp%x_full(1,1,:,:,info%ik) = 0
+     
+     if (algo%lBfield) then
+        resp%sB_full(1,1,1,:,:,info%ik) = combi**3
+        resp%aB_full(1,1,1,:,:,info%ik) = 0
+        resp%xB_full(1,1,1,:,:,info%ik) = 0
+     endif
+     
+     deallocate(gam)
+     deallocate(Z)
+     deallocate(combi)
+  else 
+  ! no updated indentation here and below until inclusion of T=0 Kernels has been completed. TO DO.
 
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
                                - real(PolyGamma(2,:,info%ik,:)) * info%beta2p*sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
@@ -167,6 +210,8 @@ subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   endif
 
+  endif ! T=0
+
   deallocate(enrgy)
 
   ! after calculating the kernels we finally multiply with the appropriate directional optical elements
@@ -197,6 +242,9 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   real(8), allocatable :: enrgy(:,:)
   real(8), allocatable :: enrgydiff(:)
   real(8), allocatable :: gamdiff(:)
+  real(8) :: combi1, combi2
+
+  real(8), parameter :: tol = 1.d-16
 
   complex(8) :: calc_sigma
   complex(8) :: calc_alpha
@@ -210,6 +258,8 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   integer :: i,j,idir,idir1,idir2,idir3
   integer :: iband1, iband2, iband, is
 
+
+  
   ! index1 = (/1,2,3,1,1,2,1,1,2/)
   ! index2 = (/1,2,3,2,3,3,2,3,3/)
 
@@ -236,7 +286,29 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
         if ((abs(enrgydiff(is)) .lt. 1d-6) .and. (abs(gamdiff(is)) .lt. 1d-6)) then
 
-          ! use the intra-band limit .....
+         ! use the intra-band limit .....
+
+         if (abs(info%Temp) <= abs(tol)) then ! T-->0 intra-band limits
+
+            combi1 = sct%zqp(iband1,info%ik,is)/pi * sct%gam(iband1,info%ik,is)/ &
+                 (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2 )
+            
+            ! We could set tol to something finite and use the next higher order in T...
+            calc_sigma = combi1**2 ! - sct%zqp(iband1,info%ik,is)**2 * &
+            !((2.d0 *(kB**2)*(sct%gam(iband1,info%ik,is)**2)*(-5.d0 *enrgy(iband1,is)**2+sct%gam(iband1,info%ik,is)**2)*(info%Temp)**2)/ &
+            !(3.d0*(enrgy(iband1,is)**2+sct%gam(iband1,info%ik,is)**2)**4))
+            
+            calc_alpha = 0
+            calc_xi = 0
+
+            if (algo%lBfield .and. edisp%lBFullMoments) then
+              calc_sigmaB = combi1**3
+              calc_alphaB = 0
+              calc_xiB = 0
+            endif
+
+          else ! T>0
+           
           calc_sigma  = real(PolyGamma(1,iband1,info%ik,is)) &
                       - real(PolyGamma(2,iband1,info%ik,is)) * info%beta2p*sct%gam(iband1,info%ik,is)
 
@@ -308,9 +380,30 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                      * (-1.d0) * sct%zqp(iband1,info%ik,is)**3 * info%beta &
                      / (16.d0 * pi**4 * sct%gam(iband1,info%ik,is)**2)
 
-          endif
+           endif
+           endif
 
-        else
+        else ! true inter-band
+
+           if (abs(info%Temp) <= abs(tol)) then
+
+            combi1 = sct%zqp(iband1,info%ik,is)/pi * sct%gam(iband1,info%ik,is) / &
+                 (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2)
+
+            combi2 = sct%zqp(iband2,info%ik,is)/pi * sct%gam(iband2,info%ik,is) / &
+                 (enrgy(iband2,is)**2 + sct%gam(iband2,info%ik,is)**2)            
+            
+            calc_sigma = combi1 * combi2
+            calc_alpha = 0
+            calc_xi = 0
+
+            if (algo%lBfield .and. edisp%lBFullMoments) then
+              calc_sigmaB = combi1 * combi2**2 
+              calc_alphaB = 0
+              calc_xiB = 0
+            endif
+
+          else ! T>0
 
           calc_sigma = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
                              - 2*ci*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))) &
@@ -442,6 +535,8 @@ subroutine response_inter_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
         endif
 
+        endif
+        
         if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
           cycle
         endif
@@ -528,6 +623,7 @@ end subroutine response_inter_km
 ! calculate the intra band response functions for the assigned momentum range
 ! Boltzmann approximation -- double precision
 subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
+  use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
   implicit none
   type (response_dp)      :: resp
 
@@ -540,10 +636,29 @@ subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   real(8) :: zqp
   real(8) :: gam
   real(8), allocatable :: enrgy(:,:)
+  real(8), parameter :: tol = 1.d-16
 
   integer :: i,j,is
   integer :: iband
 
+
+ if (abs(info%Temp) <= abs(tol)) then
+
+    ! Boltzmann kernels are tricky at T->0. In a metal: conductivity is infinite, in an insulator zero.
+    ! Since they are unphysical anyways, we set the kernels to NaN.
+     resp%s_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     resp%a_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     resp%x_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+
+     if (algo%lBfield .and. edisp%lBFullMoments) then
+        resp%sB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+        resp%aB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+        resp%xB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     endif
+
+  else
+
+  
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
@@ -595,17 +710,20 @@ subroutine response_intra_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   endif
 
   deallocate(enrgy)
-
+  
   call response_intra_optical_weights(algo, resp, edisp, info)
   if (algo%lBfield) then
     call response_intra_magnetic_optical_weights(algo, resp, edisp, info)
   endif
 
+  endif
+  
 end subroutine response_intra_Boltzmann_km
 
 ! calculate the intra band response functions for the assigned momentum range
 ! Boltzmann approximation -- quad precision
 subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
+  use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
   implicit none
   type (response_qp)    :: resp
 
@@ -616,10 +734,26 @@ subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   type(runinfo)         :: info
 
   real(16), allocatable :: enrgy(:,:)
-
+  real(8), parameter :: tol = 1.d-16
+  
   integer :: i,j,is
   integer :: iband
 
+   if (abs(info%Temp) <= abs(tol)) then
+
+     ! Boltzmann kernels are zero or do not have a well-defined limit                                                                      
+     ! Here we set all responses to zero.                                                                                                    
+     resp%s_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     resp%a_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     resp%x_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+
+     if (algo%lBfield .and. edisp%lBFullMoments) then
+        resp%sB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+        resp%aB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+        resp%xB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     endif
+
+  else
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   ! first we write the kernel into the 1 1 component
@@ -671,17 +805,20 @@ subroutine response_intra_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   endif
 
   deallocate(enrgy)
-
+  
   call response_intra_optical_weights_Q(algo, resp, edisp, info)
   if (algo%lBfield) then
     call response_intra_magnetic_optical_weights_Q(algo, resp, edisp, info)
   endif
 
+  endif
+  
 end subroutine response_intra_Boltzmann_km_Q
 
 ! calculate the inter band response functions for the assigned momentum range
 ! Boltzmann approximation -- double precision
 subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
+  use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
   implicit none
   type (response_dp)  :: resp
 
@@ -696,6 +833,7 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   real(8), allocatable :: enrgy(:,:)
   real(8), allocatable :: enrgydiff(:)
   real(8), allocatable :: gamdiff(:)
+  real(8), parameter :: tol = 1.d-16
 
   complex(8) :: calc_sigma
   complex(8) :: calc_alpha
@@ -714,6 +852,22 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   index1 = (/1,2,3,2,3,3,2,3,3/)
   index2 = (/1,2,3,1,1,2,1,1,2/)
 
+
+  if (abs(info%Temp) <= abs(tol)) then ! T=0
+     ! Boltzmann kernels are zero or do not have a well-defined limit
+     ! Here we set all responses to zero.  TO DO: limit output (in lprint) to T>0 ?
+
+     resp%s_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     resp%a_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     resp%x_full(:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     
+     if (algo%lBfield .and. edisp%lBFullMoments) then
+        resp%sB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+        resp%aB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+        resp%xB_full(:,:,:,:,:,info%ik) = ieee_value (0.d0, IEEE_QUIET_NAN)
+     endif
+
+  else ! T>0
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   allocate(enrgydiff(edisp%ispin))
@@ -885,7 +1039,8 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
                         * sct%gam(iband1,info%ik,is) * sct%gam(iband2,info%ik,is)**2 &
                         * info%beta / 2.d0 / pi**4
           endif
-        endif
+       endif
+     
 
         if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
           cycle
@@ -966,11 +1121,14 @@ subroutine response_inter_Boltzmann_km(resp, edisp, sct, kmesh, algo, info)
   deallocate(enrgydiff)
   deallocate(gamdiff)
 
+  endif
+  
 end subroutine response_inter_Boltzmann_km
 
 ! calculate the inter band response functions for the assigned momentum range
 ! Boltzmann approximation -- quad precision
 subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
+  use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
   implicit none
   type (response_qp)   :: resp
 
@@ -983,6 +1141,7 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   real(16), allocatable :: enrgy(:,:)
   real(16), allocatable :: enrgydiff(:)
   real(16), allocatable :: gamdiff(:)
+  real(8), parameter :: tol = 1.d-16
 
   complex(16) :: calc_sigma
   complex(16) :: calc_alpha
@@ -1000,6 +1159,22 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   index1 = (/1,2,3,2,3,3,2,3,3/)
   index2 = (/1,2,3,1,1,2,1,1,2/)
 
+  if (abs(info%Temp) <= abs(tol)) then ! T=0
+     
+     ! Boltzmann kernels are zero or do not have a well-defined limit 
+     ! Here we set all responses to zero.  TO DO: limit output (in lprint) to T>0 ?
+     
+     resp%s_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     resp%a_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     resp%x_full(:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+
+     if (algo%lBfield .and. edisp%lBFullMoments) then
+        resp%sB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+        resp%aB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+        resp%xB_full(:,:,:,:,:,info%ik) = ieee_value (0.q0, IEEE_QUIET_NAN)
+     endif
+
+  else ! T>0                 
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
   allocate(enrgydiff(edisp%ispin))
@@ -1247,6 +1422,8 @@ subroutine response_inter_Boltzmann_km_Q(resp, edisp, sct, kmesh, algo, info)
   deallocate(enrgydiff)
   deallocate(gamdiff)
 
+  endif
+  
 end subroutine response_inter_Boltzmann_km_Q
 
 
@@ -1850,11 +2027,46 @@ subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   complex(16)           :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
   real(16), allocatable :: enrgy(:,:)
+  real(16), allocatable :: gam(:,:), Z(:,:), combi(:,:)  ! tmp variables for the T=0 Kernels
+  real(8), parameter :: tol = 1.d-16
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
-  ! first we write the kernel into the 1 1 component
   enrgy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,info%ik,:) - info%muQ)
+  ! first we write the kernel into the 1 1 component
 
+  ! For T=0 we use the analytical limits of the polygamma functions
+  if (abs(info%Temp) <= abs(tol)) then
+     allocate(  gam(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     allocate(    z(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     allocate(combi(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
+     
+     gam = sct%gam(edisp%nbopt_min:edisp%nbopt_max, info%ik, :)
+     Z   = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
+     combi = Z/piQ * gam * (enrgy**2 + gam**2)
+     
+     resp%s_full(1,1,:,:,info%ik) = combi**2 
+
+     !If we set the tolerance tol of the if statement to something small but finite, we could use the next order in the low-T expansion:
+     !resp%s_full(1,1,:,:,info%ik) = resp%s_full(1,1,:,:,info%ik)  - &
+     !     ((2.d0 *(kB**2)*(gam**2)*(-5.d0 *enrgy**2+gam**2)*(info%Temp)**2)/(3.d0*(enrgy**2+gam**2)**4))
+     !resp%s_full(1,1,:,:,info%ik) = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)**2 * resp%s_full(1,1,:,:,info%ik) / 1
+     
+     resp%a_full(1,1,:,:,info%ik) = 0
+     resp%x_full(1,1,:,:,info%ik) = 0
+     
+     if (algo%lBfield) then
+        resp%sB_full(1,1,1,:,:,info%ik) = combi**3
+        resp%aB_full(1,1,1,:,:,info%ik) = 0
+        resp%xB_full(1,1,1,:,:,info%ik) = 0
+     endif
+     
+     deallocate(gam)
+     deallocate(Z)
+     deallocate(combi)
+
+  else 
+
+  
   resp%s_full(1,1,:,:,info%ik) = real(PolyGamma(1,:,info%ik,:)) &
                                - real(PolyGamma(2,:,info%ik,:)) * info%beta2pQ*sct%gam(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
 
@@ -1937,6 +2149,8 @@ subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
   endif
 
+  endif
+
   deallocate(enrgy)
 
   call response_intra_optical_weights_Q(algo, resp, edisp, info)
@@ -1964,6 +2178,9 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
   real(16), allocatable :: enrgy(:,:)
   real(16), allocatable :: enrgydiff(:)
   real(16), allocatable :: gamdiff(:)
+  real(16) :: combi1, combi2
+
+  real(8), parameter :: tol = 1.d-16
 
   complex(16) :: calc_sigma
   complex(16) :: calc_alpha
@@ -2004,6 +2221,28 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
         if ((abs(enrgydiff(is)) .lt. 1q-6) .and. (abs(gamdiff(is)) .lt. 1q-6)) then
 
           ! use the intra-band limit .....
+
+           if (abs(info%Temp) <= abs(tol)) then ! T-->0 intra-band limits
+
+            combi1 = sct%zqp(iband1,info%ik,is)/piQ * sct%gam(iband1,info%ik,is)/ &
+                 (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2 )
+            
+            ! We could set tol to something finite and use the next higher order in T...
+            calc_sigma = combi1**2 ! - sct%zqp(iband1,info%ik,is)**2 * &
+            !((2.d0 *(kB**2)*(sct%gam(iband1,info%ik,is)**2)*(-5.d0 *enrgy(iband1,is)**2+sct%gam(iband1,info%ik,is)**2)*(info%Temp)**2)/ &
+            !(3.d0*(enrgy(iband1,is)**2+sct%gam(iband1,info%ik,is)**2)**4))
+            
+            calc_alpha = 0
+            calc_xi = 0
+
+            if (algo%lBfield .and. edisp%lBFullMoments) then
+              calc_sigmaB = combi1**3
+              calc_alphaB = 0
+              calc_xiB = 0
+            endif
+
+          else ! T>0
+
           calc_sigma  = real(PolyGamma(1,iband1,info%ik,is)) &
                       - real(PolyGamma(2,iband1,info%ik,is)) * info%beta2pQ*sct%gam(iband1,info%ik,is)
 
@@ -2076,8 +2315,29 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                      / (16.q0 * piQ**4 * sct%gam(iband1,info%ik,is)**2)
 
           endif
+          endif
+          
+        else ! true inter-band
 
-        else
+           if (abs(info%Temp) <= abs(tol)) then
+
+            combi1 = sct%zqp(iband1,info%ik,is)/piQ * sct%gam(iband1,info%ik,is) / &
+                 (enrgy(iband1,is)**2 + sct%gam(iband1,info%ik,is)**2)
+
+            combi2 = sct%zqp(iband2,info%ik,is)/piQ * sct%gam(iband2,info%ik,is) / &
+                 (enrgy(iband2,is)**2 + sct%gam(iband2,info%ik,is)**2)            
+            
+            calc_sigma = combi1 * combi2
+            calc_alpha = 0
+            calc_xi = 0
+
+            if (algo%lBfield .and. edisp%lBFullMoments) then
+              calc_sigmaB = combi1 * combi2**2 
+              calc_alphaB = 0
+              calc_xiB = 0
+            endif
+
+          else ! T>0
 
           calc_sigma = real((enrgydiff(is)**2 + sct%gam(iband2,info%ik,is)**2 - sct%gam(iband1,info%ik,is)**2 &
                              - 2*ciQ*sct%gam(iband1,info%ik,is)*(-enrgydiff(is))) &
@@ -2122,21 +2382,21 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
             ! L11B
             calc_sigmaB = real(PolyGamma(1,iband1,info%ik,is) / sct%gam(iband1,info%ik,is) &
-                                / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                                / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                                / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                                / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_sigmaB = calc_sigmaB &
                         - real(PolyGamma(2,iband2,info%ik,is) / 4.q0 / piQ / sct%gam(iband2,info%ik,is)**2 &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
             calc_sigmaB = calc_sigmaB &
                         + aimag(PolyGamma(1,iband2,info%ik,is) / sct%gam(iband2,info%ik,is)**2 &
-                                * (-enrgydiff(is) - ci*sct%gam(iband2,info%ik,is)) &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                                * (-enrgydiff(is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_sigmaB = calc_sigmaB &
                         + real(PolyGamma(1,iband2,info%ik,is) / 2.q0 / sct%gam(iband2,info%ik,is)**3 &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
 
             calc_sigmaB = calc_sigmaB &
                         * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is)**2 &
@@ -2145,29 +2405,29 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
             ! L12B
             calc_alphaB = real(PolyGamma(1,iband1,info%ik,is) / sct%gam(iband1,info%ik,is) &
-                                * (enrgy(iband1,is) - ci*sct%gam(iband1,info%ik,is)) &
-                                / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                                / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                                * (enrgy(iband1,is) - ciQ*sct%gam(iband1,info%ik,is)) &
+                                / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                                / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_alphaB = calc_alphaB &
                         - aimag(PolyGamma(1,iband2,info%ik,is) / 2.q0 / sct%gam(iband2,info%ik,is)**2 &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
             calc_alphaB = calc_alphaB &
                         - real(PolyGamma(2,iband2,info%ik,is) / 4.q0 / piQ / sct%gam(iband2,info%ik,is)**2 &
-                                * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is)) &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                                * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
             calc_alphaB = calc_alphaB &
                         + aimag(PolyGamma(1,iband2,info%ik,is) / sct%gam(iband2,info%ik,is)**2 &
-                                * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is)) &
-                                * (-enrgydiff(is) - ci*sct%gam(iband2,info%ik,is)) &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                                * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                                * (-enrgydiff(is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_alphaB = calc_alphaB &
                         + real(PolyGamma(1,iband2,info%ik,is) / 2.q0 / sct%gam(iband2,info%ik,is)**3 &
-                                * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is)) &
-                                / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                                / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                                * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                                / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                                / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
 
             calc_alphaB = calc_alphaB &
                         * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is)**2 &
@@ -2176,30 +2436,30 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
 
             ! L22B
             calc_xiB = real(PolyGamma(1,iband1,info%ik,is) / sct%gam(iband1,info%ik,is) &
-                            * (enrgy(iband1,is) - ci*sct%gam(iband1,info%ik,is))**2 &
-                            / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                            / (enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                            * (enrgy(iband1,is) - ciQ*sct%gam(iband1,info%ik,is))**2 &
+                            / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                            / (enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_xiB = calc_xiB &
                      - aimag(PolyGamma(1,iband2,info%ik,is) / sct%gam(iband2,info%ik,is)**2 &
-                             * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is)) &
-                             / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                             / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                             * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                             / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                             / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
             calc_xiB = calc_xiB &
                      - real(PolyGamma(2,iband2,info%ik,is) / 4.q0 / piQ / sct%gam(iband2,info%ik,is)**2 &
-                             * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is))**2 &
-                             / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                             / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                             * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is))**2 &
+                             / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                             / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
             calc_xiB = calc_xiB &
                      + aimag(PolyGamma(1,iband2,info%ik,is) / sct%gam(iband2,info%ik,is)**2 &
-                             * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is))**2 &
-                             * (-enrgydiff(is) - ci*sct%gam(iband2,info%ik,is)) &
-                             / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
-                             / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
+                             * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is))**2 &
+                             * (-enrgydiff(is) - ciQ*sct%gam(iband2,info%ik,is)) &
+                             / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is)))**2 &
+                             / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is)))**2 )
             calc_xiB = calc_xiB &
                      + real(PolyGamma(1,iband2,info%ik,is) / 2.q0 / sct%gam(iband2,info%ik,is)**3 &
-                             * (enrgy(iband2,is) - ci*sct%gam(iband2,info%ik,is))**2 &
-                             / (-enrgydiff(is) - ci*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
-                             / (-enrgydiff(is) + ci*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
+                             * (enrgy(iband2,is) - ciQ*sct%gam(iband2,info%ik,is))**2 &
+                             / (-enrgydiff(is) - ciQ*(sct%gam(iband1,info%ik,is)+sct%gam(iband2,info%ik,is))) &
+                             / (-enrgydiff(is) + ciQ*(sct%gam(iband1,info%ik,is)-sct%gam(iband2,info%ik,is))) )
 
             calc_xiB    = calc_xiB &
                         * sct%zqp(iband1,info%ik,is) * sct%zqp(iband2,info%ik,is)**2 &
@@ -2207,7 +2467,8 @@ subroutine response_inter_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
                         * info%betaQ / 2.q0 / piQ**4
           endif
         endif
-
+        endif
+        
         if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
           cycle
         endif
