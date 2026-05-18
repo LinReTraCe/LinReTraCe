@@ -104,7 +104,7 @@ subroutine response_intra_km(resp, PolyGamma, edisp, sct, kmesh, algo, info)
      
      gam = sct%gam(edisp%nbopt_min:edisp%nbopt_max, info%ik, :)
      Z   = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
-     combi = Z/pi * gam * (enrgy**2 + gam**2)
+     combi = Z/pi * gam / (enrgy**2 + gam**2)
      
      resp%s_full(1,1,:,:,info%ik) = combi**2 
 
@@ -2042,7 +2042,7 @@ subroutine response_intra_km_Q(resp, PolyGamma, edisp, sct, kmesh, algo, info)
      
      gam = sct%gam(edisp%nbopt_min:edisp%nbopt_max, info%ik, :)
      Z   = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,info%ik,:)
-     combi = Z/piQ * gam * (enrgy**2 + gam**2)
+     combi = Z/piQ * gam / (enrgy**2 + gam**2)
      
      resp%s_full(1,1,:,:,info%ik) = combi**2 
 
