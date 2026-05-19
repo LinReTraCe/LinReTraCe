@@ -173,11 +173,32 @@ def refine_kmesh(
     band_data: BandData,
     target_energy: float,
     tolerance: float,
-    refinement_factor: int = 4,
+    refinement_factor: int = 3,
     uniqueness_tol: float = 1e-12,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return refined (points, weights) preserving total weight."""
+    """Return refined (points, weights) preserving total weight.
+    
+    The refinement uses a cell-centred subdivision: each hotspot k-point
+    represents a cell of linear size d (its nearest-neighbour spacing).
+    That cell is split into refinement_factor^3 sub-cells, with new points
+    placed at sub-cell centres:
+ 
+        k_new = k_parent + (i - (n-1)/2) * d/n,   i = 0 ... n-1
+ 
+    For odd n one sub-cell centre coincides exactly with the parent point,
+    so the coarse mesh is always contained in the refined mesh and the
+    subdivision is symmetric around the parent.  Even refinement_factor
+    values are therefore not allowed and are incremented by 1 with a warning.
+    """
 
+    # Enforce odd refinement_factor
+    if refinement_factor % 2 == 0:
+        refinement_factor += 1
+        logger.warning(
+            "refinement_factor must be odd for symmetric cell-centred subdivision. "
+            "Incrementing to %d.", refinement_factor
+        )
+    
     energies = band_data.energies
     k_points = band_data.k_points
     weights = band_data.weights
@@ -212,12 +233,24 @@ def refine_kmesh(
         deltas = np.array(diffs, dtype=quad_dtype)
         step = deltas / quad_dtype(refinement_factor)
 
+        # Cell-centred subdivision: place n points symmetrically around the
+        # parent at offsets (i - (n-1)/2) * d/n for i = 0 ... n-1.
+        # For odd n the central offset is 0, so the parent is always included.
+        n = refinement_factor
+        offsets = (np.arange(n, dtype=quad_dtype) - quad_dtype(n - 1) / 2)
         refined_axes = [
-            np.linspace(k_pt[axis] - deltas[axis] / 2.0, k_pt[axis] + deltas[axis] / 2.0,
-                        refinement_factor, endpoint=False, dtype=float)
-            if deltas[axis] > 0 else np.array([float(k_pt[axis])])
+            k_pt[axis] + offsets * (deltas[axis] / quad_dtype(n))
+            if deltas[axis] > 0 else np.array([k_pt[axis]], dtype=quad_dtype)
             for axis in range(3)
         ]
+
+        # old scheme
+        #refined_axes = [
+        #    np.linspace(k_pt[axis] - deltas[axis] / 2.0, k_pt[axis] + deltas[axis] / 2.0,
+        #                refinement_factor, endpoint=False, dtype=float)
+        #    if deltas[axis] > 0 else np.array([float(k_pt[axis])])
+        #    for axis in range(3)
+        #]
 
         mesh = np.meshgrid(*refined_axes, indexing="ij")
         refined = np.column_stack([axis.ravel() for axis in mesh]).astype(quad_dtype)

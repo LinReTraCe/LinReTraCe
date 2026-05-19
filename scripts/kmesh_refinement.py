@@ -64,7 +64,7 @@ class RefinementParams:
     max_iter : int
         Hard cap on refinement iterations.
     refinement_factor : int
-        Number of subdivisions per k-axis for hotspot regions.
+        Number of subdivisions per k-axis for hotspot regions; should be odd.
     energy_window : float
         Half-width (eV) of the mu-centred window used by hotspot detection.
     workdir : Path
@@ -78,7 +78,7 @@ class RefinementParams:
     t_min:               float
     error_tol:           float  = 5e-3
     max_iter:            int    = 10
-    refinement_factor:   int    = 4
+    refinement_factor:   int    = 3
     energy_window:       float  = 0.1
     workdir:             Path   = Path('.')
     keep_intermediate:   bool   = False

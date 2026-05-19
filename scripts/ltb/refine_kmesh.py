@@ -25,7 +25,7 @@ Optional arguments
 ------------------
     --error_tol ERR         Target df/da error threshold (default: 0.005).
     --max_iter N            Maximum refinement iterations (default: 10).
-    --refinement_factor F   Subdivisions per axis for refined hotspots (default: 4).
+    --refinement_factor F   Subdivisions per axis for refined hotspots (default: 3).
     --energy_window E       mu-centred energy window for hotspot detection (default: 0.1).
     --filling FILL          Electron filling for the TB calculation (default: 2.0).
     --mushift               Shift energies so that mu = 0 after diagonalisation.
@@ -85,8 +85,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="Target error threshold. Default: 0.005.")
     parser.add_argument("--max_iter", type=int, default=10,
                         help="Maximum refinement iterations. Default: 10.")
-    parser.add_argument("--refinement_factor", type=int, default=4,
-                        help="Subdivisions per axis for refined regions. Default: 4.")
+    parser.add_argument("--refinement_factor", type=int, default=3,
+                        help="Subdivisions per axis for refined regions. Default: 3.")
     parser.add_argument("--energy_window", type=float, default=0.1,
                         help="Energy window around mu for hotspot detection. Default: 0.1.")
     parser.add_argument("--keep_intermediate", action="store_true",
