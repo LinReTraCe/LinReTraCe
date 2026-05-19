@@ -41,10 +41,18 @@ Optional arguments
 
 from __future__ import annotations
 
-import argparse
-import logging
 import sys
 from pathlib import Path
+
+# Ensure the package root is on sys.path when this script is run directly
+# by absolute path. scripts/ltb/ sits two levels below the root.
+_root = Path(__file__).resolve().parents[2]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+import argparse
+import logging
+
 
 from structure.generators.ltb_gen import LtbGenerator
 from scripts.kmesh_refinement import RefinementParams, run_refinement
