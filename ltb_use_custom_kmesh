@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""
+ltb_use_custom_kmesh: Pre-processing of tight-binding structures for LRTC using a custom k-mesh.
+
+Usage:
+    ltb_use_custom_kmesh tb_file custom_k_mesh.hdf5 [--filling F] [--mu MU] [--mushift] [--corronly] [--vector] 
+               [--intra VALUE] [--inter VALUE] [--intraonly] [--plot] [--debug]
+
+Positional arguments:
+    tb_file         Tight binding file containing 'begin hopping', 'begin atoms', etc.
+    custom_k_mesh   HDF5 file containing a group '/.kmesh' with datasets 'points' (Nx3)
+                    and 'weights' (N,)
+
+Optional arguments:
+    --filling F     Number of electrons in the system (default: 2.0)
+    --mu MU         Use provided chemical potential instead of computing it.
+    --mushift       Shift energies such that the Fermi level is at mu = 0.
+    --corronly      Only use the multi–orbital Peierls correction term (set derivative term to 0).
+    --vector        Save also the full Hamiltonian and transformation matrices to HDF5.
+    --intra VALUE   Set all intra-band elements to given value.
+    --inter VALUE   Set all inter-band elements to given value.
+    --intraonly     Only save intra-band elements.
+    --plot          Plot bands and/or DOS after computation.
+    --debug         Enable debug logging.
+"""
+
+import sys
+import os
+import logging
+import argparse
+from argparse import RawTextHelpFormatter
+
+import h5py
+import numpy as np
+import matplotlib.pyplot as plt
+
+from structure.inout import h5output
+from structure.tb import TightBinding
+from structure.auxiliary import LogFormatter
+
+def parse_args(args=None):
+    parser = argparse.ArgumentParser(
+        description='TB pre-processing for LRTC using a custom k-mesh.',
+        formatter_class=RawTextHelpFormatter,
+        epilog='''
+The tight binding file (tb_file) must contain sections:
+  begin hopping ... end hopping
+  begin atoms ... end atoms
+  begin real_lattice ... end real_lattice
+OPTIONAL:
+  begin orbitals ... end orbitals
+
+The custom k-mesh file is an HDF5 file that must contain:
+  Group '/.kmesh'
+    Dataset 'points'  : an N x 3 array (fractional coordinates)
+    Dataset 'weights' : a 1D array of length N
+''')
+    # Positional arguments
+    parser.add_argument('tb_file', type=str, help='Tight binding file')
+    parser.add_argument('custom_k_mesh', type=str, help='HDF5 file containing custom k-mesh in /.kmesh group')
+    # Optional arguments
+    parser.add_argument('--filling', type=float, default=2.0,
+                        help='Number of electrons in the system (default: 2.0)')
+    parser.add_argument('--mu', type=float, default=None,
+                        help='Use provided chemical potential instead of computed one')
+    parser.add_argument('--mushift', action='store_true',
+                        help='Shift energies so that the chemical potential is at mu = 0')
+    parser.add_argument('--corronly', action='store_true',
+                        help='Only use the multi-orbital Peierls correction term (derivatives set to 0)')
+    parser.add_argument('--vector', action='store_true',
+                        help='Save additional full Hamiltonian data in output HDF5')
+    # Add the new arguments for inter and intra band elements
+    parser.add_argument('--intra', type=float, help='Set all intra-band elements to given value')
+    parser.add_argument('--inter', type=float, help='Set all inter-band elements to given value')
+    parser.add_argument('--intraonly', action='store_true', 
+                        help='Only save intra-band elements')
+    parser.add_argument('--plot', action='store_true',
+                        help='Plot bands and DOS after computation')
+    parser.add_argument('--debug', action='store_true',
+                        help=argparse.SUPPRESS)
+    return parser.parse_args(args)
+
+def main():
+    args = parse_args()
+    debug = args.debug
+
+    # Set up logging
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    console = logging.StreamHandler()
+    console.setFormatter(LogFormatter())
+    console.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.addHandler(console)
+
+    # Create a TightBinding object.
+    # Since we are using a custom k-mesh, the parameters for nkx, nky, nkz are placeholders.
+    try:
+        tb = TightBinding(nkx=1, nky=1, nkz=1, irreducible=False, kshift=False)
+    except Exception as e:
+        sys.exit("ltb_use_custom_kmesh: Error during TightBinding object creation: " + str(e))
+
+    # Read the custom k-mesh from the provided HDF5 file.
+    try:
+        with h5py.File(args.custom_k_mesh, 'r') as f:
+            kmesh_group = f["/.kmesh"]
+            custom_points = kmesh_group["points"][:]  # Expected shape: (N, 3)
+            custom_weights = kmesh_group["weights"][:]  # Expected shape: (N,) or (N, 1)
+            if custom_weights.ndim > 1:
+                custom_weights = custom_weights.flatten()
+    except Exception as e:
+        sys.exit("ltb_use_custom_kmesh: Error reading custom k-mesh file: " + str(e))
+
+    # Set the custom k-mesh in the TightBinding object.
+    try:
+        tb.setCustomKmesh(custom_points, custom_weights)
+        logger.info("Custom k-mesh successfully set. Number of k-points: {}".format(tb.nkp))
+    except Exception as e:
+        sys.exit("ltb_use_custom_kmesh: Error in setCustomKmesh: " + str(e))
+
+    # Now, compute the dispersion and other properties.
+    try:
+        tb.computeData(tbfile=args.tb_file,
+                       charge=args.filling,
+                       mu=args.mu,
+                       mushift=args.mushift,
+                       corronly=args.corronly,
+                       vector=args.vector)
+    except Exception as e:
+        sys.exit("ltb_use_custom_kmesh: Error during computeData: " + str(e))
+
+    # Apply custom intra-band and inter-band element settings if provided
+    if args.intra is not None:
+        try:
+            tb.setDiagonal(args.intra)
+            logger.info("Set all intra-band elements to {:.6f}".format(args.intra))
+        except Exception as e:
+            sys.exit("ltb_use_custom_kmesh: Error setting intra-band elements: " + str(e))
+            
+    if args.inter is not None:
+        try:
+            tb.setOffDiagonal(args.inter)
+            logger.info("Set all inter-band elements to {:.6f}".format(args.inter))
+        except Exception as e:
+            sys.exit("ltb_use_custom_kmesh: Error setting inter-band elements: " + str(e))
+    
+    # Handle intraonly option
+    if args.intraonly:
+        tb.bopticfull = False
+        tb.opticfull = False
+        logger.info("Set to save only intra-band elements")
+
+    # Set output filename; you may add an option for this.
+    fname = "lrtc-tb-custom.hdf5"
+    try:
+        h5output(fname, tb, tb)
+    except Exception as e:
+        sys.exit("ltb_use_custom_kmesh: Error writing output HDF5: " + str(e))
+
+    logger.info("Output file {!r} successfully created. File size: {:.2f} MB.".format(
+        fname, os.stat(fname).st_size/1e6))
+
+    # Optionally, plot the band structure and DOS.
+    if args.plot:
+        try:
+            # Plot band structure (assuming tb.energies is a list with at least one entry)
+            plt.figure()
+            for iband in range(tb.energyBandMax):
+                plt.plot(tb.energies[0][:, iband], label='band {}'.format(iband+1), lw=2)
+            plt.axhline(tb.mu, label='Fermi level (mu) = {:.3f}'.format(tb.mu), color='black', lw=1, ls='--')
+            plt.xlabel('k-point index')
+            plt.ylabel('Energy (eV)')
+            plt.legend(loc='best')
+            plt.title('Band Structure')
+            plt.show()
+            
+            # Add DOS plotting as in the original ltb.py if tb.calcDOS is available
+            try:
+                tb.calcDOS(gamma=0.03, npoints=10000, windowsize=1.5)
+                
+                fig = plt.figure()
+                ax1 = fig.add_subplot(111)
+                ax2 = ax1.twinx()
+                for ispin in range(tb.spins):
+                    ax1.plot(tb.dosaxis, tb.dos[ispin], label='DOS', color='blue', lw=2)
+                    ax2.plot(tb.dosaxis, tb.nos[ispin], label='NOS', color='red', lw=2)
+
+                ax1.axvline(x=tb.mu, color='black', lw=1, ls='-')
+                ax1.set_ylim(ymin=0)
+                ax1.set_ylabel(r'$\mathrm{DOS}$')
+                ax1.set_xlabel(r'$\mu$ [eV]')
+                ax1.legend(loc='center left')
+
+                ax2.axhline(y=tb.charge, color='black', lw=1, ls='-')
+                ax2.set_ylim(ymin=0)
+                ax2.set_ylabel(r'$\mathrm{NOS}$')
+                ax2.legend(loc='center right')
+                
+                plt.title('Density and Number of States')
+                plt.show()
+            except (AttributeError, Exception) as e:
+                logger.debug("Could not generate DOS plot: " + str(e))
+                
+        except Exception as e:
+            logger.error("Plotting error: " + str(e))
+
+if __name__ == '__main__':
+    main()

@@ -24,10 +24,22 @@ class TightBinding(Model):
 
   def __init__(self, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False):
     super(TightBinding, self).__init__(nkx,nky,nkz)
-    self.irreducible = irreducible and not (nkx * nky * nkz == 1) # generate irreducible grid instead of reducible
+    self.irreducible = irreducible and not (nkx * nky * nkz == 1) # generate irreducible grid instead of reducible unless there is but 1 k-point
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
+    self.customMesh  = False
 
-    logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
+    logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
+
+  def setCustomKmesh(self, custom_kpoints, custom_weights):
+    if custom_kpoints.ndim != 2 or custom_kpoints.shape[1] != 3:
+      raise ValueError("Custom k-points must be an Nx3 array (fractional coordinates).")
+    if custom_weights.ndim != 1 or custom_weights.shape[0] != custom_kpoints.shape[0]:
+      raise ValueError("Custom weights must be a 1D array with length equal to the number of k-points.")
+    self.kpoints = custom_kpoints.copy()
+    self.weights = custom_weights.copy()
+    self.nkp = custom_kpoints.shape[0]
+    self.multiplicity = np.ones(self.nkp, dtype=int)
+    self.customMesh = True
 
   def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False):
     self.tbfile       = tbfile
@@ -41,8 +53,14 @@ class TightBinding(Model):
 
     if self.charge < 0 or self.charge > self.energyBandMax*2:
       raise ValueError('Provided charge does not match provided bands : charge in [0,2*bands]')
+    
+    if not self.customMesh:
+      # No custom mesh provided; generate the default k-mesh.
+      self._setupKmesh()
+    else:
+      # Log a message indicating that the custom mesh is used.
+      logging.getLogger(__name__).info("Using custom k-mesh provided by setCustomKmesh.")
 
-    self._setupKmesh()
     if self.irreducible:
       self._checkSymmetriesTightbinding()
       self._checkSymmetriesKmesh()

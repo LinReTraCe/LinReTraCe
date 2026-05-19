@@ -16,5 +16,5 @@ setup(name='linretrace',
       license='GPLv3',
       packages=['postproc','scattering','structure','structure.symmetries','structure.symmetries.onedim','structure.symmetries.twodim','structure.symmetries.threedim'],
       install_requires=['numpy>=1.14','scipy>=1.10','h5py>=2.7','matplotlib>=2.2','ase>=3.17','spglib>=1.16'],
-      scripts=['laverage','lconfig','ldft','lprint','ltb','lscat','lwann']
+      scripts=['laverage','lconfig','ldft','lprint','ltb','ltb_refine_kmesh','ltb_use_custom_kmesh','lscat','lwann']
      )
