@@ -7,14 +7,15 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 setup(name='linretrace',
-      version='1.3',
+      version='1.5',
       description='Linear Response Transport Centre',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='Matthias Pickem',
       author_email='matthias.pickem@gmail.com',
       license='GPLv3',
-      packages=['postproc','scattering','structure','structure.symmetries','structure.symmetries.onedim','structure.symmetries.twodim','structure.symmetries.threedim'],
+      packages=['postproc','scattering','structure','structure.symmetries','structure.symmetries.onedim','structure.symmetries.twodim','structure.symmetries.threedim',
+                'scripts','scripts.ltb'],
       install_requires=['numpy>=1.14','scipy>=1.10','h5py>=2.7','matplotlib>=2.2','ase>=3.17','spglib>=1.16'],
-      scripts=['laverage','lconfig','ldft','lprint','ltb','ltb_refine_kmesh','ltb_use_custom_kmesh','lscat','lwann']
+      scripts=['laverage','lconfig','ldft','lprint','ltb','ltb-run','lscat','lwann']
      )
