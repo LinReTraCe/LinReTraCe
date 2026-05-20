@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""
+linspect  -  Inspect and visualise LinReTraCe input data.
+
+Subcommands
+-----------
+  bz      Plot the Brillouin-zone k-mesh from an HDF5 input file.
+  uc      Plot the real-space unit cell from a tight-binding file.
+
+Usage
+-----
+  linspect bz run.hdf5 [options]
+  linspect uc model.tbdata [options]
+
+Run 'linspect <subcommand> --help' for subcommand-specific options.
+"""
+
+import sys
+from pathlib import Path
+
+# Ensure the package root is on sys.path when invoked directly by path.
+_root = Path(__file__).resolve().parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from scripts.linspect import bz as bz_mod
+from scripts.linspect import uc as uc_mod
+
+SUBCOMMANDS = {
+    'bz': bz_mod,
+    'uc': uc_mod,
+}
+
+HELP = """
+linspect  -  Inspect and visualise LinReTraCe input data.
+
+Subcommands
+-----------
+  bz      Plot the Brillouin-zone k-mesh.
+  uc      Plot the real-space unit cell.
+
+Run 'linspect <subcommand> --help' for subcommand-specific options.
+"""
+
+
+def main():
+    args = sys.argv[1:]
+
+    if not args or args[0] in ('-h', '--help'):
+        print(HELP)
+        sys.exit(0)
+
+    if args[0] not in SUBCOMMANDS:
+        print(f"linspect: unknown subcommand '{args[0]}'")
+        print("Available subcommands:", ', '.join(SUBCOMMANDS))
+        sys.exit(1)
+
+    cmd, remaining = args[0], args[1:]
+    sys.argv = [f'linspect {cmd}'] + remaining
+    sys.exit(SUBCOMMANDS[cmd].main())
+
+
+if __name__ == '__main__':
+    main()
