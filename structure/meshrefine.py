@@ -1,4 +1,5 @@
-"""Utilities for iterative k-mesh refinement based on energy-space error estimates."""
+"""Utilities for iterative k-mesh refinement based on energy-space error estimates.
+   2026 Juntian Peng"""
 
 from __future__ import annotations
 
