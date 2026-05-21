@@ -31,8 +31,32 @@ SUBCOMMANDS = {
     'refine': refine_kmesh,
 }
 
+HELP = '''ltb: Pre-processing of tight-binding structures for the LRTC code
+
+Subcommands
+-----------
+  run     Build a regular k-mesh HDF5 file from a tight-binding model (default).
+  refine  Iteratively refine an existing k-mesh towards a target error threshold.
+
+Usage
+-----
+  ltb run    tb_file nkx nky nkz filling [options]
+  ltb        tb_file nkx nky nkz filling [options]   (backwards compatible)
+  ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
+
+Run 'ltb <subcommand> --help' for subcommand-specific options.
+'''
+
 def main():
     args = sys.argv[1:]
+
+    if not args or args[0] in ('-h', '--help'):
+        # Show the subcommand overview, then the default (run) help below it.
+        print(HELP)
+        print('--- ltb run (default) ---')
+        sys.argv = ['ltb run', '--help']
+        run.main(['--help'])
+        sys.exit(0)
 
     if args and args[0] in SUBCOMMANDS:
         # Explicit subcommand: ltb run ... / ltb refine ...

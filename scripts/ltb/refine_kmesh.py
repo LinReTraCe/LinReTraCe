@@ -63,8 +63,27 @@ logger = logging.getLogger(__name__)
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=__doc__,
+        prog='ltb refine',
+        description='Iteratively refine a LinReTraCe k-mesh towards a target error threshold.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Usage via wrapper (recommended)
+--------------------------------
+  ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
+
+Usage via direct call (expert)
+--------------------------------
+  python -m scripts.ltb.refine_kmesh initial.hdf5 tb_file mu gamma_min t_min [options]
+  python /path/to/scripts/ltb/refine_kmesh.py initial.hdf5 tb_file mu gamma_min t_min [options]
+
+Positional arguments
+--------------------
+  initial_hdf5        Initial tight-binding HDF5 file (must end with .hdf5).
+  tb_file             Wannier-style tight-binding input file.
+  chemical_potential  Chemical potential (mu) used for df/da and the generator.
+  gamma_min           Minimum gamma parameter for df/da.
+  t_min               Minimum temperature for df/da.
+""",
     )
 
     # Positional arguments -- identical to the original ltb_refine_kmesh,

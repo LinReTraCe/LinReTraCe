@@ -27,7 +27,7 @@ ltb run: Pre-processing of tight-binding structures for the LRTC code
 
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
-    description='Argument parser for the TB pre-processing for LRTC', \
+    description='Build a LinReTraCe HDF5 file from a tight-binding model on a regular k-mesh.', \
     formatter_class=RawTextHelpFormatter,
     prog='ltb run',
     epilog='''
@@ -186,3 +186,5 @@ def main(argv=None):
 
 if __name__ == '__main__':
   main()
+
+
