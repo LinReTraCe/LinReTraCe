@@ -13,8 +13,8 @@ Features
 
 Called via:
   ltb toxyz input.tbdata --atom 1 C [options]        # through the wrapper
-  python -m scripts.ltb.toxyz input.tbdata --atom 1 C
-  python /path/to/scripts/ltb/toxyz.py input.tbdata --atom 1 C
+  python -m scripts.ltb.toxyz input.tbdata output.xyz --atom 1 C
+  python /path/to/scripts/ltb/toxyz.py input.tbdata output.xyz --atom 1 C
 
 Based on tb2xyz (J.M. Tomczak, 2026).
 
@@ -146,18 +146,21 @@ def get_parser():
         epilog="""
 Usage via wrapper (recommended)
 --------------------------------
-  ltb toxyz input.tbdata --atom 1 C [options]
-  ltb toxyz input.tbdata --atom 1 C --atom 2 H --center -o output.xyz
+  ltb toxyz input.tbdata output.xyz --atom 1 C [options]
+  ltb toxyz input.tbdata --atom 1 C              # output to stdout
+  ltb toxyz input.tbdata output.xyz --atom 1 C --atom 2 H --center
+  ltb toxyz input.tbdata --atom 1 C --center     # stdout with centering
 
 Usage via direct call (expert)
 -------------------------------
-  python -m scripts.ltb.toxyz input.tbdata --atom 1 C
-  python /path/to/scripts/ltb/toxyz.py input.tbdata --atom 1 C
+  python -m scripts.ltb.toxyz input.tbdata output.xyz --atom 1 C
+  python /path/to/scripts/ltb/toxyz.py input.tbdata output.xyz --atom 1 C
 
 Examples
 --------
-  ltb toxyz graphene.tbdata --atom 1 C
-  ltb toxyz BN.tbdata --atom 1 B --atom 2 N --center -o BN.xyz
+  ltb toxyz graphene.tbdata graphene.xyz --atom 1 C
+  ltb toxyz graphene.tbdata --atom 1 C              # stdout
+  ltb toxyz BN.tbdata BN.xyz --atom 1 B --atom 2 N --center
 """,
     )
 
@@ -165,8 +168,8 @@ Examples
 def _add_arguments(parser):
     parser.add_argument("inputfile",
                         help="Input tight-binding file (.tbdata or similar).")
-    parser.add_argument("-o", "--output", default=None, metavar="FILE",
-                        help="Output XYZ file. Default: stdout.")
+    parser.add_argument("output", nargs="?", default=None, metavar="output.xyz",
+                        help="Output XYZ file. If omitted, output goes to stdout.")
     parser.add_argument("--center", action="store_true",
                         help="Shift structure so its centroid is at the origin.")
     parser.add_argument("--atom", nargs=2, metavar=("TYPE", "ELEMENT"),
