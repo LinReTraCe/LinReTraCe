@@ -4,8 +4,9 @@ ltb: Pre-processing of tight-binding structures for the LRTC code
 
 Subcommands
 -----------
-  run     Build a regular k-mesh HDF5 file from a tight-binding model (default).
-  refine  Iteratively refine an existing k-mesh towards a target error threshold.
+  run        Build a regular k-mesh HDF5 file from a tight-binding model (default).
+  refine     Iteratively refine an existing k-mesh towards a target error threshold.
+  supercell  Create a periodic or finite supercell from a TB file.
 
 Usage
 -----
@@ -24,19 +25,21 @@ _root = Path(__file__).resolve().parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from scripts.ltb import run, refine_kmesh
+from scripts.ltb import run, refine_kmesh, supercell
 
 SUBCOMMANDS = {
-    'run':    run,
-    'refine': refine_kmesh,
+    'run':      run,
+    'refine':   refine_kmesh,
+    'supercell': supercell,
 }
 
 HELP = '''ltb: Pre-processing of tight-binding structures for the LRTC code
 
 Subcommands
 -----------
-  run     Build a regular k-mesh HDF5 file from a tight-binding model (default).
-  refine  Iteratively refine an existing k-mesh towards a target error threshold.
+  run        Build a regular k-mesh HDF5 file from a tight-binding model (default).
+  refine     Iteratively refine an existing k-mesh towards a target error threshold.
+  supercell  Create a periodic or finite supercell from a TB file.
 
 Usage
 -----
