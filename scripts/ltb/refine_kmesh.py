@@ -18,8 +18,8 @@ Positional arguments
     initial_hdf5        Initial tight-binding HDF5 file (must end with .hdf5).
     tb_file             Wannier-style tight-binding input file.
     chemical_potential  Chemical potential (mu) used for df/da and the generator.
-    gamma_min           Minimum gamma parameter for df/da.
-    t_min               Minimum temperature for df/da.
+    gamma_min           Minimum gamma parameter [eV] for df/da.
+    t_min               Minimum temperature [K] for df/da.
 
 Optional arguments
 ------------------
@@ -95,9 +95,11 @@ Positional arguments
     parser.add_argument("chemical_potential", type=float,
                         help="Chemical potential used for refinement and the TB calculation.")
     parser.add_argument("gamma_min", type=float,
-                        help="Minimum gamma parameter for df/da.")
+                        help="Minimum gamma parameter [eV] for df/da.")
     parser.add_argument("t_min", type=float,
-                        help="Minimum temperature for df/da.")
+                        help="Minimum temperature [K] for df/da. "
+                        "If 0 is supplied, it is increased to 0.0005 K, "
+                        "since df/da diverges at T=0.")
 
     # Refinement loop options
     parser.add_argument("--error_tol", type=float, default=5e-3,
@@ -149,9 +151,14 @@ def validate_inputs(args: argparse.Namespace) -> None:
         raise ValueError("max_iter must be positive.")
     if args.refinement_factor < 1:
         raise ValueError("refinement_factor must be at least 1.")
-    if args.t_min <= 0:
-        raise ValueError("Temperature must be positive for df/da calculation.")
-
+    if args.t_min < 0:
+        raise ValueError("Temperature must be non-negative")
+    if args.t_min == 0.0:
+        logger.warning(
+            "t_min = 0 is not supported (df/da diverges)."
+            "Increasing to t_min = 0.0005 K."
+            )
+        args.t_min = 0.0005
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
