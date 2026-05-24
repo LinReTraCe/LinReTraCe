@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/ltb/toxyz.py  --  Convert a LinReTraCe tight-binding file to XYZ format.
+scripts/ltb/tb2xyz.py  --  Convert a LinReTraCe tight-binding file to XYZ format.
 
 Features
 --------
@@ -12,9 +12,9 @@ Features
 - Writes to stdout or a file.
 
 Called via:
-  ltb toxyz input.tbdata --atom 1 C [options]        # through the wrapper
-  python -m scripts.ltb.toxyz input.tbdata output.xyz --atom 1 C
-  python /path/to/scripts/ltb/toxyz.py input.tbdata output.xyz --atom 1 C
+  ltb tb2xyz input.tbdata --atom 1 C [options]        # through the wrapper
+  python -m scripts.ltb.tb2xyz input.tbdata output.xyz --atom 1 C
+  python /path/to/scripts/ltb/tb2xyz.py input.tbdata output.xyz --atom 1 C
 
 Based on tb2xyz (J.M. Tomczak, 2026).
 
@@ -136,7 +136,7 @@ def write_xyz(cart_atoms: list, comment: str, outfile: str | None = None) -> Non
 
 def get_parser():
     return argparse.ArgumentParser(
-        prog="ltb toxyz",
+        prog="ltb tb2xyz",
         description=(
             "Convert a LinReTraCe tight-binding file to XYZ format.\n\n"
             "Atom sort indices (from the 'atoms' section) are mapped to chemical\n"
@@ -146,21 +146,21 @@ def get_parser():
         epilog="""
 Usage via wrapper (recommended)
 --------------------------------
-  ltb toxyz input.tbdata output.xyz --atom 1 C [options]
-  ltb toxyz input.tbdata --atom 1 C              # output to stdout
-  ltb toxyz input.tbdata output.xyz --atom 1 C --atom 2 H --center
-  ltb toxyz input.tbdata --atom 1 C --center     # stdout with centering
+  ltb tb2xyz input.tbdata output.xyz --atom 1 C [options]
+  ltb tb2xyz input.tbdata --atom 1 C              # output to stdout
+  ltb tb2xyz input.tbdata output.xyz --atom 1 C --atom 2 H --center
+  ltb tb2xyz input.tbdata --atom 1 C --center     # stdout with centering
 
 Usage via direct call (expert)
 -------------------------------
-  python -m scripts.ltb.toxyz input.tbdata output.xyz --atom 1 C
-  python /path/to/scripts/ltb/toxyz.py input.tbdata output.xyz --atom 1 C
+  python -m scripts.ltb.tb2xyz input.tbdata output.xyz --atom 1 C
+  python /path/to/scripts/ltb/tb2xyz.py input.tbdata output.xyz --atom 1 C
 
 Examples
 --------
-  ltb toxyz graphene.tbdata graphene.xyz --atom 1 C
-  ltb toxyz graphene.tbdata --atom 1 C              # stdout
-  ltb toxyz BN.tbdata BN.xyz --atom 1 B --atom 2 N --center
+  ltb tb2xyz graphene.tbdata graphene.xyz --atom 1 C
+  ltb tb2xyz graphene.tbdata --atom 1 C              # stdout
+  ltb tb2xyz BN.tbdata BN.xyz --atom 1 B --atom 2 N --center
 """,
     )
 
@@ -200,7 +200,7 @@ def main(argv=None):
 
     if not atoms:
         sys.exit(
-            "ltb toxyz: no atoms found in the input file.\n"
+            "ltb tb2xyz: no atoms found in the input file.\n"
             "Make sure the file contains a 'begin atoms ... end atoms' section."
         )
 
