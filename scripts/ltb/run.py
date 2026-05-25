@@ -94,7 +94,7 @@ end orbitals
                       help='Use sparse matrix multiplication when rotating velocities\n'
                            'and curvatures into the Kohn-Sham basis.\n'
                            'Speedup grows as ~N_orb/z for large supercells (z = coordination).\n'
-                           'No effect on results. Recommended for N_orb > ~1000.')
+                           'No effect on results. Recommended for N_orb > ~100.')
   parser.add_argument('--vector', default=False, action='store_true', help='save also the full hamiltonian and transformations to HDF5')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
