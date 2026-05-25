@@ -90,6 +90,11 @@ end orbitals
   parser.add_argument('--red', default=False, help='make k-grid reducible', action='store_true')
   parser.add_argument('--mu', type=float, help='use provided chemical potential instead of provided filling (debugging purposes)')
   parser.add_argument('--corronly', default=False, action='store_true', help='only use the multi-orbital Peierls correction term (derivative term is set to 0)')
+  parser.add_argument('--sparse_rotation', default=False, action='store_true',
+                      help='Use sparse matrix multiplication when rotating velocities\n'
+                           'and curvatures into the Kohn-Sham basis.\n'
+                           'Speedup grows as ~N_orb/z for large supercells (z = coordination).\n'
+                           'No effect on results. Recommended for N_orb > ~1000.')
   parser.add_argument('--vector', default=False, action='store_true', help='save also the full hamiltonian and transformations to HDF5')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
@@ -125,7 +130,8 @@ def main(argv=None):
                    mu=args.mu,
                    mushift=args.mushift,
                    corronly=args.corronly,
-                   vector=args.vector)
+                   vector=args.vector,
+                   sparse_rotation=args.sparse_rotation)
   except Exception as e:
     error(str(e)+'\nExit.')
 

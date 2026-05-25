@@ -49,6 +49,8 @@ class LtbGenerator:
         Override all inter-band optical matrix elements with this value.
     intraonly : bool
         Discard inter-band elements before writing (sets opticfull = False).
+    sparse_rotation: bool
+        Use sparse matrix multiplication when rotating velocities and curvatures.
     """
 
     def __init__(
@@ -62,16 +64,18 @@ class LtbGenerator:
         intra: float | None = None,
         inter: float | None = None,
         intraonly: bool = False,
+        sparse_rotation: bool = False,
     ) -> None:
-        self.tb_file   = str(tb_file)
-        self.filling   = filling
-        self.mu        = mu
-        self.mushift   = mushift
-        self.corronly  = corronly
-        self.vector    = vector
-        self.intra     = intra
-        self.inter     = inter
-        self.intraonly = intraonly
+        self.tb_file         = str(tb_file)
+        self.filling         = filling
+        self.mu              = mu
+        self.mushift         = mushift
+        self.corronly        = corronly
+        self.vector          = vector
+        self.intra           = intra
+        self.inter           = inter
+        self.intraonly       = intraonly
+        self.sparse_rotation = sparse_rotation
 
     # ------------------------------------------------------------------
     # Public interface expected by the MeshGenerator protocol
@@ -124,12 +128,13 @@ class LtbGenerator:
         logger.info("Custom k-mesh set: %d k-points.", tb.nkp)
 
         tb.computeData(
-            tbfile   = self.tb_file,
-            charge   = self.filling,
-            mu       = self.mu,
-            mushift  = self.mushift,
-            corronly = self.corronly,
-            vector   = self.vector,
+            tbfile           = self.tb_file,
+            charge           = self.filling,
+            mu               = self.mu,
+            mushift          = self.mushift,
+            corronly         = self.corronly,
+            vector           = self.vector,
+            sparse_rotation  = self.sparse_rotation,
         )
 
         # Optional overrides of optical matrix elements

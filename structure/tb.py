@@ -41,11 +41,12 @@ class TightBinding(Model):
     self.multiplicity = np.ones(self.nkp, dtype=int)
     self.customMesh = True
 
-  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False):
-    self.tbfile       = tbfile
-    self.charge       = charge
-    self.corronly     = corronly
-    self.vector       = vector
+  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False, sparse_rotation=False):
+    self.tbfile           = tbfile
+    self.charge           = charge
+    self.corronly         = corronly
+    self.vector           = vector
+    self.sparse_rotation  = sparse_rotation
 
     self._readTb()
     self._computeOrthogonality() # sets self.ortho
@@ -645,13 +646,36 @@ class TightBinding(Model):
 
       ''' the velocities and curvatures are ordered according to e(k)
           due to the reordering of U '''
-      Uinv = np.linalg.inv(U)
 
-      vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
+      if self.sparse_rotation:
+        import scipy.sparse as _sp
+        nb   = self.energyBandMax
+        Udag = np.conjugate(U).swapaxes(1, 2)   # (nkp, nb, nb)
+
+        vel = np.zeros((self.nkp, nb, nb, hvk.shape[3]), dtype=np.complex128)
+        cur = np.zeros((self.nkp, nb, nb, hck.shape[3]), dtype=np.complex128)
+
+        for ik in range(self.nkp):
+          Uk    = U[ik]
+          Udagk = Udag[ik]
+          for d in range(hvk.shape[3]):
+            tmp            = _sp.csr_matrix(hvk[ik,:,:,d]).dot(Uk)
+            vel[ik,:,:,d]  = Udagk.dot(tmp)
+          for d in range(hck.shape[3]):
+            tmp            = _sp.csr_matrix(hck[ik,:,:,d]).dot(Uk)
+            cur[ik,:,:,d]  = Udagk.dot(tmp)
+
+        Uinv = Udag   # U unitary from eigh: U† == U^{-1}, kept for vector storage
+
+      else:
+        Uinv = np.linalg.inv(U)
+
+        vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
+        cur = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
+
       vel_conj = np.conjugate(vel)
       vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
 
-      cur = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
       # transform into matrix form
       curmat  = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
       curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
