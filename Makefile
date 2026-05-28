@@ -25,6 +25,8 @@ all help default:
 	@echo "  - make test:           run testsuite"
 	@echo "  - make test-clean:     clean test folder from temporary input/output files"
 	@echo ""
+	@echo "  - make test-openmp:    check OpenMP/BLAS threading setup (warns if suboptimal)"
+	@echo ""
 	@echo "  - make squeaky-clean:  run all three clean commands"
 	@echo ""
 
@@ -68,7 +70,19 @@ test-clean:
 	rm -f Si_output.hdf5
 	rm -f Si_output.txt
 
-squeaky-clean: clean validate-clean test-clean
+test-openmp:
+	@echo ""
+	@echo "-- Checking OpenMP / BLAS threading setup ..."
+	python3 testsuite/tests/test_openmp.py; \
+	  if [ $$? -ne 0 ]; then \
+	    echo "-- WARNING: threading check failed (see above). Continuing."; \
+	  fi
+	@echo ""
+
+test-openmp-clean:
+	@echo "-- test-openmp produces no output files; nothing to clean."
+
+squeaky-clean: clean validate-clean test-clean test-openmp-clean
 
 install: bin/linretrace
 	@echo "Creating bin folder in \$$HOME:"

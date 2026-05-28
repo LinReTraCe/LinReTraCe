@@ -36,6 +36,7 @@ Optional arguments
     --intraonly             Discard inter-band elements before writing.
     --keep_intermediate     Keep intermediate mesh and HDF5 files.
     --workdir DIR           Directory for intermediate and output files (default: cwd).
+    --openmp [N]            Number of OpenMP/BLAS threads; omit N for all cores.
     --verbose               Enable debug logging.
 """
 
@@ -49,6 +50,12 @@ from pathlib import Path
 _root = Path(__file__).resolve().parents[2]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
+
+# ── OpenMP / BLAS thread count ────────────────────────────────────────────────
+# MUST happen before numpy (or any BLAS-linked library) is imported.
+from scripts.ltb.openmp_utils import preparse_openmp, add_openmp_argument, openmp_info_line
+_openmp_ncores = preparse_openmp()
+# ─────────────────────────────────────────────────────────────────────────────
 
 import argparse
 import logging
@@ -66,7 +73,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog='ltb refine',
         description='Iteratively refine a LinReTraCe k-mesh towards a target error threshold.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog="""\
 Usage via wrapper (recommended)
 --------------------------------
   ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
@@ -86,8 +93,7 @@ Positional arguments
 """,
     )
 
-    # Positional arguments -- identical to the original ltb_refine_kmesh,
-    # except --ltb_use_custom_kmesh is gone (no longer needed).
+    # Positional arguments
     parser.add_argument("initial_hdf5", type=Path,
                         help="Initial tight-binding HDF5 file (must end with .hdf5).")
     parser.add_argument("tb_file", type=Path,
@@ -132,6 +138,7 @@ Positional arguments
                         help="Set all inter-band optical elements to VALUE.")
     parser.add_argument("--intraonly", action="store_true",
                         help="Discard inter-band elements before writing.")
+    add_openmp_argument(parser)
 
     return parser.parse_args(argv)
 
@@ -166,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format=LOG_FORMAT,
     )
+
+    logger.info(openmp_info_line(_openmp_ncores))
 
     try:
         validate_inputs(args)

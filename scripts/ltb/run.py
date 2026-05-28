@@ -10,6 +10,12 @@ _root = Path(__file__).resolve().parents[2]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
+# ── OpenMP / BLAS thread count ────────────────────────────────────────────────
+# MUST happen before numpy (or any BLAS-linked library) is imported.
+from scripts.ltb.openmp_utils import preparse_openmp, add_openmp_argument, openmp_info_line
+_openmp_ncores = preparse_openmp()
+# ─────────────────────────────────────────────────────────────────────────────
+
 import os
 import logging
 import argparse
@@ -30,7 +36,7 @@ def parse_args(args=None):
     description='Build a LinReTraCe HDF5 file from a tight-binding model on a regular k-mesh.', \
     formatter_class=RawTextHelpFormatter,
     prog='ltb run',
-    epilog='''
+    epilog='''\
 tb_file:
   begin hopping:      hopping parameter [eV]
                       sign convention e(k) ~ -t * (1-2.delta_(R,0).delta(l,l')) e^{ikR}
@@ -97,6 +103,7 @@ end orbitals
                            'No effect on results. Recommended for N_orb > ~100.')
   parser.add_argument('--vector', default=False, action='store_true', help='save also the full hamiltonian and transformations to HDF5')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
+  add_openmp_argument(parser)
   return parser.parse_args(args)
 
 def main(argv=None):
@@ -111,6 +118,8 @@ def main(argv=None):
   console.setFormatter(LogFormatter())
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
+
+  logger.info(openmp_info_line(_openmp_ncores))
 
   # create tightbinding object
   irr = not args.red
@@ -192,5 +201,3 @@ def main(argv=None):
 
 if __name__ == '__main__':
   main()
-
-
