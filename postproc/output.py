@@ -26,13 +26,41 @@ class LRTCoutput(object):
   The two main output routines are "saveData" and "outputData"
   saveData purely saves the requested data in the data dictionary
   while outputData additionally outputs said data either to stdout or plots it via matplotlib
+
+  Standard-deviation support (disorder averaging workflow)
+  ---------------------------------------------------------
+  When the HDF5 file was produced by the disorder averaging script
+  (workflow_step7_transport_avg.py), each Onsager group contains companion
+  datasets ``sum_std`` and ``sum_std_imag`` alongside ``sum``.
+  This class detects them via ``self.has_std`` and exposes them through
+  ``self.datastd`` / ``self.datastd_spinsum``.
+
+  For raw Onsager coefficients and conductivity (c-) the std is read
+  directly.  For derived ratio quantities (Seebeck s-, Hall rh-, Nernst n-,
+  etc.) an extremal-envelope approach is used: the formula is evaluated at
+  all 2^M corners of the +/-sigma hypercube (M = number of participating
+  Onsager inputs) and the pointwise min/max across those corners gives a
+  conservative uncertainty band.  See saveData for details.
+
+  Notes on dtypes
+  ---------------
+  The Fortran code writes Onsager arrays as complex(8); h5py reads them as
+  numpy complex128.  L11 is purely real; L12/L22 have small imaginary parts.
+  The ``sum_std`` datasets are float64 (real-valued), written by
+  np.std(arr.real, ...) in the averaging script.
   '''
   def __init__(self, fname, altaxis=False):
     self.fname    = fname.strip()
     self.datasets = {}
     self.owned    = {}
-    self.data     = None
+    self.data        = None
     self.dataspinsum = None
+    self.datastd         = None   # std of real parts (float64); populated when has_std is True
+    self.datastd_spinsum = None
+    self.datastd_lo      = None   # extremal-envelope lower bound for derived quantities
+    self.datastd_lo_ss   = None
+    self.datastd_hi      = None   # extremal-envelope upper bound for derived quantities
+    self.datastd_hi_ss   = None
 
     self._parse()        # runmode, quad, dimensions
 
@@ -143,7 +171,49 @@ class LRTCoutput(object):
   def saveData(self, command, *args):
     '''
     Check if the provided command is valid for the given file.
-    Save the collected data in self.data in form of a dictionary
+    Save the collected data in self.data in form of a dictionary.
+
+    Standard-deviation handling (disorder averaging workflow)
+    ---------------------------------------------------------
+    When self.has_std is True the method also populates parallel dicts
+    self.datastd / self.datastd_spinsum for raw Onsager coefficients,
+    and self.datastd_lo / self.datastd_hi (and spinsum variants) for
+    derived quantities.
+
+    *Raw Onsager coefficients and conductivity (c-)*:
+      The std is read directly from sum_std (float64, real part only).
+      For the band-summed quantity (c-) which is just L11, this is exact.
+
+    *Derived ratio quantities (Seebeck s-, Hall rh-, Nernst n-, ...)*:
+      Exact error propagation would require the full covariance matrix
+      between Onsager inputs, which is not stored.  Instead we use an
+      extremal-envelope approach:
+
+        For M participating Onsager inputs each with element-wise std
+        sigma_k, evaluate the formula f at all 2^M corners of the
+        +/-sigma hypercube:
+
+          f_corner = f(L1 +/- sigma1, L2 +/- sigma2, ...)
+
+        The uncertainty band is:
+          lower = pointwise min over all corners
+          upper = pointwise max over all corners
+
+        This is a rigorous conservative bound when correlations between
+        Onsager inputs are unknown, and is exact when all inputs are
+        monotone in the formula (which is true for S = L12/L11 etc.).
+        It costs 2^M formula evaluations; since M <= 4 (L11, L12, L22
+        and one B-field coefficient) this is at most 16 evaluations.
+
+    Limitations:
+      * The 2^M bound is conservative: if disorder fluctuations in L11
+        and L12 are positively correlated (they usually are), the true
+        Seebeck band is narrower than what we show.  The band is an
+        outer bound, not a 1-sigma interval.
+      * Near a metal-insulator transition where L11 is small the inversion
+        is ill-conditioned and even the outer bound may be misleading.
+      * Propagated bands for derived quantities are only shown when the
+        user explicitly passes --fullstd to lprint.
     '''
 
     command = command.strip()
@@ -169,6 +239,14 @@ class LRTCoutput(object):
       self.data.update({'mu':self.mu})
       self.data.update({'carrier':self.carrier})
 
+    if self.datastd is None and self.has_std:
+      self.datastd         = {}
+      self.datastd_spinsum = {}
+      self.datastd_lo      = {}
+      self.datastd_lo_ss   = {}
+      self.datastd_hi      = {}
+      self.datastd_hi_ss   = {}
+
     if response:
       for icmd in commands: # iterate through all the required items
         key = self.owned[icmd][1] # path
@@ -178,6 +256,12 @@ class LRTCoutput(object):
         # get the spin-summed onsager coefficients
         out = self._getResponseCombination(key, spinsum=True)
         self.dataspinsum.update({icmd:out})
+        # load std counterpart when available
+        if self.has_std:
+          out_std = self._getResponseCombination(key, spinsum=False, std=True)
+          self.datastd.update({icmd: out_std})
+          out_std_ss = self._getResponseCombination(key, spinsum=True, std=True)
+          self.datastd_spinsum.update({icmd: out_std_ss})
     else:
       if len(args) != 0:
         print('#   Warning: This group does not take additional arguments')
@@ -238,52 +322,49 @@ class LRTCoutput(object):
           else:
             temp = self.temp[:,None,None] # steps, dir, dir
 
-        if command.startswith('c-'): # conductivity
-          tosave = itotal[0]
-          ylabel = r'$\sigma$'
-        elif command.startswith('r-'): # resistivity
-          tosave = self.invert(itotal[0])
-          ylabel = r'$\rho$'
-        elif command.startswith('p-'): # peltier
-          tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1])
-          ylabel = r'$\Pi$'
-        elif command.startswith('s-'): # seebeck
-          tosave = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
-          ylabel = r'$S$'
-        elif command.startswith('pf-'): # power factor
-          seeb = -np.einsum('...ij,...jk->...ik', self.invert(itotal[0]), itotal[1]) / temp
-          cond = itotal[0]
-          tosave = np.einsum('...ij,...jk,...kl->...il',seeb,seeb,cond) # S**2 * conductivitiy
-          ylabel = r'$PF$'
-        elif command.startswith('tc-'): # thermal conductivity
-          tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
-          tosave /= temp
-          ylabel = r'$\kappa_e$'
-        elif command.startswith('tr-'): # thermal resistivity
-          tosave = itotal[2] - np.einsum('...ij,...jk,...kl->...il', itotal[1], self.invert(itotal[0]), itotal[1])
-          tosave /= temp
-          tosave = self.invert(tosave)
-          ylabel = r'$r$'
-        elif command.startswith('cb-'): # Hall conducitivity
-          tosave = itotal[0]
-          ylabel = r'$\sigma_B$'
-        elif command.startswith('rh-'): # Hall coefficient
-          tosave = np.einsum('...ij,...jkz,...kl->...ilz', self.invert(itotal[0]), itotal[1], self.invert(itotal[0]))
-          ylabel = r'$R_H$'
-        elif command.startswith('n-'): # Nernst coefficient
-          tosave  = np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(itotal[0]), itotal[1], itotal[2], self.invert(itotal[0]))
-          tosave -= np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(itotal[0]), itotal[3], itotal[0], self.invert(itotal[0]))
-          tosave /= temp
-          tosave *= (-1.)
-          ylabel = r'$\nu$'
-        elif command.startswith('muh-'): # Hall mobility
-          tosave  = np.einsum('...ij,...jkz->...ikz', self.invert(itotal[0]), itotal[1])
-          ylabel = r'$\mu_H$'
-        elif command.startswith('mut-'): # Thermal mobility
-          tosave  = np.einsum('...ij,...jkz->...ikz', self.invert(itotal[0]), itotal[1])
-          ylabel = r'$\mu_T$'
-        else:
-          raise IOError('Cannot recognize command')
+        # --- helper: evaluate the transport formula from a list of Onsager arrays ---
+        # Factored out so the same code path serves both the nominal evaluation
+        # and the extremal-envelope std computation (see saveData docstring).
+        def _eval_derived(cmd, L, tmp):
+          '''
+          Evaluate the transport formula for cmd given Onsager list L and
+          temperature broadcast array tmp.
+          Returns (result_array, ylabel_string).
+          '''
+          if cmd.startswith('c-'):
+            return L[0], r'$\sigma$'
+          elif cmd.startswith('r-'):
+            return self.invert(L[0]), r'$\rho$'
+          elif cmd.startswith('p-'):
+            return -np.einsum('...ij,...jk->...ik', self.invert(L[0]), L[1]), r'$\Pi$'
+          elif cmd.startswith('s-'):
+            return -np.einsum('...ij,...jk->...ik', self.invert(L[0]), L[1]) / tmp, r'$S$'
+          elif cmd.startswith('pf-'):
+            seeb = -np.einsum('...ij,...jk->...ik', self.invert(L[0]), L[1]) / tmp
+            return np.einsum('...ij,...jk,...kl->...il', seeb, seeb, L[0]), r'$PF$'
+          elif cmd.startswith('tc-'):
+            val = L[2] - np.einsum('...ij,...jk,...kl->...il', L[1], self.invert(L[0]), L[1])
+            return val / tmp, r'$\kappa_e$'
+          elif cmd.startswith('tr-'):
+            val = L[2] - np.einsum('...ij,...jk,...kl->...il', L[1], self.invert(L[0]), L[1])
+            return self.invert(val / tmp), r'$r$'
+          elif cmd.startswith('cb-'):
+            return L[0], r'$\sigma_B$'
+          elif cmd.startswith('rh-'):
+            return np.einsum('...ij,...jkz,...kl->...ilz', self.invert(L[0]), L[1], self.invert(L[0])), r'$R_H$'
+          elif cmd.startswith('n-'):
+            val  = np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(L[0]), L[1], L[2], self.invert(L[0]))
+            val -= np.einsum('...ij,...jkz,...kl,...lm->...imz', self.invert(L[0]), L[3], L[0], self.invert(L[0]))
+            return -val / tmp, r'$\nu$'
+          elif cmd.startswith('muh-'):
+            return np.einsum('...ij,...jkz->...ikz', self.invert(L[0]), L[1]), r'$\mu_H$'
+          elif cmd.startswith('mut-'):
+            return np.einsum('...ij,...jkz->...ikz', self.invert(L[0]), L[1]), r'$\mu_T$'
+          else:
+            raise IOError('Cannot recognize command')
+
+        # nominal value
+        tosave, ylabel = _eval_derived(command, itotal, temp)
 
         # Zero out T=0 entries for quantities that carry a 1/T prefactor
         # (Seebeck, power factor, thermal conductivity/resistivity, Nernst)
@@ -294,10 +375,94 @@ class LRTCoutput(object):
           slices = (slice(None),) + (np.newaxis,) * (tosave.ndim - 1)
           tosave = np.where(t0_mask[slices], 0.0, tosave)
 
+        # --- std / extremal-envelope for derived quantities ---
+        #
+        # Two cases:
+        #
+        # (A) Conductivity (c-): f = L11 (or L11-inter + L11-intra for c-total).
+#     The std is simply the std of L11, possibly summed over inter+intra.
+#     We propagate std(L11-inter + L11-intra) = std(L11-inter) + std(L11-intra)
+#     (linear sum: conservative, appropriate since the two channels are driven
+#     by the same disorder realisation and hence positively correlated).
+#     Result stored in datastd[command] so the 'raw' display path picks it up.
+#
+        # (B) All other derived quantities: extremal-envelope over 2^M corners
+#     of the +/-sigma hypercube, where M = len(itotal) (the number of SUMMED
+#     Onsager arrays after the inter+intra addition for 'total' commands).
+#     We build std_itotal to mirror exactly how itotal was built from combined.
+#     Result stored in datastd_lo / datastd_hi.
+        if self.has_std and not self.owned[command][0]:  # derived quantities only
+          if i == 0:
+            std_src = self.datastd
+          else:
+            std_src = self.datastd_spinsum
+
+          reqs_ok = (
+            std_src is not None
+            and all(ireq in std_src and std_src[ireq] is not None
+                    for ireq in requirements)
+          )
+
+          if reqs_ok:
+            # Build std_itotal in exactly the same way itotal was built:
+            # collect per-requirement stds, then sum pairs for 'total' commands.
+            std_combined = [np.abs(std_src[ireq]) for ireq in requirements]
+            if command.find('total') != -1:
+              std_itotal = [
+                std_combined[2*k] + std_combined[2*k+1]
+                for k in range(len(std_combined)//2)
+              ]
+            else:
+              std_itotal = std_combined
+
+            if command.startswith('c-'):
+              # Case A: conductivity -- std is std(L11[total])
+              tosave_std = std_itotal[0]
+              env_lo = env_hi = None
+            else:
+              # Case B: extremal envelope over 2^M corners
+              import itertools
+              M = len(itotal)   # matches len(std_itotal)
+              env_lo = None
+              env_hi = None
+              for signs in itertools.product([-1, 1], repeat=M):
+                L_corner = [
+                  itotal[k] + signs[k] * std_itotal[k]
+                  for k in range(M)
+                ]
+                val_corner, _ = _eval_derived(command, L_corner, temp)
+                val_corner = val_corner.real
+                if env_lo is None:
+                  env_lo = val_corner.copy()
+                  env_hi = val_corner.copy()
+                else:
+                  env_lo = np.minimum(env_lo, val_corner)
+                  env_hi = np.maximum(env_hi, val_corner)
+              # Apply same T=0 mask to the envelope bounds
+              if command.startswith(('s-', 'pf-', 'tc-', 'tr-', 'n-')):
+                slices = (slice(None),) + (np.newaxis,) * (env_lo.ndim - 1)
+                env_lo = np.where(t0_mask[slices], 0.0, env_lo)
+                env_hi = np.where(t0_mask[slices], 0.0, env_hi)
+              tosave_std = None
+          else:
+            tosave_std = env_lo = env_hi = None
+        else:
+          tosave_std = env_lo = env_hi = None
+
         if i==0:
           self.data.update({command:tosave})
+          if tosave_std is not None:
+            self.datastd[command]    = tosave_std
+          if env_lo is not None:
+            self.datastd_lo[command] = env_lo
+            self.datastd_hi[command] = env_hi
         else:
           self.dataspinsum.update({command:tosave})
+          if tosave_std is not None:
+            self.datastd_spinsum[command] = tosave_std
+          if env_lo is not None:
+            self.datastd_lo_ss[command] = env_lo
+            self.datastd_hi_ss[command] = env_hi
 
     if response and self.ndim == 3:
       return ylabel + ' ' + unit
@@ -390,6 +555,21 @@ class LRTCoutput(object):
     Save the data via saveData
     Output the collected data to stdout
     or plot it with matplotlib.
+
+    Standard-deviation output (disorder averaging workflow)
+    -------------------------------------------------------
+    When self.has_std is True and --nostd is not set:
+
+    * Text mode: two extra columns <command>_std.real and <command>_std.imag
+      are appended after the usual real/imag columns.  For derived quantities
+      the lower/upper envelope bounds are printed instead (as _lo and _hi).
+      Only shown with --fullstd for non-raw quantities.
+
+    * Plot mode: a semi-transparent grey fill_between band is drawn.
+      For raw Onsager / conductivity: mean +/- std.
+      For derived quantities (--fullstd only): the extremal-envelope
+      [datastd_lo, datastd_hi] band is shaded.  This is a rigorous
+      outer bound (conservative) rather than a 1-sigma band.
     '''
 
     if settings.plot:
@@ -409,6 +589,21 @@ class LRTCoutput(object):
 
     response = self.owned[command][3]
     magnetic = self.owned[command][4]
+
+    # Decide whether to show std for this command.
+    # Raw Onsager and conductivity (c-): shown by default when available.
+    # All other derived quantities: only with --fullstd, because the
+    # extremal-envelope computation can produce very wide bands for
+    # ill-conditioned quantities (thermal conductivity, Nernst, ...).
+    _is_raw    = response and self.owned[command][0]
+    _is_cond   = command.startswith('c-')
+    _show_std  = (
+      self.has_std
+      and not getattr(settings, 'nostd', False)
+      and (_is_raw or _is_cond or getattr(settings, 'fullstd', False))
+    )
+    # For derived quantities use lo/hi envelope; for raw use datastd directly.
+    _use_envelope = _show_std and not (_is_raw or _is_cond)
 
     '''
     check arguments in more detail
@@ -482,38 +677,149 @@ class LRTCoutput(object):
               if settings.convolve:
                 outarray = signal.convolve(outarray, gauss_window, mode='same') / sum(gauss_window)
 
+              # --- extract std / envelope slice for this spin/direction ---
+              # std arrays are float64 (real); .real on float64 is a no-op.
+              outarray_std = None   # for raw quantities: +/- half-width
+              outarray_lo  = None   # for derived: lower envelope
+              outarray_hi  = None   # for derived: upper envelope
+              if _show_std:
+                try:
+                  if _use_envelope:
+                    # derived: pull from lo/hi dicts
+                    _lo_src = self.datastd_lo    if ispin >= 0 else self.datastd_lo_ss
+                    _hi_src = self.datastd_hi    if ispin >= 0 else self.datastd_hi_ss
+                    if command in _lo_src and _lo_src[command] is not None:
+                      _lo = _lo_src[command]
+                      _hi = _hi_src[command]
+                      if ispin >= 0:
+                        outarray_lo = _lo[:,ispin,idir1,idir2] if idir3 is None else _lo[:,ispin,idir1,idir2,idir3]
+                        outarray_hi = _hi[:,ispin,idir1,idir2] if idir3 is None else _hi[:,ispin,idir1,idir2,idir3]
+                      else:
+                        outarray_lo = _lo[:,idir1,idir2] if idir3 is None else _lo[:,idir1,idir2,idir3]
+                        outarray_hi = _hi[:,idir1,idir2] if idir3 is None else _hi[:,idir1,idir2,idir3]
+                  else:
+                    # raw / conductivity: pull from datastd
+                    _std_src = self.datastd if ispin >= 0 else self.datastd_spinsum
+                    if _std_src and command in _std_src and _std_src[command] is not None:
+                      _s = _std_src[command]
+                      if ispin >= 0:
+                        outarray_std = _s[:,ispin,idir1,idir2].real if idir3 is None else _s[:,ispin,idir1,idir2,idir3].real
+                      else:
+                        outarray_std = _s[:,idir1,idir2].real if idir3 is None else _s[:,idir1,idir2,idir3].real
+                except Exception:
+                  outarray_std = outarray_lo = outarray_hi = None
+
               if settings.plot:
-                plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
+                line, = plt.plot(self.axis, outarray.real, label='{}.real [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
+                # uncertainty band
+                if outarray_std is not None:
+                  # raw/conductivity: mean +/- std (grey shading)
+                  plt.fill_between(self.axis,
+                                   outarray.real - outarray_std,
+                                   outarray.real + outarray_std,
+                                   alpha=0.25, color='gray',
+                                   label=r'{} $\pm1\sigma$ [{}]'.format(command, icombdescr))
+                elif outarray_lo is not None:
+                  # derived: extremal envelope (grey shading)
+                  plt.fill_between(self.axis, outarray_lo, outarray_hi,
+                                   alpha=0.25, color='gray',
+                                   label='{} envelope [{}]'.format(command, icombdescr))
                 if settings.imag: plt.plot(self.axis, outarray.imag, label='{}.imag [{}{}]'.format(command, icombdescr, ' - '+self.fname if settings.compare else ''))
               else:
                 if idir3 is None:
                   auxarray = np.zeros((self.nT,3), dtype=int)
                   auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1], dtype=int)
 
-                  if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i', \
-                               header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2'.format \
-                               (self.axisname,self.axisunit,command))
-                    self.headerwritten = True
-
+                  if outarray_std is not None:
+                    # raw: append _std.real and _std.imag (zero) columns
+                    _scol  = outarray_std[:,None]
+                    _zeros = np.zeros_like(_scol)
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            _scol, _zeros, auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i',
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag, {2:>24}_std.real, {2:>17}_std.imag,  is id1 id2'.format(
+                                   self.axisname, self.axisunit, command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            _scol, _zeros, auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i',
+                                 comments='', header='\n')
+                  elif outarray_lo is not None:
+                    # derived: append _lo and _hi columns
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            outarray_lo[:,None], outarray_hi[:,None], auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i',
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag, {2:>24}_env.lo,  {2:>17}_env.hi,   is id1 id2'.format(
+                                   self.axisname, self.axisunit, command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            outarray_lo[:,None], outarray_hi[:,None], auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i',
+                                 comments='', header='\n')
                   else:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i', \
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2'.format \
+                                 (self.axisname,self.axisunit,command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i', comments='', header='\n')
                 else:
                   auxarray = np.zeros((self.nT,4), dtype=int)
                   auxarray[None,:] = np.array([ispin+1,idir1+1,idir2+1,idir3+1], dtype=int)
 
-                  if not self.headerwritten:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
-                               header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3'.format \
-                               (self.axisname,self.axisunit,command))
-                    self.headerwritten = True
-
+                  if outarray_std is not None:
+                    _scol  = outarray_std[:,None]
+                    _zeros = np.zeros_like(_scol)
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            _scol, _zeros, auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i %2i',
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag, {2:>24}_std.real, {2:>17}_std.imag,  is id1 id2 id3'.format(
+                                   self.axisname, self.axisunit, command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            _scol, _zeros, auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i %2i',
+                                 comments='', header='\n')
+                  elif outarray_lo is not None:
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            outarray_lo[:,None], outarray_hi[:,None], auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i %2i',
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag, {2:>24}_env.lo,  {2:>17}_env.hi,   is id1 id2 id3'.format(
+                                   self.axisname, self.axisunit, command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe,
+                                 np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None],
+                                            outarray_lo[:,None], outarray_hi[:,None], auxarray)),
+                                 fmt='%25.15e %30.18e %30.18e %30.18e %30.18e %5i %2i %2i %2i',
+                                 comments='', header='\n')
                   else:
-                    np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
-                               fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
+                    if not self.headerwritten:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', \
+                                 header='  {0}{1}, {2:>31}.real, {2:>24}.imag,           is id1 id2 id3'.format \
+                                 (self.axisname,self.axisunit,command))
+                      self.headerwritten = True
+                    else:
+                      np.savetxt(self.textpipe, np.hstack((self.axis[:,None], outarray.real[:,None], outarray.imag[:,None], auxarray)), \
+                                 fmt='%25.15e %30.18e %30.18e %5i %2i %2i %2i', comments='', header='\n')
 
               # we have plotted it now, now break the idir3 loop
               # if this is not done we do it twice more
@@ -658,20 +964,39 @@ class LRTCoutput(object):
         pass
 
 
-  def _getResponseCombination(self, key, spinsum):
+  def _getResponseCombination(self, key, spinsum, std=False):
     '''
-    Get the key numpy array from the file
+    Get the key numpy array from the file.
+
+    Parameters
+    ----------
+    key     : str  -- HDF5 path to the sum dataset (e.g. L11/intra/sum)
+    spinsum : bool -- if True sum over the spin axis (axis=1)
+    std     : bool -- if True read sum_std instead of sum (float64 real array).
+                      Returns None if the dataset does not exist.
+
+    Notes on dtypes
+    ---------------
+    sum datasets are complex128 (Fortran complex(8) via HDF5 compound type).
+    sum_std datasets are float64 (real), written by np.std(arr.real, ...) in
+    the averaging script.  L11 is purely real; L12/L22 have small imaginary
+    parts, so sum_std captures the real-part spread which is what lprint plots.
     '''
 
+    actual_key = key.replace('/sum', '/sum_std') if std else key
+
     with h5py.File(self.fname,'r') as h5:
-      outputarray = h5['{}'.format(key)][()]
+      if actual_key not in h5:
+        return None   # std dataset absent -- caller must check has_std
+      outputarray = h5['{}'.format(actual_key)][()]
 
     if spinsum:
       data = np.sum(outputarray, axis=1)
       return data
 
     else:
-      # artificially introduce spins
+      # NOTE: sum_std is float64; the complex128 promotion below still works
+      # because float64 assigns cleanly into complex128 with zero imaginary part.
       if self.spins == 1:
         shape = list(outputarray.shape)
         shape[1] = 2
@@ -785,6 +1110,9 @@ class LRTCoutput(object):
     Detect if we have quad precision response
     Detect the number of dimensions and which dimensions are valid
     (necessary for quantities that require an inversion)
+
+    Additionally sets self.has_std (bool): True when the file contains
+    sum_std datasets produced by the disorder averaging workflow.
     '''
 
     try:
@@ -804,6 +1132,17 @@ class LRTCoutput(object):
         self.dimmask2 = np.logical_and(self.dims[:,None], self.dims[None,:])
         self.dimmask3 = np.logical_and(np.logical_and(self.dims[:,None], self.dims[None,:])[:,:,None], self.dims[None,None,:])
         print('#   File: {} - Run mode: {} - {} crystal directions: {}'.format(self.fname, self.mode, self.ndim, np.array(["x","y","z"])[self.dims]))
+
+        # Detect whether this file was produced by the disorder averaging
+        # workflow (sum_std datasets present alongside the usual sum datasets).
+        self.has_std = False
+        for _probe in ['L11/intra/sum_std', 'L11/inter/sum_std',
+                       'L11B/intra/sum_std', 'L11/intraBoltzmann/sum_std']:
+          if _probe in hfi:
+            self.has_std = True
+            break
+        if self.has_std:
+          print('#   Standard-deviation data detected (disorder averaging workflow).')
     except:
       raise IOError('{} is not an LRTC output file.'.format(self.fname))
 

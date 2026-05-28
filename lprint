@@ -48,6 +48,22 @@ def parse_args(args=None):
   parser.add_argument('--convolve',      nargs=1, help='Convolve mu-mode output with Gaussian of standard deviation [eV]', type=float) # convolue mu-mode result with gaussian with sigma = value
   parser.add_argument('--diag',          help=argparse.SUPPRESS, default=False, action='store_true') # only use the diagonal parts (when no directions supplied
   parser.add_argument('--debug',         help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--nostd',
+    help=('Suppress standard-deviation output even when the averaged HDF5 file\n'
+          'contains sum_std datasets (disorder averaging workflow).\n'
+          'By default, when sum_std is detected:\n'
+          '  text mode: extra columns _std.real/_std.imag (or _env.lo/_env.hi)\n'
+          '  plot mode: grey fill_between band around the mean curve.'),
+    default=False, action='store_true')
+  parser.add_argument('--fullstd',
+    help=('Show uncertainty bands for all derived quantities\n'
+          '(Seebeck s-, Hall rh-, Nernst n-, thermal conductivity tc-, ...).\n'
+          'By default only raw Onsager coefficients and conductivity (c-)\n'
+          'show bands, because derived quantities use an extremal-envelope\n'
+          'method (2^M formula evaluations at +/-sigma corners) which can\n'
+          'produce very wide bands for ill-conditioned quantities.\n'
+          'See postproc/output.py saveData for the full algorithm description.'),
+    default=False, action='store_true')
 
   return parser.parse_args(args)
 
@@ -126,6 +142,8 @@ def main():
   settings.scale     = args.scale
   settings.compare   = args.compare # if option unused default = None
   settings.convolve  = args.convolve
+  settings.nostd     = args.nostd
+  settings.fullstd   = args.fullstd
 
   ''' Output object commands '''
   if outobj is not None:
