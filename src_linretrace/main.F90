@@ -6,10 +6,12 @@ program main
   use Mmpi_org
   use Mconfig
   use Minput
+  use Minput_hk
   use Moutput
   use Mresponse
   use hdf5_wrapper
   use hdf5
+  use Mantiresponse
   implicit none
 
   type(algorithm)   :: algo    ! contains run flags and file names
@@ -27,12 +29,16 @@ program main
   type(response_dp) :: resp_intra_Boltzmann
   type(response_dp) :: resp_inter
   type(response_dp) :: resp_inter_Boltzmann
+  type(response_dp) :: resp_inter_anti
+  type(response_dp) :: resp_inter_anti_Boltzmann
 
   ! response data quad precision
   type(response_qp) :: qresp_intra
   type(response_qp) :: qresp_intra_Boltzmann
   type(response_qp) :: qresp_inter
   type(response_qp) :: qresp_inter_Boltzmann
+  type(response_qp) :: qresp_inter_anti
+  type(response_qp) :: qresp_inter_anti_Boltzmann
 
   ! HDF5 file identifier
   integer(hid_t)    :: ifile_scatter_hdf5
@@ -68,6 +74,9 @@ program main
 
   complex(8), allocatable  :: PolyGamma(:,:,:,:)
   complex(16), allocatable :: PolyGammaQ(:,:,:,:)
+
+  complex(8), allocatable  :: DiGamma(:,:,:,:)
+  complex(16), allocatable :: DiGammaQ(:,:,:,:)
 
 
   ! work arrays
@@ -129,21 +138,12 @@ program main
   ! define kpoint weights on the MPI range
   allocate(kmesh%weightQ(ikstr:ikend))
   allocate(kmesh%weight(ikstr:ikend))
-  if (kmesh%irreducible) then
-     nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
-     do ik=ikstr,ikend
-        ! these integer statements here ARE NECESSARY TO PRODUCE THE REQUIRED ACCURACY
-        kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
-        kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
-     enddo
-  else
-     nkred = kmesh%nkp ! required for the adaptive (non-uniform!) mesh
-     do ik=ikstr,ikend
-        ! these integer statements here ARE NECESSARY TO PRODUCE THE REQUIRED ACCURACY
-        kmesh%weightQ(ik) = real(kmesh%inputweight(ik),16) ! required for the adaptive (non-uniform!) mesh
-        kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
-     enddo
-  endif
+  nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
+  do ik=ikstr,ikend
+    ! these integer statements here ARE NECESSARY TO PRODCE THE REQUIRED ACCURACY
+    kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
+    kmesh%weight(ik)  = real(kmesh%weightQ(ik), 8)
+  enddo
 
   ! read the energies and diagonal optical elements
   if (algo%ldebug .and. (index(algo%dbgstr,"SaveRAM") .ne. 0)) then
@@ -227,13 +227,8 @@ program main
       call read_preproc_scattering_text(algo, kmesh, edisp, sct, pot, temp)
     else
       if (algo%steps .gt. 1) then
-         if (temp%tlogarithmic) then
-            if (temp%Tmin.gt.0) then
-               temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(algo%steps-1)) ! logarithmic step
-            else
-               ! If the desired T-mesh is logarithmic but Tmin=0, then keep T=0 included but start log-mesh at T=0.1K.
-               temp%dT = (temp%Tmax/1.d-1) ** (1.d0 / dble(algo%steps-2)) ! logarithmic step, excluding T=0
-            endif
+        if (temp%tlogarithmic) then
+          temp%dT = (temp%Tmax/temp%Tmin) ** (1.d0 / dble(algo%steps-1)) ! logarithmic step
         else
           temp%dT = (temp%Tmax-temp%Tmin)/dble(algo%steps-1) ! linear step
         endif
@@ -247,16 +242,9 @@ program main
 
       ! define Temperature grid
       if (temp%tlogarithmic) then
-         if (temp%Tmin.gt.0) then
-            do iT=1,algo%steps
-               temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
-            enddo
-         else
-            temp%TT(1)=0.d0
-            do iT=2,algo%steps
-               temp%TT(iT)=1.d-1 * temp%dT**(real(iT-2,8))
-            enddo
-         endif
+        do iT=1,algo%steps
+           temp%TT(iT)=temp%Tmin * temp%dT**(real(iT-1,8))
+        enddo
       else
         do iT=1,algo%steps
            temp%TT(iT)=real(iT-1,8)*temp%dT+temp%Tmin
@@ -370,13 +358,23 @@ program main
 
   ! for the responses we need psi_1, psi_2 and psi_3
   if (algo%lIntrabandQuantities .or. algo%lInterbandQuantities) then
+
     if (algo%lQuad) then
       allocate(PolyGammaQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     else
       allocate(PolyGamma(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     endif
   endif
-
+  
+  if (algo%lAntiSymInterBandQuantites) then
+    
+    if (algo%lQuad) then
+      allocate(DiGammaQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    else
+      allocate(DiGamma(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+    endif
+  endif 
+  
   ! allocate the arrays once outside of the main (temperature) loop
   if (algo%lQuad) then
     if (algo%lIntrabandQuantities) then
@@ -391,6 +389,12 @@ program main
         call allocate_response(algo, edisp, temp, qresp_inter_Boltzmann)
       endif
     endif
+    if (algo%lAntiSymInterBandQuantites) then
+      call allocate_response(algo, edisp, temp, qresp_inter_anti)
+      !if (algo%lBoltzmann) then
+        !call allocate_response(algo, edisp, temp, qresp_inter_anti_Boltzmann)
+      !endif
+    endif
   else
     if (algo%lIntrabandQuantities) then
       call allocate_response(algo, edisp, temp, resp_intra)
@@ -403,6 +407,12 @@ program main
       if (algo%lBoltzmann) then
         call allocate_response(algo, edisp, temp, resp_inter_Boltzmann)
       endif
+    endif
+    if (algo%lAntiSymInterBandQuantites) then
+      call allocate_response(algo, edisp, temp, resp_inter_anti)
+      !if (algo%lBoltzmann) then
+       ! call allocate_response(algo, edisp, temp, resp_inter_anti_Boltzmann)
+      !endif
     endif
   endif
 
@@ -424,6 +434,23 @@ program main
       edisp%Mopt(:,:,:,:,ik) = edisp%Moptk
     enddo
     deallocate(edisp%Moptk)
+    call hdf5_close_file(ifile_energy)
+  endif
+
+ ! load in the anti-symmetric inter-band elements 
+
+  if (algo%lAntiSymInterBandQuantites) then
+    call hdf5_open_file(algo%input_energies, ifile_energy, rdonly=.true.)
+    allocate(edisp%BerryCurv(3,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin, ikstr:ikend))
+    allocate(edisp%BerryCurvk(3,edisp%nbopt_min:edisp%nbopt_max, &
+                                       edisp%nbopt_min:edisp%nbopt_max, edisp%ispin))
+    do ik = ikstr,ikend
+      info%ik = ik ! save into the runinformation datatype
+      call read_berry_curv(ifile_energy, edisp, info)  ! load them into edisp%BerryCurvk
+      edisp%BerryCurv(:,:,:,:,ik) = edisp%BerryCurvk
+    enddo
+    deallocate(edisp%BerryCurvk)
     call hdf5_close_file(ifile_energy)
   endif
 
@@ -616,31 +643,12 @@ program main
     ! run time information
     info%iStep   = iStep
     info%Temp    = temp%TT(iStep)
+    info%beta    = 1.d0/(kB*info%Temp)
+    info%beta2p  = info%beta/(2.d0*pi)
+
     info%TempQ   = real(info%Temp,16)
-
-    ! If T=0 then give finite value to beta, otherwise code won't run. If T less than 0, revert back to original
-    if (info%Temp==0.d0) then ! T=0 limiting Kubo Kernel functions are independent of beta, Boltzmann kernels will be set to NaN.
-       ! CAVEAT 1
-       ! The chemical potential search depends on beta. One could use the T-->0 heavyside/Log expression, but in order not to worsen
-       ! performance, a high-level procedure pointer will need to be put in place instead of low-level conditional expressions. TO DO
-       ! For now, we set beta to something finite, but gigantic.
-       ! CAVEAT 2
-       ! Kubo kernels then work for all K's and L's. In lprint sigma, rho, sigmaB, RH work.
-       ! But Seebeck and Nernst have a 1/T factor. Physically these quantitites are zero. Indeed, the Onsager coefficients decay with at least T^2.
-       ! Numerically, however, this produces S = -1/T * (L12/L11) = -1/0 * (0/finite) = NaN. Therefore, we set Seebeck, Nernst etc to zero in
-       ! lprint (postproc/output.py).
-      info%beta    = 1.d50
-      info%beta2p  = 1.d50
-
-      info%betaQ   = 1.q50
-      info%beta2pQ = 1.q50
-    else
-      info%beta    = 1.d0/(kB*info%Temp)
-      info%beta2p  = info%beta/(2.d0*pi)
-
-      info%betaQ   = 1.q0/(kB*info%TempQ)
-      info%beta2pQ = info%betaQ/(2.q0*piQ)
-    endif
+    info%betaQ   = 1.q0/(kB*info%TempQ)
+    info%beta2pQ = info%betaQ/(2.q0*piQ)
 
     ! define scattering rates and quasi particle weights
     ! for the current temperature
@@ -833,6 +841,24 @@ program main
       endif
     endif
 
+    !initialize the anti-symmetric response
+    if (algo%lAntiSymInterBandQuantites) then
+      if (algo%lQuad) then 
+        call calc_digamma_Q(DiGammaQ, edisp, sct, kmesh, algo, info)
+        call initialize_response(algo, qresp_inter_anti)
+        !if (algo%lBoltzmann) then
+         ! call initialize_response(algo, qresp_inter_anti_Boltzmann)
+        !end if
+      else
+        call calc_digamma_D(DiGamma, edisp, sct, kmesh, algo, info)
+        call initialize_response(algo, resp_inter_anti)
+        !if (algo%lBoltzmann) then
+         ! call initialize_response(algo, resp_inter_anti_Boltzmann)
+        !end if  
+      end if
+    end if 
+    
+    
     call cpu_time(tfinish)
     timings(4) = timings(4) + (tfinish - tstart) ! polygamma eval
     tstart = tfinish
@@ -854,6 +880,12 @@ program main
             call response_inter_Boltzmann_km_Q(qresp_inter_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
         endif
+        if (algo%lAntiSymInterBandQuantites) then
+          call response_inter_anti_km_Q(qresp_inter_anti, DiGammaQ, PolyGammaQ, edisp, sct, kmesh, algo, info)
+         ! if (algo%lBoltzmann) then
+           ! call response_inter_anti_Boltzmann_km_Q(qresp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
+          !endif
+        endif
       else
         ! double precision routines
         if (algo%lIntrabandQuantities) then
@@ -868,6 +900,13 @@ program main
           if (algo%lBoltzmann) then
             call response_inter_Boltzmann_km(resp_inter_Boltzmann, edisp, sct, kmesh, algo, info)
           endif
+        endif
+
+        if (algo%lAntiSymInterBandQuantites) then
+          call response_inter_anti_km(resp_inter_anti, DiGamma, PolyGamma, edisp, sct, kmesh, algo, info)
+          !if (algo%lBoltzmann) then
+            !call response_inter_anti_Boltzmann_km(resp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
+          !endif
         endif
       endif
     enddo
@@ -891,6 +930,12 @@ program main
           call output_response_Q(qresp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
       endif
+      if (algo%lAntiSymInterBandQuantites) then
+        call output_response_Q(qresp_inter_anti, "inter_anti", edisp, algo, info, temp, kmesh)
+        !if (algo%lBoltzmann) then
+         ! call output_response_Q(qresp_inter_anti_Boltzmann, "inter_anti_Boltzmann", edisp, algo, info, temp, kmesh)
+        !endif
+      endif
     else
       if (algo%lIntrabandQuantities) then
         call output_response_D(resp_intra, "intra", edisp, algo, info, temp, kmesh)
@@ -904,6 +949,12 @@ program main
         if (algo%lBoltzmann) then
           call output_response_D(resp_inter_Boltzmann, "interBoltzmann", edisp, algo, info, temp, kmesh, inter_magnetic)
         endif
+      endif
+      if (algo%lAntiSymInterBandQuantites) then
+        call output_response_D(resp_inter_anti, "inter_anti", edisp, algo, info, temp, kmesh)
+        !if (algo%lBoltzmann) then
+          !call output_response_D(resp_inter_anti_Boltzmann, "inter_anti_Boltzmann", edisp, algo, info, temp, kmesh)
+        !endif
       endif
     endif
 
