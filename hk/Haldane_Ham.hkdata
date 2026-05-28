@@ -1,0 +1,7 @@
+{"d0":"0",
+ "d1":"cos(kx)+cos(0.5*(kx+sqrt(3)*ky))+1",
+"d2":"sin(kx)+sin(0.5*(kx+sqrt(3)*ky))",
+ "d3":"-0.5*(sin(kx)+sin(0.5*(kx+sqrt(3)*ky))+sin(0.5*(-kx+sqrt(3)*ky)))",
+ "b1":"[2*pi/3,2*pi/sqrt(3),0]",
+ "b2":"[2*pi/3,-2*pi/sqrt(3),0]",
+"b3": "[0,0,1]"}

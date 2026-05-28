@@ -1,0 +1,8 @@
+{"d0":"0",
+ "d1":"-(cos(kx)+2*cos(kx/2)*cos(ky*sqrt(3)/2))",
+"d2":"-(sin(kx)-2*sin(kx/2)*cos(ky*sqrt(3)/2))",
+ "d3":"0.0",
+ "b1":"[-2*pi/3,-2*pi/sqrt(3),0]",
+ "b2":"[-2*pi/3,2*pi/sqrt(3),0]",
+"b3": "[0,0,-2*pi]",
+"Name": "graphene"}
