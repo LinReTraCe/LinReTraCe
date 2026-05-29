@@ -188,7 +188,8 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
 
             for i in range(len(hk)):
                   for j in range(len(hk)):
-                        hk[i][j]=parse_expr(hk[i][j],local_dict=symbols_dict) #parses the strings into sympy variables
+                      if type(hk[i][j])==str:#only need to parse the variable if it is a string
+                            hk[i][j]=parse_expr(hk[i][j],local_dict=symbols_dict) #parses the strings into sympy variables
 
             hk=Matrix(hk) #turn it into the Sympy Matrix object- needed to be compatible with Matrix_Elements_Gen() 
 
