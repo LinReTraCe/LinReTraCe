@@ -194,11 +194,17 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
             hk=Matrix(hk) #turn it into the Sympy Matrix object- needed to be compatible with Matrix_Elements_Gen() 
 
       else: #use the Pauli matrix format
+          
+            ds=[config["d0"],config["d1"],config["d2"],config["d3"]]
 
-            d0=parse_expr(config["d0"], local_dict=symbols_dict) #parses the Pauli matrix coeffient strings into sympy variables 
-            d1=parse_expr(config["d1"], local_dict=symbols_dict)
-            d2=parse_expr(config["d2"], local_dict=symbols_dict)
-            d3=parse_expr(config["d3"], local_dict=symbols_dict)
+            for i in range(4):
+                if type(ds[i])==str: #only parse the variable if it is a string
+                    ds[i]=parse_expr(ds[i], local_dict=symbols_dict)  #parses the Pauli matrix coeffient strings into sympy variables 
+
+            d0=ds[0]
+            d1=ds[1]
+            d2=ds[2]
+            d3=ds[3]
  
             hk=Hk(d0,d1,d2,d3) #builds the hamiltonian from 2x2 Pauli matrices 
 
