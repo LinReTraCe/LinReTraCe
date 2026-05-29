@@ -153,7 +153,7 @@ class LRTCoutput(object):
             ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
             ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(K*m)]','[K*m/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
             [False,False,False,False,False,False,False,True,True,True,True,True]):
-      for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
+      for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra','inter_anti',)]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
           key = '{}-{}{}'.format(iL,ii,iB)
