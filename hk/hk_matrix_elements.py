@@ -207,9 +207,24 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
       if config.get("b1")==None or config.get("b2")==None or config.get("b3")==None:
            raise HkInputError("Reciprocal Lattice Vector is missing from input or incorrectly formatted") #raises an error if the wrong format provided 
 
-      b1=np.array(parse_expr(config["b1"], local_dict=symbols_dict)) #parses the reciprocal lattice vector strings into sympy variables 
-      b2=np.array(parse_expr(config["b2"], local_dict=symbols_dict))
-      b3=np.array(parse_expr(config["b3"], local_dict=symbols_dict))
+      if type(config["b1"])==str: #if user specifies the recp lattice vectors as a complete string parse as one variable
+          
+          b1=np.array(parse_expr(config["b1"], local_dict=symbols_dict)) #parses the reciprocal lattice vector strings into sympy variables 
+          b2=np.array(parse_expr(config["b2"], local_dict=symbols_dict))
+          b3=np.array(parse_expr(config["b3"], local_dict=symbols_dict))
+
+      else: #if user desides to specify individual components as strings then need to parse indivdual components
+          
+          bs=[config["b1"],config["b2"],config["b3"]]
+
+          for i in range(3):
+              for j in range(3):
+                if type(bs[i][j])==str:
+                    bs[i][j]=parse_expr(bs[i][j], local_dict=symbols_dict)
+
+          b1=np.array(bs[0])
+          b2=np.array(bs[1])
+          b3=np.array(bs[2])
 
       if config.get("Name")==None:
           name=False
