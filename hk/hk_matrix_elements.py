@@ -219,7 +219,7 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
           b2=np.array(parse_expr(config["b2"], local_dict=symbols_dict))
           b3=np.array(parse_expr(config["b3"], local_dict=symbols_dict))
 
-      else: #if user desides to specify individual components as strings then need to parse indivdual components
+      else: #if user decides to specify individual components as strings then need to parse indivdual components
           
           bs=[config["b1"],config["b2"],config["b3"]]
 
