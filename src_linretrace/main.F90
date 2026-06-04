@@ -79,6 +79,13 @@ program main
   complex(16), allocatable :: DiGammaQ(:,:,:,:)
 
 
+  complex(8), allocatable  :: DiGamLim(:,:,:,:)
+  complex(8), allocatable :: PolyGamLim(:,:,:,:)
+
+  complex(16), allocatable  :: DiGamLimQ(:,:,:,:)
+  complex(16), allocatable :: PolyGamLimQ(:,:,:,:)
+
+
   ! work arrays
   real(8), allocatable    :: darr1(:)
   real(8), allocatable    :: darr2(:,:)
@@ -370,8 +377,12 @@ program main
     
     if (algo%lQuad) then
       allocate(DiGammaQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(DiGamLimQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(PolyGamLimQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     else
       allocate(DiGamma(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(DiGamLim(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(PolyGamLim(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     endif
   endif 
   
@@ -844,13 +855,17 @@ program main
     !initialize the anti-symmetric response
     if (algo%lAntiSymInterBandQuantites) then
       if (algo%lQuad) then 
-        call calc_digamma_Q(DiGammaQ, edisp, sct, kmesh, algo, info)
+        call calc_digamma(DiGammaQ, edisp, sct, kmesh, algo, info)
+        call calc_digamma_lim_Q(DiGamLimQ, edisp, sct, info)
+        call calc_polygamma_lim_Q(PolyGamLimQ, edisp, sct, info)
         call initialize_response(algo, qresp_inter_anti)
         !if (algo%lBoltzmann) then
          ! call initialize_response(algo, qresp_inter_anti_Boltzmann)
         !end if
       else
-        call calc_digamma_D(DiGamma, edisp, sct, kmesh, algo, info)
+        call calc_digamma(DiGamma, edisp, sct, kmesh, algo, info)
+        call calc_digamma_lim_D(DiGamLim, edisp, sct, info)
+        call calc_polygamma_lim_D(PolyGamLim, edisp, sct, info)
         call initialize_response(algo, resp_inter_anti)
         !if (algo%lBoltzmann) then
          ! call initialize_response(algo, resp_inter_anti_Boltzmann)
@@ -881,7 +896,8 @@ program main
           endif
         endif
         if (algo%lAntiSymInterBandQuantites) then
-          call response_inter_anti_km_Q(qresp_inter_anti, DiGammaQ, PolyGammaQ, edisp, sct, kmesh, algo, info)
+          call response_inter_anti_km_Q(qresp_inter_anti, DiGammaQ, PolyGammaQ, DiGamLimQ, PolyGamLimQ, &
+                                         edisp, sct, kmesh, algo, info)
          ! if (algo%lBoltzmann) then
            ! call response_inter_anti_Boltzmann_km_Q(qresp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
           !endif
@@ -903,7 +919,7 @@ program main
         endif
 
         if (algo%lAntiSymInterBandQuantites) then
-          call response_inter_anti_km(resp_inter_anti, DiGamma, PolyGamma, edisp, sct, kmesh, algo, info)
+          call response_inter_anti_km(resp_inter_anti, DiGamma, PolyGamma, DiGamLim, PolyGamLim, edisp, sct, kmesh, algo, info)
           !if (algo%lBoltzmann) then
             !call response_inter_anti_Boltzmann_km(resp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
           !endif
