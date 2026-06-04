@@ -239,7 +239,7 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, DiGamLim, PolyGamLim
   real(8), allocatable :: gamdiff(:)
   real(8), allocatable :: gamplus(:)
 
-  real(8), parameter :: tol = 1
+  real(8), parameter :: tol = 1e-16
 
   complex(8) :: M0_11
   complex(8) :: M1_11
@@ -506,7 +506,7 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma,DiGamLim, PolyGamLi
   integer :: i,j,idir,idir1,idir2,idir3
   integer :: iband1, iband2, iband, is
 
-  real(16), parameter :: tol = 1
+  real(16), parameter :: tol = 1e-16
 
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
