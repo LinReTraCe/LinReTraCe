@@ -102,6 +102,8 @@ program main
 
   call read_config(algo, edisp, sct, temp, pot, imp)
   call check_files(algo)
+  algo%tol= 1.d-16 !set the T=0 tolerances 
+  algo%tolQ=1.q-16
 
   timings = 0.d0        ! reset timings
   call cpu_time(tstart) ! start timer
@@ -378,11 +380,11 @@ program main
     if (algo%lQuad) then
       allocate(DiGammaQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
       allocate(DiGamLimQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
-      allocate(PolyGamLimQ(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(PolyGamLimQ(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     else
       allocate(DiGamma(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
       allocate(DiGamLim(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
-      allocate(PolyGamLim(1, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+      allocate(PolyGamLim(3, edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
     endif
   endif 
   
@@ -855,17 +857,24 @@ program main
     !initialize the anti-symmetric response
     if (algo%lAntiSymInterBandQuantites) then
       if (algo%lQuad) then 
-        call calc_digamma(DiGammaQ, edisp, sct, kmesh, algo, info)
-        call calc_digamma_lim_Q(DiGamLimQ, edisp, sct, info)
-        call calc_polygamma_lim_Q(PolyGamLimQ, edisp, sct, info)
+        
+        if (abs(info%Temp) <= abs(algo%tolQ)) then ! take the T=0 limit of polygamma functions
+          call calc_digamma_lim_Q(DiGamLimQ, edisp, sct, info)
+          call calc_polygamma_lim_Q(PolyGamLimQ, edisp, sct, info)
+        else !calc full funtion if T>0
+          call calc_digamma(DiGammaQ, edisp, sct, kmesh, algo, info)
+        endif
         call initialize_response(algo, qresp_inter_anti)
         !if (algo%lBoltzmann) then
          ! call initialize_response(algo, qresp_inter_anti_Boltzmann)
         !end if
       else
-        call calc_digamma(DiGamma, edisp, sct, kmesh, algo, info)
-        call calc_digamma_lim_D(DiGamLim, edisp, sct, info)
-        call calc_polygamma_lim_D(PolyGamLim, edisp, sct, info)
+        if (abs(info%Temp) <= abs(algo%tol)) then ! take the T=0 limit of polygamma functions
+          call calc_digamma_lim_D(DiGamLim, edisp, sct, info)
+          call calc_polygamma_lim_D(PolyGamLim, edisp, sct, info)
+        else !calc full function if T>0
+          call calc_digamma(DiGamma, edisp, sct, kmesh, algo, info)
+        endif
         call initialize_response(algo, resp_inter_anti)
         !if (algo%lBoltzmann) then
          ! call initialize_response(algo, resp_inter_anti_Boltzmann)
@@ -896,8 +905,11 @@ program main
           endif
         endif
         if (algo%lAntiSymInterBandQuantites) then
-          call response_inter_anti_km_Q(qresp_inter_anti, DiGammaQ, PolyGammaQ, DiGamLimQ, PolyGamLimQ, &
-                                         edisp, sct, kmesh, algo, info)
+          if (abs(info%Temp) <= abs(algo%tolQ)) then
+            call response_inter_anti_km_Q(qresp_inter_anti, DiGamLimQ, PolyGamLimQ, edisp, sct, kmesh, algo, info)
+          else
+            call response_inter_anti_km_Q(qresp_inter_anti, DiGammaQ, PolyGammaQ, edisp, sct, kmesh, algo, info)
+          endif
          ! if (algo%lBoltzmann) then
            ! call response_inter_anti_Boltzmann_km_Q(qresp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
           !endif
@@ -919,7 +931,11 @@ program main
         endif
 
         if (algo%lAntiSymInterBandQuantites) then
-          call response_inter_anti_km(resp_inter_anti, DiGamma, PolyGamma, DiGamLim, PolyGamLim, edisp, sct, kmesh, algo, info)
+          if (abs(info%Temp) <= abs(algo%tol)) then
+            call response_inter_anti_km(resp_inter_anti, DiGamLim, PolyGamLim, edisp, sct, kmesh, algo, info)
+          else
+            call response_inter_anti_km(resp_inter_anti, DiGamma, PolyGamma, edisp, sct, kmesh, algo, info)
+          endif
           !if (algo%lBoltzmann) then
             !call response_inter_anti_Boltzmann_km(resp_inter_anti_Boltzmann, edisp, sct, kmesh, algo, info)
           !endif
