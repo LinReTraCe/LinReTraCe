@@ -11,10 +11,18 @@ implicit none
     module procedure calc_digamma_D, calc_digamma_Q
   end interface calc_digamma
 
+  interface calc_digamma_lim
+    module procedure calc_digamma_lim_D, calc_digamma_Q
+  end interface calc_digamma_lim
+
+  interface calc_polygamma_lim
+    module procedure calc_polygamma_lim_D, calc_polygamma_lim_Q
+  end interface calc_polygamma_lim
+
   contains
 
 
-subroutine calc_digamma_D(DiGamma, edisp, sct, kmesh, algo, info)
+subroutine calc_digamma_D(DiGamma, edisp, sct, kmesh, algo, info) !digamma (psi_0) function double precision 
   implicit none
   type(algorithm)  :: algo
   type(energydisp) :: edisp
@@ -47,7 +55,7 @@ subroutine calc_digamma_D(DiGamma, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_digamma_D
 
-subroutine calc_digamma_Q(DiGammaQ, edisp, sct, kmesh, algo, info)
+subroutine calc_digamma_Q(DiGammaQ, edisp, sct, kmesh, algo, info) !digamma (psi_0) function quadruple precision 
   implicit none
   type(algorithm)  :: algo
   type(energydisp) :: edisp
@@ -80,9 +88,136 @@ subroutine calc_digamma_Q(DiGammaQ, edisp, sct, kmesh, algo, info)
 
 end subroutine calc_digamma_Q
 
+subroutine calc_digamma_lim_D(DiGamLim, edisp, sct, info) !T=0 lim of digamma function double precision
+  implicit none
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  complex(8) :: DiGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(8), allocatable :: limenergy(:,:,:)
+  complex(8), allocatable :: limgam(:,:,:)
+  integer :: iband, ik, is
+
+  allocate(limenergy(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  allocate(limgam(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  limenergy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%mu)
+  limgam=sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:)
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        DiGamLim(1,iband,ik,is) = log(sqrt(real(limgam(iband,ik,is)**2+limenergy(iband,ik,is)**2)))&
+                                  +ci*atan(real(limenergy(iband,ik,is)/limgam(iband,ik,is)))
+      enddo
+    enddo
+  enddo
+  deallocate(limenergy)
+  deallocate(limgam)
+
+end subroutine calc_digamma_lim_D
+
+subroutine calc_digamma_lim_Q(DiGamLim, edisp, sct, info) !T=0 lim of digamma function quadruple precision
+  implicit none
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  complex(16) :: DiGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(16), allocatable :: limenergy(:,:,:)
+  complex(16), allocatable :: limgam(:,:,:)
+  integer :: iband, ik, is
+
+  allocate(limenergy(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  allocate(limgam(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  limenergy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%muQ)
+  limgam=sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:)
+
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        DiGamLim(1,iband,ik,is) = log(sqrt(real(limgam(iband,ik,is)**2+limenergy(iband,ik,is)**2)))&
+                                  +ci*atan(real(limenergy(iband,ik,is)/limgam(iband,ik,is)))
+      enddo
+    enddo
+  enddo
+  deallocate(limenergy)
+  deallocate(limgam)
+
+end subroutine calc_digamma_lim_Q
+
+subroutine calc_polygamma_lim_D(PolyGamLim, edisp, sct, info) !T=0 lim of Psi_1 function double precision
+  implicit none
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  complex(8) :: PolyGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(8), allocatable :: limenergy(:,:,:)
+  complex(8), allocatable :: limgam(:,:,:)
+  integer :: iband, ik, is
+
+  allocate(limenergy(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  allocate(limgam(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  limenergy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%mu)
+  limgam=sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:)
+  
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        PolyGamLim(1,iband,ik,is) = 1/(limgam(iband,ik,is)**2+limenergy(iband,ik,is)**2)&
+                                    *(limgam(iband,ik,is)-ci*limenergy(iband,ik,is))
+      enddo
+    enddo
+  enddo
+  deallocate(limenergy)
+  deallocate(limgam)
+
+end subroutine calc_polygamma_lim_D
+
+subroutine calc_polygamma_lim_Q(PolyGamLim, edisp, sct, info) !T=0 lim of Psi_1 function quadruple precision
+  implicit none
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(runinfo)    :: info
+
+  complex(16) :: PolyGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(16), allocatable :: limenergy(:,:,:)
+  complex(16), allocatable :: limgam(:,:,:)
+  integer :: iband, ik, is
+
+  allocate(limenergy(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+  allocate(limgam(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
+
+  limenergy = sct%zqp(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) &
+                 * (edisp%band(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:) - info%muQ)
+  limgam=sct%gam(edisp%nbopt_min:edisp%nbopt_max,ikstr:ikend,:)
+  
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband = edisp%nbopt_min,edisp%nbopt_max
+        PolyGamLim(1,iband,ik,is) = 1/(limgam(iband,ik,is)**2+limenergy(iband,ik,is)**2)&
+                                    *(limgam(iband,ik,is)-ci*limenergy(iband,ik,is))
+      enddo
+    enddo
+  enddo
+  deallocate(limenergy)
+  deallocate(limgam)
+
+end subroutine calc_polygamma_lim_Q
 
 
-subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, algo, info)
+subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, DiGamLim, PolyGamLim, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_dp)  :: resp
 
@@ -94,6 +229,8 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
 
   complex(8)          :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
   complex(8)          :: DiGamma(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+  complex(8)          :: DiGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+  complex(8)          :: PolyGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   real(8) :: zqp
   real(8) :: gam
@@ -101,6 +238,8 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
   real(8), allocatable :: enrgydiff(:)
   real(8), allocatable :: gamdiff(:)
   real(8), allocatable :: gamplus(:)
+
+  real(8), parameter :: tol = 1
 
   complex(8) :: M0_11
   complex(8) :: M1_11
@@ -169,10 +308,14 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
                           *(enrgydiff(is)-ci*gamdiff(is)))
 
           
-
-          calc_sigma = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_sigma = real(M1_11*DiGamLim(1,iband2,info%ik,is))+real(M2_11*DiGamLim(1,iband1,info%ik,is)) &
+                              -aimag(M3_11*PolyGamLim(1,iband1,info%ik,is))
+          else
+            calc_sigma = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
                             -info%beta2p*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
-          
+          endif
+
           calc_sigma=2.d0*pi*2.d0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/pi**3* &
                             (M0_11+calc_sigma)
@@ -206,13 +349,17 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
                           *(enrgydiff(is)-ci*gamplus(is))*(enrgydiff(is)-ci*gamdiff(is)))
 
           
-
-          calc_alpha = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
-                            -info%beta2p*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_alpha = real(M1_12*DiGamLim(1,iband2,info%ik,is))+real(M2_12*DiGamLim(1,iband1,info%ik,is)) &
+                            -aimag(M3_12*PolyGamLim(1,iband1,info%ik,is))
+          else  
+            calc_alpha = real(M1_12*DiGamma(1,iband2,info%ik,is))+real(M2_12*DiGamma(1,iband1,info%ik,is)) &
+                            -info%beta2p*aimag(M3_12*PolyGamma(1,iband1,info%ik,is))
+          endif
           
           calc_alpha=2.d0*pi*2.d0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/pi**3* &
-                            (M0_11+calc_alpha)
+                            (M0_12+calc_alpha)
 
         !L22-anti kernel calculation
 
@@ -242,13 +389,17 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
                           *(enrgydiff(is)-ci*gamplus(is))*(enrgydiff(is)-ci*gamdiff(is)))
 
           
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_xi = real(M1_22*DiGamLim(1,iband2,info%ik,is))+real(M2_22*DiGamLim(1,iband1,info%ik,is)) &
+                            -aimag(M3_22*PolyGamLim(1,iband1,info%ik,is))
+          else
+            calc_xi = real(M1_22*DiGamma(1,iband2,info%ik,is))+real(M2_22*DiGamma(1,iband1,info%ik,is)) &
+                            -info%beta2p*aimag(M3_22*PolyGamma(1,iband1,info%ik,is))
+          endif
 
-          calc_xi = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
-                            -info%beta2p*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
-          
           calc_xi=2.d0*pi*2.d0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/pi**3* &
-                            (M0_11+calc_xi)
+                            (M0_22+calc_xi)
 
 
         if (algo%ldebug .and. (index(algo%dbgstr,"KernelsOnly") .ne. 0)) then
@@ -301,7 +452,7 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
     resp%x_full(3,1,iband,:,info%ik) = -1.d0*resp%x_full(1,3,iband,:,info%ik)
     resp%x_full(3,2,iband,:,info%ik) = -1.d0*resp%x_full(2,3,iband,:,info%ik)
   enddo
-
+  
   deallocate(enrgy)
   deallocate(enrgydiff)
   deallocate(gamdiff)
@@ -309,7 +460,7 @@ subroutine response_inter_anti_km(resp, DiGamma, PolyGamma, edisp, sct, kmesh, a
 
 end subroutine response_inter_anti_km
 
-subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh, algo, info)
+subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma,DiGamLim, PolyGamLim, edisp, sct, kmesh, algo, info)
   implicit none
   type (response_qp)  :: resp
 
@@ -321,6 +472,9 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh,
 
   complex(16)          :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
   complex(16)          :: DiGamma(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+
+  complex(16)          :: DiGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
+  complex(16)          :: PolyGamLim(1,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
   real(16) :: zqp
   real(16) :: gam
@@ -351,6 +505,8 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh,
   integer :: index1(3), index2(3)
   integer :: i,j,idir,idir1,idir2,idir3
   integer :: iband1, iband2, iband, is
+
+  real(16), parameter :: tol = 1
 
 
   allocate(enrgy(edisp%nbopt_min:edisp%nbopt_max,edisp%ispin))
@@ -396,9 +552,13 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh,
                           *(enrgydiff(is)-ci*gamdiff(is)))
 
           
-
-          calc_sigma = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_sigma = real(M1_11*DiGamLim(1,iband2,info%ik,is))+real(M2_11*DiGamLim(1,iband1,info%ik,is)) &
+                              -aimag(M3_11*PolyGamLim(1,iband1,info%ik,is))
+          else
+            calc_sigma = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
                             -info%beta2pQ*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
+          endif
           
           calc_sigma=2.q0*piQ*2.q0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/piQ**3* &
@@ -435,9 +595,13 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh,
                           *(enrgydiff(is)-ci*gamplus(is))*(enrgydiff(is)-ci*gamdiff(is)))
 
           
-
-          calc_alpha = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
-                            -info%beta2pQ*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_alpha = real(M1_12*DiGamLim(1,iband2,info%ik,is))+real(M2_12*DiGamLim(1,iband1,info%ik,is)) &
+                            -aimag(M3_12*PolyGamLim(1,iband1,info%ik,is))
+          else  
+            calc_alpha = real(M1_12*DiGamma(1,iband2,info%ik,is))+real(M2_12*DiGamma(1,iband1,info%ik,is)) &
+                            -info%beta2pQ*aimag(M3_12*PolyGamma(1,iband1,info%ik,is))
+          endif
           
           calc_alpha=2.q0*piQ*2.q0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/piQ**3* &
@@ -471,8 +635,13 @@ subroutine response_inter_anti_km_Q(resp, DiGamma, PolyGamma, edisp, sct, kmesh,
 
           
 
-          calc_xi = real(M1_11*DiGamma(1,iband2,info%ik,is))+real(M2_11*DiGamma(1,iband1,info%ik,is)) &
-                            -info%beta2p*aimag(M3_11*PolyGamma(1,iband1,info%ik,is))
+          if (abs(info%Temp) <= abs(tol)) then !zero temepature lowest order expansion of kernel function
+            calc_xi = real(M1_22*DiGamLim(1,iband2,info%ik,is))+real(M2_22*DiGamLim(1,iband1,info%ik,is)) &
+                            -aimag(M3_22*PolyGamLim(1,iband1,info%ik,is))
+          else
+            calc_xi = real(M1_22*DiGamma(1,iband2,info%ik,is))+real(M2_22*DiGamma(1,iband1,info%ik,is)) &
+                            -info%beta2pQ*aimag(M3_22*PolyGamma(1,iband1,info%ik,is))
+          endif
           
           calc_xi=2.q0*piQ*2.q0*sct%zqp(iband1,info%ik,is)**2 * sct%zqp(iband2,info%ik,is) * &
                             sct%gam(iband1,info%ik,is)**2*sct%gam(iband2,info%ik,is)/pi**3* &
