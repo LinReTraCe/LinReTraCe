@@ -39,6 +39,9 @@ module Mtypes
     integer :: step_dir       ! step direction
                               ! +1 [1...steps] -- -1 [steps...1]
 
+    real(8) :: tol ! tolerance below which use T=0 kernel expansions
+    real(16) :: tolQ ! tolerance below which use T=0 kernel expansions
+
     character(len=256) :: input_energies
     character(len=256) :: input_scattering_hdf5
     character(len=256) :: input_scattering_text
