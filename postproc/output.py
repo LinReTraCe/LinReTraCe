@@ -16,6 +16,11 @@ with warnings.catch_warnings():
 from structure import es
 from structure.dos import calcDOS
 
+# Sommerfeld value of the Lorenz number: L0 = pi^2/3 * (kB/e)^2
+# kB in eV/K, e cancels -> L0 in V^2/K^2 = W*Ohm/K^2
+_kB_eV = 8.617333262e-5  # eV/K
+_L0    = (np.pi**2 / 3.0) * _kB_eV**2  # 2.4430e-8 V^2/K^2
+
 class LRTCoutput(object):
   '''
   Output class for the main output of LRTC
@@ -153,6 +158,28 @@ class LRTCoutput(object):
             ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
             ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(K*m)]','[K*m/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
             [False,False,False,False,False,False,False,True,True,True,True,True]):
+      for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
+        for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
+
+          key = '{}-{}{}'.format(iL,ii,iB)
+          requirement = []
+          for i in iLreq:
+            for j in iireq:
+              requirement.append(i+'-'+j+iB)
+
+          quantity_description = '{} {}'.format(iLdescr,iBdescr) #  resistivitiy Boltzmann
+          type_description = '({})'.format(ii)
+          description = '{0:<35} {1:<8} {2:>15}'.format(quantity_description, type_description, unit)
+          self.datasets.update({key : (False, requirement, description, True, magnetic)})
+
+    # Lorenz number L = (L22 - L12*inv(L11)*L21) / (L11 * T^2)
+    # Registered separately: T=0 limit is L0 (Sommerfeld value), not 0,
+    # and the formula needs a dedicated branch in _eval_derived.
+    for iL, iLreq, iLdescr, unit, magnetic in zip(['lz'], \
+            [('L11','L12','L22')], \
+            ['Lorenz number'], \
+            ['[V^2/K^2]'], \
+            [False]):
       for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra')]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
@@ -360,20 +387,34 @@ class LRTCoutput(object):
             return np.einsum('...ij,...jkz->...ikz', self.invert(L[0]), L[1]), r'$\mu_H$'
           elif cmd.startswith('mut-'):
             return np.einsum('...ij,...jkz->...ikz', self.invert(L[0]), L[1]), r'$\mu_T$'
+          elif cmd.startswith('lz-'):
+            # Lorenz number: L = (L22 - L12*inv(L11)*L21) / (L11 * T^2)
+            # L[0]=L11, L[1]=L12, L[2]=L22 (requirements sorted: L11,L12,L22).
+            # At T=0 this is 0/0; saveData replaces those entries with L0.
+            num = L[2] - np.einsum('...ij,...jk,...kl->...il', L[1], self.invert(L[0]), L[1])
+            return np.einsum('...ij,...jk->...ik', self.invert(L[0]), num) / tmp**2, r'$L$'
           else:
             raise IOError('Cannot recognize command')
 
         # nominal value
         tosave, ylabel = _eval_derived(command, itotal, temp)
 
-        # Zero out T=0 entries for quantities that carry a 1/T prefactor
-        # (Seebeck, power factor, thermal conductivity/resistivity, Nernst)
-        # Physically these vanish as T->0 (Onsager coefficients decay with at least T^2), but numerically we get NaN from 0/0.
-        if command.startswith(('s-', 'pf-', 'tc-', 'tr-', 'n-')):
+        # T=0 overrides for quantities with 1/T or 1/T^2 prefactors.
+        #
+        # s-, pf-, tc-, tr-, n-: Onsager coefficients vanish at least as
+        #   T^2, so the ratio is physically 0 at T=0, but 0/0 gives NaN.
+        #
+        # lz- (Lorenz number): L -> L0 = pi^2/3*(kB/e)^2 as T->0
+        #   (Sommerfeld/Wiedemann-Franz law). The formula is 0/0 at T=0,
+        #   so we substitute L0 = 2.4430e-8 V^2/K^2 directly.
+        if command.startswith(('s-', 'pf-', 'tc-', 'tr-', 'n-', 'lz-')):
           t0_mask = (self.temp == 0.0)          # shape: (nT,)
           # Broadcast the mask to the shape of tosave
           slices = (slice(None),) + (np.newaxis,) * (tosave.ndim - 1)
-          tosave = np.where(t0_mask[slices], 0.0, tosave)
+          if command.startswith('lz-'):
+            tosave = np.where(t0_mask[slices], _L0, tosave)
+          else:
+            tosave = np.where(t0_mask[slices], 0.0, tosave)
 
         # --- std / extremal-envelope for derived quantities ---
         #
@@ -1337,3 +1378,4 @@ class LRTCoutput(object):
       returned = inverted
 
     return returned
+
