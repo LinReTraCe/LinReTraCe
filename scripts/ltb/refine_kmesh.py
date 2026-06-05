@@ -11,7 +11,7 @@ generator-agnostic loop in scripts/refine_kmesh.py.
 Usage
 -----
     python -m scripts.ltb.refine_kmesh initial_hdf5 tb_file chemical_potential
-                                        gamma_min t_min [options]
+                                        gamma_min T_min [options]
 
 Positional arguments
 --------------------
@@ -19,7 +19,7 @@ Positional arguments
     tb_file             Wannier-style tight-binding input file.
     chemical_potential  Chemical potential (mu) used for df/da and the generator.
     gamma_min           Minimum gamma parameter [eV] for df/da.
-    t_min               Minimum temperature [K] for df/da.
+    T_min               Minimum temperature [K] for df/da.
 
 Optional arguments
 ------------------
@@ -76,12 +76,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog="""\
 Usage via wrapper (recommended)
 --------------------------------
-  ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
+  ltb refine initial.hdf5 tb_file mu gamma_min T_min [options]
 
 Usage via direct call (expert)
 --------------------------------
-  python -m scripts.ltb.refine_kmesh initial.hdf5 tb_file mu gamma_min t_min [options]
-  python /path/to/scripts/ltb/refine_kmesh.py initial.hdf5 tb_file mu gamma_min t_min [options]
+  python -m scripts.ltb.refine_kmesh initial.hdf5 tb_file mu gamma_min T_min [options]
+  python /path/to/scripts/ltb/refine_kmesh.py initial.hdf5 tb_file mu gamma_min T_min [options]
 
 Positional arguments
 --------------------
@@ -89,7 +89,7 @@ Positional arguments
   tb_file             Wannier-style tight-binding input file.
   chemical_potential  Chemical potential (mu) used for df/da and the generator.
   gamma_min           Minimum gamma parameter for df/da.
-  t_min               Minimum temperature for df/da.
+  T_min               Minimum temperature for df/da.
 """,
     )
 
@@ -102,7 +102,7 @@ Positional arguments
                         help="Chemical potential used for refinement and the TB calculation.")
     parser.add_argument("gamma_min", type=float,
                         help="Minimum gamma parameter [eV] for df/da.")
-    parser.add_argument("t_min", type=float,
+    parser.add_argument("T_min", type=float,
                         help="Minimum temperature [K] for df/da. "
                         "If 0 is supplied, it is increased to 0.0005 K, "
                         "since df/da diverges at T=0.")
@@ -158,14 +158,14 @@ def validate_inputs(args: argparse.Namespace) -> None:
         raise ValueError("max_iter must be positive.")
     if args.refinement_factor < 1:
         raise ValueError("refinement_factor must be at least 1.")
-    if args.t_min < 0:
+    if args.T_min < 0:
         raise ValueError("Temperature must be non-negative")
-    if args.t_min == 0.0:
+    if args.T_min == 0.0:
         logger.warning(
-            "t_min = 0 is not supported (df/da diverges)."
-            "Increasing to t_min = 0.0005 K."
+            "T_min = 0 is not supported (df/da diverges)."
+            "Increasing to T_min = 0.0005 K."
             )
-        args.t_min = 0.0005
+        args.T_min = 0.0005
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         initial_hdf5       = args.initial_hdf5,
         chemical_potential = args.chemical_potential,
         gamma_min          = args.gamma_min,
-        t_min              = args.t_min,
+        T_min              = args.T_min,
         error_tol          = args.error_tol,
         max_iter           = args.max_iter,
         refinement_factor  = args.refinement_factor,

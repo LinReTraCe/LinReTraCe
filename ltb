@@ -13,7 +13,7 @@ Usage
 -----
   ltb run    tb_file nkx nky nkz filling [options]   # explicit
   ltb        tb_file nkx nky nkz filling [options]   # implicit run (backwards compatible)
-  ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
+  ltb refine initial.hdf5 tb_file mu gamma_min T_min [options]
 
 Run 'ltb <subcommand> --help' for subcommand-specific options.
 '''
@@ -48,7 +48,7 @@ Usage
 -----
   ltb run    tb_file nkx nky nkz filling [options]
   ltb        tb_file nkx nky nkz filling [options]   (backwards compatible)
-  ltb refine initial.hdf5 tb_file mu gamma_min t_min [options]
+  ltb refine initial.hdf5 tb_file mu gamma_min T_min [options]
 
 Run 'ltb <subcommand> --help' for subcommand-specific options.
 '''
