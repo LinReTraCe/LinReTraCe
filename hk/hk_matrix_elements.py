@@ -188,13 +188,12 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
 
             for i in range(len(hk)):
                   for j in range(len(hk)):
-                      if type(hk[i][j])==str:#only need to parse the variable if it is a string
+                        if type(hk[i][j])==str: #only need to parse the expression if it is a string
                             hk[i][j]=parse_expr(hk[i][j],local_dict=symbols_dict) #parses the strings into sympy variables
 
             hk=Matrix(hk) #turn it into the Sympy Matrix object- needed to be compatible with Matrix_Elements_Gen() 
 
       else: #use the Pauli matrix format
-          
             ds=[config["d0"],config["d1"],config["d2"],config["d3"]]
 
             for i in range(4):
@@ -210,16 +209,20 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
 
       #reads in the reciprocal lattice vectors 
 
-      if config.get("b1")==None or config.get("b2")==None or config.get("b3")==None:
+      if config.get("b1")==None or config.get("b2")==None:# these two recirpocal lattice vectors must be sepcified 
            raise HkInputError("Reciprocal Lattice Vector is missing from input or incorrectly formatted") #raises an error if the wrong format provided 
+      
+      if type(config["b1"])==str: #if entire vector written in as a string then can just parse it all through 
 
-      if type(config["b1"])==str: #if user specifies the recp lattice vectors as a complete string parse as one variable
-          
-          b1=np.array(parse_expr(config["b1"], local_dict=symbols_dict)) #parses the reciprocal lattice vector strings into sympy variables 
-          b2=np.array(parse_expr(config["b2"], local_dict=symbols_dict))
-          b3=np.array(parse_expr(config["b3"], local_dict=symbols_dict))
+        b1=np.array(parse_expr(config["b1"], local_dict=symbols_dict)) #parses the reciprocal lattice vector strings into sympy variables 
+        b2=np.array(parse_expr(config["b2"], local_dict=symbols_dict))
 
-      else: #if user decides to specify individual components as strings then need to parse indivdual components
+        if config.get("b3")==None: #if no b3 provided then assign the default b3 vector
+            b3=np.array([0,0,1])
+        else:
+            b3=np.array(parse_expr(config["b3"], local_dict=symbols_dict))
+
+      else: #if user desides to specify individual components as strings then use this format to read in variables 
           
           bs=[config["b1"],config["b2"],config["b3"]]
 
@@ -230,11 +233,29 @@ def load_hk(filename): #loads in the k-space hamiltonian from a given JSON file
 
           b1=np.array(bs[0])
           b2=np.array(bs[1])
-          b3=np.array(bs[2])
+
+          if config.get("b3")==None: #if no b3 provided then assign the default b3 vector
+            b3=np.array([0,0,1])
+          else:
+            b3=np.array(bs[2])
+         
+      if len(b1)==2: #if lattice vectors given in 2D then upgrade to 3D 
+      
+        b1=np.array([b1[0],b1[1],0])
+
+      if len(b2)==2:
+      
+        b2=np.array([b2[0],b2[1],0])
+                  
 
       if config.get("Name")==None:
           name=False
       else:
           name=config["Name"]
 
-    return hk, b1, b2, b3, name
+      if config.get("b3")==None: #if no b3 provided then the system will be treated as 2D otherwise the system will be treated as 3D
+          ndim=2
+      else:
+          ndim=3
+
+    return hk, b1, b2, b3, name, ndim
