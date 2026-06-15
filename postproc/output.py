@@ -148,12 +148,20 @@ class LRTCoutput(object):
             self.datasets.update({key : (True, internalpath, description, True, iMflag)})
 
     # 'derived' quantities ... that are constructed from the Onsager coefficients
+    with h5py.File(self.fname,'r') as h5: #check the dimension and change the units if system is 2D
+      ndims=h5['.unitcell/ndim'][()]
+    if ndims==2:
+      units=['[Ohm]','[1/(Ohm)]','[V]','[V/K]','[W/(K^2)]','[W/(K)]','[K/W]', '[A*m/(V^2*s)]', '[m^2/C]', '[V/(K*T)]', '[1/T]', '[1/T]']
+    else:
+      units=['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(K*m)]','[K*m/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]']
+
+    # 'derived' quantities ... that are constructed from the Onsager coefficients
     for iL, iLreq, iLdescr, unit, magnetic in zip(['r','c','p','s','pf','tc','tr','cb','rh','n','muh','mut'], \
-            [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
-            ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
-            ['[Ohm*m]','[1/(Ohm*m)]','[V]','[V/K]','[W/(K^2*m)]','[W/(K*m)]','[K*m/W]', '[A*m^2/(V^2*s)]', '[m^3/C]', '[V/(K*T)]', '[1/T]', '[1/T]'], \
-            [False,False,False,False,False,False,False,True,True,True,True,True]):
-      for ii, iireq in zip(['inter','intra','total'], [('inter',), ('intra',), ('inter','intra','inter_anti',)]):
+           [('L11',),('L11',),('L11','L12'),('L11','L12'),('L11','L12'),('L11','L12','L22'),('L11','L12','L22'),('L11B',),('L11B','L11'),('L11B','L12B','L11','L12'),('L11','L11B'),('L12','L12B')], \
+           ['Resistivity', 'Conductivity','Peltier coeff', 'Seebeck coeff', 'Power factor', 'Thermal conductivity', 'Thermal resistivity', 'Hall conductivity', 'Hall coeff', 'Nernst coeff', 'Hall mobility', 'Thermal mobility'], \
+            units, \
+           [False,False,False,False,False,False,False,True,True,True,True,True]):
+      for ii, iireq in zip(['inter','inter_anti','intra','total'], [('inter',),('inter_anti',), ('intra',), ('inter','intra','inter_anti',)]):
         for iB, iBdescr in zip(['','Boltz'],['','Boltzmann']):
 
           key = '{}-{}{}'.format(iL,ii,iB)
