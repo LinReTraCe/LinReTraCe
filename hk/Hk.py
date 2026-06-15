@@ -28,7 +28,7 @@ class hk(Model):
 
   def _read_hk_file(self): #reads in the coeffients saved in the Hamiltonian.json file and calulcates matrix elements 
       
-    Hamk,b1,b2,b3,name=load_hk(self.hk_file)
+    Hamk,b1,b2,b3,name,ndim=load_hk(self.hk_file)
 
     self.n_bands=int(np.sqrt(len(Hamk))) #defines the number of bands in the system 
 
@@ -50,13 +50,11 @@ class hk(Model):
     self.rvec[1,:] = np.cross(self.kvec[2,:],self.kvec[0,:]) / Vk
     self.rvec[2,:] = np.cross(self.kvec[0,:],self.kvec[1,:]) / Vk
     self.rvec *= 2*np.pi
+
+    if ndim==2: #a3 must be set to (0,0,1) in order to get the correct volume in 2D
+      self.rvec[2,:]=np.array([0,0,1])
  
-    if self.nkz==1: #if there is only 1 k-point in z-direc treats the system as 2D 
-      self.vol = np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),np.array([0,0,1]))) #area of BZ for a 2D lattice - 
-    else:
-
-      self.vol= np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),self.rvec[2,:])) #volume of BZ for 3D lattice 
-
+    self.vol= np.abs(np.dot(np.cross(self.rvec[0,:],self.rvec[1,:]),self.rvec[2,:])) #volume of BZ for 3D lattice (also correct for )
 
     #calculates the matrix elements on the reducible k-mesh using Sympy package 
     energy_array,diagonal_array,full_array,berry_array=Matrix_Elements_Gen(Hamk,b1,b2,b3,self.nkx,self.nky,self.nkz,self.write_to_file)    
