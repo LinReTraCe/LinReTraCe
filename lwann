@@ -13,8 +13,17 @@ from structure.wannier import Wannier90Calculation
 from structure.wannier import wannier90hamiltonian # wannier90 hk file
 from structure.wannier import hamiltonian_matrix    # hk in matrix form
 
+# bind the DMFT extension method onto Wannier90Calculation (used by --dmft)
+from structure.wannier_dmft import computeDMFT as _computeDMFT
+Wannier90Calculation.computeDMFT = _computeDMFT
+
 '''
 lwann : Pre-processing of Wannier90 calculations
+
+With --dmft <hdf5> [<hdf5> ...]: additionally reads one or more
+w2dynamics DMFT output files, extracts linearised quasi-particle
+parameters, and writes a LinReTraCe scattering HDF5 (requires an
+existing energy HDF5 from a preceding plain lwann run).
 '''
 
 def parse_args(args=None):
@@ -31,6 +40,18 @@ def parse_args(args=None):
   parser.add_argument('--nocorrection', help='Do not calculate the correction terms to the Peierls approximation', default=False, action='store_true')
   parser.add_argument('--intraonly', help='Only output intra elements', default=False, action='store_true')
   parser.add_argument('--debug', help=argparse.SUPPRESS, default=False, action='store_true')
+  parser.add_argument('--dmft', nargs='+', metavar='HDF5', help='One or more w2dynamics HDF5 output files. If supplied, a DMFT scattering file is written in addition to (or instead of a new) energy file. Multiple files are interpreted as runs at different temperatures and are sorted by ascending temperature automatically.')
+  parser.add_argument('--energy-hdf5', help='Path to the existing LinReTraCe energy HDF5 to use as input for FullScattering (required when --dmft is given and the energy file has a non-default name).', default=None)
+  parser.add_argument('--scat-output', help='Output name for the DMFT scattering HDF5 (default: lrtc-dmft-scat.hdf5)', default='lrtc-dmft-scat.hdf5')
+  parser.add_argument('--no-spin-average', help='Do not average spin-up and spin-down self-energies. By default, spin is averaged for paramagnetic runs (general.magnetism = para) and kept separate otherwise.', default=False, action='store_true')
+  parser.add_argument('--n-fit', type=int, default=12, help='Number of lowest Matsubara frequencies used for the self-energy polynomial fit (default: 12). Ignored when --fit-wmax is also supplied.')
+  parser.add_argument('--fit-wmax', type=float, default=None, metavar='ENERGY', help='If given [eV], use all positive Matsubara frequencies up to this energy cutoff instead of a fixed --n-fit count. Recommended when combining DMFT runs at several temperatures so that each fit covers the same energy window. fit_wmax and --n-fit may be specified together; fit_wmax takes priority.')
+  parser.add_argument('--fit-degree', type=int, default=2, help='Polynomial degree for the self-energy fit, >= 1 (default: 2, quadratic). A linear fit (1) is the minimal Fermi-liquid form; higher orders can give better results for runs with very good statistics, but need a correspondingly larger --n-fit/--fit-wmax to stay well-conditioned. Always check the fit visually first, e.g. via --check-fit or python -m structure.checkfit, before trusting a higher-order extrapolation.')
+  parser.add_argument('--gamma-min', type=float, default=1e-6, help='Minimum scattering rate floor in eV (default: 1e-6). Applied after fitting to prevent unphysical negative values.')
+  parser.add_argument('--check-fit', help='Instead of running the full DMFT extraction, save (and optionally show, see --check-fit-show) diagnostic plots comparing the raw self-energy Matsubara data to the polynomial fit that --n-fit/--fit-degree/--fit-wmax would produce. Requires --dmft. Does not need a valid Wannier90 folder or an energy HDF5 (the "system" positional argument is still required by the parser but is ignored in this mode). Equivalent to running "python -m structure.checkfit" directly.', default=False, action='store_true')
+  parser.add_argument('--check-fit-elements', nargs='+', default=['diag'], help="Which orbital pairs to plot in --check-fit mode: 'diag' (default), 'offdiag' (every unique off-diagonal pair, shown together with its (Lp,L) partner for a symmetry check), 'all' (both), or explicit 'L,Lp' pairs.")
+  parser.add_argument('--check-fit-outdir', default='./fit_check', help='Output directory for --check-fit figures (default: ./fit_check).')
+  parser.add_argument('--check-fit-show', help='In --check-fit mode, also open an interactive window (requires a display).', default=False, action='store_true')
   return parser.parse_args(args)
 
 class log_formatter(logging.Formatter):
@@ -53,7 +74,32 @@ def main():
   console.setLevel(logging.DEBUG if debug else logging.INFO)
   logger.addHandler(console)
 
+  # ── DMFT fit-diagnostic shortcut: no Wannier90 folder needed ──────────
+  if args.check_fit:
+    if not args.dmft:
+      error('--check-fit requires --dmft <hdf5> [<hdf5> ...].')
+    from structure.checkfit import make_plot
+    spin_avg = None if not args.no_spin_average else False
+    try:
+      make_plot(
+        files        = args.dmft,
+        elements_spec= (args.check_fit_elements[0]
+                         if args.check_fit_elements[0] in ('diag', 'offdiag', 'all')
+                         else args.check_fit_elements),
+        n_fit        = args.n_fit,
+        fit_degree   = args.fit_degree,
+        fit_wmax     = args.fit_wmax,
+        spin_average = spin_avg,
+        outdir       = args.check_fit_outdir,
+        show         = args.check_fit_show,
+      )
+    except Exception as e:
+      error(str(e)+"\nExit.")
+    sys.exit(0)
+
   if os.path.isfile(args.system):
+    if args.dmft:
+      error('--dmft requires a Wannier90 folder, not a single .hk file.')
     try:
       ham = wannier90hamiltonian(hk_file=args.system, charge=args.charge)
       h5output(args.output, ham, ham, peierls=True)
@@ -67,11 +113,47 @@ def main():
         ham.expandKmesh(np.array(args.kmesh, dtype=int))
       elif args.wien2k:
         ham.readWien2k()
-      ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
-      if args.charge:
-        ham.outputData(args.output, intraonly=args.intraonly)
+
+      # ── DMFT mode ───────────────────────────────────────────────────
+      if args.dmft:
+        from structure.w2dyn import read_and_sort_temperatures
+
+        e_hdf5 = args.energy_hdf5 if args.energy_hdf5 else args.output
+        if not os.path.isfile(e_hdf5):
+          logger.warning(
+            "Energy HDF5 '{}' not found.  "
+            "Running plain lwann first to create it.".format(e_hdf5))
+          ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
+          if args.charge:
+            ham.outputData(e_hdf5, intraonly=args.intraonly)
+          else:
+            ham.outputData(e_hdf5, mu=ham.efer, intraonly=args.intraonly)
+
+        spin_avg = None if not args.no_spin_average else False
+
+        se_list = read_and_sort_temperatures(
+          paths        = args.dmft,
+          spin_average = spin_avg,
+          n_fit        = args.n_fit,
+          fit_degree   = args.fit_degree,
+          fit_wmax     = args.fit_wmax,
+          gamma_min    = args.gamma_min,
+        )
+
+        ham.computeDMFT(
+          se_params_list    = se_list,
+          energy_hdf5       = e_hdf5,
+          output            = args.scat_output,
+          peierlscorrection = not args.nocorrection,
+        )
+
+      # ── standard lwann mode (unchanged) ─────────────────────────────
       else:
-        ham.outputData(args.output, mu=ham.efer, intraonly=args.intraonly)
+        ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
+        if args.charge:
+          ham.outputData(args.output, intraonly=args.intraonly)
+        else:
+          ham.outputData(args.output, mu=ham.efer, intraonly=args.intraonly)
     except Exception as e:
       error(str(e)+"\nExit.")
 
@@ -130,3 +212,4 @@ def main():
 
 if __name__ == '__main__':
   main()
+
