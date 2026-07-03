@@ -124,6 +124,14 @@ Positional arguments
     # Refinement loop options
     parser.add_argument("--error_tol", type=float, default=5e-3,
                         help="Target error threshold. Default: 0.005.")
+    parser.add_argument("--plateau_tol", type=float, default=5.0, metavar="PERCENT",
+                        help="error-plateau detection: stop if an iteration reduced the "
+                             "error by less than PERCENT %% relative to the previous one "
+                             "(default: 5). Only active from the 4th refinement step "
+                             "onward, as the error may equilibrate non-monotonically "
+                             "early on. On plateau the target precision cannot be "
+                             "reached and a finer initial mesh should be tried. "
+                             "Set to 0 to disable the check.")
     parser.add_argument("--max_iter", type=int, default=10,
                         help="Maximum refinement iterations. Default: 10.")
     parser.add_argument("--refinement_factor", type=int, default=3,
@@ -219,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         energy_window      = args.energy_window,
         workdir            = args.workdir,
         keep_intermediate  = args.keep_intermediate,
+        plateau_tol        = args.plateau_tol / 100.0,  # CLI takes percent
     )
 
     return run_refinement(params, generator)

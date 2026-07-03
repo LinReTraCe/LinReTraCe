@@ -73,6 +73,15 @@ class RefinementParams:
         Directory where intermediate mesh and HDF5 files are written.
     keep_intermediate : bool
         If True, do not delete intermediate files after each iteration.
+    plateau_tol : float
+        Error-plateau detection (fraction, default 0.05 = 5%): stop the
+        refinement if an iteration reduced the error by less than this
+        fraction relative to the previous iteration.  The check only becomes
+        active from the fourth refinement step onward (iteration index >= 3),
+        since the error may equilibrate non-monotonically in the early
+        stages.  The persisting plateau value shrinks with a finer initial
+        mesh, so on plateau the loop stops with a warning suggesting one.
+        Set to 0 (or negative) to disable the check.
     """
     initial_hdf5:        Path
     chemical_potential:  float
@@ -84,6 +93,12 @@ class RefinementParams:
     energy_window:       float = 0.1
     workdir:             Path  = Path('.')
     keep_intermediate:   bool  = False
+    plateau_tol:         float = 0.05
+
+
+# first iteration index (0-based) at which the plateau check is active,
+# i.e. the check can first trigger on the Nth refinement step
+PLATEAU_MIN_ITER = 4
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +294,7 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
 
     current_hdf5: Path            = params.initial_hdf5.resolve()
     final_error:  Optional[float] = None
+    previous_error: Optional[float] = None  # error of the preceding iteration (plateau check)
 
     # files this run created and may therefore delete; the input file is
     # never in this set and is consequently never deleted or overwritten
@@ -349,6 +365,35 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
                 "Target error reached (%.6f <= %.6f).", final_error, params.error_tol
             )
             break
+
+        # ── 3b. Error-plateau check ───────────────────────────────────────
+        # The refinement error typically plateaus after a few steps at a
+        # value dictated by the resolution of the initial mesh.  Stop once an
+        # iteration reduced the error by less than plateau_tol (relative);
+        # active from the 4th refinement step onward only, since the error
+        # may equilibrate non-monotonically in the early stages.
+        if (
+            params.plateau_tol > 0
+            and iteration >= PLATEAU_MIN_ITER
+            and previous_error is not None
+            and previous_error > 0
+            and (previous_error - final_error) < params.plateau_tol * previous_error
+        ):
+            logger.warning(
+                "Error plateau detected: iteration %d reduced the error by only "
+                "%.2f%% (%.6f -> %.6f), less than the plateau threshold of %.2f%%. "
+                "The target precision (%.6f) could NOT be reached; the persisting "
+                "error is limited by the resolution of the initial mesh. "
+                "Restart the refinement from a finer initial mesh, or override "
+                "this check via the plateau option (--plateau_tol 0 disables it).",
+                iteration,
+                100.0 * (previous_error - final_error) / previous_error,
+                previous_error, final_error,
+                100.0 * params.plateau_tol,
+                params.error_tol,
+            )
+            break
+        previous_error = final_error
 
         # ── 4. Detect hotspots ────────────────────────────────────────────
         try:
