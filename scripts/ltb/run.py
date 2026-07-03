@@ -118,6 +118,15 @@ end orbitals
                         help='set all inter-band elements to given value')
     parser.add_argument('--red',            default=False, action='store_true',
                         help='make k-grid reducible')
+    parser.add_argument('--rawkpoints', '--nobz-mapping', dest='rawkpoints',
+                        default=False, action='store_true',
+                        help='keep the raw spglib irreducible k-point representatives '
+                             '(zero-centered convention: points may lie outside the '
+                             'primitive reciprocal cell and form disjoint clusters). '
+                             'Disables the default physics-neutral mapping of each '
+                             'representative onto its symmetry-equivalent point in the '
+                             'connected wedge inside the primitive Brillouin zone cell. '
+                             'Only relevant for irreducible grids.')
     parser.add_argument('--mu',             type=float,
                         help='use provided chemical potential instead of provided filling'
                              ' (debugging purposes)')
@@ -189,6 +198,7 @@ def main(argv=None):
             nkz=args.nkz,
             irreducible=irr,
             kshift=args.kshift,
+            canonicalize=not args.rawkpoints,
         )
     except Exception as e:
         error(str(e) + '\nExit.')

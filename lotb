@@ -37,6 +37,10 @@ def parse_args(args=None):
   parser.add_argument('--intra', type=float, help='set all intra-band elements to value given')
   parser.add_argument('--inter', type=float, help='set all inter-band elements to value given')
   parser.add_argument('--red', default=False, help='make k-grid reducible', action='store_true')
+  parser.add_argument('--rawkpoints', '--nobz-mapping', dest='rawkpoints', default=False, action='store_true',
+                      help='keep the raw spglib irreducible k-point representatives; disables the default '
+                           'physics-neutral mapping onto the connected wedge inside the primitive BZ cell '
+                           '(only relevant for irreducible spglib grids)')
   parser.add_argument('--mu', type=float, help='use provided chemical potential instead of provided filling')
   parser.add_argument('-o', '--output', default=None, help='Output file name')
   parser.add_argument('-p', '--plot', default=False, action='store_true', help='Plot bands / DOS / NOS')
@@ -74,7 +78,8 @@ def main():
                                 nky=args.nky, \
                                 nkz=args.nkz, \
                                 irreducible=irr, \
-                                kshift=args.shift)
+                                kshift=args.shift, \
+                                canonicalize=not args.rawkpoints)
   except Exception as e:
     error(str(e)+'\nExit.')
 

@@ -43,13 +43,14 @@ class OrthogonalTightBinding(Model):
   This class can be used for irreducible grids without spglib
   '''
 
-  def __init__(self, ax=1, ay=1, az=1, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False):
+  def __init__(self, ax=1, ay=1, az=1, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False, canonicalize=True):
     super(OrthogonalTightBinding, self).__init__(nkx,nky,nkz)
     self.ax          = ax
     self.ay          = ay
     self.az          = az
     self.irreducible = irreducible  # generate irreducible grid instead of reducible
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
+    self.canonicalize = canonicalize # map spglib irreducible representatives into the primitive reciprocal cell (connected wedge)
 
     self.spacing     = [self.ax, self.ay, self.az]
     self.vol         = self.ax*self.ay*self.az
@@ -206,6 +207,14 @@ class OrthogonalTightBinding(Model):
     self.nsym = self.symop.shape[0]
 
     logger.debug('Spglib symmetries:\n{}'.format(self.symop))
+
+    ''' map spglib representatives into the primitive reciprocal cell as one
+        connected wedge; physics-neutral (see Model._canonicalizeIrreducibleKpoints).
+        Keeps the spglib path consistent with the first-visit convention of the
+        manual irreducible search below. Disable via canonicalize=False. '''
+    if self.canonicalize:
+      self._canonicalizeIrreducibleKpoints(kgrid, is_shift)
+      logger.debug('canonicalized kpoints:\n{}'.format(self.kpoints))
 
   def _setupKmesh(self):
     '''

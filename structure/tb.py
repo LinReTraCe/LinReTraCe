@@ -22,10 +22,11 @@ class TightBinding(Model):
   Reducible grids do not require spglib.
   '''
 
-  def __init__(self, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False):
+  def __init__(self, nkx=1, nky=1, nkz=1, irreducible=True, kshift=False, canonicalize=True):
     super(TightBinding, self).__init__(nkx,nky,nkz)
     self.irreducible = irreducible and not (nkx * nky * nkz == 1) # generate irreducible grid instead of reducible unless there is but 1 k-point
     self.kshift      = kshift       # shift by half a k-point to avoid Gamma point
+    self.canonicalize = canonicalize # map spglib irreducible representatives into the primitive reciprocal cell (connected wedge)
     self.customMesh  = False
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
@@ -443,6 +444,17 @@ class TightBinding(Model):
                         '\n   Validity of generated data can not be guaranteed.\n')
       logger.info('   Found {} applicable symmetry operations.'.format(self.nsym))
       logger.debug('Symmetry operations: \n{}'.format(self.symop))
+
+      ''' spglib chooses representatives in a zero-centered address convention:
+          some may lie outside the primitive reciprocal cell (b1,b2,b3) and the
+          set may split into disjoint clusters. Map each representative onto the
+          symmetry-equivalent grid point with lexicographically smallest address
+          -> one connected wedge confined to the primitive cell.
+          Physics-neutral (see Model._canonicalizeIrreducibleKpoints);
+          can be disabled via canonicalize=False (--rawkpoints). '''
+      if self.canonicalize:
+        self._canonicalizeIrreducibleKpoints(kgrid, is_shift)
+        logger.debug('canonicalized kpoints:\n{}'.format(self.kpoints))
     else:
       self.nkp = self.nkx * self.nky * self.nkz
       self.kpoints = []

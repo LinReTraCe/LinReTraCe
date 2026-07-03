@@ -48,6 +48,58 @@ class Model(ElectronicStructure, ABC):
 
     self._defineDimensions()
 
+  def _canonicalizeIrreducibleKpoints(self, kgrid, is_shift):
+    '''
+    Canonicalize the irreducible k-point representatives returned by spglib.
+
+    spglib.get_ir_reciprocal_mesh chooses orbit representatives in a
+    zero-centered grid-address convention: some representatives carry
+    negative fractional coordinates, i.e. lie outside the primitive
+    reciprocal cell spanned by b1, b2, b3, and the representative set as a
+    whole may split into visually disjoint clusters (observed e.g. for
+    hexagonal lattices).
+
+    Each representative is replaced by the symmetry-equivalent point of its
+    own star -- generated with the identical transformation the optical
+    element symmetrization employs (k_red = P^T . k_irr, cf. _computeHk) --
+    whose grid address, folded to [0, nk_i), is lexicographically smallest.
+    This
+      * confines all representatives to the primitive reciprocal cell,
+      * assembles them into a single connected wedge attached to Gamma
+        (the same first-visit convention the manual non-spglib irreducible
+        search in orthotb.py uses), and
+      * is exactly physics-neutral: by the group property the star
+        multiset { S^T k' mod 1 } of the new representative k' coincides
+        with that of the old one, hence eigenvalues, multiplicities,
+        weights and the star-averaged optical elements are all unchanged.
+
+    Symmetry images that do not land on the Monkhorst-Pack grid (possible
+    for shifted grids with which only a subgroup is compatible) are
+    skipped; the identity always survives, so at minimum every
+    representative is folded into the primitive cell.
+    '''
+    kgrid = np.asarray(kgrid, dtype=int)
+    shift = np.asarray(is_shift, dtype=np.float64) / 2.0
+
+    nmoved = 0
+    for ik in range(self.kpoints.shape[0]):
+      ''' full star of the representative; modulo maps into [0,1) '''
+      images = np.einsum('nji,j->ni', self.symop, self.kpoints[ik,:]) % 1.0
+      ''' integer grid addresses; discard images off the (possibly shifted) grid '''
+      addr   = images * kgrid[None,:].astype(np.float64) - shift[None,:]
+      addr_r = np.rint(addr)
+      ongrid = np.all(np.abs(addr - addr_r) < 1e-6, axis=1)
+      addr_i = addr_r[ongrid,:].astype(int) % kgrid[None,:]
+      ''' lexicographically smallest address (kx first) = first-visit convention '''
+      first  = np.lexsort((addr_i[:,2], addr_i[:,1], addr_i[:,0]))[0]
+      knew   = (addr_i[first,:].astype(np.float64) + shift) / kgrid.astype(np.float64)
+      if not np.allclose(knew, self.kpoints[ik,:]):
+        nmoved += 1
+      self.kpoints[ik,:] = knew
+
+    if nmoved:
+      logger.info('   Canonicalized {} irreducible k-point representative(s) into the primitive reciprocal cell.'.format(nmoved))
+
   @abc.abstractmethod
   def computeData(self):
     '''
