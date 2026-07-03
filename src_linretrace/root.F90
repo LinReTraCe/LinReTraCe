@@ -21,7 +21,69 @@ module Mroot
     module procedure occ_impurity_D, occ_impurity_Q
   end interface occ_impurity
 
+  ! all occupation kernels of a given precision share one signature;
+  ! we exploit this to resolve the (muFermi x T=0) choice ONCE per temperature
+  ! step -- outside all momentum/band loops -- via procedure pointers.
+  ! inside the leaf kernels the distribution functions remain direct calls to
+  ! pure elemental module procedures, i.e. they stay inlinable/vectorizable.
+  abstract interface
+    subroutine occ_kernel_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+      import :: energydisp, scattering, kpointmesh, algorithm, runinfo
+      real(8), intent(in)  :: mu
+      real(8), intent(out) :: occ_tot
+      type(energydisp) :: edisp
+      type(scattering) :: sct
+      type(kpointmesh) :: kmesh
+      type(algorithm)  :: algo
+      type(runinfo)    :: info
+    end subroutine occ_kernel_D
+
+    subroutine occ_kernel_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
+      import :: energydisp, scattering, kpointmesh, algorithm, runinfo
+      real(16), intent(in)  :: mu
+      real(16), intent(out) :: occ_tot
+      type(energydisp) :: edisp
+      type(scattering) :: sct
+      type(kpointmesh) :: kmesh
+      type(algorithm)  :: algo
+      type(runinfo)    :: info
+    end subroutine occ_kernel_Q
+  end interface
+
+  ! occupation kernels used by ndeviation_D/Q
+  ! set via set_occ_kernels once per temperature step (main.F90)
+  procedure(occ_kernel_D), pointer :: occ_ptr_D => null()
+  procedure(occ_kernel_Q), pointer :: occ_ptr_Q => null()
+
   contains
+
+! resolve which occupation kernels the chemical potential search uses:
+! (fermi | digamma) x (finite T | T=0)
+! to be called once per temperature step, after info%lT0 and the scattering
+! quantities for the step have been set
+subroutine set_occ_kernels(algo, info)
+  implicit none
+  type(algorithm) :: algo
+  type(runinfo)   :: info
+
+  if (info%lT0) then
+    if (algo%muFermi) then
+      occ_ptr_D => occ_fermi_T0_D
+      occ_ptr_Q => occ_fermi_T0_Q
+    else
+      occ_ptr_D => occ_digamma_T0_D
+      occ_ptr_Q => occ_digamma_T0_Q
+    endif
+  else
+    if (algo%muFermi) then
+      occ_ptr_D => occ_fermi_D
+      occ_ptr_Q => occ_fermi_Q
+    else
+      occ_ptr_D => occ_digamma_D
+      occ_ptr_Q => occ_digamma_Q
+    endif
+  endif
+end subroutine set_occ_kernels
 
 ! if band shifts are applied onto the input DFT energy range
 ! we have to re-determine the chemical potential of the system
@@ -442,6 +504,17 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
        call stop_with_message(stderr, "Root-finding method not properly defined")
   end select
 
+  ! at T=0 with Heaviside statistics the deviation is a staircase in mu:
+  ! secant/Ridders operate on plateaus (equal function values -> ill-conditioned
+  ! updates), while bisection converges the bracket robustly onto the step.
+  ! enforce bisection for this combination.
+  if (info%lT0 .and. algo%muFermi) then
+    lsecant = .false.
+    linint  = .false.
+    lridd   = .false.
+    lbisec  = .true.
+  endif
+
 ! deviation from set particle number with initial mu
   call ndeviation(mu, target_zero1, edisp, sct, kmesh, imp, algo, info)
 
@@ -534,6 +607,12 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
        call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
 
        if (abs(target_zero).lt.dev) exit
+       ! T=0 Heaviside statistics: on a discrete k-grid the demanded electron
+       ! number may fall between two occupation plateaus (metals), so
+       ! |target_zero| can never drop below dev. the bracket nevertheless
+       ! collapses geometrically onto the step, i.e. onto the Fermi level ->
+       ! accept once the interval is converged. (finite-T behavior untouched)
+       if (info%lT0 .and. algo%muFermi .and. abs(mu2-mu1) < 1q-14) exit
        if (target_zero.gt.0.q0) then
           mu1=mu
           target_zero1=target_zero
@@ -543,6 +622,42 @@ subroutine find_mu(mu,dev,target_zero,niitact, edisp, sct, kmesh, imp, algo, inf
        endif
     enddo
     niitact = iit
+  endif
+
+  ! T=0 with pure Fermi statistics (Heaviside occupation):
+  ! the carrier-balance refinement below is degenerate here -- inside a gap the
+  ! activated electron and hole counts are BOTH identically zero for ANY mu in
+  ! the gap, so occ_refine carries no information and find_mu_refine's
+  ! bracketing would not terminate meaningfully. never enter it.
+  !
+  ! instead, in the pure fully gapped case we place mu at the center of the gap,
+  ! which is the exact T->0 limit of Fermi statistics (the root finder above
+  ! merely returns SOME point of the zero-deviation plateau, dependent on
+  ! bracket history). the band edges used here are maintained by find_mu_DFT,
+  ! which main.F90 re-evaluates every step on the CURRENT dispersion whenever
+  ! band shifts are present (edisp%band = band_file + band_shift) -- static
+  ! self-energy renormalizations from a scattering file are therefore honored.
+  ! the quasi-particle weight Z > 0 cannot move the T=0 Fermi mu at all, since
+  ! it drops out of sign(Z*(eps-mu)) identically (band- and k-dependent or not).
+  !
+  ! with impurities or doping the root-finder result above stands: mu is then
+  ! pinned by the (staircase) charge balance, and mid-gap centering would be
+  ! wrong. note that at strict T=0 the position of mu WITHIN a zero-deviation
+  ! plateau of the impurity balance is physically undetermined; if the precise
+  ! T->0 pinning is required, evaluate at a small finite temperature instead.
+  if (info%lT0 .and. algo%muFermi) then
+    if (edisp%gapped_complete .and. &
+        .not. (algo%lTMODE .and. (algo%lImpurities .or. algo%lDoping))) then
+      if (edisp%ispin == 1) then
+        mu = (real(edisp%ene_conductionBand(1),16) + real(edisp%ene_valenceBand(1),16)) / 2.q0
+      else
+        mu = (real(minval(edisp%ene_conductionBand),16) + real(maxval(edisp%ene_valenceBand),16)) / 2.q0
+      endif
+      ! re-evaluate the deviation at the centered chemical potential
+      ! (identically zero in the gap; keeps the reported target_zero consistent)
+      call ndeviation(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
+    endif
+    return
   endif
 
   if ( (algo%ldebug .and. (index(algo%dbgstr,"NoRefine") .ne. 0)) ) then
@@ -791,11 +906,12 @@ subroutine ndeviation_D(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   real(8) :: occ_tot
   real(8) :: occimp
 
-  if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
-  else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  ! kernel choice (fermi | digamma) x (finite T | T=0) resolved once per
+  ! temperature step in set_occ_kernels -- no branching in the hot loops
+  if (.not. associated(occ_ptr_D)) then
+    call stop_with_message(stderr, 'ndeviation_D: occupation kernel not set (set_occ_kernels)')
   endif
+  call occ_ptr_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   if (algo%lTMODE .and. algo%lImpurities) then
     call occ_impurity(occimp, mu, imp, info)
@@ -833,11 +949,12 @@ subroutine ndeviation_Q(mu, target_zero, edisp, sct, kmesh, imp, algo, info)
   real(16) :: dist
   real(16) :: occimp
 
-  if (algo%muFermi) then
-    call occ_fermi(mu, occ_tot, edisp, sct, kmesh, algo, info)
-  else
-    call occ_digamma(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  ! kernel choice (fermi | digamma) x (finite T | T=0) resolved once per
+  ! temperature step in set_occ_kernels -- no branching in the hot loops
+  if (.not. associated(occ_ptr_Q)) then
+    call stop_with_message(stderr, 'ndeviation_Q: occupation kernel not set (set_occ_kernels)')
   endif
+  call occ_ptr_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   if (algo%lTMODE .and. algo%lImpurities) then
     call occ_impurity(occimp, mu, imp, info)
@@ -1007,6 +1124,169 @@ subroutine occ_fermi_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
 end subroutine occ_fermi_Q
 
+!________________________________________________________
+! T=0 occupation kernels
+! these mirror the finite-temperature loop nests above one-to-one;
+! only the distribution function is replaced by its beta -> infinity limit
+! (see Mfermi for the derivations). they contain no beta and no exp/wpsipg.
+!
+! note on renormalizations:
+! - the kernels act on edisp%band, which contains the band shifts of the
+!   current step (edisp%band = band_file + band_shift, input.f90), so static
+!   real-part renormalizations from a scattering file are fully honored
+! - the quasi-particle weight Z > 0 drops out of the Heaviside identically
+!   (sign(Z*(eps-mu)) = sign(eps-mu)) but remains in the digamma/arctan kernel
+
+! T=0 occupation via the fermi function (Heaviside)
+! -- double precision
+subroutine occ_fermi_T0_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  implicit none
+
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: occ_loc
+  integer :: is, ik, iband
+
+  occ_loc = 0.d0
+  ! evaluate the function
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occ_loc = occ_loc + &
+        fermi_T0(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)) * kmesh%weight(ik)
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_fermi_T0_D
+
+! T=0 occupation via the fermi function (Heaviside)
+! -- quad precision
+subroutine occ_fermi_T0_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  implicit none
+
+  real(16), intent(in)  :: mu
+  real(16), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+
+  real(16) :: occ_loc
+  integer :: is, ik, iband
+
+  occ_loc = 0.q0
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occ_loc = occ_loc + &
+        fermi_T0_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)) * kmesh%weightQ(ik)
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call mpi_reduce_quad(occ_loc, occ_tot) ! custom quad reduction
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_fermi_T0_Q
+
+! T=0 occupation via the digamma function limit
+! n = 0.5 - 1/pi * atan2(Z*(eps-mu), Gamma)
+! i.e. the Lorentzian-broadened occupation; recovers the Heaviside for Gamma -> 0
+! -- double precision
+subroutine occ_digamma_T0_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  implicit none
+
+  real(8), intent(in)  :: mu
+  real(8), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+  !local variables
+
+  real(8) :: occ_loc
+  integer :: is, ik, iband
+
+  occ_loc = 0.d0
+  ! evaluate the function
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occ_loc = occ_loc + (0.5d0 - &
+        atankern_T0(sct%gam(iband,ik,is), sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu))) &
+        * kmesh%weight(ik)
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call MPI_ALLREDUCE(occ_loc, occ_tot, 1, MPI_REAL8, MPI_SUM, MPI_COMM_WORLD, mpierr)
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_digamma_T0_D
+
+! T=0 occupation via the digamma function limit
+! -- quad precision
+subroutine occ_digamma_T0_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
+  implicit none
+
+  real(16), intent(in)  :: mu
+  real(16), intent(out) :: occ_tot
+
+  type(energydisp) :: edisp
+  type(scattering) :: sct
+  type(kpointmesh) :: kmesh
+  type(algorithm)  :: algo
+  type(runinfo)    :: info
+
+  !local variables
+  real(16) :: occ_loc
+  integer  :: iband, is, ik
+
+  occ_loc = 0.q0
+  ! evaluate the function
+  do is = 1,edisp%ispin
+    do ik = ikstr, ikend
+      do iband=1,edisp%nband_max
+        occ_loc = occ_loc + (0.5q0 - &
+        atankern_T0(sct%gam(iband,ik,is), sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu))) &
+        * kmesh%weightQ(ik)
+      enddo
+    enddo
+  enddo
+
+#ifdef MPI
+  call MPI_reduce_quad(occ_loc, occ_tot)
+#else
+  occ_tot = occ_loc
+#endif
+
+end subroutine occ_digamma_T0_Q
+
 ! determine the difference between the thermally activated electrons and holes in the system
 ! -- quad precision
 subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
@@ -1048,7 +1328,49 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
 
   ! do this if statement outside
   ! code speed > code duplication
-  if (algo%muFermi) then
+  ! T=0 note: the fermi branch is degenerate at T=0 (elec/hole identically 0
+  ! inside a gap); find_mu therefore never enters the refinement for
+  ! (muFermi .and. lT0). the T=0 Heaviside branch below exists only for
+  ! completeness / debug paths (AlwaysRefine).
+  if (info%lT0 .and. algo%muFermi) then
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          elec = fermi_T0_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu))
+          hole = omfermi_T0_qp(sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu))
+
+          ! here we take the smaller of the two quantities
+          ! and weigh it with the quadruple precision weight
+          if (hole > elec) then
+            sumelec = sumelec + elec * kmesh%weightQ(ik)
+          else
+            sumhole = sumhole + hole * kmesh%weightQ(ik)
+          endif
+
+        enddo
+      enddo
+    enddo
+  else if (info%lT0) then
+    do is = 1,edisp%ispin
+      do ik = ikstr, ikend
+        do iband=1,edisp%nband_max
+          ! T=0 limit of the psi_0 kernel: balances the Gamma-activated carriers
+          psikern = atankern_T0(sct%gam(iband,ik,is), &
+                                sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu))
+          elec = 0.5q0 - psikern
+          hole = 0.5q0 + psikern
+          ! here we take the smaller of the two quantities
+          ! and weigh it with the quadruple precision weight
+          if (hole > elec) then
+            sumelec = sumelec + elec * kmesh%weightQ(ik)
+          else
+            sumhole = sumhole + hole * kmesh%weightQ(ik)
+          endif
+
+        enddo
+      enddo
+    enddo
+  else if (algo%muFermi) then
     do is = 1,edisp%ispin
       do ik = ikstr, ikend
         do iband=1,edisp%nband_max
@@ -1137,10 +1459,18 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
   ! = N_D^+ - N_A^-
   ! nvalence = nsearch - impurity occupation
 
+  ! T=0 note: the exponentials below are replaced by their step-function limits;
+  ! previously T=0 was handled implicitly via exp overflow of the huge-beta
+  ! surrogate -- fragile under floating point exception trapping
   do iimp = 1,imp%nimp
     if (.not. imp%Band(iimp)) then
-      occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      if (info%lT0) then
+        occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+          * gfermi_T0(imp%Dopant(iimp)*(mu-imp%Energy(iimp)), imp%Degeneracy(iimp))
+      else
+        occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+          / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      endif
     else
       do ii=-500,500 ! this stays hard coded
 
@@ -1173,8 +1503,13 @@ subroutine occ_impurity_D(occimp, mu, imp, info)
         ! the additional factors at the end were set such that the sum sum_ii densii = density
 
         ! and finally simply add the contribution
-        occimp = occimp + imp%Dopant(iimp)*densii &
-          / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-eneii)))
+        if (info%lT0) then
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            * gfermi_T0(imp%Dopant(iimp)*(mu-eneii), imp%Degeneracy(iimp))
+        else
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            / (1.d0 + imp%Degeneracy(iimp) * exp(info%beta*imp%Dopant(iimp)*(mu-eneii)))
+        endif
       enddo
     endif
   enddo
@@ -1200,8 +1535,13 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
 
   do iimp = 1,imp%nimp
     if (.not. imp%Band(iimp)) then
-      occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
-        / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      if (info%lT0) then
+        occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+          * gfermi_T0(real(imp%Dopant(iimp),16)*(mu-imp%Energy(iimp)), imp%Degeneracy(iimp))
+      else
+        occimp = occimp + imp%Dopant(iimp)*imp%Density(iimp) &
+          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-imp%Energy(iimp))))
+      endif
     else
       do ii=-500,500 ! this stays hard coded
 
@@ -1234,8 +1574,13 @@ subroutine occ_impurity_Q(occimp, mu, imp, info)
         ! the additional factors at the end were set such that the sum sum_ii densii = density
 
         ! and finally simply add the contribution
-        occimp = occimp + imp%Dopant(iimp)*densii &
-          / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        if (info%lT0) then
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            * gfermi_T0(real(imp%Dopant(iimp),16)*(mu-eneii), imp%Degeneracy(iimp))
+        else
+          occimp = occimp + imp%Dopant(iimp)*densii &
+            / (1.q0 + imp%Degeneracy(iimp) * exp(info%betaQ*imp%Dopant(iimp)*(mu-eneii)))
+        endif
       enddo
     endif
   enddo

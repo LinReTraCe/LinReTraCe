@@ -618,12 +618,22 @@ program main
     info%Temp    = temp%TT(iStep)
     info%TempQ   = real(info%Temp,16)
 
+    ! canonical T=0 flag: consumed by the chemical potential search (Mroot,
+    ! via set_occ_kernels below) and the impurity occupation
+    info%lT0 = (info%Temp == 0.d0)
+
     ! If T=0 then give finite value to beta, otherwise code won't run. If T less than 0, revert back to original
-    if (info%Temp==0.d0) then ! T=0 limiting Kubo Kernel functions are independent of beta, Boltzmann kernels will be set to NaN.
-       ! CAVEAT 1
-       ! The chemical potential search depends on beta. One could use the T-->0 heavyside/Log expression, but in order not to worsen
-       ! performance, a high-level procedure pointer will need to be put in place instead of low-level conditional expressions. TO DO
-       ! For now, we set beta to something finite, but gigantic.
+    if (info%lT0) then ! T=0 limiting Kubo Kernel functions are independent of beta, Boltzmann kernels will be set to NaN.
+       ! CAVEAT 1 (resolved)
+       ! The chemical potential search now uses the analytical T->0 limits of the
+       ! distribution functions (Heaviside / arctan, see Mfermi and Mroot). The
+       ! (fermi|digamma) x (T=0|T>0) kernel choice is resolved ONCE per step via
+       ! procedure pointers (set_occ_kernels), outside all momentum/band loops.
+       ! The mu search therefore no longer consumes beta at T=0.
+       ! The gigantic-but-finite beta below remains ONLY as a surrogate for the
+       ! auxiliary quantities that have not been migrated yet
+       ! (calc_total_energy_*, calc_elecholes_*; their fermi variants saturate
+       ! to the exact step values via IEEE overflow). TO DO: migrate these.
        ! CAVEAT 2
        ! Kubo kernels then work for all K's and L's. In lprint sigma, rho, sigmaB, RH work.
        ! But Seebeck and Nernst have a 1/T factor. Physically these quantitites are zero. Indeed, the Onsager coefficients decay with at least T^2.
@@ -711,6 +721,14 @@ program main
     call cpu_time(tfinish)
     timings(1) = timings(1) + (tfinish - tstart) ! alloc + readin
     tstart = tfinish
+
+    ! resolve the occupation kernels (fermi | digamma) x (T=0 | T>0) for this
+    ! step -- the choice is made HERE, once, outside all momentum/band loops;
+    ! ndeviation_D/Q then simply dispatch through the procedure pointers.
+    ! must come after info%lT0 and the scattering quantities are set;
+    ! also needed when muSearch is off (ndeviation_Q is evaluated below for
+    ! the occupation / carrier-concentration output)
+    call set_occ_kernels(algo, info)
 
     ! root finding (mu)
     niitact = 0

@@ -190,6 +190,8 @@ module Mtypes
     integer  :: iStep ! current step number
 
     real(8)  :: Temp  ! current temperature
+    logical  :: lT0 = .false. ! T=0 flag: single source of truth for the zero-temperature limit
+                              ! set once per temperature step in main.F90 alongside beta
     real(8)  :: beta
     real(8)  :: beta2p
 

@@ -28,6 +28,39 @@ module Mfermi
     module procedure polygamma2psi1_dp, polygamma2psi1_qp
   end interface polygamma2psi1
 
+  ! T=0 limit of the fermi function: Heaviside theta(-eps) with value 1/2 at eps=0
+  interface fermi_T0
+    module procedure fermi_T0_dp, fermi_T0_qp
+  end interface fermi_T0
+
+  ! T=0 limit of one minus the fermi function: Heaviside theta(eps) with value 1/2 at eps=0
+  interface omfermi_T0
+    module procedure omfermi_T0_dp, omfermi_T0_qp
+  end interface omfermi_T0
+
+  ! T=0 (beta -> infinity) limit of the psi_0 (digamma) occupation kernel
+  ! 1/pi * Im[psi_0(0.5 + beta/2pi * (gamma + i*a))]  --beta->inf-->  1/pi * atan2(a, gamma)
+  ! since psi_0(z) -> ln(z) for |z| -> infinity and Im[ln(gamma + i*a)] = arg(gamma + i*a);
+  ! the subleading term -1/(2z) contributes O(1/(beta*gamma)) and vanishes identically at T=0.
+  ! atan2 covers the corner cases gracefully:
+  !   gamma  > 0          : Lorentzian-broadened occupation kernel
+  !   gamma -> 0, a <> 0  : +-1/2, i.e. the Heaviside limit is recovered
+  !   gamma  = 0, a  = 0  : 0, i.e. occupation 1/2 -- no 0/0
+  ! occupations built from this kernel:
+  !   occ_digamma convention (gamma - i*a): n = 1/2 - atankern(gamma, a)
+  !   occ_refine  convention (gamma + i*a): elec = 1/2 - atankern ; hole = 1/2 + atankern
+  ! with a = Z*(eps - mu)
+  interface atankern_T0
+    module procedure atankern_T0_dp, atankern_T0_qp
+  end interface atankern_T0
+
+  ! T=0 limit of the degeneracy-weighted fermi factor 1/(1 + g*exp(beta*x)):
+  ! theta(-x) with value 1/(1+g) at x=0
+  ! (used for the impurity occupation; g=1 recovers fermi_T0)
+  interface gfermi_T0
+    module procedure gfermi_T0_dp, gfermi_T0_qp
+  end interface gfermi_T0
+
   contains
 
 !________________________________________________________
@@ -179,5 +212,115 @@ module Mfermi
     real(16) :: polygamma2psi1_qp
     polygamma2psi1_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
   end function polygamma2psi1_qp
+
+!________________________________________________________
+! T=0 limits of the distribution functions used in the chemical potential search
+! note: these are step / arctan functions of the *sign* of the argument;
+! for arguments a = Z*(eps-mu) with Z > 0 the quasi-particle weight hence
+! drops out of the Heaviside functions identically
+
+  ! T=0 fermi function: theta(-eps), 1/2 at eps=0
+  ! the eps=0 case is not measure-zero on a discrete k-grid (bisection can land
+  ! exactly on a band energy), so it is handled explicitly
+  pure elemental function fermi_T0_dp(eps) result(f)
+    implicit none
+    real(8), intent(in) :: eps
+    real(8)             :: f
+    if (eps < 0.d0) then
+      f = 1.d0
+    else if (eps > 0.d0) then
+      f = 0.d0
+    else
+      f = 0.5d0
+    endif
+  end function fermi_T0_dp
+
+  pure elemental function fermi_T0_qp(eps) result(f)
+    implicit none
+    real(16), intent(in) :: eps
+    real(16)             :: f
+    if (eps < 0.q0) then
+      f = 1.q0
+    else if (eps > 0.q0) then
+      f = 0.q0
+    else
+      f = 0.5q0
+    endif
+  end function fermi_T0_qp
+
+  ! T=0 one minus fermi function: theta(eps), 1/2 at eps=0
+  pure elemental function omfermi_T0_dp(eps) result(f)
+    implicit none
+    real(8), intent(in) :: eps
+    real(8)             :: f
+    if (eps > 0.d0) then
+      f = 1.d0
+    else if (eps < 0.d0) then
+      f = 0.d0
+    else
+      f = 0.5d0
+    endif
+  end function omfermi_T0_dp
+
+  pure elemental function omfermi_T0_qp(eps) result(f)
+    implicit none
+    real(16), intent(in) :: eps
+    real(16)             :: f
+    if (eps > 0.q0) then
+      f = 1.q0
+    else if (eps < 0.q0) then
+      f = 0.q0
+    else
+      f = 0.5q0
+    endif
+  end function omfermi_T0_qp
+
+  ! T=0 digamma occupation kernel: 1/pi * atan2(a, gamma)
+  ! (see interface block above for derivation and sign conventions)
+  ! gamma is kept double precision in accordance with sct%gam
+  pure elemental function atankern_T0_dp(gamma,a) result(f)
+    implicit none
+    real(8), intent(in) :: gamma
+    real(8), intent(in) :: a
+    real(8)             :: f
+    f = atan2(a, gamma) / pi
+  end function atankern_T0_dp
+
+  pure elemental function atankern_T0_qp(gamma,a) result(f)
+    implicit none
+    real(8), intent(in)  :: gamma
+    real(16), intent(in) :: a
+    real(16)             :: f
+    f = atan2(a, real(gamma,16)) / piQ
+  end function atankern_T0_qp
+
+  ! T=0 degeneracy-weighted fermi factor: theta(-x), 1/(1+g) at x=0
+  pure elemental function gfermi_T0_dp(x,g) result(f)
+    implicit none
+    real(8), intent(in) :: x
+    real(8), intent(in) :: g
+    real(8)             :: f
+    if (x < 0.d0) then
+      f = 1.d0
+    else if (x > 0.d0) then
+      f = 0.d0
+    else
+      f = 1.d0 / (1.d0 + g)
+    endif
+  end function gfermi_T0_dp
+
+  pure elemental function gfermi_T0_qp(x,g) result(f)
+    implicit none
+    real(16), intent(in) :: x
+    real(8), intent(in)  :: g
+    real(16)             :: f
+    if (x < 0.q0) then
+      f = 1.q0
+    else if (x > 0.q0) then
+      f = 0.q0
+    else
+      f = 1.q0 / (1.q0 + real(g,16))
+    endif
+  end function gfermi_T0_qp
 
 end module Mfermi
