@@ -91,8 +91,13 @@ class BandData:
     # files produced by the generator (ltb run with setCustomKmesh), because
     # those always write nkx=nky=nkz=1 — which would give cell_deltas=1.0,
     # i.e. a full BZ width, which is wrong.  write_custom_mesh prevents this
-    # by always writing the correct cell_deltas explicitly.
+    # by always writing the correct cell_deltas explicitly, and load_band_data
+    # raises a hard error if it encounters that combination anyway.
     cell_deltas:  np.ndarray   # (nkp, 3)
+    # Where cell_deltas came from: 'file' if read from /.kmesh/cell_deltas
+    # (i.e. the input is an already-refined mesh -> continuation), or
+    # 'coarse-grid' if derived from nkx/nky/nkz (fresh coarse input).
+    cell_deltas_source: str = "file"
 
 
 def load_band_data(h5file: "h5py.File") -> BandData:
@@ -100,12 +105,17 @@ def load_band_data(h5file: "h5py.File") -> BandData:
 
     cell_deltas is read from the ``/.kmesh/cell_deltas`` dataset when present.
     This dataset is written by :func:`write_custom_mesh` on every iteration
-    from iteration 1 onward.
+    and patched into every generator output by the refinement loop; its
+    presence marks the file as an already-(partially-)refined mesh, from
+    which refinement can be *continued* (``cell_deltas_source == 'file'``).
 
-    For the initial coarse HDF5 (produced by ``ltb run`` / ``ltb refine``
-    start, where cell_deltas is absent), the values are derived from the
-    stored ``nkx`` / ``nky`` / ``nkz`` fields as ``1/nk_i``.  This path is
-    only reached for the very first iteration.
+    For an initial coarse HDF5 (produced by ``ltb run``, where cell_deltas is
+    absent), the values are derived from the stored ``nkx``/``nky``/``nkz``
+    fields as ``1/nk_i`` (``cell_deltas_source == 'coarse-grid'``).
+
+    A custom-mesh file (nkx=nky=nkz=1) without cell_deltas is rejected with a
+    ValueError: its per-point cell widths are unknown and the fallback would
+    silently produce zero-width cells, i.e. a no-op refinement.
     """
 
     energies = h5file["/energies"][:].astype(quad_dtype)
@@ -118,14 +128,39 @@ def load_band_data(h5file: "h5py.File") -> BandData:
     multiplicity = k_group["multiplicity"][:].astype(quad_dtype)
 
     if "cell_deltas" in k_group:
-        # Present from iteration 1 onward: written by write_custom_mesh.
+        # Present in every generator output from iteration 1 onward (patched
+        # by the refinement loop).  Its presence therefore identifies the
+        # input as an already-(partially-)refined mesh -> continuation.
         cell_deltas = k_group["cell_deltas"][:].astype(quad_dtype)
+        if cell_deltas.shape != (k_points.shape[0], 3):
+            raise ValueError(
+                "/.kmesh/cell_deltas has shape {} but the mesh has {} k-points; "
+                "the file appears corrupted or was assembled from mismatched "
+                "refinement stages.".format(cell_deltas.shape, k_points.shape[0])
+            )
+        source = "file"
     else:
-        # Initial coarse HDF5 from ltb run: nkx/nky/nkz are the true coarse
-        # grid dimensions.  Derive uniform cell widths from them.
         nkx = int(k_group["nkx"][()])
         nky = int(k_group["nky"][()])
         nkz = int(k_group["nkz"][()])
+        if nkx * nky * nkz == 1 and k_points.shape[0] > 1:
+            # Custom-mesh convention: generator outputs always write
+            # nkx=nky=nkz=1.  Deriving cell widths from these would give
+            # zero-width cells and the refinement would silently do nothing.
+            # This combination means the file is a refined/custom mesh whose
+            # cell_deltas dataset is missing (produced by a pipeline version
+            # predating the cell_deltas patch step, or stripped by an
+            # external tool).  Refuse loudly instead of no-op'ing.
+            raise ValueError(
+                "Input HDF5 is a custom-mesh file (nkx=nky=nkz=1, {} k-points) "
+                "but contains no /.kmesh/cell_deltas dataset. Refinement cannot "
+                "be (re)started from it: per-point cell widths are unknown. "
+                "Either restart from the original coarse mesh, or restore the "
+                "cell_deltas dataset from the corresponding custom_mesh_iter_N "
+                "file of the run that produced it.".format(k_points.shape[0])
+            )
+        # Initial coarse HDF5 from ltb run: nkx/nky/nkz are the true coarse
+        # grid dimensions.  Derive uniform cell widths from them.
         cell_deltas = np.tile(
             np.array(
                 [
@@ -137,6 +172,7 @@ def load_band_data(h5file: "h5py.File") -> BandData:
             ),
             (k_points.shape[0], 1),
         )
+        source = "coarse-grid"
 
     return BandData(
         energies=energies,
@@ -144,6 +180,7 @@ def load_band_data(h5file: "h5py.File") -> BandData:
         weights=weights,
         multiplicity=multiplicity,
         cell_deltas=cell_deltas,
+        cell_deltas_source=source,
     )
 
 
@@ -160,7 +197,9 @@ def compute_error(band: np.ndarray, temperature: float, gamma: float) -> float:
     """Return |1 - int df_da d epsilon| for the supplied band grid."""
 
     dfda = df_da(band, temperature, gamma)
-    integral = np.trapz(dfda, band)
+    # np.trapz was removed in numpy 2.x in favour of np.trapezoid
+    _trapz = getattr(np, "trapezoid", None) or np.trapz
+    integral = _trapz(dfda, band)
     return float(np.abs(1.0 - integral))
 
 
@@ -243,6 +282,9 @@ def _merge_duplicates_with_tolerance(
     dtype      = scaled.dtype
     structured = scaled.view([(f"f{i}", dtype) for i in range(scaled.shape[1])])
     _, idx, inv = np.unique(structured, return_index=True, return_inverse=True)
+    # numpy >= 2.0 returns inverse indices with the shape of the input array
+    # (here (M, 1) from the structured view) instead of flattened -> ravel
+    inv = np.asarray(inv).ravel()
     merged_points  = points[idx]
     merged_weights = np.zeros(len(idx), dtype=weights.dtype)
     np.add.at(merged_weights, inv, weights)

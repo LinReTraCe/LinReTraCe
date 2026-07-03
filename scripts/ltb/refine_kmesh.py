@@ -16,6 +16,15 @@ Usage
 Positional arguments
 --------------------
     initial_hdf5        Initial tight-binding HDF5 file (must end with .hdf5).
+                        May be either a coarse mesh from `ltb run` (reducible
+                        or irreducible) OR the output of a previous refinement
+                        run (refined_iter_N.hdf5): the latter is detected
+                        automatically and refinement then CONTINUES from it —
+                        per-point cell widths are read from the stored
+                        /.kmesh/cell_deltas and output numbering resumes after
+                        N. Existing files in the working directory are never
+                        overwritten. Continuing with tightened parameters
+                        (e.g. lower T_min / gamma_min) is fully supported.
     tb_file             Wannier-style tight-binding input file.
     chemical_potential  Chemical potential (mu) used for df/da and the generator.
     gamma_min           Minimum gamma parameter [eV] for df/da.
@@ -86,6 +95,8 @@ Usage via direct call (expert)
 Positional arguments
 --------------------
   initial_hdf5        Initial tight-binding HDF5 file (must end with .hdf5).
+                      A previous refinement output (refined_iter_N.hdf5) is
+                      detected automatically -> refinement continues from it.
   tb_file             Wannier-style tight-binding input file.
   chemical_potential  Chemical potential (mu) used for df/da and the generator.
   gamma_min           Minimum gamma parameter for df/da.
@@ -95,7 +106,10 @@ Positional arguments
 
     # Positional arguments
     parser.add_argument("initial_hdf5", type=Path,
-                        help="Initial tight-binding HDF5 file (must end with .hdf5).")
+                        help="Initial tight-binding HDF5 file (must end with .hdf5). "
+                             "May be a coarse mesh from 'ltb run' or the output of "
+                             "a previous refinement run; the latter is detected "
+                             "automatically and refinement continues from it.")
     parser.add_argument("tb_file", type=Path,
                         help="Wannier-style tight-binding input file.")
     parser.add_argument("chemical_potential", type=float,
