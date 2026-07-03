@@ -106,6 +106,13 @@ program main
     call stop_with_message(stderr, 'Intraband optical elements required for Intraband quantities')
   endif
 
+  ! interband contributions do not exist in a single-band system:
+  ! silently deactivate the interband option instead of demanding full
+  ! optical elements (lconfig may set interband=yes generically)
+  if (algo%lInterbandQuantities .and. edisp%nband_max == 1) then
+    algo%lInterbandQuantities = .false.
+  endif
+
   if (algo%lInterbandQuantities .and. .not. edisp%lFullMoments) then
     call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
   endif
