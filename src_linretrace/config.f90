@@ -464,6 +464,26 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
       call stop_with_message(stdout, 'Provide either ScatteringFile OR ScatteringText')
     endif
 
+    ! optional ADDITIVE phenomenological coefficients on top of a scattering
+    ! file (e.g. inelastic e-e / e-ph rates of non-disorder origin):
+    ! Gamma_add(T) = sum_i c_i * T**(i-1)  [c_i in eV/K**(i-1), T in Kelvin]
+    ! and an additional quasi-particle weight combined with the file's
+    ! qpweight; both are applied per temperature step in input.f90.
+    if (algo%lScatteringFile) then
+      call floatn_find('ScatteringCoefficients', floatntemp, subsearch_start, subsearch_end, found)
+      if (found) then
+        allocate(sct%gamcoeff(size(floatntemp), 1))
+        sct%gamcoeff(:,1) = floatntemp
+        deallocate(floatntemp)
+      endif
+      call floatn_find('QuasiParticleCoefficients', floatntemp, subsearch_start, subsearch_end, found)
+      if (found) then
+        allocate(sct%zqpcoeff(size(floatntemp), 1))
+        sct%zqpcoeff(:,1) = floatntemp
+        deallocate(floatntemp)
+      endif
+    endif
+
     if (.not. (algo%lScatteringFile .or. algo%lScatteringText)) then
         call float_find('ScatteringOffset', sct%gamimp, search_start, search_end, found)
         if (found) call stop_with_message(stderr, &

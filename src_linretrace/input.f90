@@ -600,6 +600,8 @@ subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
 
   integer :: iband, ik
   integer :: kpoints, nbands
+  integer :: icoeff
+  real(8) :: gadd, zadd
 
   logical :: k_dependence
   logical :: band_dependence
@@ -768,6 +770,32 @@ subroutine read_scattering_hdf5(ifile, edisp, kmesh, sct, info)
 
   ! add possible impurity offsets
   sct%gam = sct%gam + sct%gamimp ! so we have access to a constant shift right from the config file
+
+  ! optional ADDITIVE phenomenological scattering on top of the (elastic)
+  ! scattering file: Gamma_add(T) = sum_i c_i * T**(i-1), T in Kelvin.
+  ! Typical use: inelastic e-e / e-ph rates of non-disorder origin.
+  ! NOTE for vertex-corrected (dressed) energy files: rates added HERE
+  ! broaden the transport kernels but were absent from the ladder rails
+  ! used to construct the dressing; prefer supplying the inelastic rate
+  ! already at interface time (lwann --gamma-add) for full consistency.
+  if (allocated(sct%gamcoeff)) then
+    gadd = 0.d0
+    do icoeff = 1, size(sct%gamcoeff, 1)
+      gadd = gadd + sct%gamcoeff(icoeff, 1) * info%Temp**(icoeff-1)
+    enddo
+    sct%gam = sct%gam + gadd
+  endif
+  ! optional quasi-particle weight from the config, combined with the
+  ! file's qpweight via the additive-self-energy rule
+  !   1/Z_tot = 1/Z_file + 1/Z_config - 1
+  if (allocated(sct%zqpcoeff)) then
+    zadd = 0.d0
+    do icoeff = 1, size(sct%zqpcoeff, 1)
+      zadd = zadd + sct%zqpcoeff(icoeff, 1) * info%Temp**(icoeff-1)
+    enddo
+    sct%zqp = 1.d0 / (1.d0/sct%zqp + 1.d0/zadd - 1.d0)
+  endif
+
   sct%gam = sct%gam * sct%zqp    ! convention
 
 end subroutine

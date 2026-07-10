@@ -16,6 +16,8 @@ from structure.wannier import hamiltonian_matrix    # hk in matrix form
 # bind the DMFT extension method onto Wannier90Calculation (used by --dmft)
 from structure.wannier_dmft import computeDMFT as _computeDMFT
 Wannier90Calculation.computeDMFT = _computeDMFT
+from structure.wannier_disorder import computeDisorder as _computeDisorder
+Wannier90Calculation.computeDisorder = _computeDisorder
 
 '''
 lwann : Pre-processing of Wannier90 calculations
@@ -43,6 +45,22 @@ def parse_args(args=None):
   parser.add_argument('--dmft', nargs='+', metavar='HDF5', help='One or more w2dynamics HDF5 output files. If supplied, a DMFT scattering file is written in addition to (or instead of a new) energy file. Multiple files are interpreted as runs at different temperatures and are sorted by ascending temperature automatically.')
   parser.add_argument('--energy-hdf5', help='Path to the existing LinReTraCe energy HDF5 to use as input for FullScattering (required when --dmft is given and the energy file has a non-default name).', default=None)
   parser.add_argument('--scat-output', help='Output name for the DMFT scattering HDF5 (default: lrtc-dmft-scat.hdf5)', default='lrtc-dmft-scat.hdf5')
+  parser.add_argument('--disorder', metavar='HDF5', help='Two-point disorder archive (deltaH.h5) from the disorder-Wannier pipeline. Writes a disorder scattering HDF5 (momentum- and band-resolved on-shell rates, VCA bandshifts, Z=1) and, unless --no-disorder-vertex, a DRESSED energy file with ab-initio diffuson-ladder vertex corrections folded into the transition matrix elements. May be combined with --dmft (static parts add before the rotation; rails carry the total width; the ladder rung stays disorder-only).', default=None)
+  parser.add_argument('--disorder-engine', choices=['born','scba','ata'], default='scba', help='On-shell disorder rate engine: born (single pass), scba (self-consistent, default; the conserving partner of the ladder vertex), ata (average T-matrix: per-configuration multiple scattering; captures impurity bound-state trends).')
+  parser.add_argument('--disorder-temps', nargs=3, type=float, metavar=('TMIN','TMAX','NT'), default=[100.0, 500.0, 5], help='Temperature axis [K] for the disorder scattering file when --dmft is absent (elastic rates are T-independent and replicated). Default: 100 500 5.')
+  parser.add_argument('--disorder-temps-log', '--disorder-tlog', dest='disorder_tlog', action='store_true', default=False, help='Logarithmic temperature mesh for --disorder-temps (as in the linretrace config). Ignored when --dmft is given: the DMFT temperature axis takes precedence.')
+  parser.add_argument('--no-disorder-vca', action='store_true', default=False, help='Do NOT fold the virtual-crystal Sigma^(1)(k) of the archive into the band rotation and bandshifts.')
+  parser.add_argument('--no-disorder-vertex', action='store_true', default=False, help='Skip the static on-shell ladder vertex (rates/shifts only; no dressed energy file).')
+  parser.add_argument('--dressed-energy-output', default='lrtc-wann-dressed.hdf5', help='Output name for the vertex-dressed energy HDF5 (default: lrtc-wann-dressed.hdf5). Run linretrace on THIS file together with the disorder scattering file.')
+  parser.add_argument('--lambda-output', default=None, metavar='HDF5', help='Optional analysis HDF5 with the vertex enhancements themselves (lambdaDiagonal = dressed/bare matrix-element ratios, momentum- and band-resolved; plus dressed moments and disorder rates).')
+  parser.add_argument('--coherence-window', type=float, default=6.0, help='Inter-band matrix elements are vertex-dressed for |a_n - a_m| < WINDOW*(Gamma_n + Gamma_m); outside, the bare element is kept (RA pair weight negligible). Default 6.')
+  parser.add_argument('--disorder-svd-cut', type=float, default=1e-2, help='RELATIVE truncated-SVD cut deflating the near-unit conserved-density (diffusion) direction of the DC ladder implied by the per-energy Ward identity. The current source is parity-orthogonal to it for self-averaging correlators; the source leak into dropped directions is monitored and reported. Default 1e-2.')
+  parser.add_argument('--rate-eval', choices=['onshell','fermi'], default='onshell', help="Evaluation energy of the on-shell disorder rates: 'onshell' = -Im Sigma at eps=a_kn (the quasiparticle width of each state's own resonance; activated transport); 'fermi' = -Im Sigma at eps=0 (governs the Lorentzian tail spectral weight at mu; metals and the low-T saturation regime). Keep matched with --vertex-eval so rails and ladder form a consistent linearised pair (a warning is issued otherwise). Default: onshell.")
+  parser.add_argument('--vertex-channels', choices=['ladder','cooperon','both'], default='ladder', help="Vertex-correction channels folded into the dressed matrix elements: 'ladder' (diffuson, default), 'cooperon' (maximally crossed, weak localisation), 'both'. The Cooperon requires an inelastic dephasing rate on the rails (--gamma-add or --dmft): elastic disorder does not dephase it and its Q->0 pole would be unregularised. Adequacy of the Q-mesh (vs the dephasing length), of the supercell size (vs the elastic mean free path) and of the configuration ensemble is checked and warned about.")
+  parser.add_argument('--gamma-add', nargs=2, type=float, metavar=('C0','C2'), default=[0.0, 0.0], help='Phenomenological INELASTIC scattering rate Gamma_inel(T) = C0 + C2*T^2 [eV, eV/K^2], added consistently to the rails of the rate equation and of the vertex, to the written scatrate (per temperature step), and acting as the Cooperon dephasing cutoff. Preferred over a downstream ScatteringOffset when vertex corrections are on (that would broaden the kernels but not the ladder rails). Makes the vertex temperature dependent (see --dressed-per-t).')
+  parser.add_argument('--dressed-per-t', action='store_true', default=False, help='When the dressing is temperature dependent (combined --dmft mode or --gamma-add), write one dressed energy file per temperature (suffix _T####) instead of only the first temperature; run linretrace once per file.')
+  parser.add_argument('--vertex-eval', choices=['onshell','fermi'], default='onshell', help="Evaluation energy of the static ladder vertex. 'onshell': lambda at eps=a_kn per state (pair midpoints for interband), energy-binned -- correct in the activated regime of (narrow-gap) semiconductors where carriers live at the band edges, and retains vertex-induced particle-hole asymmetry (L12/Seebeck). 'fermi': lambda at eps=0, one solve per orbit -- correct for metals (where both settings agree to leading order) and for the low-T tail-dominated saturation regime of narrow-gap semiconductors. The transport weight (-df/de)|G|^2 is bimodal for |a_kn| >> k_BT; disagreement between the two settings flags the crossover regime where a single static dressing is strained (then use the full disorder_transport machinery). Default: onshell.")
+  parser.add_argument('--dwannier-path', default=None, help='Path to the disorder-Wannier pipeline modules (dwannier.py, disorder_selfenergy.py, disorder_transport.py); alternatively set DWANNIER_PATH.')
   parser.add_argument('--no-spin-average', help='Do not average spin-up and spin-down self-energies. By default, spin is averaged for paramagnetic runs (general.magnetism = para) and kept separate otherwise.', default=False, action='store_true')
   parser.add_argument('--n-fit', type=int, default=12, help='Number of lowest Matsubara frequencies used for the self-energy polynomial fit (default: 12). Ignored when --fit-wmax is also supplied.')
   parser.add_argument('--fit-wmax', type=float, default=None, metavar='ENERGY', help='If given [eV], use all positive Matsubara frequencies up to this energy cutoff instead of a fixed --n-fit count. Recommended when combining DMFT runs at several temperatures so that each fit covers the same energy window. fit_wmax and --n-fit may be specified together; fit_wmax takes priority.')
@@ -115,7 +133,7 @@ def main():
         ham.readWien2k()
 
       # ── DMFT mode ───────────────────────────────────────────────────
-      if args.dmft:
+      if args.dmft and not args.disorder:
         from structure.w2dyn import read_and_sort_temperatures
 
         e_hdf5 = args.energy_hdf5 if args.energy_hdf5 else args.output
@@ -147,8 +165,50 @@ def main():
           peierlscorrection = not args.nocorrection,
         )
 
+      # ── disorder mode (may follow --dmft in the same invocation) ────
+      if args.disorder:
+        e_hdf5 = args.energy_hdf5 if args.energy_hdf5 else args.output
+        if not os.path.isfile(e_hdf5):
+          logger.warning(
+            "Energy HDF5 '{}' not found. "
+            "Running plain lwann first to create it.".format(e_hdf5))
+          ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
+          if args.charge:
+            ham.outputData(e_hdf5, intraonly=args.intraonly)
+          else:
+            ham.outputData(e_hdf5, mu=ham.efer, intraonly=args.intraonly)
+        se_list = None
+        if args.dmft:
+          from structure.w2dyn import read_and_sort_temperatures
+          se_list = read_and_sort_temperatures(
+            paths=args.dmft,
+            spin_average=(None if not args.no_spin_average else False),
+            n_fit=args.n_fit, fit_degree=args.fit_degree,
+            fit_wmax=args.fit_wmax, gamma_min=args.gamma_min)
+        tm = args.disorder_temps
+        ham.computeDisorder(
+          archive_path      = args.disorder,
+          energy_hdf5       = e_hdf5,
+          scat_output       = args.scat_output if args.scat_output != 'lrtc-dmft-scat.hdf5' or args.dmft else 'lrtc-disorder-scat.hdf5',
+          temps             = (tm[0], tm[1], int(tm[2]), args.disorder_tlog),
+          engine            = args.disorder_engine,
+          vca               = not args.no_disorder_vca,
+          vertex            = not args.no_disorder_vertex,
+          dressed_output    = args.dressed_energy_output,
+          lambda_output     = args.lambda_output,
+          coherence_window  = args.coherence_window,
+          svd_cut           = args.disorder_svd_cut,
+          vertex_eval       = args.vertex_eval,
+          rate_eval         = args.rate_eval,
+          vertex_channels   = args.vertex_channels,
+          gamma_add         = tuple(args.gamma_add),
+          dressed_per_t     = args.dressed_per_t,
+          dwannier_path     = args.dwannier_path,
+          se_params_list    = se_list,
+          peierlscorrection = not args.nocorrection,
+        )
       # ── standard lwann mode (unchanged) ─────────────────────────────
-      else:
+      elif not args.dmft:
         ham.computeHamiltonian(peierlscorrection = not args.nocorrection)
         if args.charge:
           ham.outputData(args.output, intraonly=args.intraonly)

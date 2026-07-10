@@ -1,0 +1,611 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage[colorlinks=true,linkcolor=blue]{hyperref}
+\usepackage{booktabs}
+\newcommand{\vk}{\mathbf{k}}
+\newcommand{\vq}{\mathbf{q}}
+\newcommand{\vR}{\mathbf{R}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\Gam}{\Gamma}
+\newcommand{\Tr}{\operatorname{Tr}}
+\title{Ab-initio disorder input for \textsc{LinReTraCe}:\\
+on-shell rates, ladder-dressed transition matrix elements,\\
+and the \texttt{lwann --disorder} interface}
+\author{}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Purpose and scope}
+This interface connects the \emph{disorder-Wannier pipeline} (archive
+\texttt{deltaH.h5}) to \textsc{LinReTraCe} at Boltzmann-like cost, without
+touching the Fortran core.  It produces
+\begin{enumerate}
+\item a \textbf{scattering HDF5} with momentum- and band-resolved
+\emph{on-shell} disorder rates $\Gam_{\vk n}$, bandshifts from the
+disorder mean field $\Sigma^{(1)}(\vk)$, and $Z=1$ (elastic disorder is
+frequency independent);
+\item a \textbf{dressed energy HDF5}: a copy of the plain
+\texttt{lwann} energy file in which the transition matrix elements $M$
+carry the resummed static disorder (diffuson) ladder,
+$M\to\lambda M$ intra-band and analogously for inter-band elements;
+\item optionally a \textbf{$\lambda$ HDF5} containing the vertex
+enhancements themselves, together with the ensemble-averaged correlator
+in the band basis, for physics analysis.
+\end{enumerate}
+\textsc{LinReTraCe} is then run \emph{unchanged} on the dressed energy
+file together with the disorder scattering file: its polygamma kernels
+are untouched; all vertex physics enters through the matrix elements.
+Section~\ref{sec:whylambda} derives why this factorisation is
+legitimate; these notes are self-contained given only the disorder
+pipeline and the \textsc{LinReTraCe} paper.
+
+\section{Background, notation, and what the archive contains}
+\label{sec:background}
+
+\paragraph{The archive stores configurations, not averages.}
+The pipeline archive \texttt{deltaH.h5} stores, for every disorder
+configuration $c$ (weight $w_c$, $\sum_c w_c=1$), the \emph{two-point}
+disorder Hamiltonian in the primitive Wannier basis $\{L\}$,
+\begin{equation}
+\Delta H^{(c)}_{LL'}(\vk,\vk-\vq_p),
+\qquad p=1,\dots,N=\det S,
+\label{eq:archive}
+\end{equation}
+where the $\vq_p$ are the $N$ discrete momentum transfers of the
+supercell's reciprocal superlattice (a supercell with matrix $S$ folds
+the primitive Brillouin zone $N$-fold; disorder that is periodic on the
+supercell can transfer crystal momentum only in these $N$ quanta).  In
+the file this is held as real-space hopping blocks per configuration;
+the class \texttt{DisorderArchive} performs the Fourier transform and
+provides, \emph{computed on load},
+\begin{equation}
+\bar V(\vk,\vk-\vq_p)=\sum_c w_c\,\Delta H^{(c)}(\vk,\vk-\vq_p),
+\qquad
+\delta V_c=\Delta H^{(c)}-\bar V ,
+\label{eq:dV}
+\end{equation}
+i.e.\ the ensemble mean and the \emph{fluctuation} of the disorder
+potential.  The $\vq_p{=}0$ mean is the (virtual-crystal) first cumulant
+$\Sigma^{(1)}(\vk)=\bar V(\vk,\vk)$ and is folded into the band energies
+(bandshifts) rather than into scattering.  \textbf{Why store
+configurations rather than averages?}  Per-configuration storage is
+lossless: any moment of the ensemble can be formed later --- the second
+moment $\sum_c w_c\,\delta V_c\otimes\delta V_c^\dagger$ used by
+Born/SCBA and by the ladder below, but also the \emph{full}
+$\delta V_c$ needed by the T-matrix (engine \texttt{ata}), which resums
+all higher cumulants of a single scatterer and cannot be reconstructed
+from second moments alone.  Storing only averaged correlators would
+close that door.  For \emph{analysis} convenience the interface exports
+the transport-relevant average --- the ensemble-averaged squared
+correlator rotated into the band basis on the actual $\vk$-mesh --- into
+the $\lambda$ file (dataset \texttt{correlatorW2},
+Sec.~\ref{sec:outputs}); caching $\bar V$ additionally inside
+\texttt{deltaH.h5} would be a backward-compatible pipeline extension,
+but is not required (the on-load construction is cheap and exact).
+
+\paragraph{Linearised Green's function and band basis.}
+As in \textsc{LinReTraCe}, the retarded propagator of band $n$ is
+Lorentzian,
+\begin{equation}
+G^{R}_{\vk n}(\eps)=\frac{Z_{\vk n}}
+{\eps-a_{\vk n}+i\tilde\Gam_{\vk n}},\qquad
+G^{A}=\big(G^{R}\big)^{*},\qquad
+A_{\vk n}(\eps)=-\tfrac1\pi\,\mathrm{Im}\,G^R_{\vk n}(\eps),
+\label{eq:G}
+\end{equation}
+with $a_{\vk n}=E_{\vk n}-\mu$ the renormalised band energy,
+$\tilde\Gam$ the renormalised scattering rate and $Z$ the quasiparticle
+weight ($Z{=}1$ for pure disorder).  The band basis is obtained by
+diagonalising the static Hermitian part,
+$H(\vk)+\Sigma^{(1)}(\vk)$ (plus the DMFT static parts in combined mode,
+Sec.~\ref{sec:dmft}); the eigenvector matrix $U(\vk)$ rotates the
+velocities, $v_{nm}^{\alpha}(\vk)=[U^\dagger(\partial_{k_\alpha}
+H)U]_{nm}$ (including the inter-orbital Peierls correction, exactly as
+in \texttt{lwann}), and the disorder fluctuations,
+\begin{equation}
+\delta V^{\rm band}_{c}(\vk n\to\vk'm)
+=\big[U^\dagger(\vk)\;\delta V_c(\vk,\vk')\;U(\vk')\big]_{nm},
+\qquad \vk'=\vk-\vq_p .
+\label{eq:dVband}
+\end{equation}
+The \textsc{LinReTraCe} Onsager coefficients have the generic structure
+$\mathcal L\propto\sum_{\vk,n,m}\mathcal K(\vk,n,m)\,M(\vk,n,m)$ with
+kernels $\mathcal K$ (polygamma functions of $a$, $\tilde\Gam$, $\beta$)
+and Peierls matrix elements
+$M^{\alpha\beta}(\vk,n,m)=\overline{v^{\alpha}_{nm}}\,v^{\beta}_{nm}$;
+this interface modifies only the $M$.
+
+\paragraph{Diagrammatic vocabulary.}
+Disorder averaging of the current--current correlation function
+organises into diagrams in which the two propagator lines
+(``\emph{rails}'', one retarded at energy $\eps$, one advanced at the
+same $\eps$ for DC) are connected by pairwise-correlated disorder
+insertions (``\emph{rungs}'', each rung carrying one factor of the
+correlator $\sum_c w_c\,\delta V_c\otimes\delta V_c^\dagger$ and one
+momentum transfer $\vq_p$).  Ladders (rungs in parallel, non-crossing)
+build the \emph{diffuson}; maximally crossed rungs build the
+\emph{Cooperon} (weak localisation), which is \emph{not} included here
+(Sec.~\ref{sec:notincluded}).
+
+\section{On-shell rates}
+\label{sec:rates}
+The disorder self-energy in the Born approximation is
+$\Sigma(\vk,\eps)=\sum_{p,c}w_c\,\delta V_c(\vk,\vk')\,G(\vk',\eps)\,
+\delta V_c^\dagger(\vk,\vk')$.  Its band-diagonal imaginary part,
+evaluated \emph{on shell} ($\eps=a_{\vk n}$, the energy at which the
+state's own spectral weight sits --- the same choice
+\textsc{LinReTraCe} offers for $\Gam^0_{\vk n}$), gives with the
+Lorentzian rails~\eqref{eq:G}
+\begin{equation}
+\boxed{\;
+\Gam_{\vk n}=\sum_{p,c,m} w_c\,
+\big|\delta V^{\rm band}_{c}(\vk n\to\vk'm)\big|^{2}\,
+\frac{Z_{\vk'm}\,\tilde\Gam_{\vk'm}}
+{(a_{\vk n}-a_{\vk'm})^{2}+\tilde\Gam_{\vk'm}^{2}}\;}
+\label{eq:rates}
+\end{equation}
+(the Lorentzian is the finite-lifetime replacement of the golden-rule
+$\pi\delta(a_{\vk n}-a_{\vk'm})$).  Engines:
+\texttt{born} evaluates \eqref{eq:rates} once with a seed width;
+\texttt{scba} (default) iterates it to self-consistency,
+$\tilde\Gam=Z(\Gam+\Gam_{\rm other})$ on the right-hand side --- this is
+the conserving partner of the ladder in Sec.~\ref{sec:ladder};
+\texttt{ata} replaces $\delta V_c\,G\,\delta V_c^\dagger$ by the full
+per-configuration T-matrix $T_c=(1-\delta V_cG)^{-1}\delta V_c$ resummed
+within each $\vq_p$ orbit, capturing multiple scattering off one
+configuration (impurity bound-state trends) beyond second order.
+The evaluation energy is selectable (\texttt{--rate-eval}): `onshell'
+($\eps=a_{\vk n}$, the quasiparticle width of each state's own
+resonance --- governs activated transport) or `fermi' ($\eps=0$ ---
+governs the Lorentzian tail spectral weight at $\mu$, i.e.\ metals and
+the low-$T$ saturation regime); keep it matched with
+\texttt{--vertex-eval} so rails and ladder form one consistent
+linearised pair (a warning is issued otherwise).
+Elastic scattering makes $\Gam_{\vk n}$ temperature independent; the
+rates are replicated over the requested $T$ axis
+(\texttt{--disorder-temps}, linear, or \texttt{--disorder-temps-log},
+logarithmic as in the \texttt{linretrace} config), unless
+\texttt{--dmft} supplies the axis (Sec.~\ref{sec:dmft}).
+\emph{Write convention}: \textsc{LinReTraCe}'s core multiplies
+\texttt{scatrate} by \texttt{qpweight} on read; the file therefore
+carries the bare rate (disorder-only: $Z=1$, as computed; combined:
+$\gamma^{\rm QP}_{\rm DMFT}/Z+\Gam_{\rm dis}$).
+
+\section{Why the vertex just multiplies the matrix elements}
+\label{sec:whylambda}
+This section is the heart of the interface; we give the complete
+argument.
+
+\paragraph{(a) Which diagrams are summed.}
+The dissipative DC conductivity involves the disorder-averaged
+particle--hole bubble at equal energies.  Keeping, of all averaged
+diagrams, the non-crossing particle--hole \emph{ladder} built on the
+same rails and the same rung as the SCBA self-energy (a conserving,
+Baym--Kadanoff pair --- mixing rungs and rails from different
+approximations is known to violate positivity), the RA part of the
+transport function per energy $\eps$ reads
+\begin{equation}
+T^{RA}(\eps)=\frac1{N_k}\sum_{\vk}\Tr\big[v^{\alpha}\,
+G^{R}(\vk,\eps)\,\Lambda^{\beta}(\vk;\eps)\,G^{A}(\vk,\eps)\big],
+\label{eq:TRA}
+\end{equation}
+where the three-point vertex $\Lambda$ resums \emph{all} rung orders
+through the linear (Bethe--Salpeter) equation
+\begin{equation}
+\boxed{\;
+\Lambda_{nm}(\vk;\eps)=v_{nm}(\vk)+\sum_{p,c}w_c\Big[
+\delta V_c(\vk,\vk')\,G^{R}(\vk',\eps)\,\Lambda(\vk';\eps)\,
+G^{A}(\vk',\eps)\,\delta V_c^{\dagger}(\vk,\vk')\Big]_{nm}\;}
+\label{eq:ladder}
+\end{equation}
+with band-diagonal rails~\eqref{eq:G} and $\delta V_c$ from
+Eq.~\eqref{eq:dVband}.  Iterating \eqref{eq:ladder} generates
+$v+K[v]+K[K[v]]+\dots=(1-K)^{-1}v$: the one-rung, two-rung, \dots{}
+ladders.  \emph{No double counting:} exactly one current vertex in the
+bubble \eqref{eq:TRA} is replaced by $\Lambda$; since $\Lambda$ already
+contains every ladder insertion \emph{between} the two currents,
+dressing both sides would count each diagram twice.  Hence the dressed
+matrix element is one-sided,
+\begin{equation}
+\tilde M^{\alpha\beta}_{nm}(\vk)
+=\mathrm{Re}\big[\overline{v^{\alpha}_{nm}(\vk)}\,
+\Lambda^{\beta}_{nm}(\vk)\big]
+\;\xrightarrow{\;n=m\;}\;
+\lambda^{\alpha\beta}_{\vk n}\,M^{\alpha\beta}_{nn}(\vk),
+\qquad
+\lambda\equiv\tilde M/M .
+\label{eq:dressing}
+\end{equation}
+
+\paragraph{(b) Elasticity makes $\Lambda$ static.}
+The rungs in \eqref{eq:ladder} carry \emph{no energy transfer}
+(static disorder): both rails sit at the single external energy $\eps$,
+which enters only \emph{parametrically}.  $\Lambda(\eps)$ therefore
+varies on band-structure scales (bandwidth, distance to band edges and
+van-Hove points, broadened by $\tilde\Gam$), whereas the
+\textsc{LinReTraCe} kernels vary on the thermal scale $T$ --- the same
+scale separation that justifies linearising $\Sigma(\omega)$ in the
+first place.  Evaluating $\Lambda$ at one representative energy per
+state (Sec.~\ref{sec:eval}) then removes the $\eps$-dependence
+entirely.
+
+\paragraph{(c) The kernel factorisation.}
+With a static $\Lambda$, the energy integral of the RA bubble
+factorises per $(\vk,n)$:
+\begin{equation}
+\int\! d\eps\,\big({-}f'(\eps)\big)\,
+\big|G_{\vk n}(\eps)\big|^{2}\,
+\overline{v^{\alpha}_{nn}}\,\Lambda^{\beta}_{nn}
+=\tilde M^{\alpha\beta}_{nn}(\vk)\;
+\underbrace{\int\! d\eps\,({-}f')\,|G_{\vk n}|^{2}}_{\textstyle
+\propto\;\mathcal K_{11}(\vk,n)},
+\label{eq:factorize}
+\end{equation}
+i.e.\ exactly the \textsc{LinReTraCe} kernel times the dressed matrix
+element: \emph{the kernels are untouched, only} $M\to\tilde M=\lambda M$.
+The same argument applies verbatim to $\mathcal K_{12}$ and
+$\mathcal K_{22}$ (extra factors $\eps^{a+b-2}$ are scalars under the
+vertex equation), so charge, Seebeck and thermal kernels share one
+$\lambda$ --- the Jonson--Mahan structure survives elastic vertex
+corrections.  One approximation should be stated explicitly: the
+ladder is solved for the RA section, which dominates DC transport for
+$\tilde\Gam$ small against band scales; the RR/AA contributions inside
+the kernels (the $\psi_2$-type terms) are kept \emph{bare}.
+
+\paragraph{(d) What is \emph{not} included.}
+\label{sec:notincluded}
+(i) the maximally crossed (Cooperon) channel --- weak localisation is a
+separate, additive channel with its own momentum structure and
+cutoff sensitivity, planned as a future extension; (ii) the
+disorder-current end terms $\langle\delta v\,\delta V\rangle$ and the
+$\langle\delta v\,G\,\delta v\rangle$ dumbbell, which require the
+derivative data $\partial_\vk\Delta H$ (available in the full
+\texttt{disorder\_transport} code, where they are shown to matter for
+optical spectra; at DC they are a percent-level correction on the test
+systems); (iii) electron--electron vertex corrections (excluded by the
+same assumption as in \textsc{LinReTraCe}); (iv) rail-off-diagonal
+(inter-band) vertex \emph{components} --- see
+Sec.~\ref{sec:interband}.
+
+\section{Solving the ladder: orbits, the Ward identity, and zero-mode
+deflation}
+\label{sec:ladder}
+Because the rung transfers only the $N$ discrete momenta $\vq_p$,
+Eq.~\eqref{eq:ladder} couples $\vk$ only to points of its
+\emph{transfer orbit} $\{\vk-\sum_p n_p\vq_p\}$ (size $\le N$ on a
+commensurate mesh): the solve block-diagonalises into small linear
+systems of dimension $|{\rm orbit}|\times n_b^2$.
+
+\paragraph{The per-energy Ward identity.}
+For \emph{elastic} scattering, the anti-Hermitian part of the SCBA
+self-energy satisfies, at every single energy $\eps$ separately,
+\begin{equation}
+\Sigma^{R}(\vk,\eps)-\Sigma^{A}(\vk,\eps)
+=\sum_{p,c}w_c\,\delta V_c(\vk,\vk')
+\big[G^{R}-G^{A}\big](\vk',\eps)\,
+\delta V_c^{\dagger}(\vk,\vk') ,
+\label{eq:ward}
+\end{equation}
+which is the statement that scattering redistributes spectral weight
+\emph{within} each energy shell without creating or destroying it
+(particle-number conservation per energy; it is the elastic,
+energy-resolved form of the usual Ward identity relating $\Sigma$ and
+the vertex).  Consequence for \eqref{eq:ladder}: at $\omega=0$ the RA
+kernel $K$ possesses an eigenvalue (arbitrarily close to) $1$ at
+\emph{every} $\eps$ --- the conserved-density (diffusion) mode, the
+$q\to0$ precursor of the diffusion pole.  A naive solve of
+$(1-K)\Lambda=v$ amplifies rounding by $1/(1-\lambda_{\max})$.
+
+\paragraph{Why the current is orthogonal to that mode --- and when.}
+The protection is a $\vk\to-\vk$ parity argument, so we must first ask
+when the band structure itself obeys $a_{-\vk n}=a_{\vk n}$.
+\emph{Sufficient} conditions: spatial inversion, \emph{or} time-reversal
+symmetry (Kramers: for any non-magnetic system, with or without
+spin--orbit coupling, $E_n(-\vk)=E_n(\vk)$ with bands sorted by energy),
+or more generally any operation of the magnetic point group mapping
+$\vk\to-\vk$ (e.g.\ the combined $PT$ symmetry of many
+antiferromagnets).  None is individually \emph{necessary}; what fails is
+the case with none of them --- e.g.\ non-centrosymmetric magnets (such
+as magnetic Weyl semimetals), where $E_n(-\vk)\neq E_n(\vk)$
+generically.  Given such a symmetry, the diffusion mode is \emph{even}
+(built from the local spectral density, with $a$ and $\tilde\Gam$ even),
+while the current source is \emph{odd},
+$v^{\alpha}_{nn}(-\vk)=-v^{\alpha}_{nn}(\vk)$.  There is additionally a
+\emph{weaker protection that needs no point symmetry at all}: the
+solvability of $(1-K)\Lambda=v$ requires only that the source be
+orthogonal to the \emph{left} zero mode, whose weight depends on $\vk$
+through $(a_{\vk n},\tilde\Gam_{\vk n})$; if $\tilde\Gam$ depends on
+$\vk$ only through the band energy, the overlap is a Brillouin-zone
+total derivative, $\sum_\vk\partial_\vk F(a_{\vk n})=0$ --- exactly
+zero.  Genuine $\vk$-anisotropy of $\tilde\Gam$ in a system without any
+$\vk\to-\vk$ symmetry leaves a small residual overlap, which is
+precisely what the leak diagnostic below measures.  For the correlator,
+the corresponding condition is
+\begin{equation}
+\sum_c w_c\big|\delta V^{\rm band}_c(\vk n\to\vk'm)\big|^2
+=\sum_c w_c\big|\delta V^{\rm band}_c(-\vk\,n\to-\vk'\,m)\big|^2 ,
+\label{eq:parity}
+\end{equation}
+then $K$ commutes with the parity operator, its even and odd sectors
+decouple, and the odd current source cannot excite the even zero mode:
+the physical current vertex is finite.  Condition \eqref{eq:parity}
+holds for a self-averaging ensemble (each configuration's mirror image
+is equally likely); for small ensembles it is only approximate --- the
+code measures the violation (``correlator parity asymmetry'') and
+reports it.
+
+\paragraph{Truncated-SVD deflation and the leak diagnostic.}
+The solver inverts $(1-K)$ through its singular-value decomposition,
+dropping directions with $\sigma<\texttt{svd\_cut}\cdot\sigma_{\max}$
+(relative cut, default $10^{-2}$): this removes the near-null diffusion
+direction.  For each Cartesian source the amplitude that \emph{would}
+have entered the dropped directions, relative to the kept solution, is
+recorded as the \emph{leak}.  Small leak $\Rightarrow$ the truncation is
+harmless (parity protection intact).  Leak $\gtrsim10^{-3}$
+$\Rightarrow$ the source genuinely drives the marginal mode (broken
+parity, Eq.~\eqref{eq:parity} violated): $\lambda$ near the affected
+energies is unreliable; enlarge the configuration ensemble.  Both the
+asymmetry and the leak are printed on every run.
+
+\section{Evaluation energy: \texttt{--vertex-eval \{onshell,fermi\}}}
+\label{sec:eval}
+The weight multiplying $\lambda_{\vk n}(\eps)$ in
+Eq.~\eqref{eq:factorize} is $(-f'(\eps))|G_{\vk n}(\eps)|^2$: a thermal
+window of width $T$ at $\mu$ times the state's Lorentzian of width
+$\tilde\Gam$ at $a_{\vk n}$.  Since $(-f')$ decays exponentially while
+the Lorentzian tail decays only polynomially, this weight is
+\emph{bimodal} for $|a|\gg T$: a tail lobe at $\eps\simeq0$ of height
+$\sim1/a^{2}$ and an on-shell lobe at $\eps\simeq a$ of height
+$\sim e^{-|a|/T}/\tilde\Gam^{2}$; the on-shell lobe dominates iff
+$|a|/T<2\ln(|a|/\tilde\Gam)$.  Hence two selectable prescriptions:
+\begin{itemize}
+\item \texttt{fermi}: one solve per orbit at $\eps=0$.  Correct for
+\emph{metals} --- there the states that carry the current have
+$|a|\lesssim\max(T,\tilde\Gam)$ and both prescriptions agree to leading
+order --- and for the \emph{low-$T$, tail-dominated}
+(resistivity-saturation) regime of narrow-gap semiconductors, where
+transport proceeds through the $\tilde\Gam$-induced in-gap spectral
+weight at $\mu$.
+\item \texttt{onshell}: energy-binned solves at $\eps=a_{\vk n}$ (pair
+midpoints for inter-band elements; bin width
+$\sim\tilde\Gam_{\min}/3$).  Correct in the \emph{activated} regime,
+where the carriers live at the band edges and $\eps=0$ lies in the gap
+where no state exists; and the only choice that retains vertex-induced
+particle--hole \emph{asymmetry} (valence and conduction states with
+different orbital character acquire different $\lambda$), which feeds
+$L_{12}$ and the Seebeck coefficient.  Residual error
+$O(\tilde\Gam\,\partial_\eps\ln\lambda)$, temperature independent.
+\end{itemize}
+The migration of the dominant lobe with temperature is precisely the
+characteristic-temperature ($T^\ast$) phenomenology of finite-lifetime
+semiconductors.  \textbf{Practical rule: run both settings.}  Agreement
+$\Rightarrow$ the static dressing is controlled.  Disagreement
+$\Rightarrow$ the system is in the bimodal crossover, where no single
+static $\lambda$ is exact --- there, benchmark against the
+frequency-resolved vertex of the full \texttt{disorder\_transport}
+machinery.
+
+\section{Inter-band elements}
+\label{sec:interband}
+\textsc{LinReTraCe}'s kernels include inter-band transitions
+$\mathcal K(\vk,n,m)$ with proper degenerate limits, so the interface
+dresses inter-band matrix elements as well: Eq.~\eqref{eq:ladder} is
+already the full band-matrix equation, and pairs inside the coherence
+window
+\begin{equation}
+|a_{\vk n}-a_{\vk m}|<n_{\rm coh}\,
+(\tilde\Gam_{\vk n}+\tilde\Gam_{\vk m}),
+\qquad n_{\rm coh}=\texttt{--coherence-window}\ (\text{default }6),
+\end{equation}
+are dressed at their pair-midpoint energy
+$\bar\eps=\tfrac12(a_n+a_m)$ (or $0$ in \texttt{fermi} mode); outside
+the window the $G^R_nG^A_m$ pair weight is negligible and the bare
+element is kept.  Two remarks: (i) the \emph{rails} remain
+band-diagonal --- rail-off-diagonal vertex components are suppressed by
+$\tilde\Gam/(|a_n-a_m|+\tilde\Gam)$, the same parameter that controls
+\textsc{LinReTraCe}'s own neglect of inter-band scattering after the
+rotation, so both truncations degrade together (near degeneracies) and
+are mutually consistent; (ii) inter-band \emph{scattering} is fully
+retained in the rung through $|\delta V^{\rm band}_{nm}|^2$ --- it
+contributes to the rates \eqref{eq:rates} and mixes bands inside the
+ladder.
+
+\section{Combined mode with \texttt{--dmft}}
+\label{sec:dmft}
+Static Hermitian parts add before the rotation:
+$\tilde H(\vk)=H(\vk)+\Sigma^0_{\rm DMFT}+\mathrm{dc}
++\Sigma^{(1)}_{\rm dis}(\vk)-\mu_{\rm DMFT}$, solved as the generalised
+eigenproblem with $Z^{-1}_{\rm DMFT}$ exactly as in
+\texttt{wannier\_dmft} ($\Sigma^{(1)}$ is $\vk$-dependent, hence added
+per $\vk$).  The rails of both the rate equation~\eqref{eq:rates} and
+the ladder~\eqref{eq:ladder} carry the \emph{total} renormalised width
+$\tilde\Gam=Z(\Gam^0_{\rm DMFT}+\Gam_{\rm dis})$ and spectral weight
+$Z$ (coherent part only, consistent with \textsc{LinReTraCe}); the rung
+remains disorder-only (no $e$--$e$ vertex, by the same assumption as in
+the core).  Consequently $\lambda$ acquires a parametric temperature
+dependence through $\Gam_{\rm DMFT}(T)$ and is computed per
+temperature; the DMFT temperature axis takes precedence over
+\texttt{--disorder-temps}.  Note there is \emph{no Matthiessen rule for
+the vertex}: rates add on the rails, but rungs of different channels
+are not additive --- the ladder is solved once with the combined
+ingredients.  The dressed energy file carries the first temperature's
+vertex (\textsc{LinReTraCe} reads a single energy file; per-$T$ dressed
+files are future work, and a warning is issued).
+
+\section{Inelastic rates: three consistent routes}
+\label{sec:inelastic}
+Phenomenological rates of non-disorder origin ($e$--$e$, $e$--ph) are
+\emph{inelastic}; they broaden the rails, suppress the diffuson
+enhancement, and provide the Cooperon dephasing cutoff
+(Sec.~\ref{sec:cooperon}).  Three ways to include them, in decreasing
+order of consistency:
+(i) \texttt{--gamma-add C0 C2}: $\Gam_{\rm inel}(T)=C_0+C_2T^2$
+[eV, eV/K$^2$] enters the rails of the rate equation \eqref{eq:rates}
+\emph{and} of the ladder \eqref{eq:ladder}, is written into the
+scattering file per temperature step, and cuts the Cooperon --- fully
+consistent; the vertex becomes $T$-dependent (use
+\texttt{--dressed-per-t});
+(ii) core-side \texttt{ScatteringCoefficients} /
+\texttt{QuasiParticleCoefficients} in the \texttt{linretrace} config
+\emph{together with} a \texttt{ScatteringFile}: a small core extension
+(part of this patch series) makes them \emph{additive} on top of the
+file per temperature step,
+$\Gam_{\rm add}(T)=\sum_i c_i T^{\,i-1}$ ($T$ in K) and
+$1/Z_{\rm tot}=1/Z_{\rm file}+1/Z_{\rm cfg}-1$, applied before the
+$\Gam\cdot Z$ convention --- the kernels are then consistent, but a
+dressed energy file constructed \emph{without} this rate carries a
+ladder with too-narrow rails (acceptable for
+$\Gam_{\rm inel}\ll\Gam_{\rm dis}$);
+(iii) \texttt{ScatteringOffset}: constant, added and multiplied by $Z$
+in the unmodified core (verified: \texttt{input.f90}), same consistency
+caveat as (ii).
+
+\section{The maximally crossed (Cooperon) channel}
+\label{sec:cooperon}
+With \texttt{--vertex-channels cooperon|both} the interface adds the
+weak-localisation channel.  The $n$-rung maximally crossed fan at fixed
+total momentum $\mathbf Q=\vk+\vk'$ is a transfer operator on the
+$\vq_p$ orbit (transplanted from the full transport code, where its
+momentum routing was validated against explicit ring traces to
+$10^{-16}$),
+\begin{equation}
+O_{(u),(u-\vq_p)}=\sum_c w_c\big[\delta V_c(u,u')\,G^{R}(u')\big]
+\otimes\big[\delta V_c(\mathbf Q{-}u,(\mathbf Q{-}u){+}\vq_p)\,
+G^{A}((\mathbf Q{-}u){+}\vq_p)\big],
+\end{equation}
+with $\delta V_c(\mathbf Q{-}u,(\mathbf Q{-}u){+}\vq_p)
+=\delta V_c((\mathbf Q{-}u){+}\vq_p\to\mathbf Q{-}u)^\dagger$ by
+hermiticity.  The fan sum $n\ge2$ is $O^{2}(1-O)^{-1}$ ($n{=}1$ is
+already contained in the diffuson), closed per $\vk$ in the
+$(\vk,\mathbf Q{-}\vk)$ block by the twisted boundary; the result is
+cast as an \emph{additive} current vertex through
+$t_\vk=\Tr[v^{\alpha}G^{R}C^{\beta}G^{A}]$, i.e.\
+$C_{il}(\vk)=P_{il}/G^{A}_{l}(\vk)$ with
+$P_{il}=\sum_{jk'}G^{A}_{j}(\mathbf Q{-}\vk)\,X_{(ij)(k'l)}\,
+v^{\beta}(\mathbf Q{-}\vk)_{k'j}$, summed over all $\mathbf Q$ of the
+mesh.  Dressing then proceeds through the same one-sided pipeline,
+$\tilde M=\mathrm{Re}[\overline{v^{\alpha}}(\lambda v^{\beta}
++C^{\beta})]$; the interface reproduces the full-code crossed transport
+function to $7\times10^{-16}$ on identical rails (test~5).
+
+\paragraph{Cutoff physics and the emergent regulator.}
+The Cooperon pole at $\mathbf Q\to0$ expresses perfect constructive
+interference of time-reversed loops; \emph{elastic} disorder does not
+dephase it --- its rail broadening cancels against the rung at
+$\mathbf Q=0$ by the same Ward identity \eqref{eq:ward} that creates the
+pole.  The infrared cutoff must therefore be \emph{inelastic}: with
+rails carrying $\tilde\Gam=Z(\Gam_{\rm el}+\Gam_{\rm inel})$ and the
+rung elastic-only, $1-O(\mathbf Q{\to}0)\approx
+\Gam_{\rm inel}/\Gam_{\rm tot}$ emerges automatically --- the
+\texttt{--gamma-add} (or DMFT) rate \emph{is} the dephasing,
+$L_\phi=\sqrt{D\tau_\phi}$.  The interface refuses to run the Cooperon
+without an inelastic rate (unregularised pole) and issues quantitative
+warnings when: the $\mathbf Q$-mesh is coarser than $1/L_\phi$
+(recommending $N_i\ge|\mathbf b_i|L_\phi$ --- otherwise the \emph{mesh}
+truncates the weak-localisation logarithm); the elastic mean free path
+$\ell$ exceeds the supercell linear size (periodic disorder replicas
+then interfere coherently; minimal supercell size $\gtrsim\ell$); or the
+ensemble is small/asymmetric (the pole region amplifies ensemble
+noise).  The crossed contribution is intrinsically $T$-dependent via
+$\tau_\phi(T)$; use \texttt{--dressed-per-t} and run
+\texttt{linretrace} once per temperature.  Cost: one small orbit solve
+per $(\mathbf Q,\text{energy bin})$; the $\mathbf Q$ loop is
+parallelised with the pipeline's \texttt{tile\_map}
+(\texttt{DWANN\_NUM\_WORKERS} / \texttt{DWANN\_BACKEND=mpi}), the same
+rationale as the full scheme.
+
+\section{Outputs and file formats}
+\label{sec:outputs}
+\textbf{Scattering HDF5} (FullScattering layout, identical to the DMFT
+interface): \texttt{.quantities/*} (axes), and per spin prefix
+\texttt{step/NNNNNN/scatrate|qpweight|bandshift}, shapes
+$(n_k,n_b)$ per temperature step.
+\textbf{Dressed energy HDF5}: byte-copy of the plain energy file with
+\texttt{momentsDiagonal} $(n_k,n_b,n_{\rm dir})$ and the in-window rows
+of \texttt{kPoint/*/moments} replaced by Eq.~\eqref{eq:dressing};
+attributes \texttt{disorder\_dressed} (mode) and
+\texttt{disorder\_archive}.  Run \texttt{linretrace} on this file plus
+the scattering file.  When the dressing is $T$-dependent (combined mode
+or \texttt{--gamma-add}), \texttt{--dressed-per-t} writes one file per
+temperature (suffix \texttt{\_T\#\#\#\#}); attributes record channels,
+evaluation modes, $T$, and \texttt{gamma\_add}.
+\textbf{$\lambda$ HDF5} (\texttt{--lambda-output}):
+\begin{center}\small
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+dataset & shape & content \\
+\midrule
+\texttt{lambdaDiagonal} & $(n_k,n_b,n_{\rm dir})$ &
+dressed/bare ratios $\lambda$; entries with negligible bare moment
+(band extrema, $v\to0$) are guarded to $\lambda=1$ --- the dressed
+values remain exact.  $(n_T,\dots)$ leading axis in combined mode. \\
+\texttt{vertexDiagonal} & $(n_k,n_b,3)$ complex &
+$\Lambda^{\alpha}_{nn}(\vk)$ itself. \\
+\texttt{kPoint/*/lambdaPairs} & $(n_{\rm pairs},8)$ &
+rows $(n,m,\mathrm{Re}\Lambda^{x,y,z},\mathrm{Im}\Lambda^{x,y,z})$ for
+dressed inter-band pairs. \\
+\texttt{correlatorW2} & $(n_k,N,n_b,n_b)$ &
+$\sum_c w_c|\delta V^{\rm band}_c|^2$; element $[k,p,n,m]$ couples
+$(\vk,n)$ to $(\vk-\vq_p,m)$ --- the transport-relevant ensemble
+average, exported for analysis (cf.\ Sec.~\ref{sec:background}). \\
+\texttt{bandEnergies}, \texttt{railWidths} & $(n_k,n_b)$ &
+$a_{\vk n}$ and $\tilde\Gam_{\vk n}$ used in the solves. \\
+\bottomrule
+\end{tabular}
+\end{center}
+Attributes record the archive path, \texttt{vertex\_eval}, and the
+temperature axis.
+
+\section{Validation}
+\texttt{testsuite/tests/test\_disorder\_interface.py} (requires
+\texttt{DWANNIER\_PATH} and the CaCuO$_2$ archive):
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+check & result & meaning \\
+\midrule
+orbit solver $=$ pipeline \texttt{solve\_vertex} & $9\times10^{-15}$ &
+ladder algebra exact vs the machine-validated \\
+(identical rails, ab-initio correlator) & & full-transport solver \\
+point-like correlator & $\lambda=1$ exact & parity decoupling
+(Sec.~\ref{sec:ladder}) \\
+forward-scattering correlator & $10^{-10}$ vs analytic &
+$\lambda=[1-2u_0u_1q]^{-1}$, the $\tau_{\rm tr}/\tau$ textbook case \\
+end-to-end CaCuO$_2$, both eval modes & pass &
+dressed $=\lambda\cdot$bare at $7\times10^{-15}$; diagnostics fire \\
+Cooperon vertex $=$ full-code crossed fan & $7\times10^{-16}$ &
+transplanted operator exact (identical rails) \\
+channel guards & pass & Cooperon w/o dephasing refuses;
+\texttt{gamma\_add} enters scatrate; per-$T$ files \\
+\bottomrule
+\end{tabular}
+\end{center}
+On the two-configuration CaCuO$_2$ archive the parity asymmetry
+(5--7\%) and the leak warning fire, and $\lambda$ is spread over tens
+--- the \emph{correct} verdict for a non-self-averaging ensemble.
+Rates and bandshifts are already robust at two configurations;
+quantitative vertex corrections require larger ensembles.
+
+\section{Usage}
+\begin{verbatim}
+# 1. plain energy file on a q_p-commensurate, Gamma-centred mesh
+lwann <w90folder> --kmesh 6 6 6 -o lrtc-wann.hdf5
+# 2. disorder input (rates + dressed elements + lambda analysis)
+lwann <w90folder> --kmesh 6 6 6 -o lrtc-wann.hdf5 \
+    --disorder deltaH.h5 --disorder-engine scba \
+    --disorder-temps 100 500 9 --disorder-temps-log \
+    --vertex-eval onshell \
+    --scat-output lrtc-dis-scat.hdf5 \
+    --dressed-energy-output lrtc-wann-dressed.hdf5 \
+    --lambda-output lrtc-lambda.hdf5
+# combined with DMFT (its temperature axis takes precedence):
+lwann <w90folder> --kmesh 6 6 6 --dmft w2d_T*.hdf5 --disorder deltaH.h5 ...
+# 3. run the untouched core on (dressed energy file, scattering file)
+\end{verbatim}
+Requires \texttt{DWANNIER\_PATH} (or \texttt{--dwannier-path}).  All
+flags: \texttt{lwann --help}; workflow details:
+\texttt{documentation/DISORDER\_INTERFACE\_MANUAL.md}.
+\end{document}
