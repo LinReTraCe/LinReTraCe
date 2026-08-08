@@ -1,6 +1,29 @@
 #! /usr/bin/env python3
 
 import sys
+
+# ── subcommand dispatch (backwards compatible) ───────────────────────────────
+# 'lwann refine ...' delegates to the adaptive k-mesh refinement entry point.
+# 'lwann run ...' is the explicit spelling of the standard mode; any other
+# first token (i.e. the Wannier90 folder) also falls through to it, so the
+# historical 'lwann <folder> [options]' form keeps working.  This mirrors the
+# ltb dispatcher, where 'run' is likewise both explicit and the default.
+# The refine branch must run BEFORE numpy is imported, because the refinement
+# entry point sets the OpenMP/BLAS thread-count environment variables at
+# import time.
+if len(sys.argv) > 1 and sys.argv[1] == 'refine':
+  from pathlib import Path
+  _root = Path(__file__).resolve().parent
+  if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+  sys.argv = ['lwann refine'] + sys.argv[2:]
+  from scripts.lwann import refine_kmesh as _refine_kmesh
+  sys.exit(_refine_kmesh.main())
+elif len(sys.argv) > 1 and sys.argv[1] == 'run':
+  # strip the token and continue into the standard mode below
+  sys.argv = ['lwann run'] + sys.argv[2:]
+# ─────────────────────────────────────────────────────────────────────────────
+
 import os
 import logging
 import argparse
@@ -38,7 +61,11 @@ existing energy HDF5 from a preceding plain lwann run).
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
     description='Argument parser for Wannier90 pre-processing of LRTC',
-    epilog="That's the end of the help")
+    epilog="Subcommands: 'lwann run <folder> [options]' is the standard mode "
+           "(also the default, so the folder may be given directly); "
+           "'lwann refine initial.hdf5 wannier_dir mu gamma_min T_min "
+           "[options]' runs the adaptive k-mesh refinement. See "
+           "'lwann refine --help'.")
   parser.add_argument('system', help='Folder of Wannier90 calculation')
   parser.add_argument('-c', '--charge', type=float, help='Number of electrons in the provided bands. If not provided determine it.')
   parser.add_argument('-o', '--output', help='Outputname of hdf5 (default="lrtc-wann.hdf5")', default='lrtc-wann.hdf5')
@@ -77,6 +104,12 @@ def parse_args(args=None):
   parser.add_argument('--check-fit-elements', nargs='+', default=['diag'], help="Which orbital pairs to plot in --check-fit mode: 'diag' (default), 'offdiag' (every unique off-diagonal pair, shown together with its (Lp,L) partner for a symmetry check), 'all' (both), or explicit 'L,Lp' pairs.")
   parser.add_argument('--check-fit-outdir', default='./fit_check', help='Output directory for --check-fit figures (default: ./fit_check).')
   parser.add_argument('--check-fit-show', help='In --check-fit mode, also open an interactive window (requires a display).', default=False, action='store_true')
+  # The --disorder option block above is currently commented out (the
+  # structure/wannier_disorder.py extension is not part of every
+  # distribution), but main() still branches on args.disorder.  Without this
+  # default every plain lwann invocation dies with
+  # "'Namespace' object has no attribute 'disorder'".
+  parser.set_defaults(disorder=None)
   return parser.parse_args(args)
 
 class log_formatter(logging.Formatter):

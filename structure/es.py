@@ -148,6 +148,76 @@ class ElectronicStructure(ABC):
     self.dims = np.array(self.dims)
     logger.info('Detected {} dimensions.'.format(self.ndim))
 
+  def _defineDimensionsFromKpoints(self, kpoints, dims=None, tol=1e-10):
+    '''
+    Set ndim/dims for a custom (irregular) k-mesh.
+
+    Custom meshes carry no regular grid dimensions -- by convention
+    nkx=nky=nkz=1 is written for them -- so _defineDimensions would report
+    ndim=0 and dims=[F,F,F].  That value is propagated through h5output into
+    .unitcell/ndim and is consumed both by linretrace and by postproc (which
+    would then zero the off-diagonal Onsager elements and skip the tensor
+    inversion).
+
+    If *dims* is given (a length-3 boolean sequence, typically read from the
+    .unitcell/dims dataset of the coarse HDF5 the mesh was derived from) it is
+    adopted verbatim.  This is the preferred route: the dimensionality of the
+    parent calculation is a property of the physical setup, not of the k-mesh,
+    and inheriting it guarantees that a refined file is treated exactly like
+    the coarse file it came from.
+
+    Only when no *dims* is supplied are the dimensions inferred from the
+    spread of the k-points along each axis.  Note that inference cannot see
+    cases where the k-mesh is three-dimensional but the projection is not
+    (e.g. a single planar d_x2-y2 orbital in a layered cuprate); such setups
+    must pass *dims* explicitly.
+    '''
+    if dims is not None:
+      dims = np.asarray(dims, dtype=bool).ravel()
+      if dims.shape != (3,):
+        raise ValueError('dims must be a length-3 boolean sequence')
+      self.dims = dims
+      self.ndim = int(np.sum(dims))
+      logger.info('Adopted {} dimensions from the parent calculation.'.format(self.ndim))
+      return
+
+    kpoints = np.asarray(kpoints, dtype=np.float64)
+    if kpoints.ndim != 2 or kpoints.shape[1] != 3:
+      raise ValueError('kpoints must be an (N,3) array of fractional coordinates')
+
+    self.ndim = 0
+    self.dims = []
+    for i in range(3):
+      spread = np.max(kpoints[:, i]) - np.min(kpoints[:, i])
+      if spread > tol:
+        self.ndim += 1
+        self.dims.append(True)
+      else:
+        self.dims.append(False)
+    self.dims = np.array(self.dims)
+    logger.info('Detected {} dimensions from the custom k-mesh.'.format(self.ndim))
+
+  def _checkBrillouinZone(self, kpoints, name='custom k-mesh'):
+    '''
+    Map fractional k-points into the primitive reciprocal cell [0,1)^3 and
+    report how many had to be wrapped.
+
+    Wrapping itself is physics-neutral -- every quantity is evaluated through
+    exp(2 pi i k.R), which is periodic -- but a mesh that leaves [0,1) is a
+    symptom worth surfacing: it means the caller built points outside the
+    cell, and any downstream code that indexes a regular grid (or compares
+    k-points for equality) would then silently disagree with this mesh.
+    '''
+    kpoints = np.asarray(kpoints, dtype=np.float64)
+    outside = np.count_nonzero((kpoints < 0.0) | (kpoints >= 1.0))
+    wrapped = np.mod(kpoints, 1.0)
+    # guard against 1-eps rounding up to exactly 1.0 in the modulo
+    wrapped[wrapped >= 1.0 - 1e-14] = 0.0
+    if outside:
+      logger.debug('{}: {} coordinate(s) outside [0,1) wrapped into the '
+                   'primitive reciprocal cell.'.format(name, outside))
+    return wrapped
+
   def _calcOccupation(self, mu, raiseError=False):
     '''
     Calculate the deviation of the occupation the the given charge in the system.

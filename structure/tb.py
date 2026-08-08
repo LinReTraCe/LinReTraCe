@@ -31,16 +31,20 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def setCustomKmesh(self, custom_kpoints, custom_weights):
+  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None):
     if custom_kpoints.ndim != 2 or custom_kpoints.shape[1] != 3:
       raise ValueError("Custom k-points must be an Nx3 array (fractional coordinates).")
     if custom_weights.ndim != 1 or custom_weights.shape[0] != custom_kpoints.shape[0]:
       raise ValueError("Custom weights must be a 1D array with length equal to the number of k-points.")
-    self.kpoints = custom_kpoints.copy()
-    self.weights = custom_weights.copy()
+    self.kpoints = self._checkBrillouinZone(
+                     np.array(custom_kpoints, dtype=np.float64), 'ltb custom k-mesh')
+    self.weights = np.array(custom_weights, dtype=np.float64)
     self.nkp = custom_kpoints.shape[0]
     self.multiplicity = np.ones(self.nkp, dtype=int)
     self.customMesh = True
+    # nkx=nky=nkz=1 (the custom-mesh convention) would make _defineDimensions
+    # report ndim=0; adopt the parent dimensionality, or infer it.
+    self._defineDimensionsFromKpoints(self.kpoints, dims=dims)
 
   def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False, sparse_rotation=False):
     self.tbfile           = tbfile

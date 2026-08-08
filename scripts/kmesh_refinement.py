@@ -244,6 +244,63 @@ def _reserve_iteration_paths(
 # Shared refinement loop
 # ---------------------------------------------------------------------------
 
+def read_source_dims(path: Path):
+    """Return ``.unitcell/dims`` of *path* as a length-3 bool array, or None.
+
+    Generators pass this on to setCustomKmesh so that a refined mesh inherits
+    the dimensionality of the calculation it was derived from instead of
+    re-deriving it.  Re-derivation is not always possible: a layered system
+    can have a three-dimensional k-mesh while the Wannier projection is
+    effectively two-dimensional.
+    """
+    try:
+        with h5py.File(path, "r") as f:
+            if "/.unitcell/dims" not in f:
+                return None
+            dims = np.asarray(f["/.unitcell/dims"][()], dtype=bool).ravel()
+        return dims if dims.shape == (3,) else None
+    except Exception as exc:                      # pragma: no cover
+        logger.warning("Could not read /.unitcell/dims from %s: %s", path, exc)
+        return None
+
+
+def _reject_irreducible(path: Path) -> bool:
+    """True (and logs why) if *path* holds an irreducible mesh.
+
+    Refinement replaces the mesh by a custom one, which the generators
+    evaluate through the *reducible* code path.  That path does not
+    symmetrise the optical matrix elements over the star of each k-point --
+    the irreducible path in _computeHk / computeHamiltonian does.  Feeding an
+    irreducible wedge through the reducible path therefore yields raw
+    v_i v_j at the wedge points, whose weighted sum is not the Brillouin-zone
+    average: for a cubic single-band test model the wedge sum comes out as
+    (0.2148, 0.3203, 0.2148) where the correct answer is (0.25, 0.25, 0.25).
+
+    Band energies are symmetry invariant and stay correct, so the refinement
+    error metric converges normally and the problem is silent.  Refuse
+    instead.
+    """
+    with h5py.File(path, "r") as f:
+        if "/.kmesh/irreducible" not in f:
+            return False
+        if not bool(f["/.kmesh/irreducible"][()]):
+            return False
+        nsym = int(f["/.unitcell/nsym"][()]) if "/.unitcell/nsym" in f else 0
+
+    logger.error(
+        "%s holds an IRREDUCIBLE k-mesh (%d symmetry operations). Refinement "
+        "cannot start from it: the refined mesh is evaluated through the "
+        "reducible code path, which does not symmetrise the optical matrix "
+        "elements over the star of each k-point, so the resulting transport "
+        "tensor would be wrong (the band energies, and hence the refinement "
+        "error metric, would still look correct -- the failure is silent). "
+        "Regenerate the coarse mesh as a reducible grid ('ltb run ... --red', "
+        "or an lwann run without --wien2k) and refine that.",
+        path, nsym,
+    )
+    return True
+
+
 def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
     """
     Iteratively refine the k-mesh stored in *params.initial_hdf5*.
@@ -320,6 +377,16 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
     except Exception as exc:
         logger.error("Cannot inspect %s: %s", current_hdf5, exc)
         return 1
+
+    # A continuation input was itself produced by this loop and is therefore
+    # already a reducible custom mesh; only fresh coarse input needs the check.
+    if not is_continuation:
+        try:
+            if _reject_irreducible(current_hdf5):
+                return 1
+        except Exception as exc:
+            logger.error("Cannot inspect %s: %s", current_hdf5, exc)
+            return 1
     # resume after the input's iteration index, and never number below
     # refinement files already present in the working directory
     next_index = max(

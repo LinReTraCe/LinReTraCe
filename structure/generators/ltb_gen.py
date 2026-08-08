@@ -51,6 +51,11 @@ class LtbGenerator:
         Discard inter-band elements before writing (sets opticfull = False).
     sparse_rotation: bool
         Use sparse matrix multiplication when rotating velocities and curvatures.
+    dims : sequence of 3 bool or None
+        Dimensionality of the parent calculation (.unitcell/dims of the coarse
+        HDF5).  Adopted verbatim so that the refined file is treated exactly
+        like the mesh it was derived from.  If None, the dimensions are
+        inferred from the k-point spread.
     """
 
     def __init__(
@@ -65,6 +70,7 @@ class LtbGenerator:
         inter: float | None = None,
         intraonly: bool = False,
         sparse_rotation: bool = False,
+        dims=None,
     ) -> None:
         self.tb_file         = str(tb_file)
         self.filling         = filling
@@ -76,6 +82,7 @@ class LtbGenerator:
         self.inter           = inter
         self.intraonly       = intraonly
         self.sparse_rotation = sparse_rotation
+        self.dims            = dims
 
     # ------------------------------------------------------------------
     # Public interface expected by the MeshGenerator protocol
@@ -124,7 +131,7 @@ class LtbGenerator:
         # Build TightBinding object (nkx/nky/nkz are placeholders for custom meshes)
         tb = TightBinding(nkx=1, nky=1, nkz=1, irreducible=False, kshift=False)
 
-        tb.setCustomKmesh(mesh_points, mesh_weights)
+        tb.setCustomKmesh(mesh_points, mesh_weights, dims=self.dims)
         logger.info("Custom k-mesh set: %d k-points.", tb.nkp)
 
         tb.computeData(

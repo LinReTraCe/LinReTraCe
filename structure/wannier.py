@@ -52,6 +52,7 @@ class Wannier90Calculation(DftCalculation):
     ''' and some flags '''
     self.opticdiag  = True
     self.bopticdiag = True
+    self.customMesh = False
 
     ''' define the usual spin resolved arrays '''
     self.energies        = []
@@ -110,6 +111,54 @@ class Wannier90Calculation(DftCalculation):
     self.weights = self.multiplicity * self.weightsum / (self.nkx*self.nky*self.nkz)
     # wannier90 should always give us a reducible grid
     self.irreducible = False
+
+  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None):
+    '''
+      Replace the Wannier90 k-mesh with a caller-supplied one (fractional
+      coordinates + integration weights).  Used by the adaptive mesh
+      refinement, which hands over an irregular, locally subdivided mesh.
+
+      Must be called AFTER readData(): the grid dimensions nkx/nky/nkz that
+      readData() derives from the nnkp k-points are overwritten with the
+      custom-mesh convention (1,1,1).  *dims* (typically .unitcell/dims of
+      the coarse HDF5) is adopted verbatim when given, so that the refined
+      file inherits the dimensionality of the parent calculation; without it
+      the dimensions are inferred from the k-point spread.  Points are mapped
+      into the primitive reciprocal cell [0,1)^3.  The total weight is
+      expected to be conserved by the caller and is checked against weightsum.
+
+      NOTE: a custom mesh is NOT a regular grid.  Any code path that indexes
+      k-points by grid address (e.g. the disorder extension, which builds
+      shape=(nkx,nky,nkz) index maps) must refuse to run on it; the
+      customMesh flag set here is the hook for that check.
+    '''
+
+    custom_kpoints = np.asarray(custom_kpoints, dtype=np.float64)
+    custom_weights = np.asarray(custom_weights, dtype=np.float64).ravel()
+
+    if custom_kpoints.ndim != 2 or custom_kpoints.shape[1] != 3:
+      raise ValueError('Custom k-points must be an Nx3 array (fractional coordinates).')
+    if custom_weights.shape[0] != custom_kpoints.shape[0]:
+      raise ValueError('Custom weights must have the same length as the k-points.')
+
+    self.kpoints      = self._checkBrillouinZone(custom_kpoints, 'lwann custom k-mesh')
+    self.weights      = custom_weights
+    self.nkp          = self.kpoints.shape[0]
+    self.multiplicity = np.ones((self.nkp,), dtype=int)
+    self.irreducible  = False
+    self.customMesh   = True
+
+    # custom-mesh convention (as in structure/tb.py): no regular grid exists
+    self.nkx = self.nky = self.nkz = 1
+    self._defineDimensionsFromKpoints(self.kpoints, dims=dims)
+
+    wsum = float(np.sum(self.weights))
+    if not np.isclose(wsum, float(self.weightsum), rtol=1e-10, atol=1e-12):
+      logger.warning('Custom k-mesh weights sum to {} but weightsum is {}.'.format(
+                     wsum, self.weightsum))
+
+    logger.info('   Custom k-mesh set: {} k-points, {} dimensions.'.format(
+                self.nkp, self.ndim))
 
   def expandKmesh(self, kmesh, kirr=False):
     '''
@@ -305,7 +354,73 @@ class Wannier90Calculation(DftCalculation):
       logger.debug('Symmetry operations')
       logger.debug(self.symop)
 
-  def computeHamiltonian(self, peierlscorrection=True):
+  @staticmethod
+  def _availableMemoryBytes():
+    '''Best-effort free memory in bytes; None if it cannot be determined.'''
+    try:
+      with open('/proc/meminfo') as fh:
+        for line in fh:
+          if line.startswith('MemAvailable:'):
+            return int(line.split()[1]) * 1024
+    except Exception:
+      pass
+    try:
+      return os.sysconf('SC_AVPHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
+    except Exception:
+      return None
+
+  def _resolveKblock(self, kblock, memory_budget_gb, ndir,
+                     fullmoments=True, debug=False):
+    '''
+    Choose the number of k-points evaluated per pass on a reducible grid.
+
+    Blocking bounds only the TRANSIENT arrays.  Their cost per k-point is
+
+      24 * nrp                       (rdotk + exp(i r.k))
+      + ~1056 * nproj^2              (H(k), dH, d2H, U, Uinv, v, c, curmat,
+                                      vel2 and the B-field einsum output)
+
+    with a safety factor for the einsum contraction intermediates.  The
+    OUTPUT arrays are independent of the block size and are reported so that
+    a run which cannot fit regardless of blocking says so up front.
+    '''
+    per_k_transient = 24.0 * self.nrp + 1056.0 * self.nproj**2
+    per_k_transient *= 1.5   # einsum intermediates
+
+    per_k_output = 8.0 * self.nproj + self.nproj**2 * (48.0 + 96.0)
+    if fullmoments:
+      per_k_output += self.nproj**2 * (8.0 * ndir + 432.0)
+    else:
+      per_k_output += self.nproj * (8.0 * ndir + 432.0)
+    if debug:
+      per_k_output += 176.0 * self.nproj**2
+
+    output_gb = per_k_output * self.nkp / 1024**3
+
+    if memory_budget_gb is None:
+      avail = self._availableMemoryBytes()
+      budget = 0.25 * avail if avail else 2.0 * 1024**3
+    else:
+      budget = float(memory_budget_gb) * 1024**3
+
+    if kblock is None:
+      kblock = int(max(1, budget // per_k_transient))
+    kblock = int(min(max(1, kblock), self.nkp))
+
+    nblocks = -(-self.nkp // kblock)
+    logger.info('   k-blocking: {} k-points per pass ({} pass(es)); '
+                'transient ~{:.2f} GB, output arrays ~{:.2f} GB.'.format(
+                kblock, nblocks, kblock * per_k_transient / 1024**3, output_gb))
+    if output_gb > 8.0:
+      logger.warning('The output arrays alone need ~{:.1f} GB and must be '
+                     'held in full before writing; k-blocking cannot reduce '
+                     'this. Use intraonly if only band-diagonal elements are '
+                     'required (drops the dominant nproj^2 B-field term to '
+                     'nproj), or refine to fewer k-points.'.format(output_gb))
+    return kblock
+
+  def computeHamiltonian(self, peierlscorrection=True, kblock=None,
+                         memory_budget_gb=None, intraonly=False):
     ''' calculate e(r), v(r), c(r)
         we need to generate:
           self.energies[[nkp,nband]]
@@ -315,9 +430,32 @@ class Wannier90Calculation(DftCalculation):
           self.BopticalDiag[[nkp,nband,3,3,3]]
           self.opticalMoments[[nkp,nband,nband,3/6]]  3 if ortho
           self.BopticalMoments[[nkp,nband,nband,3,3,3]] + write output function
+
+        Parameters
+        ----------
+        peierlscorrection : bool
+          Include the generalised (multi-atomic) Peierls correction.
+        kblock : int or None
+          Number of k-points evaluated per pass on a reducible grid.  None
+          (default) sizes the block from *memory_budget_gb*.  Results are
+          independent of the block size.
+        memory_budget_gb : float or None
+          Budget [GB] for the transient per-block arrays.  None uses a
+          quarter of the detected available memory (2 GB if undetectable).
+        intraonly : bool
+          Only the band-diagonal optical and B-field elements are needed.
+          The full (nband x nband) moment arrays are then never allocated,
+          which removes the dominant memory term for many-orbital models.
+          Sets opticfull/bopticfull to False, matching outputData(intraonly).
     '''
 
     logger.info('Calculating Hamiltonian')
+
+    if intraonly:
+      # only band-diagonal elements are wanted -> never allocate the full
+      # (nband x nband) moment arrays (see the kblock discussion below)
+      self.opticfull  = False
+      self.bopticfull = False
 
     ''' r vector for hv(k) in Cartesian coordinates'''
     prefactor_r = np.einsum('id,ri->dr', self.rvec, self.rlist)
@@ -338,15 +476,10 @@ class Wannier90Calculation(DftCalculation):
 
       # hamiltonian H(r)
       hr = self.hrlist[ispin] # self.nrp, self.nproj, self.nproj
-      # hamiltonian H(k)
-      hk = np.zeros((self.nkp,self.nproj,self.nproj), dtype=np.complex128)
-      # hamiltonian derivative d_dk H(k)
-      # 3: x y z
-      hvk = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.complex128)
-      # hamiltonian double derivative d2_dk2 H(k)
-      # 6: xx yy zz xy xz yz
-      hck = np.zeros((self.nkp,self.nproj,self.nproj,6), dtype=np.complex128)
-
+      # H(k), d_dk H(k) and d2_dk2 H(k) are transient: the irreducible branch
+      # builds its own red_* copies, the reducible branch allocates them per
+      # k-block.  Allocating them here at full (nkp,nproj,nproj[,3/6]) size
+      # cost 160*nproj^2 bytes per k-point for nothing.
 
       if self.irreducible:
 
@@ -433,19 +566,47 @@ class Wannier90Calculation(DftCalculation):
         self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
 
       else:
-        ''' reducible grid : evalutate h(k) hv(k) hc(k)
-            on full grid -> done '''
+        ''' reducible grid : evaluate h(k), hv(k), hc(k) in blocks of
+            k-points.  Blocking is numerically transparent -- every quantity
+            is local in k -- but it bounds the transient memory, which the
+            previous single-shot version did not:
 
-        ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
-        rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints, self.rlist) # no scaling to recip vector / lattice vectors here ?
-        ee = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
-        hk[:,:,:] = np.einsum('kr,rij->kij', ee, hr)
+              exp(i r.k) alone is nkp x nrp complex128, i.e. 16 GB for
+              1e5 k-points and 1e4 Wannier r-points, and the transient
+              H(k)/U/curvature stack adds ~1e3 * nproj^2 bytes per k-point.
 
-        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-        hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,hr)
+            What blocking cannot reduce are the OUTPUT arrays, which have to
+            exist in full before h5output is called.  Their dominant term is
+            BopticalMoments at 432*nproj^2 bytes per k-point; pass
+            intraonly=True when only the band diagonal is needed. '''
 
-        ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-        hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,hr)
+        nb    = self.nproj
+        ndir  = 3 if self.ortho else 9
+        debug = logging.getLogger().isEnabledFor(logging.DEBUG)
+        diag  = np.arange(nb)
+
+        kblock = self._resolveKblock(kblock, memory_budget_gb, ndir,
+                                     fullmoments=not intraonly, debug=debug)
+
+        ''' output arrays (full size, unavoidable) '''
+        ek_full = np.zeros((self.nkp, nb), dtype=np.float64)
+        vk_full = np.zeros((self.nkp, nb, nb, 3), dtype=np.complex128)
+        ck_full = np.zeros((self.nkp, nb, nb, 6), dtype=np.complex128)
+        if intraonly:
+          vel2_full = np.zeros((self.nkp, nb, ndir), dtype=np.float64)
+          mb_full   = np.zeros((self.nkp, nb, 3, 3, 3), dtype=np.complex128)
+        else:
+          vel2_full = np.zeros((self.nkp, nb, nb, ndir), dtype=np.float64)
+          mb_full   = np.zeros((self.nkp, nb, nb, 3, 3, 3), dtype=np.complex128)
+
+        ''' save the full hamiltonian and its derivatives
+            if in debug mode and only for the reducible structure '''
+        if debug:
+          self.hk           = np.zeros((self.nkp, nb, nb),    dtype=np.complex128)
+          self.hvk          = np.zeros((self.nkp, nb, nb, 3), dtype=np.complex128)
+          self.hck          = np.zeros((self.nkp, nb, nb, 6), dtype=np.complex128)
+          self.Ukohnsham    = np.zeros((self.nkp, nb, nb),    dtype=np.complex128)
+          self.Uinvkohnsham = np.zeros((self.nkp, nb, nb),    dtype=np.complex128)
 
         if peierlscorrection:
           # Jan's code snippet
@@ -453,84 +614,113 @@ class Wannier90Calculation(DftCalculation):
           # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
           distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
           ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-          hvk_correction = - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
-          hvk += hvk_correction
 
-        # eigk  : self.nkp, self.nproj
-        # U     : self.nkp, self.nproj, self.nproj
-        #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
-        # inv(U) @ hk @ U = ek
+        complex_energies = False
 
-        ''' this transforms all k points at once '''
-        ek, U = np.linalg.eigh(hk)
+        for k0 in range(0, self.nkp, kblock):
+          k1   = min(k0 + kblock, self.nkp)
+          kpts = self.kpoints[k0:k1]
 
-        ''' Sort eigenvalues from smallest to largest
-            Required for detection of possible gaps '''
-        for ik in range(self.nkp):
-          ekk, Uk = ek[ik,:], U[ik,:,:]
-          idx = ekk.argsort()
-          ek[ik,:] = ekk[idx]
-          U[ik,:,:] = Uk[:,idx]
+          ''' FORUIERTRANSFORM hk = sum_r e^{i r.k} * weight(r) * h(r) '''
+          rdotk = 2*np.pi*np.einsum('ki,ri->kr', kpts, self.rlist) # no scaling to recip vector / lattice vectors here ?
+          ee    = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
+          del rdotk
+          hk  = np.einsum('kr,rij->kij', ee, hr, optimize=True)
+          ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
+          hvk = np.einsum('dr,kr,rij->kijd',  1j*prefactor_r, ee, hr, optimize=True)
+          hck = np.einsum('dr,kr,rij->kijd', -prefactor_r2,   ee, hr, optimize=True)
+          del ee
 
-        ''' the velocities and curvatures are ordered according to e(k)
-            due to the reordering of U '''
-        Uinv = np.linalg.inv(U)
+          if peierlscorrection:
+            hvk += - 1j * hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
 
-        ''' save the full hamiltonian and its derivatives
-            if in debug mode and only for the reducible structure '''
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-          self.hk  = hk
-          self.hvk = hvk
-          self.hck = hck
-          self.Ukohnsham = U
-          self.Uinvkohnsham = Uinv
+          # eigk  : nkp, nproj
+          # U     : nkp, nproj, nproj
+          #       U[0, :, i] is the eigenvector corresponding to ek[0, i]
+          # inv(U) @ hk @ U = ek
+          ek, U = np.linalg.eigh(hk)
 
-        vk = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
-        ck = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
+          ''' Sort eigenvalues from smallest to largest
+              Required for detection of possible gaps '''
+          order = np.argsort(ek, axis=1)
+          ek    = np.take_along_axis(ek, order, axis=1)
+          U     = np.take_along_axis(U, order[:,None,:], axis=2)
 
-        if np.any(np.abs(ek.imag) > 1e-5):
-          logger.warn('Detected complex energies ... truncating')
+          ''' the velocities and curvatures are ordered according to e(k)
+              due to the reordering of U '''
+          Uinv = np.linalg.inv(U)
+
+          if debug:
+            self.hk[k0:k1]           = hk
+            self.hvk[k0:k1]          = hvk
+            self.hck[k0:k1]          = hck
+            self.Ukohnsham[k0:k1]    = U
+            self.Uinvkohnsham[k0:k1] = Uinv
+
+          vk = np.einsum('kab,kbci,kcd->kadi', Uinv, hvk, U, optimize=True)
+          ck = np.einsum('kab,kbci,kcd->kadi', Uinv, hck, U, optimize=True)
+          del hk, hvk, hck, U, Uinv
+
+          if np.any(np.abs(ek.imag) > 1e-5):
+            complex_energies = True
+
+          ''' energies, velocities, curvatures '''
+          ek_full[k0:k1] = ek.real
+          vk_full[k0:k1] = vk
+          ck_full[k0:k1] = ck
+
+          ''' calculate optical elements'''
+          vk_conj = np.conjugate(vk)
+
+          # transform into matrix form
+          nk_blk = k1 - k0
+          curmat = np.zeros((nk_blk, nb, nb, 3, 3), dtype=np.complex128)
+          curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = ck[:,:,:,:]
+          curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
+          del ck
+
+          if intraonly:
+            vkd, vkcd, curd = (vk[:,diag,diag,:], vk_conj[:,diag,diag,:],
+                               curmat[:,diag,diag,:,:])
+            vel2 = vkcd[:,:,[0,1,2,0,0,1]] * vkd[:,:,[0,1,2,1,2,2]]
+            if self.ortho:
+              vel2_full[k0:k1] = vel2[:,:,:3].real
+            else:
+              vel2_full[k0:k1,:,:6] = vel2.real
+              vel2_full[k0:k1,:,6:] = vel2[:,:,:3].imag
+            #           epsilon_cij v_a v_i c_bj -> abc
+            mb_full[k0:k1] = np.einsum('cij,kna,kni,knbj->knabc',
+                                       levmatrix, vkcd, vkd, curd, optimize=True)
+            del vkd, vkcd, curd
+          else:
+            vel2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
+            if self.ortho:
+              vel2_full[k0:k1] = vel2[:,:,:,:3].real
+            else:
+              vel2_full[k0:k1,:,:,:6] = vel2.real
+              vel2_full[k0:k1,:,:,6:] = vel2[:,:,:,:3].imag
+            #           epsilon_cij v_a v_i c_bj -> abc
+            mb_full[k0:k1] = np.einsum('cij,knma,knmi,knmbj->knmabc',
+                                       levmatrix, vk_conj, vk, curmat, optimize=True)
+          del vk, vk_conj, vel2, curmat
+
+        if complex_energies:
+          logger.warning('Detected complex energies ... truncating')
         ''' apparently complex velocities and curvatures are allowed now '''
-        # if np.any(np.abs(hvk.imag) > 1e-5):
-        #   logger.warn('Detected complex velocities ... truncating')
-        # if np.any(np.abs(hck.imag) > 1e-5):
-        #   logger.warn('Detected complex curvatures ... truncating')
 
-        ''' energies, velocities, curvatures '''
-        ek = ek.real
-        self.energies.append(ek)
-        self.velocities.append(vk)
-        self.curvatures.append(ck)
+        self.energies.append(ek_full)
+        self.velocities.append(vk_full)
+        self.curvatures.append(ck_full)
 
-
-        ''' calculate optical elements'''
-        vk_conj = np.conjugate(vk)
-        cur = ck
-
-        # transform into matrix form
-        curmat  = np.zeros((self.nkp,self.nproj,self.nproj,3,3), dtype=np.complex128)
-        curmat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = cur[:,:,:,:]
-        curmat[:,:,:, [1,2,2], [0,0,1]] = curmat[:,:,:, [0,0,1], [1,2,2]]
-        vel2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
-
-        if self.ortho:
-          vel2 = vel2[:,:,:,:3].real
+        self.opticalMoments.append(vel2_full)
+        self.BopticalMoments.append(mb_full)
+        if intraonly:
+          # already band-diagonal
+          self.opticalDiag.append(vel2_full)
+          self.BopticalDiag.append(mb_full)
         else:
-          temp = vel2.copy()
-          vel2 = np.empty((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-          vel2[:,:,:,:6] = temp.real
-          vel2[:,:,:,6:] = temp[:,:,:,:3].imag
-
-        self.opticalMoments.append(vel2)
-        vel2diag = vel2[:,np.arange(self.nproj),np.arange(self.nproj),:]
-        self.opticalDiag.append(vel2diag)
-
-          #           epsilon_cij v_a v_i c_bj -> abc
-        mb = np.einsum('cij,knma,knmi,knmbj->knmabc',levmatrix,vk_conj,vk,curmat)
-        self.BopticalMoments.append(mb)
-        mbdiag = mb[:,np.arange(self.nproj),np.arange(self.nproj),:,:,:]
-        self.BopticalDiag.append(mbdiag)
-
+          self.opticalDiag.append(vel2_full[:,diag,diag,:])
+          self.BopticalDiag.append(mb_full[:,diag,diag,...])
 
     ''' after spin loop : truncate possible unnecessary data '''
     if not self.ortho:
