@@ -87,6 +87,7 @@ class WannGenerator:
         dims=None,
         kblock: "int | None" = None,
         memory_budget_gb: "float | None" = None,
+        symop=None,
     ):
         self.directory         = Path(directory)
         self.charge            = charge
@@ -97,6 +98,7 @@ class WannGenerator:
         self.dims              = dims
         self.kblock            = kblock
         self.memory_budget_gb  = memory_budget_gb
+        self.symop             = symop
 
         if self.charge is None and self.mu is None:
             raise ValueError("WannGenerator requires either charge or mu.")
@@ -139,7 +141,8 @@ class WannGenerator:
         ham.readData()
         t_read = time.perf_counter() - t_read0
 
-        ham.setCustomKmesh(mesh_points, mesh_weights, dims=self.dims)
+        ham.setCustomKmesh(mesh_points, mesh_weights, dims=self.dims,
+                           symop=self.symop)
 
         t_comp0 = time.perf_counter()
         ham.computeHamiltonian(

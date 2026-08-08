@@ -56,6 +56,11 @@ class LtbGenerator:
         HDF5).  Adopted verbatim so that the refined file is treated exactly
         like the mesh it was derived from.  If None, the dimensions are
         inferred from the k-point spread.
+    symop : (nsym,3,3) array or None
+        Point-group operations of the parent calculation (.unitcell/symop of
+        the coarse HDF5).  Supply these when the mesh is an irreducible
+        wedge: the moments are then group-averaged over the star of every
+        k-point.  Omit for a reducible (full-BZ) mesh.
     """
 
     def __init__(
@@ -71,6 +76,7 @@ class LtbGenerator:
         intraonly: bool = False,
         sparse_rotation: bool = False,
         dims=None,
+        symop=None,
     ) -> None:
         self.tb_file         = str(tb_file)
         self.filling         = filling
@@ -83,6 +89,7 @@ class LtbGenerator:
         self.intraonly       = intraonly
         self.sparse_rotation = sparse_rotation
         self.dims            = dims
+        self.symop           = symop
 
     # ------------------------------------------------------------------
     # Public interface expected by the MeshGenerator protocol
@@ -131,7 +138,8 @@ class LtbGenerator:
         # Build TightBinding object (nkx/nky/nkz are placeholders for custom meshes)
         tb = TightBinding(nkx=1, nky=1, nkz=1, irreducible=False, kshift=False)
 
-        tb.setCustomKmesh(mesh_points, mesh_weights, dims=self.dims)
+        tb.setCustomKmesh(mesh_points, mesh_weights, dims=self.dims,
+                          symop=self.symop)
         logger.info("Custom k-mesh set: %d k-points.", tb.nkp)
 
         tb.computeData(

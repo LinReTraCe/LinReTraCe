@@ -75,7 +75,7 @@ import logging
 
 from structure.generators.lwann_gen import WannGenerator
 from scripts.kmesh_refinement import (RefinementParams, read_source_dims,
-                                       run_refinement)
+                                       read_source_symmetry, run_refinement)
 
 LOG_FORMAT = "%(levelname)s: %(message)s"
 logger = logging.getLogger(__name__)
@@ -249,6 +249,13 @@ def main(argv: list[str] | None = None) -> int:
     # 3D k-mesh while the Wannier projection is effectively 2D.
     source_dims = read_source_dims(args.initial_hdf5)
 
+    # An irreducible source mesh covers only a wedge; the moments must then be
+    # group-averaged over the star of every k-point (see _setCustomSymmetries).
+    source_irreducible, source_symop = read_source_symmetry(args.initial_hdf5)
+    if source_irreducible and source_symop is not None:
+        logger.info("Source mesh is irreducible; refined meshes will be "
+                    "symmetrised over %d operations.", source_symop.shape[0])
+
     generator = WannGenerator(
         directory         = args.wannier_dir,
         charge            = args.charge,
@@ -259,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         dims              = source_dims,
         kblock            = args.kblock,
         memory_budget_gb  = args.max_memory,
+        symop             = source_symop,
     )
 
     params = RefinementParams(

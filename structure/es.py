@@ -197,6 +197,62 @@ class ElectronicStructure(ABC):
     self.dims = np.array(self.dims)
     logger.info('Detected {} dimensions from the custom k-mesh.'.format(self.ndim))
 
+  def _setCustomSymmetries(self, symop):
+    '''
+    Attach point-group operations to a custom (irregular) k-mesh, or declare
+    the mesh reducible when none are given.
+
+    Why this is needed
+    ------------------
+    An irreducible mesh covers only a wedge of the Brillouin zone.  Band
+    energies are symmetry invariant, so the wedge reproduces the density of
+    states directly -- but the optical matrix elements v_i v_j are NOT: the
+    wedge is not invariant under the operations that relate the Cartesian
+    directions, so a raw weighted sum over it breaks the symmetry of the
+    Onsager tensor.  For a cubic single-band model at 8x8x8 the raw wedge sum
+    gives (0.2148, 0.3203, 0.2148) where the correct answer is
+    (0.25, 0.25, 0.25).
+
+    The symmetrising branch of _computeHk / computeHamiltonian fixes this by
+    replacing the moment at every k-point with its group average
+    M_sym(k) = (1/nsym) sum_S M(S k).  That average is exact for a REFINED
+    wedge as well, even though the children of a high-symmetry parent
+    generally have a smaller stabiliser than the parent whose weight they
+    inherit:
+
+      sum_c (w_p/n^3) M_sym(k_c)
+        = w_p/(n^3 nsym) sum_S sum_c M(S k_c)
+
+    For each S the points {S k_c} are the sub-cell centres of the image cell
+    S.(parent cell); each distinct image cell is produced by exactly g
+    operations, where g is the order of the stabiliser of k_p, and there are
+    mult_p = nsym/g distinct images.  The sum therefore collapses to
+    w_p * <M> over the union of the images -- the same identity that makes
+    the coarse irreducible case correct, independent of the children's own
+    stabilisers.
+
+    Parameters
+    ----------
+    symop : (nsym,3,3) array or None
+        Operations in the convention used by _computeHk, i.e. the reducible
+        partners of k are obtained as k_red = P^T . k_irr.  Read back from
+        .unitcell/symop of the parent HDF5.  None marks the mesh reducible.
+    '''
+    if symop is None:
+      self.irreducible = False
+      return
+
+    symop = np.asarray(symop, dtype=np.float64)
+    if symop.ndim != 3 or symop.shape[1:] != (3, 3):
+      raise ValueError('symop must be an (nsym,3,3) array')
+
+    self.symop       = symop
+    self.nsym        = symop.shape[0]
+    self.invsymop    = np.linalg.inv(symop)
+    self.irreducible = True
+    logger.info('   Custom k-mesh treated as irreducible: moments will be '
+                'group-averaged over {} symmetry operations.'.format(self.nsym))
+
   def _checkBrillouinZone(self, kpoints, name='custom k-mesh'):
     '''
     Map fractional k-points into the primitive reciprocal cell [0,1)^3 and

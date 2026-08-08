@@ -264,39 +264,62 @@ def read_source_dims(path: Path):
         return None
 
 
-def _reject_irreducible(path: Path) -> bool:
-    """True (and logs why) if *path* holds an irreducible mesh.
+def read_source_symmetry(path: Path):
+    """Return ``(irreducible, symop)`` of *path*.
 
-    Refinement replaces the mesh by a custom one, which the generators
-    evaluate through the *reducible* code path.  That path does not
-    symmetrise the optical matrix elements over the star of each k-point --
-    the irreducible path in _computeHk / computeHamiltonian does.  Feeding an
-    irreducible wedge through the reducible path therefore yields raw
-    v_i v_j at the wedge points, whose weighted sum is not the Brillouin-zone
-    average: for a cubic single-band test model the wedge sum comes out as
-    (0.2148, 0.3203, 0.2148) where the correct answer is (0.25, 0.25, 0.25).
+    ``symop`` is the ``.unitcell/symop`` array, returned only when the mesh is
+    flagged irreducible and carries more than the identity; otherwise None.
+    Generators pass it on to setCustomKmesh, which then makes the evaluation
+    symmetrise the optical / B-field moments over the star of every k-point.
+    """
+    try:
+        with h5py.File(path, "r") as f:
+            irr = bool(f["/.kmesh/irreducible"][()]) if "/.kmesh/irreducible" in f else False
+            if not irr or "/.unitcell/symop" not in f:
+                return irr, None
+            symop = np.asarray(f["/.unitcell/symop"][()], dtype=float)
+    except Exception as exc:                      # pragma: no cover
+        logger.warning("Could not read symmetry information from %s: %s", path, exc)
+        return False, None
 
-    Band energies are symmetry invariant and stay correct, so the refinement
-    error metric converges normally and the problem is silent.  Refuse
-    instead.
+    if symop.ndim != 3 or symop.shape[1:] != (3, 3) or symop.shape[0] < 1:
+        logger.warning("%s has a malformed /.unitcell/symop (shape %s); "
+                       "treating the mesh as reducible.", path, symop.shape)
+        return irr, None
+    return irr, symop
+
+
+def _reject_unsymmetrised_irreducible(path: Path, generator) -> bool:
+    """True (and logs why) if *path* is irreducible but *generator* cannot
+    symmetrise.
+
+    An irreducible mesh covers only a wedge.  Band energies are symmetry
+    invariant and come out right either way, but the optical matrix elements
+    v_i v_j do not: summed raw over the wedge they break the symmetry of the
+    Onsager tensor (cubic single-band test model, 8x8x8: the wedge sum gives
+    (0.2148, 0.3203, 0.2148) against the correct (0.25, 0.25, 0.25)).  The
+    failure is silent, because the refinement error metric only sees energies.
+
+    Generators that accept a ``symop`` argument take the symmetrising path and
+    are fine.  Anything else must refuse.
     """
     with h5py.File(path, "r") as f:
-        if "/.kmesh/irreducible" not in f:
+        if "/.kmesh/irreducible" not in f or not bool(f["/.kmesh/irreducible"][()]):
             return False
-        if not bool(f["/.kmesh/irreducible"][()]):
-            return False
-        nsym = int(f["/.unitcell/nsym"][()]) if "/.unitcell/nsym" in f else 0
+
+    if getattr(generator, "symop", None) is not None:
+        return False
 
     logger.error(
-        "%s holds an IRREDUCIBLE k-mesh (%d symmetry operations). Refinement "
-        "cannot start from it: the refined mesh is evaluated through the "
-        "reducible code path, which does not symmetrise the optical matrix "
-        "elements over the star of each k-point, so the resulting transport "
-        "tensor would be wrong (the band energies, and hence the refinement "
-        "error metric, would still look correct -- the failure is silent). "
-        "Regenerate the coarse mesh as a reducible grid ('ltb run ... --red', "
-        "or an lwann run without --wien2k) and refine that.",
-        path, nsym,
+        "%s holds an IRREDUCIBLE k-mesh, but %s was constructed without "
+        "symmetry operations, so the refined mesh would be evaluated through "
+        "the reducible code path. That path does not symmetrise the optical "
+        "matrix elements over the star of each k-point, and the resulting "
+        "transport tensor would be wrong while the band energies -- and hence "
+        "the refinement error metric -- still looked correct. Either supply "
+        "/.unitcell/symop (read_source_symmetry) or regenerate the coarse "
+        "mesh as a reducible grid.",
+        path, type(generator).__name__,
     )
     return True
 
@@ -382,7 +405,7 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
     # already a reducible custom mesh; only fresh coarse input needs the check.
     if not is_continuation:
         try:
-            if _reject_irreducible(current_hdf5):
+            if _reject_unsymmetrised_irreducible(current_hdf5, generator):
                 return 1
         except Exception as exc:
             logger.error("Cannot inspect %s: %s", current_hdf5, exc)

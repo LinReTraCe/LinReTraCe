@@ -31,7 +31,20 @@ class TightBinding(Model):
 
     logger.info('Setting up tight binding with {} x {} x {} kpoints'.format(self.nkx,self.nky,self.nkz))
 
-  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None):
+  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None, symop=None):
+    '''
+      Replace the k-mesh with a caller-supplied one (fractional coordinates +
+      integration weights).  Used by the adaptive mesh refinement.
+
+      symop : (nsym,3,3) array or None
+        Point-group operations of the parent calculation (.unitcell/symop of
+        the coarse HDF5).  When supplied, the mesh is treated as an
+        IRREDUCIBLE wedge: _computeHk takes the symmetrising path and the
+        optical / B-field moments are group-averaged over the star of every
+        k-point.  This is required for correctness whenever the mesh does not
+        cover the full Brillouin zone -- see _setCustomSymmetries.
+        When None, the mesh is assumed to be reducible (full BZ).
+    '''
     if custom_kpoints.ndim != 2 or custom_kpoints.shape[1] != 3:
       raise ValueError("Custom k-points must be an Nx3 array (fractional coordinates).")
     if custom_weights.ndim != 1 or custom_weights.shape[0] != custom_kpoints.shape[0]:
@@ -45,6 +58,7 @@ class TightBinding(Model):
     # nkx=nky=nkz=1 (the custom-mesh convention) would make _defineDimensions
     # report ndim=0; adopt the parent dimensionality, or infer it.
     self._defineDimensionsFromKpoints(self.kpoints, dims=dims)
+    self._setCustomSymmetries(symop)
 
   def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False, sparse_rotation=False):
     self.tbfile           = tbfile
@@ -69,7 +83,15 @@ class TightBinding(Model):
 
     if self.irreducible:
       self._checkSymmetriesTightbinding()
-      self._checkSymmetriesKmesh()
+      if self.customMesh:
+        # _checkSymmetriesKmesh validates the spacing 1/nk_i against the
+        # symmetry operations; a custom mesh has no such spacing (nkx=nky=
+        # nkz=1 by convention) so the check is meaningless here.  The
+        # operations themselves are still validated against the hoppings by
+        # _checkSymmetriesTightbinding above.
+        logger.info('Custom k-mesh: skipping the regular-grid symmetry check.')
+      else:
+        self._checkSymmetriesKmesh()
 
     ''' after getting the correct number of k-points we can setup the arrays '''
     self._setupArrays(self.ortho)
@@ -542,7 +564,7 @@ class TightBinding(Model):
         red_hk[np.abs(red_hk) < 1e-14] = 0.0
 
         ''' generate velocity hamiltonian '''
-        red_hvk = np.einsum('dr,nr,rij->nijd',1j*prefactor_r,red_ee,self.hr)
+        red_hvk = np.einsum('dr,nr,rij->nijd',1j*prefactor_r,red_ee,self.hr, optimize=True)
 
         if self.orbitals is not None:
           # Jan's code snippet
@@ -555,7 +577,7 @@ class TightBinding(Model):
 
 
         ''' generate curvature hamiltonian '''
-        red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,self.hr)
+        red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,self.hr, optimize=True)
         red_hck_mat  = np.zeros((self.nsym,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
         red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
         red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
@@ -582,10 +604,10 @@ class TightBinding(Model):
         red_Uinv = np.linalg.inv(red_U)
 
         ''' transform velocity hamiltonian into Kohn Sham basis '''
-        vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U)
+        vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U, optimize=True)
         velconj = np.conjugate(vel)
         ''' transform curvature hamiltonian into Kohn Sham basis '''
-        curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U)
+        curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U, optimize=True)
 
         ''' take the mean over the opt matrix (velocity squares) '''
         vk2 = velconj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
@@ -599,7 +621,7 @@ class TightBinding(Model):
 
         ''' take the mean over the optb matrix '''
         #           epsilon_cij v_a v_i c_bj -> abc
-        mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat)
+        mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat, optimize=True)
         mb = np.mean(mb,axis=0)
         loc_BopticalMoments[ikp,...] = mb
 
@@ -630,10 +652,10 @@ class TightBinding(Model):
           -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
           with the x/y/z entries (columns) of the rvec matrix
       '''
-      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr)
+      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr, optimize=True)
 
       ''' FOURIERTRANSFORM hvk(alpha,beta) = - sum_r r_alpha . r_beta . e^{i r.k} * weight(r) * h(r) '''
-      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr)
+      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr, optimize=True)
 
       if self.corronly:
         hvk[...] = 0.0
@@ -686,8 +708,8 @@ class TightBinding(Model):
       else:
         Uinv = np.linalg.inv(U)
 
-        vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U)
-        cur = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U)
+        vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U, optimize=True)
+        cur = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U, optimize=True)
 
       vel_conj = np.conjugate(vel)
       vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
@@ -719,7 +741,7 @@ class TightBinding(Model):
       self.opticalDiag    = [vel2diag]
 
       #           epsilon_cij v_a v_i c_bj -> abc
-      mb = np.einsum('cij,knma,knmi,knmbj->knmabc',levmatrix,vel_conj,vel,curmat)
+      mb = np.einsum('cij,knma,knmi,knmbj->knmabc',levmatrix,vel_conj,vel,curmat, optimize=True)
       self.BopticalMoments[0][...] = mb
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag

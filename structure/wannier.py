@@ -112,7 +112,7 @@ class Wannier90Calculation(DftCalculation):
     # wannier90 should always give us a reducible grid
     self.irreducible = False
 
-  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None):
+  def setCustomKmesh(self, custom_kpoints, custom_weights, dims=None, symop=None):
     '''
       Replace the Wannier90 k-mesh with a caller-supplied one (fractional
       coordinates + integration weights).  Used by the adaptive mesh
@@ -126,6 +126,12 @@ class Wannier90Calculation(DftCalculation):
       the dimensions are inferred from the k-point spread.  Points are mapped
       into the primitive reciprocal cell [0,1)^3.  The total weight is
       expected to be conserved by the caller and is checked against weightsum.
+
+      *symop* (.unitcell/symop of the coarse HDF5) marks the mesh as an
+      IRREDUCIBLE wedge: computeHamiltonian then takes the symmetrising path
+      and group-averages the optical / B-field moments over the star of every
+      k-point.  Without it the mesh is assumed to cover the full BZ.  See
+      ElectronicStructure._setCustomSymmetries for why this matters.
 
       NOTE: a custom mesh is NOT a regular grid.  Any code path that indexes
       k-points by grid address (e.g. the disorder extension, which builds
@@ -145,12 +151,12 @@ class Wannier90Calculation(DftCalculation):
     self.weights      = custom_weights
     self.nkp          = self.kpoints.shape[0]
     self.multiplicity = np.ones((self.nkp,), dtype=int)
-    self.irreducible  = False
     self.customMesh   = True
 
     # custom-mesh convention (as in structure/tb.py): no regular grid exists
     self.nkx = self.nky = self.nkz = 1
     self._defineDimensionsFromKpoints(self.kpoints, dims=dims)
+    self._setCustomSymmetries(symop)
 
     wsum = float(np.sum(self.weights))
     if not np.isclose(wsum, float(self.weightsum), rtol=1e-10, atol=1e-12):
@@ -504,7 +510,7 @@ class Wannier90Calculation(DftCalculation):
           red_hk = np.einsum('nr,rij->nij', red_ee, hr)
           red_hk[np.abs(red_hk) < 1e-14] = 0.0
 
-          red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,hr)
+          red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,hr, optimize=True)
 
           if peierlscorrection:
             # Jan's code snippet
@@ -516,7 +522,7 @@ class Wannier90Calculation(DftCalculation):
             red_hvk += hvk_correction
 
           ''' generate curvature hamiltonian '''
-          red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,hr)
+          red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,hr, optimize=True)
           red_hck_mat  = np.zeros((self.nsym,self.nproj,self.nproj,3,3), dtype=np.complex128)
           red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
           red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
@@ -536,10 +542,10 @@ class Wannier90Calculation(DftCalculation):
           red_Uinv = np.linalg.inv(red_U)
 
           ''' transform velocity hamiltonian into Kohn Sham basis '''
-          vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U)
+          vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U, optimize=True)
           velconj = np.conjugate(vel)
           ''' transform curvature hamiltonian into Kohn Sham basis '''
-          curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U)
+          curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U, optimize=True)
 
           ''' take the mean over the opt matrix (velocity squares) '''
           vk2 = velconj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
@@ -553,7 +559,7 @@ class Wannier90Calculation(DftCalculation):
 
           ''' take the mean over the optb matrix '''
           #           epsilon_cij v_a v_i c_bj -> abc
-          mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat)
+          mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat, optimize=True)
           mb = np.mean(mb,axis=0)
           loc_BopticalMoments[ikp,...] = mb
 
