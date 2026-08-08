@@ -38,8 +38,93 @@ def _require_mpmath() -> None:
         )
 
 
-def trigamma_vec(z: np.ndarray) -> np.ndarray:
-    """Vectorised trigamma using mpmath.polygamma with complex support."""
+# ---------------------------------------------------------------------------
+# Complex trigamma
+# ---------------------------------------------------------------------------
+#
+# psi'(z) is not available for complex arguments in scipy, so this module used
+# to call mpmath.polygamma element by element from a Python loop.  With O(1e5)
+# probe energies per iteration that loop dominated the entire refinement cost.
+#
+# The replacement is the textbook recurrence + asymptotic pair, evaluated with
+# whole-array numpy operations:
+#
+#   recurrence   psi'(z) = 1/z^2 + psi'(z+1)          (shift Re z upwards)
+#   asymptotic   psi'(z) ~ 1/z + 1/(2 z^2)
+#                          + sum_k B_2k / z^(2k+1)    (large |z|)
+#
+# In this module z = 1/2 + beta/(2 pi) (gamma + i eps) always has Re z >= 1/2,
+# so |arg z| < pi/2 and the asymptotic series is well behaved; shifting only
+# ever increases Re z and therefore never crosses a pole.
+#
+# Bernoulli numbers B_2, B_4, ... B_14 as coefficients of z^-(2k+1).
+_TRIGAMMA_BERNOULLI = (
+    1.0 / 6.0,
+    -1.0 / 30.0,
+    1.0 / 42.0,
+    -1.0 / 30.0,
+    5.0 / 66.0,
+    -691.0 / 2730.0,
+    7.0 / 6.0,
+)
+
+# |z| above which the truncated asymptotic series is used.  With terms through
+# B_14 the truncation error is ~ |B_16| / |z|^17, i.e. below 1e-16 at |z| = 12.
+_TRIGAMMA_ASYMPTOTIC_CUTOFF = 12.0
+
+# Hard cap on recurrence steps; only reached for arguments very close to the
+# origin, which cannot occur for the z used here (Re z >= 1/2).
+_TRIGAMMA_MAX_SHIFTS = 64
+
+
+def _trigamma_series(z: np.ndarray) -> np.ndarray:
+    """Vectorised complex psi'(z) via recurrence + asymptotic expansion.
+
+    Accurate to ~1e-14 relative for Re(z) > 0, which is far inside the
+    tolerance of the sum-rule metric (error_tol >= 1e-4 in practice).
+    """
+
+    z = np.asanyarray(z, dtype=np.complex128)
+    if np.any(z.real <= 0.0):
+        raise ValueError(
+            "_trigamma_series requires Re(z) > 0; got Re(z)_min = "
+            f"{float(np.min(z.real))}."
+        )
+
+    shifted    = z.copy()
+    correction = np.zeros_like(shifted)
+
+    # psi'(z) = sum_j 1/(z+j)^2 + psi'(z+n): accumulate until |z+n| is large
+    # enough for the asymptotic series.  The number of steps depends only on
+    # |z|, so this loop runs at most a handful of times for realistic input.
+    for _ in range(_TRIGAMMA_MAX_SHIFTS):
+        small = np.abs(shifted) < _TRIGAMMA_ASYMPTOTIC_CUTOFF
+        if not small.any():
+            break
+        correction[small] += 1.0 / shifted[small] ** 2
+        shifted[small]    += 1.0
+    else:  # pragma: no cover - unreachable for Re(z) >= 1/2
+        logger.warning(
+            "_trigamma_series hit the recurrence cap (%d shifts); accuracy may "
+            "be reduced.", _TRIGAMMA_MAX_SHIFTS,
+        )
+
+    inv2 = 1.0 / shifted**2
+    # Horner in 1/z^2 for the Bernoulli tail: (B_2 + B_4/z^2 + ...) / z^3
+    tail = np.zeros_like(shifted)
+    for coeff in reversed(_TRIGAMMA_BERNOULLI):
+        tail = tail * inv2 + coeff
+    tail *= inv2 / shifted
+
+    return correction + 1.0 / shifted + 0.5 * inv2 + tail
+
+
+def _trigamma_mpmath(z: np.ndarray) -> np.ndarray:
+    """Reference implementation: element-wise mpmath.polygamma(1, z).
+
+    Kept for validation and for the rare case where full mpmath precision is
+    wanted.  Orders of magnitude slower than :func:`_trigamma_series`.
+    """
 
     _require_mpmath()
     z = np.asanyarray(z, dtype=np.complex128)
@@ -49,6 +134,26 @@ def trigamma_vec(z: np.ndarray) -> np.ndarray:
     for idx, val in enumerate(flat_in):
         flat_out[idx] = complex(mp.polygamma(1, val))
     return out
+
+
+def trigamma_vec(z: np.ndarray, method: str = "series") -> np.ndarray:
+    """Vectorised complex trigamma psi'(z).
+
+    Parameters
+    ----------
+    z : array_like of complex
+        Arguments with Re(z) > 0.
+    method : {'series', 'mpmath'}
+        ``'series'`` (default) uses the pure-numpy recurrence + asymptotic
+        expansion.  ``'mpmath'`` falls back to the element-wise reference
+        implementation and requires the optional mpmath dependency.
+    """
+
+    if method == "series":
+        return _trigamma_series(z)
+    if method == "mpmath":
+        return _trigamma_mpmath(z)
+    raise ValueError(f"unknown trigamma method '{method}'")
 
 
 def _beta(temperature: float) -> float:
@@ -245,27 +350,162 @@ def compute_error(band: np.ndarray, temperature: float, gamma: float) -> float:
     return float(np.abs(1.0 - integral))
 
 
+def kernel_width(temperature: float, gamma: float) -> float:
+    """Half-width [eV] of the df/da peak at mu: max(kB*T, gamma).
+
+    This is the only energy scale the sum-rule metric can resolve.  A k-mesh
+    that does not place several distinct band energies inside this width
+    cannot satisfy the sum rule regardless of how hotspots are selected, and
+    the hotspot window must never shrink below it.
+    """
+
+    return max(kB_eV * float(temperature), float(gamma))
+
+
+def _build_probe_grid(
+    band_min:           float,
+    band_max:           float,
+    chemical_potential: float,
+    energy_window:      float,
+    width:              float,
+    log_points:         int,
+    uniform_points:     int,
+) -> np.ndarray:
+    """Probe energies: uniform over the bandwidth plus log-clustered at mu.
+
+    The clustering is built from *offsets* relative to mu that are
+    geometrically spaced between a small fraction of the kernel width and
+    ``energy_window``.  The previous version spaced the offsets as
+    ``geomspace(|mu|, |mu| + window)``, which is only genuinely logarithmic
+    for mu ~ 0: for any other chemical potential the ratio
+    (|mu| + window)/|mu| is O(1) and the "log" grid degenerates into a second
+    uniform grid, leaving the peak core unresolved.
+    """
+
+    uniform_band = np.linspace(band_min, band_max, num=uniform_points,
+                               endpoint=True, dtype=float)
+
+    inner = max(1e-4 * width, 1e-12)
+    outer = max(float(energy_window), 10.0 * inner)
+    offsets = np.geomspace(inner, outer, num=log_points)
+
+    return np.sort(np.unique(np.concatenate((
+        uniform_band,
+        chemical_potential + offsets,
+        chemical_potential - offsets,
+        np.array([chemical_potential], dtype=float),
+    ))))
+
+
+# Cache for the probe grid and the analytic kernel evaluated on it.  Both
+# depend only on (band range, mu, window, T, gamma, point counts) -- none of
+# which change during a refinement run except the band range, which is
+# usually constant as well.  Recomputing them every iteration was pure waste.
+_PROBE_CACHE: "dict[tuple, tuple[np.ndarray, np.ndarray]]" = {}
+_PROBE_CACHE_MAXSIZE = 8
+
+
+def _probe_and_analytic(
+    band_min:           float,
+    band_max:           float,
+    temperature:        float,
+    gamma:              float,
+    chemical_potential: float,
+    energy_window:      float,
+    log_points:         int,
+    uniform_points:     int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (probe_band, analytic df/da on it), memoised."""
+
+    key = (band_min, band_max, temperature, gamma, chemical_potential,
+           energy_window, log_points, uniform_points)
+    hit = _PROBE_CACHE.get(key)
+    if hit is not None:
+        return hit
+
+    width      = kernel_width(temperature, gamma)
+    probe_band = _build_probe_grid(band_min, band_max, chemical_potential,
+                                   energy_window, width,
+                                   log_points, uniform_points)
+    analytic   = df_da(probe_band, temperature, gamma)
+
+    if len(_PROBE_CACHE) >= _PROBE_CACHE_MAXSIZE:
+        _PROBE_CACHE.pop(next(iter(_PROBE_CACHE)))
+    _PROBE_CACHE[key] = (probe_band, analytic)
+    return probe_band, analytic
+
+
+def clear_probe_cache() -> None:
+    """Drop the memoised probe grids (useful in long-running processes)."""
+
+    _PROBE_CACHE.clear()
+
+
 def detect_refinement_scale(
     band: np.ndarray,
     temperature: float,
     gamma: float,
     chemical_potential: float,
     energy_window: float = 0.1,
-    log_points: int = 110_000,
-    uniform_points: int = 10_000,
+    log_points: int = 12_000,
+    uniform_points: int = 4_000,
+    defect_rtol: float = 1e-3,
+    width_factor: float = 2.0,
 ) -> Tuple[np.ndarray, float]:
-    """Identify undersampled energies and return their window-derived tolerance.
+    """Identify undersampled energies and derive an adaptive hotspot window.
+
+    The current band axis is used as the node set of a linear interpolant of
+    df/da.  Where that interpolant deviates from the analytic kernel, the mesh
+    is undersampled in energy.  The *reach* of that deviation around mu sets
+    the energy window within which k-points are flagged for subdivision.
+
+    Window policy ("narrow only")
+    -----------------------------
+    ``tolerance = clip(reach, floor, energy_window)`` with
+    ``reach = max|significant - mu|`` taken over the significant energies that
+    lie *inside* ``energy_window`` (band-edge van Hove defects are always
+    present and would otherwise pin the window at its ceiling), and
+    ``floor = min(energy_window, width_factor * kernel_width)``.
+
+    The user-supplied ``energy_window`` is a hard ceiling, so the window can
+    only ever shrink relative to it as the mesh improves.  This keeps the
+    adaptivity that the defect analysis provides while making the historical
+    failure mode structurally impossible: an earlier version scaled the
+    window as ``3 * max|significant|``, which for a Dirac point at mu spanned
+    the whole bandwidth and flagged every k-point.  The floor prevents the
+    opposite failure -- a window narrower than the kernel itself, which would
+    stop refining points that still carry weight in the integral.
+
+    Parameters
+    ----------
+    band : ndarray
+        Sorted unique band energies of the current mesh.
+    temperature, gamma : float
+        Kelvin and eV; the worst-case corner of the planned sweep.
+    chemical_potential : float
+        mu [eV].
+    energy_window : float
+        Ceiling for the hotspot window [eV].
+    log_points, uniform_points : int
+        Size of the probe grid.  Reduced from (110000, 10000): the metric only
+        needs max|defect| and its half-level set, which are resolved to well
+        under a percent at these sizes, and the analytic kernel on the grid is
+        cached across iterations anyway.
+    defect_rtol : float
+        Relative defect below which the band axis is considered to resolve the
+        kernel everywhere.  Returning ``tolerance = 0.0`` then signals the
+        caller to stop: no amount of extra k-points near mu can reduce the
+        sum-rule error further, which is the plateau situation.
+    width_factor : float
+        Multiplier of the kernel width used for the window floor.
 
     Returns
     -------
     significant : ndarray
-        Probe energies where the analytic df/da differs significantly from the
-        linear interpolation of the coarse band grid.
+        Probe energies whose interpolation defect is at least half the maximum.
     tolerance : float
-        Energy window to use in :func:`refine_kmesh` for flagging hotspot
-        k-points.  Equal to ``energy_window``, clipped to be at least 1e-6.
-        This is the physically meaningful scale: the half-width of the region
-        around ``chemical_potential`` that needs denser sampling.
+        Hotspot half-window [eV] for :func:`refine_kmesh`, or 0.0 if the band
+        axis already resolves the kernel to within ``defect_rtol``.
     """
 
     dfda = df_da(band, temperature, gamma)
@@ -273,41 +513,58 @@ def detect_refinement_scale(
     band_min = float(np.min(band))
     band_max = float(np.max(band))
 
-    uniform_band = np.linspace(band_min, band_max, num=uniform_points, endpoint=True, dtype=float)
-    uniform_band = np.sort(np.unique(uniform_band))
-
-    # Construct logarithmic sampling about the chemical potential; avoid zero
-    # start by using max(|mu|, 1e-14) as the geomspace baseline.
-    delta    = max(energy_window, 1e-8)
-    baseline = max(abs(chemical_potential), 1e-14)
-    geom     = np.geomspace(baseline, baseline + delta, num=log_points)
-    log_band = np.sort(np.concatenate((chemical_potential + geom,
-                                       chemical_potential - geom)))
-
-    probe_band = np.sort(np.unique(np.concatenate((uniform_band, log_band))))
+    probe_band, analytic = _probe_and_analytic(
+        band_min, band_max, float(temperature), float(gamma),
+        float(chemical_potential), float(energy_window),
+        log_points, uniform_points,
+    )
 
     interpolator = interp1d(band, dfda, kind="linear",
                             bounds_error=False, fill_value="extrapolate")
     interpolated = interpolator(probe_band)
-    analytic     = df_da(probe_band, temperature, gamma)
     delta_arr    = np.abs(analytic - interpolated)
 
     if delta_arr.size == 0:
         return probe_band, 0.0
 
-    threshold   = 0.5 * np.max(delta_arr)
-    significant = probe_band[delta_arr >= threshold]
+    max_defect = float(np.max(delta_arr))
+    max_kernel = float(np.max(np.abs(analytic)))
+
+    # Converged in energy space: the sampled energies already reproduce the
+    # kernel everywhere, so further k-points near mu cannot help.
+    if max_kernel > 0.0 and max_defect <= defect_rtol * max_kernel:
+        logger.info(
+            "Band axis resolves df/da to %.3e relative (<= defect_rtol=%.3e); "
+            "no undersampled energies remain.",
+            max_defect / max_kernel, defect_rtol,
+        )
+        return probe_band, 0.0
+
+    significant = probe_band[delta_arr >= 0.5 * max_defect]
 
     if significant.size == 0:
         return probe_band, 0.0
 
-    # The tolerance passed to refine_kmesh is the energy half-window around
-    # chemical_potential within which k-points are considered hotspots.
-    # energy_window is the physically correct scale for this: it is the
-    # half-width of the df/da peak set by the user.  Using max|significant|*3
-    # instead produced a window spanning the entire bandwidth for systems with
-    # a Dirac point at mu (e.g. graphene), causing every k-point to be flagged.
-    tolerance = max(float(energy_window), 1e-6)
+    width = kernel_width(temperature, gamma)
+    floor = min(float(energy_window), width_factor * width)
+
+    # Only defects *inside* the user window may set the window: band-edge
+    # (van Hove) defects are always present and far from mu, and letting them
+    # enter the maximum would pin the window open at the ceiling forever.
+    offsets   = np.abs(significant - chemical_potential)
+    in_window = offsets <= float(energy_window)
+    reach     = float(np.max(offsets[in_window])) if in_window.any() else 0.0
+
+    tolerance = min(float(energy_window), max(floor, reach))
+    tolerance = max(tolerance, 1e-6)
+
+    logger.debug(
+        "detect_refinement_scale: max defect %.3e (%.2f%% of peak), "
+        "reach %.4e eV, floor %.4e eV, window %.4e eV -> tolerance %.4e eV.",
+        max_defect, 100.0 * max_defect / max_kernel if max_kernel else float('nan'),
+        reach, floor, energy_window, tolerance,
+    )
+
     return significant.astype(quad_dtype), tolerance
 
 

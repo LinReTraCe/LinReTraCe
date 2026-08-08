@@ -423,13 +423,21 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
             return 1
 
         if tolerance == 0.0:
-            logger.warning("No significant hotspots detected; stopping early.")
+            logger.warning(
+                "The current band axis already resolves the df/da kernel to "
+                "within the defect tolerance: no undersampled energies remain, "
+                "so additional k-points near mu cannot reduce the error "
+                "further (residual %.6f is set by the band range / initial "
+                "mesh). Stopping.", final_error,
+            )
             break
 
         logger.info(
-            "Hotspot tolerance: %.4e eV  (energy_window=%.4e, "
-            "%d probe energies flagged as undersampled).",
-            tolerance, params.energy_window, hotspots.size,
+            "Hotspot window: %.4e eV (ceiling energy_window=%.4e, "
+            "kernel half-width=%.4e; %d probe energies flagged as "
+            "undersampled).",
+            tolerance, params.energy_window,
+            max(kB_eV * params.T_min, params.gamma_min), hotspots.size,
         )
 
         # ── 5. Refine mesh ────────────────────────────────────────────────
