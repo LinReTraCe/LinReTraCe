@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-08-08 (patch 09).
+Last updated: 2026-08-08 (patch 12).
 
 ---
 
@@ -293,6 +293,10 @@ harmless numerically; the hazard is that a *sixth* copy gets added, or that one
 is edited and the others are not. The origin of this class of bug was a missing
 constant, not a wrong one — see [Resolved](#resolved), KI-R1.
 
+KI-R9 is the same failure mode on the Fortran side, one severity level up: a
+constant that was typed rather than derived, and typed wrongly. Both argue for
+deriving constants from a single definition wherever the arithmetic allows it.
+
 Suggested cleanup: import `kB_eV` from `structure.units` everywhere on the
 Python side and adopt the CODATA-2018 value `8.617333262e-5` consistently. The
 Fortran parameter should be aligned in the same pass, but that is a Fortran-core
@@ -338,6 +342,93 @@ k-point inference survives only as a fallback for files that predate the
 `dims` dataset, and is documented as unable to handle this case. The entry is
 kept open as a reminder that the fallback is a trap if it is ever promoted back
 to the default.
+
+---
+
+### KI-08 — Reflection branch is three orders less accurate than the direct branch
+
+| | |
+|---|---|
+| Severity | low (unreachable in practice) |
+| Confidence | confirmed |
+| Location | `src_linretrace/digamma/psi_fast.F90`, and the same in the CERNLIB originals |
+
+Measured worst relative error over K = 0..4 against `mpmath` references, in
+real quad arithmetic:
+
+```
+Re z > 0 (every LinReTraCe argument) : 9.81e-34   (~5 x quad eps)
+Re z < 0 (reflection branch)         : 1.13e-31   at K = 4, z = (-2.3, 1.1)
+```
+
+The loss comes from the reflection formula itself, where `cot(pi u)` cancels;
+it is not a property of the recurrence or the series. The old routine has the
+same behaviour and is worse (3.8e-30 at the same point), so `psi_fast` is a
+~90x improvement there rather than a regression.
+
+Unreachable in LinReTraCe: every argument is
+`z = 1/2 + beta/2pi (Gamma + i Z (E - mu))`, so `Re z >= 1/2 > 0` always. The
+branch exists only so the module is a drop-in for the general routine.
+
+Recorded so that nobody re-measures it and concludes the module is broken. If
+the branch is ever needed, the fix is to evaluate `cot(pi u)` in a form that
+does not cancel near the poles, not to touch the series.
+
+---
+
+### KI-09 — The CERNLIB digamma archive is now dead weight
+
+| | |
+|---|---|
+| Severity | low |
+| Confidence | confirmed |
+| Location | `src_linretrace/digamma/`, `src_linretrace/Makefile` |
+
+After patch 11 there are no live calls to `wpsipg` or `wpsipghp`: all 23
+remaining references are commented out under `! --- deprecated CERNLIB path`
+banners, kept so the old behaviour can be restored by uncommenting. The
+archive `cern_digamma.a` is still built and linked for that reason.
+
+Retirement checklist, for when the new path has been exercised on production
+runs:
+
+1. Delete the commented blocks in `fermi.f90`, `response.F90`, `root.F90`
+   (7 call sites; `git log` will preserve them).
+2. Drop `wpsipg.o` and `wpsipg_hp.o` from `cern_digamma.a`. Check first
+   whether `cpsipg.f` -- the CERNLIB single-precision wrapper, which calls
+   `WPSIPG` -- is referenced by anything; if not, the whole archive and the
+   `abend/lenocc/mtlprt/mtlset` support files go with it.
+3. Remove `DIGAMMA` from `src_linretrace/Makefile` and the `$(DIGAMMA)`
+   prerequisite from the `all` target.
+4. `kmax_double` / `kmax_quad` in `digamma/Makefile` disappear with it. The
+   new module has no preprocessor knobs at all -- the expansion order is a
+   run-time decision (see PERF-R2).
+
+Note that `psi_fast.o` is built by the *parent* Makefile with `$(FC)`, not by
+the archive: it is a Fortran module, and `.mod` files are not portable between
+compilers, while `digamma/Makefile` builds with `$(FCDG)`.
+
+---
+
+### KI-10 — `psi_fast` duplicates its implementation across kinds
+
+| | |
+|---|---|
+| Severity | low (hygiene) |
+| Confidence | confirmed |
+| Location | `src_linretrace/digamma/psi_fast.F90` |
+
+`psi_range_qp` / `psi_range_dp`, `psi0_imag_qp` / `psi0_imag_dp` and their
+wrappers are line-for-line the same algorithm with a different kind
+parameter, which is the same double/quad duplication the old `.F77` pair had
+-- moved, not solved. It is at least now confined to one file, and the
+coefficient table is shared (`CD = real(CQ, dp)`), so the two kinds cannot
+drift apart numerically.
+
+Unifying would mean either a preprocessor include of the body (back to a
+`cpp` pass, which the module deliberately avoids) or parameterised derived
+types, which gfortran supports only partially. Worth revisiting when the rest
+of the double/quad split in the core is addressed; not worth doing on its own.
 
 ---
 
@@ -412,7 +503,9 @@ generators' own loops.
 
 Now that PERF-R1 has vectorised the star expansion, the remaining hot spot is a
 batch of small `eigh` calls plus a few `einsum` contractions, which BLAS
-already threads. A dedicated compiled kernel would only be worth it if
+already threads. On the Fortran side, PERF-R2 removed the polygamma
+bottleneck, so the same caution applies there: profile before assuming the
+kernel is still where the time goes. A dedicated compiled kernel would only be worth it if
 profiling after PERF-R1 still shows the per-k work dominating. Do not start
 here.
 
@@ -429,6 +522,39 @@ still allocates `hk`, `hvk`, `hck` at full `(nkp, nbands, nbands[, 3/6])`.
 For tight-binding models `nbands` is usually small enough that this does not
 bite, which is why it was left alone; the blocking pattern from the other
 three branches transfers directly if it ever does.
+
+### PERF-07 — The chemical-potential search may dominate the polygamma budget
+
+| | |
+|---|---|
+| Expected gain | unknown until measured; potentially large |
+| Location | `src_linretrace/root.F90`, `occ_digamma_D/_Q` and the Ridders driver |
+
+`occ_digamma` evaluates `psi_0` over `nband_max` (all bands, not the
+`nbopt_min:nbopt_max` optical range) times `nkp`, **twice per Ridders
+iteration**, with `maxiter` = 200 in the quad branch. `calc_polygamma`
+evaluates `psi_1..psi_3` over `nbopt` times `nkp` **once**. The ratio of
+evaluations is roughly
+
+    2 * n_iter * nband_max / (3 * nbopt)
+
+which for `nband_max = 20`, `nbopt = 10` and 20 iterations is ~27x more work
+in the search than in the response.
+
+**Measure before acting.** `niitact` is already printed per temperature step
+next to `pot%MM`, and `timings(4)` already isolates polygamma evaluation from
+`timings(5)`/`timings(6)`. Those two numbers settle whether this is the hot
+spot at all.
+
+If it is, the candidate is Newton rather than Ridders: the derivative is
+analytic and already implemented as `polygamma2psi1` in `fermi.f90`,
+
+    dn/dmu = (beta / 2 pi^2) * sum_k w_k * Z * Re psi_1(z)
+
+so ~5 iterations instead of ~20, and `psi_range_*(z, 0, 1, psi)` returns both
+orders from a single recurrence pass. Keep bisection as the fallback for the
+`lT0 .and. muFermi` staircase case, where the existing comment correctly notes
+that secant-type updates are ill-conditioned.
 
 ### PERF-04 — `openmp_utils` lives under `scripts/ltb/` but is generator-agnostic
 
@@ -551,6 +677,73 @@ the truncation test that follows (`if not np.any(abs(opticalMoments[...,6:]) >
 `lwann` runs on non-orthogonal lattices only; orthogonal cells take the
 three-component path and were never affected.
 
+### KI-R9 — Wrong Bernoulli coefficient in the CERNLIB quad table
+
+*Closed by patch 10/11.* `wpsipg_hp.F77` hard-codes all 80 series
+coefficients `C(i,K)` as 30-digit literals. One is wrong:
+
+```
+C(13,0):  file  5.4827583333...Q+3
+          exact 5.4827583333...Q+4      (B_26 / 26)      <- factor of ten
+```
+
+Every other entry checks out against `B_2i (2i+K-1)!/(2i)!`.
+
+`K = 0` is `psi_0`, i.e. `occ_digamma`, i.e. the chemical-potential search.
+The index 13 is only reached when `kmax >= 13`, so the **double** build
+(`kmax_double = 7`) is unaffected and the **quad** build
+(`kmax_quad = 16`) is. Measured worst relative error over K = 0..4 against
+`mpmath` references, in real quad arithmetic:
+
+```
+wpsipghp (old)   3.41e-27
+psi_fast (new)   9.81e-34        (quad eps = 1.93e-34)
+```
+
+with the discrepancy concentrated exactly where predicted -- `K = 0` at small
+`|Im z|`:
+
+```
+z = (0.5, 0.0001)  K=0    old 2.8e-27    new 9.8e-34
+z = (3.7, 0.02  )  K=0    old 3.4e-27    new 1.7e-34
+```
+
+So the quad branch has been running the chemical-potential search four digits
+short of what it advertises.
+
+`psi_fast.F90` does not transcribe the table. It stores 16 Bernoulli numbers
+as exact integer numerator/denominator pairs and builds the K dependence from
+exact small integers, because the factorial ratio is one
+(`1/(2i)`, `1`, `2i+1`, `(2i+1)(2i+2)`, `(2i+1)(2i+2)(2i+3)`). Every number a
+reader must check is now a Bernoulli numerator they can look up.
+
+**Consequence for reproducibility:** quad results will not be bit-identical to
+previous runs. The converged `mu` shifts at the ~1e-27 level -- unobservable,
+but not zero.
+
+### KI-R10 — Quad branch did not deliver quad precision
+
+*Closed by patch 10/11.* Independently of KI-R9, the recurrence target and
+the series order were mismatched. `wpsipg_hp` walks the argument up to
+`Re V ~ 15` and then evaluates a 16-term Bernoulli series. Measured worst
+case over K = 0..4 at `Re z = 1/2`, `Im z -> 0`:
+
+```
+walk to Re V ~ 15 (the old setting) : 4.3e-29
+walk to |V|  = 22                   : 6.4e-37
+walk to |V|  = 28                    : 2.1e-40
+```
+
+against a quad epsilon of 1.9e-34. The old code paid for 16 terms and then
+stopped the walk too early to use them, losing ~5 digits precisely at
+`E = mu` -- the one place where the quad branch exists to help.
+
+`psi_fast` walks to `|V| = 28`, chosen as the smallest target at which an
+argument that just fails the gate and one that just passes it both land within
+4 x epsilon (`|V| = 28`, no walk, 16 terms: 2.2e-34). The double branch walks
+to `|V| = 12` with a 9-term series, which is both more accurate and two steps
+cheaper than the old `Re V ~ 15` with 7 terms.
+
 ### PERF-R1 — Symmetrising branch was a Python loop over k-points
 
 *Closed by patch 08.* See the patch notes: batching the star expansion plus
@@ -561,4 +754,55 @@ Retained as a record of *why* the contractions are written out by hand: NumPy's
 non-monotonic in the batch size (33 s at `kblock=1`, 52 s at `kblock=2`, 7 s at
 `kblock=8`, out-of-memory kill at `kblock=512`). Do not "simplify" them back
 into `einsum`.
+
+### PERF-R2 — Polygamma evaluation was several times slower than necessary
+
+*Closed by patch 10/11.* Four independent problems in the CERNLIB routines, in
+descending order of effect:
+
+1. **The recurrence was entered on `|Re z|`, not `|z|`.** Every LinReTraCe
+   argument has `Re z = 1/2 + beta*Gamma/2pi`, never near the threshold of 15,
+   so the 14-step walk always ran -- but the step only increments the *real*
+   part, so for a state with `|Im z| = 185` (a 1 eV band energy at 10 K) it
+   moved `|V|` from 185.0007 to 185.6. Fourteen quad-precision complex
+   divisions for nothing. Fraction of evaluations for which the walk was pure
+   waste, `E - mu` over +-3 eV:
+
+   | T | `|z| >= 28` |
+   |---|---|
+   | 1 K | 99.5 % |
+   | 10 K | 94.6 % |
+   | 100 K | 45.9 % |
+   | 300 K | ~0 % |
+
+2. **Three separate calls for K = 1,2,3 on the same argument.**
+   `calc_polygamma` looped `do ipg = 1,3`, and each call redid the reduction
+   and recomputed `1/V**(K+1)` from scratch: 45 complex divisions where 15
+   divisions plus a few multiplies suffice. In quad this is disproportionate
+   -- measured on this hardware, a complex division is ~625 ns against ~184 ns
+   for a multiply, both software-emulated by libquadmath.
+
+3. **The expansion order was a compile-time constant** (`-D kmax=`), which
+   also controlled *which* `DATA` statements existed through a nest of `#if`
+   blocks. `psi_fast` always defines all 16 coefficients and picks the Horner
+   start index at run time from `|V|`; at T = 1 K most states need 5-6 terms
+   rather than 16. No preprocessor symbols remain.
+
+4. **`occ_digamma` uses only `aimag(psi_0)`**, and `psi_0` is the one order
+   needing a complex logarithm -- ~2046 ns in quad, against ~663 ns for the
+   `atan2` that yields the imaginary part alone. `psi0_imag_*` replaces it.
+
+Measured in real Fortran quad, `E - mu` over +-3 eV, `Gamma` = 1 meV:
+
+| | psi_1..psi_3 old -> new | psi_0 old -> new |
+|---|---|---|
+| 1 K | 41.3 -> 7.4 us (5.5x) | 13.2 -> 3.6 us (3.7x) |
+| 10 K | 43.3 -> 10.2 us (4.3x) | 14.6 -> 4.8 us (3.0x) |
+| 100 K | 44.3 -> 22.7 us (2.0x) | 14.4 -> 9.4 us (1.5x) |
+| 300 K | 44.0 -> 37.1 us (1.2x) | 14.6 -> 14.3 us (1.0x) |
+
+The gain grows as temperature falls and as the relevant `E - mu` window
+widens -- which is where the quad branch matters, and the direction the
+topological transport kernels are heading, since terms proportional to the
+Fermi function have no `df/dw` cutoff.
 
