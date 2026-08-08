@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-08-08.
+Last updated: 2026-08-08 (patch 08).
 
 ---
 
@@ -30,8 +30,8 @@ Last updated: 2026-08-08.
 
 | | |
 |---|---|
-| Severity | medium |
-| Confidence | confirmed (reproducer below) |
+| Severity | **high** (raised 2026-08-08) |
+| Confidence | confirmed (two reproducers below) |
 | Location | `structure/wannier.py:computeHamiltonian`, `structure/tb.py:_computeHk` |
 | Affects | `/kPoint/*/momentsBfield` (inter-band elements only) |
 
@@ -52,6 +52,32 @@ the LAPACK build. Matrix elements in the band basis inherit the phase:
 This is pre-existing and independent of the k-blocking introduced in patch 05 —
 blocking merely made it visible, because it changes the batch handed to LAPACK.
 
+**Escalation: on the symmetrising path the magnitude is arbitrary too.**
+The optical / B-field moments of an irreducible k-point are the average over
+its star, `M_sym = (1/nsym) sum_S M(S k)`. Each term carries its *own*,
+independently arbitrary phase `e^{i(phi_m(Sk) - phi_n(Sk))}`. Summing complex
+numbers with mutually random phases does not merely rotate the result — it
+changes its modulus. So for `n != m` the star-averaged `momentsBfield` is not
+gauge covariant, it is simply not well defined.
+
+Measured by running the *same* input through the pre- and post-patch-08
+symmetrising code (which differ only in the batch shape handed to `eigh`, and
+therefore only in the phases LAPACK returns), 584 k-points, `nsym = 48`:
+
+```
+|Bopt| off-diagonal, scale        : 9.35e-03
+|Bopt| off-diagonal, deviation    : 2.73e-03   (29 % relative)
+|Bopt| band-diagonal, deviation   : 8.33e-17   (exact)
+```
+
+418 of 584 k-points are affected, with band gaps from 0.16 to 3.0 eV — this is
+not a degenerate-subspace effect. The band-diagonal elements, `moments`, and
+the energies are all unaffected, so this is confined to
+`momentsBfield[n != m]`.
+
+Note the consequence for reproducibility: those numbers can change with the
+LAPACK build, the NumPy version, or the block size, with no warning.
+
 **Reproducer.**
 
 ```python
@@ -67,10 +93,12 @@ ambiguity — it is the ordinary U(1) freedom of a non-degenerate eigenvector.
 
 **Open questions before fixing.**
 
-1. Is the quantity as consumed by `linretrace` actually gauge invariant?
-   The response kernels may only ever use it in combinations where the phase
-   cancels, in which case this is a non-issue and should be documented as such
-   rather than fixed. This needs checking in `src_linretrace/response.F90`.
+1. **Is `momentsBfield[n != m]` used at all?** This is now the first question
+   to settle, and it is a Fortran-side reading task
+   (`src_linretrace/response.F90`). If the inter-band B-field elements are
+   never consumed, the honest fix is to stop writing them (which would also
+   close KI-02, since they are the per-k-point datasets). If they are
+   consumed, the current numbers cannot be trusted.
 2. If a fix is needed, the standard remedy is a gauge fixing convention applied
    right after `eigh`, e.g. rotate each eigenvector so that its
    largest-modulus component is real and positive. That is cheap
@@ -257,30 +285,6 @@ to the default.
 
 ## Performance opportunities (identified, not implemented)
 
-### PERF-01 — The irreducible branch is a Python loop over k-points
-
-| | |
-|---|---|
-| Expected gain | 10–50x on symmetrised runs |
-| Location | `structure/wannier.py:computeHamiltonian`, `structure/tb.py:_computeHk` |
-
-The symmetrising branch loops over k-points in Python, expanding each into its
-`nsym`-point star and diagonalising `(nsym, nproj, nproj)` per iteration.
-Measured on a 2-orbital, 584-k-point refined mesh with `nsym = 48`: compute
-time 0.02 s (reducible) vs **1.07 s** (symmetrised) — a ~50x penalty, entirely
-from loop overhead on small matrices.
-
-The fix is the same restructuring already applied to the reducible branch in
-patch 05: process `B` k-points at a time, so the star expansion becomes a
-`(B*nsym, nproj, nproj)` batch and every `einsum` / `eigh` sees a large batch.
-The star average is then a `reshape(B, nsym, ...).mean(axis=1)`. Memory per
-block scales as `nsym` times the reducible case, so the block size resolver
-needs an `nsym` factor.
-
-This matters more than the raw factor suggests: symmetry is exactly what makes
-refinement affordable (see the 113-vs-2280 k-point result in KI-R3), so the
-symmetrised path is the one that should be fast.
-
 ### PERF-02 — The generator re-reads and re-evaluates everything each iteration
 
 | | |
@@ -298,7 +302,7 @@ A fix requires extending the `MeshGenerator` protocol with an optional
 `generate_incremental(new_points, new_weights, parent_hdf5, output_path)` and
 having the loop pass the parent file. The bookkeeping is not trivial: the
 refinement removes parents and adds children, so the merge has to track which
-rows of the parent arrays survive. Worth doing only after PERF-01, since the
+rows of the parent arrays survive. Worth doing now that PERF-R1 is closed; the
 two touch the same code.
 
 Cheaper intermediate step with most of the benefit for large Wannier models:
@@ -309,7 +313,7 @@ lists) so the `_hr.dat` parse and the FT prefactor setup happen once.
 
 | | |
 |---|---|
-| Expected gain | modest on top of PERF-01 |
+| Expected gain | modest on top of PERF-R1 |
 | Location | new |
 
 `--openmp` currently only exports `OMP_NUM_THREADS` and friends before NumPy is
@@ -317,11 +321,25 @@ imported (`scripts/ltb/openmp_utils.py`), i.e. it is BLAS/LAPACK threading and
 nothing else. There is no OpenMP anywhere in the refinement or in the
 generators' own loops.
 
-Once PERF-01 has vectorised the star expansion, the remaining hot spot is a
+Now that PERF-R1 has vectorised the star expansion, the remaining hot spot is a
 batch of small `eigh` calls plus a few `einsum` contractions, which BLAS
 already threads. A dedicated compiled kernel would only be worth it if
-profiling after PERF-01 still shows the per-k work dominating. Do not start
+profiling after PERF-R1 still shows the per-k work dominating. Do not start
 here.
+
+### PERF-06 — `structure/tb.py` reducible branch is still unblocked
+
+| | |
+|---|---|
+| Expected gain | memory only |
+| Location | `structure/tb.py:_computeHk`, reducible branch |
+
+The Wannier reducible branch was blocked in patch 05 and the symmetrising
+branches of both files in patch 08, but the tight-binding *reducible* branch
+still allocates `hk`, `hvk`, `hck` at full `(nkp, nbands, nbands[, 3/6])`.
+For tight-binding models `nbands` is usually small enough that this does not
+bite, which is why it was left alone; the blocking pattern from the other
+three branches transfers directly if it ever does.
 
 ### PERF-04 — `openmp_utils` lives under `scripts/ltb/` but is generator-agnostic
 
@@ -427,3 +445,31 @@ Replaced by geometric spacing of the *offsets* from mu.
 *Closed by patch 03.* `setup.py` did not list `structure.generators`, so
 `LtbGenerator` was missing from any pip-installed build and `ltb refine` only
 worked from a source checkout.
+
+### KI-R8 — Wannier reducible branch stored a guaranteed-zero imaginary part
+
+*Closed by patch 08.* For non-orthogonal lattices `opticalMoments` carries nine
+components: six real `Re(v_a^* v_b)` and three imaginary parts of the
+*off-diagonal* Cartesian pairs. `structure/tb.py` writes
+`vk2[...,3:].imag` (components xy, xz, yz) in both of its branches, and so does
+the irreducible branch of `structure/wannier.py` — but the reducible branch of
+`structure/wannier.py` wrote `vel2[...,:3].imag`, i.e. the imaginary part of
+`v_x^* v_x, v_y^* v_y, v_z^* v_z`, which is identically zero by construction.
+
+Two consequences: the imaginary off-diagonal elements were silently lost, and
+the truncation test that follows (`if not np.any(abs(opticalMoments[...,6:]) >
+1e-6): truncate`) then *always* fired, dropping columns 6:9 entirely. Affected
+`lwann` runs on non-orthogonal lattices only; orthogonal cells take the
+three-component path and were never affected.
+
+### PERF-R1 — Symmetrising branch was a Python loop over k-points
+
+*Closed by patch 08.* See the patch notes: batching the star expansion plus
+replacing the `einsum(optimize=True)` contractions with explicit BLAS calls
+took a 512-k-point, 12-orbital, `nsym = 48` model from 36.5 s to 7.0 s.
+Retained as a record of *why* the contractions are written out by hand: NumPy's
+`einsum` re-plans per call, and its chosen paths made runtime and memory
+non-monotonic in the batch size (33 s at `kblock=1`, 52 s at `kblock=2`, 7 s at
+`kblock=8`, out-of-memory kill at `kblock=512`). Do not "simplify" them back
+into `einsum`.
+

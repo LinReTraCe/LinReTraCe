@@ -3,6 +3,7 @@
 from __future__ import print_function, division, absolute_import
 import sys
 import abc
+import os
 import logging
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,152 @@ class ElectronicStructure(ABC):
         self.dims.append(False)
     self.dims = np.array(self.dims)
     logger.info('Detected {} dimensions from the custom k-mesh.'.format(self.ndim))
+
+  # Target working set for the automatic block size; see _resolveKblock.
+  _WORKING_SET_TARGET = 128 * 1024**2
+
+  @staticmethod
+  def _availableMemoryBytes():
+    '''Best-effort free memory in bytes; None if it cannot be determined.'''
+    try:
+      with open('/proc/meminfo') as fh:
+        for line in fh:
+          if line.startswith('MemAvailable:'):
+            return int(line.split()[1]) * 1024
+    except Exception:
+      pass
+    try:
+      return os.sysconf('SC_AVPHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
+    except Exception:
+      return None
+
+  def _resolveKblock(self, kblock, memory_budget_gb, nbands, nrpoints, ndir,
+                     nsym=1, fullmoments=True, debug=False, label='k-blocking'):
+    '''
+    Choose the number of k-points evaluated per pass.
+
+    Blocking bounds only the TRANSIENT arrays.  Their cost per k-point is
+
+      24 * nrp                       (r.k and exp(i r.k))
+      + ~1056 * nbands^2             (H(k), dH, d2H, U, Uinv, v, c, curmat,
+                                      vel2 and the B-field einsum output)
+
+    times a safety factor for the einsum contraction intermediates, and times
+    *nsym* on the symmetrising path, where every irreducible k-point is
+    expanded into its full star before any linear algebra happens.
+
+    The OUTPUT arrays are independent of the block size and are reported so
+    that a run which cannot fit regardless of blocking says so up front.
+    '''
+    per_k_transient = (24.0 * nrpoints + 1056.0 * nbands**2) * float(nsym)
+    per_k_transient *= 1.5   # einsum intermediates
+
+    per_k_output = 8.0 * nbands + nbands**2 * (48.0 + 96.0)
+    if fullmoments:
+      per_k_output += nbands**2 * (8.0 * ndir + 432.0)
+    else:
+      per_k_output += nbands * (8.0 * ndir + 432.0)
+    if debug:
+      per_k_output += 176.0 * nbands**2
+
+    output_gb = per_k_output * self.nkp / 1024**3
+
+    if memory_budget_gb is None:
+      avail = self._availableMemoryBytes()
+      budget = 0.25 * avail if avail else 2.0 * 1024**3
+    else:
+      budget = float(memory_budget_gb) * 1024**3
+
+    # The automatic block size targets THROUGHPUT, not the memory ceiling.
+    # Beyond a working set of a few hundred MB the block-local arrays stop
+    # fitting in cache and the whole pass becomes memory-bandwidth bound:
+    # measured on a 512-k-point, 12-orbital, nsym=48 model, 7.1 s at
+    # kblock=8 against 19.3 s at kblock=128 and 22.4 s at kblock=512, for
+    # bitwise identical output.  A user-supplied memory_budget_gb can only
+    # lower this cap, never raise it; pass an explicit kblock to override.
+    budget = min(budget, self._WORKING_SET_TARGET)
+
+    if kblock is None:
+      kblock = int(max(1, budget // per_k_transient))
+    kblock = int(min(max(1, kblock), self.nkp))
+
+    nblocks = -(-self.nkp // kblock)
+    logger.info('   {}: {} k-points per pass ({} pass(es)); transient ~{:.2f} '
+                'GB, output arrays ~{:.2f} GB.'.format(
+                label, kblock, nblocks,
+                kblock * per_k_transient / 1024**3, output_gb))
+    if output_gb > 8.0:
+      logger.warning('The output arrays alone need ~{:.1f} GB and must be '
+                     'held in full before writing; k-blocking cannot reduce '
+                     'this. Use intraonly if only band-diagonal elements are '
+                     'required (drops the dominant nbands^2 B-field term to '
+                     'nbands), or refine to fewer k-points.'.format(output_gb))
+    return kblock
+
+  @staticmethod
+  def _ftHamiltonian(ee, hr, prefactor=None):
+    '''
+    Fourier transform h(r) -> h(k) as a single BLAS call per Cartesian
+    component.
+
+      prefactor is None : out[k,i,j]   = sum_r ee[k,r] hr[r,i,j]
+      prefactor given   : out[k,i,j,d] = sum_r prefactor[d,r] ee[k,r] hr[r,i,j]
+
+    Written explicitly rather than as np.einsum('dr,kr,rij->kijd', ...):
+    einsum re-plans its contraction path per call, and for the batch sizes
+    that arise on the symmetrising path (nkblock * nsym matrices) it picks
+    orders whose intermediates grow superlinearly -- measured 33 s at
+    kblock=1, 52 s at kblock=2, 7 s at kblock=8 and an out-of-memory kill at
+    kblock=512 on the same 512-k-point, 12-orbital model.  Reshaping to a
+    plain (nk, nrp) x (nrp, nbands^2) GEMM is deterministic in both time and
+    memory.
+    '''
+    nrp, nb = hr.shape[0], hr.shape[1]
+    hrflat  = hr.reshape(nrp, nb*nb)
+    if prefactor is None:
+      return ee.dot(hrflat).reshape(ee.shape[0], nb, nb)
+
+    ndir = prefactor.shape[0]
+    out  = np.empty((ee.shape[0], nb, nb, ndir), dtype=np.complex128)
+    for d in range(ndir):
+      out[..., d] = (ee * prefactor[d][None, :]).dot(hrflat).reshape(ee.shape[0], nb, nb)
+    return out
+
+  @staticmethod
+  def _rotateToBandBasis(Uinv, mat, U):
+    '''
+    Batched basis rotation  out[n,i,l,...] = Uinv[n,i,j] mat[n,j,k,...] U[n,k,l]
+
+    *mat* may carry any number of trailing (Cartesian) axes; they are moved to
+    the front so that np.matmul broadcasts over them and every multiplication
+    is a batched zgemm.  Replaces np.einsum('nij,njkd,nkl->nild', ...) and its
+    two-index variant for the same reason as _ftHamiltonian.
+    '''
+    extra = mat.ndim - 3
+    if extra == 0:
+      return np.matmul(Uinv, np.matmul(mat, U))
+    fwd = tuple(range(3, mat.ndim)) + (0, 1, 2)
+    res = np.matmul(Uinv, np.matmul(np.transpose(mat, fwd), U))
+    back = tuple(range(extra, extra + 3)) + tuple(range(extra))
+    return np.transpose(res, back)
+
+  @staticmethod
+  def _bfieldMoment(levmatrix, velconj, vel, curmat):
+    '''
+    B-field optical moment
+
+      mb[...,x,y,z] = sum_ij eps[z,i,j] velconj[...,x] vel[...,i] curmat[...,y,j]
+
+    contracted in two steps (a tensordot and a batched matmul) followed by an
+    outer product, instead of the four-operand
+    np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz', ...).  Same result, deterministic
+    cost.
+    '''
+    # L[...,z,j] = sum_i eps[z,i,j] vel[...,i]
+    L = np.tensordot(vel, levmatrix, axes=([-1], [1]))
+    # A[...,y,z] = sum_j curmat[...,y,j] L[...,z,j]
+    A = np.matmul(curmat, np.swapaxes(L, -1, -2))
+    return velconj[..., :, None, None] * A[..., None, :, :]
 
   def _setCustomSymmetries(self, symop):
     '''

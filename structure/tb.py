@@ -60,7 +60,8 @@ class TightBinding(Model):
     self._defineDimensionsFromKpoints(self.kpoints, dims=dims)
     self._setCustomSymmetries(symop)
 
-  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False, sparse_rotation=False):
+  def computeData(self, tbfile, charge, mu=None, mushift=False, corronly=False, vector=False, sparse_rotation=False,
+                  kblock=None, memory_budget_gb=None):
     self.tbfile           = tbfile
     self.charge           = charge
     self.corronly         = corronly
@@ -97,7 +98,7 @@ class TightBinding(Model):
     self._setupArrays(self.ortho)
 
     ''' calculate hamiltonian and optical elements '''
-    self._computeHk()
+    self._computeHk(kblock=kblock, memory_budget_gb=memory_budget_gb)
 
     ''' setting some important variables '''
     self.opticalBandMin = 0
@@ -497,7 +498,7 @@ class TightBinding(Model):
 
       logger.info('Reducible grid: {} symmetry operation'.format(self.nsym))
 
-  def _computeHk(self):
+  def _computeHk(self, kblock=None, memory_budget_gb=None):
     '''
       calculate H(k) d/dk H(k) and d2/dk2 H(k)
       via H(r) and primitive lattice vectors
@@ -543,92 +544,109 @@ class TightBinding(Model):
       the symmetrized optical elements are then the average over all these points
       '''
 
+      ''' the star expansion is done for a BLOCK of irreducible k-points at a
+          time, so every linear-algebra call sees (kblock * nsym) matrices
+          instead of nsym.  Looping over k-points in Python cost ~50x the
+          reducible path on a 584-point mesh with nsym=48. '''
+
+      nb   = self.energyBandMax
+      ndir = 3 if self.ortho else 9
+      diag = np.arange(nb)
+
+      kblock = self._resolveKblock(kblock, memory_budget_gb, nb, self.nrp,
+                                   ndir, nsym=self.nsym,
+                                   label='k-blocking (symmetrised)')
+
       ''' setup arrays '''
-      if self.ortho:
-        loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3), dtype=np.float64)
-      else:
-        loc_opticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,9), dtype=np.float64)
-      loc_BopticalMoments = np.zeros((self.nkp,self.energyBandMax,self.energyBandMax,3,3,3), dtype=np.complex128)
+      loc_opticalMoments  = np.zeros((self.nkp,nb,nb,ndir), dtype=np.float64)
+      loc_BopticalMoments = np.zeros((self.nkp,nb,nb,3,3,3), dtype=np.complex128)
 
-      for ikp in range(self.nkp):
-        progressBar(ikp+1,self.nkp,status='k-points')
+      if self.orbitals is not None:
+        # Jan's code snippet
+        # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+        # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+        distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+        ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
 
-        ''' generate reducible k-points and bring back to first BZ'''
-        redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
-        redk = redk%1
+      for k0 in range(0, self.nkp, kblock):
+        k1 = min(k0 + kblock, self.nkp)
+        nk = k1 - k0
+        progressBar(k1, self.nkp, status='k-points')
+
+        ''' generate reducible k-points and bring back to first BZ
+            (nk, nsym, 3) -> flattened to (nk*nsym, 3) '''
+        redk = np.einsum('nji,bj->bni',self.symop,self.kpoints[k0:k1]) # k_red = P^T . k_irr
+        redk = (redk % 1).reshape(nk*self.nsym, 3)
 
         ''' generate hamiltonian '''
         red_rdotk = 2*np.pi*np.einsum('ni,ri->nr',redk,self.rpoints)
         red_ee = np.exp(1j * red_rdotk)
-        red_hk = np.einsum('nr,rij->nij', red_ee, self.hr)
+        del red_rdotk, redk
+        red_hk = self._ftHamiltonian(red_ee, self.hr)
         red_hk[np.abs(red_hk) < 1e-14] = 0.0
 
         ''' generate velocity hamiltonian '''
-        red_hvk = np.einsum('dr,nr,rij->nijd',1j*prefactor_r,red_ee,self.hr, optimize=True)
+        red_hvk = self._ftHamiltonian(red_ee, self.hr, 1j*prefactor_r)
 
         if self.orbitals is not None:
-          # Jan's code snippet
-          # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-          # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
-          distances = self.orbitals[:,None,:] - self.orbitals[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
-          ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-          hvk_correction = - 1j * red_hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
-          red_hvk += hvk_correction
-
+          red_hvk += - 1j * red_hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
 
         ''' generate curvature hamiltonian '''
-        red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,self.hr, optimize=True)
-        red_hck_mat  = np.zeros((self.nsym,self.energyBandMax,self.energyBandMax,3,3), dtype=np.complex128)
+        red_hck = self._ftHamiltonian(red_ee, self.hr, -prefactor_r2)
+        del red_ee
+        red_hck_mat  = np.zeros((nk*self.nsym,nb,nb,3,3), dtype=np.complex128)
         red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
         red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
-
+        del red_hck
 
         ''' imporant to note: the generated hamiltonians on the reducible grid
             must not be identical to the hamiltonian of the irreducible point
             what must be identical is only the eigenvalue
-        '''
 
-        ''' to get a full one-to-one comparison
-            we need to sort these now
-            through the application of rotations pairs of colums and rows can be interchanged '''
+            to get a full one-to-one comparison we need to sort these now:
+            through the application of rotations pairs of colums and rows can
+            be interchanged '''
         red_ek, red_U = np.linalg.eigh(red_hk)
         red_ek = red_ek.real
+        del red_hk
 
-        for isym in range(self.nsym):
-          ekk, Uk = red_ek[isym,:], red_U[isym,:,:]
-          idx = ekk.argsort()
-          red_ek[isym,:] = ekk[idx]
-          red_U[isym,:,:] = Uk[:,idx]
+        order  = np.argsort(red_ek, axis=1)
+        red_ek = np.take_along_axis(red_ek, order, axis=1)
+        red_U  = np.take_along_axis(red_U, order[:,None,:], axis=2)
 
-        self.energies[0][ikp,:] = red_ek[0,:]
+        ''' the irreducible point itself is the first star member '''
+        self.energies[0][k0:k1,:] = red_ek.reshape(nk,self.nsym,nb)[:,0,:]
         red_Uinv = np.linalg.inv(red_U)
 
         ''' transform velocity hamiltonian into Kohn Sham basis '''
-        vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U, optimize=True)
+        vel = self._rotateToBandBasis(red_Uinv, red_hvk, red_U)
         velconj = np.conjugate(vel)
         ''' transform curvature hamiltonian into Kohn Sham basis '''
-        curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U, optimize=True)
+        curmat = self._rotateToBandBasis(red_Uinv, red_hck_mat, red_U)
+        del red_hvk, red_hck_mat, red_U, red_Uinv, red_ek
 
         ''' take the mean over the opt matrix (velocity squares) '''
-        vk2 = velconj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
-        vk2 = np.mean(vk2,axis=0)
+        vk2 = velconj[...,[0,1,2,0,0,1]] * vel[...,[0,1,2,1,2,2]]
+        vk2 = vk2.reshape((nk,self.nsym) + vk2.shape[1:]).mean(axis=1)
 
         if self.ortho:
-          loc_opticalMoments[ikp,...] = vk2[...,:3].real
+          loc_opticalMoments[k0:k1,...] = vk2[...,:3].real
         else:
-          loc_opticalMoments[ikp,:,:,:6] = vk2.real
-          loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
+          loc_opticalMoments[k0:k1,...,:6] = vk2.real
+          loc_opticalMoments[k0:k1,...,6:] = vk2[...,3:].imag
+        del vk2
 
         ''' take the mean over the optb matrix '''
         #           epsilon_cij v_a v_i c_bj -> abc
-        mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat, optimize=True)
-        mb = np.mean(mb,axis=0)
-        loc_BopticalMoments[ikp,...] = mb
+        mb = self._bfieldMoment(levmatrix, velconj, vel, curmat)
+        loc_BopticalMoments[k0:k1,...] = \
+            mb.reshape((nk,self.nsym) + mb.shape[1:]).mean(axis=1)
+        del mb, vel, velconj, curmat
 
       self.opticalMoments[0][...]  = loc_opticalMoments
-      self.opticalDiag[0][...]     = loc_opticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:]
+      self.opticalDiag[0][...]     = loc_opticalMoments[:,diag,diag,:]
       self.BopticalMoments[0][...] = loc_BopticalMoments
-      self.BopticalDiag[0][...]    = loc_BopticalMoments[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),...]
+      self.BopticalDiag[0][...]    = loc_BopticalMoments[:,diag,diag,...]
 
       if not self.ortho:
         ''' truncate if there are only negligible imaginary terms '''
@@ -641,7 +659,7 @@ class TightBinding(Model):
       ''' FOURIERTRANSFORM h(k) '''
       rdotk = 2*np.pi*np.einsum('ki,ri->kr',self.kpoints,self.rpoints)
       ee = np.exp(1j * rdotk)
-      hk[:,:,:] = np.einsum('kr,rij->kij', ee, self.hr)
+      hk[:,:,:] = self._ftHamiltonian(ee, self.hr)
 
       ''' this solves the problem of almost singular matrices
           the eigenvalue routine then ignores a full 0 matrix -> thats what we want '''
@@ -652,10 +670,10 @@ class TightBinding(Model):
           -> to get Cartesian we need to dotproduct the unit cell displacement (self.rpoints)
           with the x/y/z entries (columns) of the rvec matrix
       '''
-      hvk[:,:,:,:] = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,ee,self.hr, optimize=True)
+      hvk[:,:,:,:] = self._ftHamiltonian(ee, self.hr, 1j*prefactor_r)
 
       ''' FOURIERTRANSFORM hvk(alpha,beta) = - sum_r r_alpha . r_beta . e^{i r.k} * weight(r) * h(r) '''
-      hck[:,:,:,:] = np.einsum('dr,kr,rij->kijd',-prefactor_r2,ee,self.hr, optimize=True)
+      hck[:,:,:,:] = self._ftHamiltonian(ee, self.hr, -prefactor_r2)
 
       if self.corronly:
         hvk[...] = 0.0
@@ -708,8 +726,8 @@ class TightBinding(Model):
       else:
         Uinv = np.linalg.inv(U)
 
-        vel = np.einsum('kab,kbci,kcd->kadi',Uinv,hvk,U, optimize=True)
-        cur = np.einsum('kab,kbci,kcd->kadi',Uinv,hck,U, optimize=True)
+        vel = self._rotateToBandBasis(Uinv, hvk, U)
+        cur = self._rotateToBandBasis(Uinv, hck, U)
 
       vel_conj = np.conjugate(vel)
       vel2 = vel_conj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
@@ -741,7 +759,7 @@ class TightBinding(Model):
       self.opticalDiag    = [vel2diag]
 
       #           epsilon_cij v_a v_i c_bj -> abc
-      mb = np.einsum('cij,knma,knmi,knmbj->knmabc',levmatrix,vel_conj,vel,curmat, optimize=True)
+      mb = self._bfieldMoment(levmatrix, vel_conj, vel, curmat)
       self.BopticalMoments[0][...] = mb
       mbdiag                       = mb[:,np.arange(self.energyBandMax),np.arange(self.energyBandMax),:,:,:]
       self.BopticalDiag[0][...]    = mbdiag

@@ -360,71 +360,6 @@ class Wannier90Calculation(DftCalculation):
       logger.debug('Symmetry operations')
       logger.debug(self.symop)
 
-  @staticmethod
-  def _availableMemoryBytes():
-    '''Best-effort free memory in bytes; None if it cannot be determined.'''
-    try:
-      with open('/proc/meminfo') as fh:
-        for line in fh:
-          if line.startswith('MemAvailable:'):
-            return int(line.split()[1]) * 1024
-    except Exception:
-      pass
-    try:
-      return os.sysconf('SC_AVPHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
-    except Exception:
-      return None
-
-  def _resolveKblock(self, kblock, memory_budget_gb, ndir,
-                     fullmoments=True, debug=False):
-    '''
-    Choose the number of k-points evaluated per pass on a reducible grid.
-
-    Blocking bounds only the TRANSIENT arrays.  Their cost per k-point is
-
-      24 * nrp                       (rdotk + exp(i r.k))
-      + ~1056 * nproj^2              (H(k), dH, d2H, U, Uinv, v, c, curmat,
-                                      vel2 and the B-field einsum output)
-
-    with a safety factor for the einsum contraction intermediates.  The
-    OUTPUT arrays are independent of the block size and are reported so that
-    a run which cannot fit regardless of blocking says so up front.
-    '''
-    per_k_transient = 24.0 * self.nrp + 1056.0 * self.nproj**2
-    per_k_transient *= 1.5   # einsum intermediates
-
-    per_k_output = 8.0 * self.nproj + self.nproj**2 * (48.0 + 96.0)
-    if fullmoments:
-      per_k_output += self.nproj**2 * (8.0 * ndir + 432.0)
-    else:
-      per_k_output += self.nproj * (8.0 * ndir + 432.0)
-    if debug:
-      per_k_output += 176.0 * self.nproj**2
-
-    output_gb = per_k_output * self.nkp / 1024**3
-
-    if memory_budget_gb is None:
-      avail = self._availableMemoryBytes()
-      budget = 0.25 * avail if avail else 2.0 * 1024**3
-    else:
-      budget = float(memory_budget_gb) * 1024**3
-
-    if kblock is None:
-      kblock = int(max(1, budget // per_k_transient))
-    kblock = int(min(max(1, kblock), self.nkp))
-
-    nblocks = -(-self.nkp // kblock)
-    logger.info('   k-blocking: {} k-points per pass ({} pass(es)); '
-                'transient ~{:.2f} GB, output arrays ~{:.2f} GB.'.format(
-                kblock, nblocks, kblock * per_k_transient / 1024**3, output_gb))
-    if output_gb > 8.0:
-      logger.warning('The output arrays alone need ~{:.1f} GB and must be '
-                     'held in full before writing; k-blocking cannot reduce '
-                     'this. Use intraonly if only band-diagonal elements are '
-                     'required (drops the dominant nproj^2 B-field term to '
-                     'nproj), or refine to fewer k-points.'.format(output_gb))
-    return kblock
-
   def computeHamiltonian(self, peierlscorrection=True, kblock=None,
                          memory_budget_gb=None, intraonly=False):
     ''' calculate e(r), v(r), c(r)
@@ -488,88 +423,128 @@ class Wannier90Calculation(DftCalculation):
       # cost 160*nproj^2 bytes per k-point for nothing.
 
       if self.irreducible:
+        ''' irreducible grid : every k-point is expanded into its full star
+            of nsym symmetry partners, all of them are evaluated, and the
+            optical / B-field moments are the average over the star.
 
-        if self.ortho:
-          loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3), dtype=np.float64)
+            The expansion is done for a BLOCK of irreducible k-points at a
+            time, so that every einsum / eigh call sees a batch of
+            (kblock * nsym) matrices instead of nsym.  The previous version
+            looped over k-points in Python, which cost ~50x the reducible
+            path on a 584-point mesh with nsym=48 -- almost entirely loop
+            overhead on small matrices. '''
+
+        nb   = self.nproj
+        ndir = 3 if self.ortho else 9
+        diag = np.arange(nb)
+
+        kblock = self._resolveKblock(kblock, memory_budget_gb, nb, self.nrp,
+                                     ndir, nsym=self.nsym,
+                                     fullmoments=not intraonly,
+                                     label='k-blocking (symmetrised)')
+
+        if intraonly:
+          loc_opticalMoments  = np.zeros((self.nkp,nb,ndir), dtype=np.float64)
+          loc_BopticalMoments = np.zeros((self.nkp,nb,3,3,3), dtype=np.complex128)
         else:
-          loc_opticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,9), dtype=np.float64)
-        loc_BopticalMoments = np.zeros((self.nkp,self.nproj,self.nproj,3,3,3), dtype=np.complex128)
+          loc_opticalMoments  = np.zeros((self.nkp,nb,nb,ndir), dtype=np.float64)
+          loc_BopticalMoments = np.zeros((self.nkp,nb,nb,3,3,3), dtype=np.complex128)
 
-        loc_ek = np.zeros((self.nkp,self.nproj), dtype=np.float64)
+        loc_ek = np.zeros((self.nkp,nb), dtype=np.float64)
 
-        for ikp in range(self.nkp):
-          progressBar(ikp+1,self.nkp,status='k-points')
+        if peierlscorrection:
+          # Jan's code snippet
+          # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
+          # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
+          distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
+          ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
 
-          ''' generate reducible k-points and bring back to first BZ'''
-          redk = np.einsum('nji,j->ni',self.symop,self.kpoints[ikp]) # k_red = P^T . k_irr
-          redk = redk%1
+        for k0 in range(0, self.nkp, kblock):
+          k1 = min(k0 + kblock, self.nkp)
+          nk = k1 - k0
+          progressBar(k1, self.nkp, status='k-points')
+
+          ''' generate reducible k-points and bring back to first BZ
+              (nk, nsym, 3) -> flattened to (nk*nsym, 3) '''
+          redk = np.einsum('nji,bj->bni', self.symop, self.kpoints[k0:k1]) # k_red = P^T . k_irr
+          redk = (redk % 1).reshape(nk*self.nsym, 3)
 
           ''' generate hamiltonian '''
-          red_rdotk = 2*np.pi*np.einsum('ni,ri->nr',redk,self.rlist)
+          red_rdotk = 2*np.pi*np.einsum('ni,ri->nr', redk, self.rlist)
           red_ee = np.exp(1j * red_rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
-          red_hk = np.einsum('nr,rij->nij', red_ee, hr)
+          del red_rdotk, redk
+          red_hk = self._ftHamiltonian(red_ee, hr)
           red_hk[np.abs(red_hk) < 1e-14] = 0.0
 
-          red_hvk = np.einsum('dr,kr,rij->kijd',1j*prefactor_r,red_ee,hr, optimize=True)
+          red_hvk = self._ftHamiltonian(red_ee, hr, 1j*prefactor_r)
 
           if peierlscorrection:
-            # Jan's code snippet
-            # generalized Peierls for multi-atomic unit-cells (and, obviously, supercells)
-            # correction term: -1j (rho_l^alpha - rho_l'^alpha) H_ll' (k)
-            distances = self.plist[:,None,:] - self.plist[None,:,:] # nproj nproj 3 -- w.r.t basis vectors
-            ri_minus_rj = np.einsum('id,abi->abd', self.rvec, distances) # cartesian directions
-            hvk_correction = - 1j * red_hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
-            red_hvk += hvk_correction
+            red_hvk += - 1j * red_hk[:,:,:,None] * ri_minus_rj[None,:,:,:]
 
           ''' generate curvature hamiltonian '''
-          red_hck = np.einsum('dr,nr,rij->nijd',-prefactor_r2,red_ee,hr, optimize=True)
-          red_hck_mat  = np.zeros((self.nsym,self.nproj,self.nproj,3,3), dtype=np.complex128)
+          red_hck = self._ftHamiltonian(red_ee, hr, -prefactor_r2)
+          del red_ee
+          red_hck_mat = np.zeros((nk*self.nsym,nb,nb,3,3), dtype=np.complex128)
           red_hck_mat[:,:,:, [0,1,2,0,0,1], [0,1,2,1,2,2]] = red_hck[:,:,:,:]
           red_hck_mat[:,:,:, [1,2,2], [0,0,1]] = red_hck_mat[:,:,:,[0,0,1], [1,2,2]]
-
+          del red_hck
 
           ''' diagonalize all hamiltonians of the symmetry connected k-points '''
           red_ek, red_U = np.linalg.eigh(red_hk)
           red_ek = red_ek.real
+          del red_hk
 
-          for isym in range(self.nsym):
-            ekk, Uk = red_ek[isym,:], red_U[isym,:,:]
-            idx = ekk.argsort()
-            red_ek[isym,:] = ekk[idx]
-            red_U[isym,:,:] = Uk[:,idx]
+          ''' to get a full one-to-one comparison we need to sort these now:
+              through the application of rotations pairs of columns and rows
+              can be interchanged '''
+          order  = np.argsort(red_ek, axis=1)
+          red_ek = np.take_along_axis(red_ek, order, axis=1)
+          red_U  = np.take_along_axis(red_U, order[:,None,:], axis=2)
 
-          loc_ek[ikp,:] = red_ek[0,:]
+          ''' the irreducible point itself is the first star member '''
+          loc_ek[k0:k1,:] = red_ek.reshape(nk,self.nsym,nb)[:,0,:]
           red_Uinv = np.linalg.inv(red_U)
 
           ''' transform velocity hamiltonian into Kohn Sham basis '''
-          vel = np.einsum('nij,njkd,nkl->nild',red_Uinv,red_hvk,red_U, optimize=True)
+          vel = self._rotateToBandBasis(red_Uinv, red_hvk, red_U)
           velconj = np.conjugate(vel)
           ''' transform curvature hamiltonian into Kohn Sham basis '''
-          curmat = np.einsum('nij,njkab,nkl->nilab',red_Uinv,red_hck_mat,red_U, optimize=True)
+          curmat = self._rotateToBandBasis(red_Uinv, red_hck_mat, red_U)
+          del red_hvk, red_hck_mat, red_U, red_Uinv, red_ek
+
+          if intraonly:
+            vel     = vel[:,diag,diag,:]
+            velconj = velconj[:,diag,diag,:]
+            curmat  = curmat[:,diag,diag,:,:]
 
           ''' take the mean over the opt matrix (velocity squares) '''
-          vk2 = velconj[:,:,:,[0,1,2,0,0,1]] * vel[:,:,:,[0,1,2,1,2,2]]
-          vk2 = np.mean(vk2,axis=0)
+          vk2 = velconj[...,[0,1,2,0,0,1]] * vel[...,[0,1,2,1,2,2]]
+          vk2 = vk2.reshape((nk,self.nsym) + vk2.shape[1:]).mean(axis=1)
 
           if self.ortho:
-            loc_opticalMoments[ikp,...] = vk2[...,:3].real
+            loc_opticalMoments[k0:k1,...] = vk2[...,:3].real
           else:
-            loc_opticalMoments[ikp,:,:,:6] = vk2.real
-            loc_opticalMoments[ikp,:,:,6:] = vk2[...,3:].imag
+            loc_opticalMoments[k0:k1,...,:6] = vk2.real
+            loc_opticalMoments[k0:k1,...,6:] = vk2[...,3:].imag
+          del vk2
 
           ''' take the mean over the optb matrix '''
           #           epsilon_cij v_a v_i c_bj -> abc
-          mb = np.einsum('zij,bpnx,bpni,bpnyj->bpnxyz',levmatrix,velconj,vel,curmat, optimize=True)
-          mb = np.mean(mb,axis=0)
-          loc_BopticalMoments[ikp,...] = mb
+          mb = self._bfieldMoment(levmatrix, velconj, vel, curmat)
+          loc_BopticalMoments[k0:k1,...] = \
+              mb.reshape((nk,self.nsym) + mb.shape[1:]).mean(axis=1)
+          del mb, vel, velconj, curmat
 
         self.energies.append(loc_ek)
 
         self.opticalMoments.append(loc_opticalMoments)
-        self.opticalDiag.append(loc_opticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),:])
-
         self.BopticalMoments.append(loc_BopticalMoments)
-        self.BopticalDiag.append(loc_BopticalMoments[:,np.arange(self.nproj),np.arange(self.nproj),...])
+        if intraonly:
+          self.opticalDiag.append(loc_opticalMoments)
+          self.BopticalDiag.append(loc_BopticalMoments)
+        else:
+          self.opticalDiag.append(loc_opticalMoments[:,diag,diag,:])
+          self.BopticalDiag.append(loc_BopticalMoments[:,diag,diag,...])
 
       else:
         ''' reducible grid : evaluate h(k), hv(k), hc(k) in blocks of
@@ -591,7 +566,8 @@ class Wannier90Calculation(DftCalculation):
         debug = logging.getLogger().isEnabledFor(logging.DEBUG)
         diag  = np.arange(nb)
 
-        kblock = self._resolveKblock(kblock, memory_budget_gb, ndir,
+        kblock = self._resolveKblock(kblock, memory_budget_gb, nb, self.nrp,
+                                     ndir, nsym=1,
                                      fullmoments=not intraonly, debug=debug)
 
         ''' output arrays (full size, unavoidable) '''
@@ -631,10 +607,10 @@ class Wannier90Calculation(DftCalculation):
           rdotk = 2*np.pi*np.einsum('ki,ri->kr', kpts, self.rlist) # no scaling to recip vector / lattice vectors here ?
           ee    = np.exp(1j * rdotk) / self.rmultiplicity[None,:] # rmultiplicity takes care of double counting issues
           del rdotk
-          hk  = np.einsum('kr,rij->kij', ee, hr, optimize=True)
+          hk  = self._ftHamiltonian(ee, hr)
           ''' FORUIERTRANSFORM hvk(j) = sum_r r_j e^{i r.k} * weight(r) * h(r) '''
-          hvk = np.einsum('dr,kr,rij->kijd',  1j*prefactor_r, ee, hr, optimize=True)
-          hck = np.einsum('dr,kr,rij->kijd', -prefactor_r2,   ee, hr, optimize=True)
+          hvk = self._ftHamiltonian(ee, hr,  1j*prefactor_r)
+          hck = self._ftHamiltonian(ee, hr, -prefactor_r2)
           del ee
 
           if peierlscorrection:
@@ -663,8 +639,8 @@ class Wannier90Calculation(DftCalculation):
             self.Ukohnsham[k0:k1]    = U
             self.Uinvkohnsham[k0:k1] = Uinv
 
-          vk = np.einsum('kab,kbci,kcd->kadi', Uinv, hvk, U, optimize=True)
-          ck = np.einsum('kab,kbci,kcd->kadi', Uinv, hck, U, optimize=True)
+          vk = self._rotateToBandBasis(Uinv, hvk, U)
+          ck = self._rotateToBandBasis(Uinv, hck, U)
           del hk, hvk, hck, U, Uinv
 
           if np.any(np.abs(ek.imag) > 1e-5):
@@ -693,10 +669,9 @@ class Wannier90Calculation(DftCalculation):
               vel2_full[k0:k1] = vel2[:,:,:3].real
             else:
               vel2_full[k0:k1,:,:6] = vel2.real
-              vel2_full[k0:k1,:,6:] = vel2[:,:,:3].imag
+              vel2_full[k0:k1,:,6:] = vel2[:,:,3:].imag
             #           epsilon_cij v_a v_i c_bj -> abc
-            mb_full[k0:k1] = np.einsum('cij,kna,kni,knbj->knabc',
-                                       levmatrix, vkcd, vkd, curd, optimize=True)
+            mb_full[k0:k1] = self._bfieldMoment(levmatrix, vkcd, vkd, curd)
             del vkd, vkcd, curd
           else:
             vel2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
@@ -704,10 +679,9 @@ class Wannier90Calculation(DftCalculation):
               vel2_full[k0:k1] = vel2[:,:,:,:3].real
             else:
               vel2_full[k0:k1,:,:,:6] = vel2.real
-              vel2_full[k0:k1,:,:,6:] = vel2[:,:,:,:3].imag
+              vel2_full[k0:k1,:,:,6:] = vel2[:,:,:,3:].imag
             #           epsilon_cij v_a v_i c_bj -> abc
-            mb_full[k0:k1] = np.einsum('cij,knma,knmi,knmbj->knmabc',
-                                       levmatrix, vk_conj, vk, curmat, optimize=True)
+            mb_full[k0:k1] = self._bfieldMoment(levmatrix, vk_conj, vk, curmat)
           del vk, vk_conj, vel2, curmat
 
         if complex_energies:
