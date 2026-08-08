@@ -11,6 +11,12 @@ hbareVs       = 6.582119569e-16
 mekg          = 9.10938356e-31
 echargeC      = 1.6021766208e-19
 
+# Boltzmann constant in eV / K.
+# Same value as the Fortran parameter kB in src_linretrace/params.f90 and as
+# the local definitions in scattering/*.py and scripts/*.py.  All internal
+# energies in LinReTraCe are in eV, hence beta = 1 / (kB_eV * T[K]) in eV^-1.
+kB_eV         = 8.61733034e-5
+
 w2kmom        = (1/bohr2angstrom * 1e20 * hbarJs * hbareVs / mekg) ** 2
 
 if __name__ == '__main__':

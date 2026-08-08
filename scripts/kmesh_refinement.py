@@ -34,6 +34,7 @@ from structure.meshrefine import (
     refine_kmesh,
     write_custom_mesh,
 )
+from structure.units import kB_eV
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +292,19 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
 
     workdir = params.workdir.resolve()
     workdir.mkdir(parents=True, exist_ok=True)
+
+    # Make the energy scale the metric actually resolves explicit: the df/da
+    # peak at mu has a half-width of roughly max(gamma, kB*T).  The mesh must
+    # provide several distinct band energies inside that width, otherwise the
+    # sum rule cannot be satisfied no matter how the hotspots are chosen.
+    thermal_width = kB_eV * params.T_min
+    logger.info(
+        "df/da metric: T_min = %.6g K (kB*T = %.4e eV), gamma_min = %.4e eV, "
+        "beta = %.4e eV^-1 -> peak half-width ~ %.4e eV.",
+        params.T_min, thermal_width, params.gamma_min,
+        1.0 / thermal_width if thermal_width > 0 else float('inf'),
+        max(thermal_width, params.gamma_min),
+    )
 
     current_hdf5: Path            = params.initial_hdf5.resolve()
     final_error:  Optional[float] = None

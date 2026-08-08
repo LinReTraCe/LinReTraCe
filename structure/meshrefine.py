@@ -17,6 +17,8 @@ except ImportError:  # pragma: no cover - dependency should exist in runtime
 from scipy.interpolate import interp1d
 from scipy.special import digamma
 
+from structure.units import kB_eV
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -49,18 +51,41 @@ def trigamma_vec(z: np.ndarray) -> np.ndarray:
     return out
 
 
-def digamma_im(epsilon: np.ndarray, temperature: float, gamma: float) -> np.ndarray:
-    """Imaginary part of the digamma-based auxiliary function."""
+def _beta(temperature: float) -> float:
+    """Inverse temperature in eV^-1 from a temperature in Kelvin.
 
-    beta = 1.0 / temperature
+    All internal energies (band energies, gamma, mu) are in eV, so beta must
+    carry the Boltzmann constant: beta = 1 / (kB * T).  Using 1/T[K] directly
+    understates beta by a factor 1/kB ~ 1.16e4, i.e. it corresponds to a
+    temperature 1.16e4 times higher than requested.
+    """
+
+    if temperature <= 0.0:
+        raise ValueError(
+            "temperature must be strictly positive (beta = 1/(kB*T) diverges "
+            "at T = 0); pass a small finite value instead."
+        )
+    return 1.0 / (kB_eV * temperature)
+
+
+def digamma_im(epsilon: np.ndarray, temperature: float, gamma: float) -> np.ndarray:
+    """Imaginary part of the digamma-based auxiliary function.
+
+    *temperature* is in Kelvin, *gamma* and *epsilon* in eV.
+    """
+
+    beta = _beta(temperature)
     z = 0.5 + (beta / (2.0 * np.pi)) * (gamma + 1j * epsilon)
     return 0.5 - (1.0 / np.pi) * np.imag(digamma(z))
 
 
 def df_da(epsilon: np.ndarray, temperature: float, gamma: float) -> np.ndarray:
-    """d/d(alpha) of the auxiliary function appearing in the error metric."""
+    """d/d(alpha) of the auxiliary function appearing in the error metric.
 
-    beta = 1.0 / temperature
+    *temperature* is in Kelvin, *gamma* and *epsilon* in eV.
+    """
+
+    beta = _beta(temperature)
     z = 0.5 + (beta / (2.0 * np.pi)) * (gamma + 1j * epsilon)
     trig = trigamma_vec(z)
     return beta / (2.0 * np.pi**2) * np.real(trig)
@@ -184,11 +209,28 @@ def load_band_data(h5file: "h5py.File") -> BandData:
     )
 
 
-def build_band_axis(bands: np.ndarray, max_bands: int = 2) -> np.ndarray:
-    """Construct a monotonic energy axis from the lowest bands."""
+def build_band_axis(bands: np.ndarray, max_bands: "int | None" = None) -> np.ndarray:
+    """Construct a monotonic energy axis from the sampled band energies.
 
-    take = min(max_bands, bands.shape[1])
-    subset = bands[:, :take]
+    Parameters
+    ----------
+    bands : ndarray (nkp, nbands)
+        Band energies of the current mesh.
+    max_bands : int or None
+        If None (default) *all* bands enter the axis.  This is the correct
+        choice for the df/da sum-rule metric: the bands crossing mu are not
+        in general the lowest ones, and restricting the axis to a subset both
+        removes the energies that actually resolve the peak at mu and
+        truncates the integration range, which adds a spurious error floor.
+        An explicit integer restricts the axis to the ``max_bands`` lowest
+        bands (legacy behaviour, kept for callers that need it).
+    """
+
+    if max_bands is None:
+        subset = bands
+    else:
+        take = min(max_bands, bands.shape[1])
+        subset = bands[:, :take]
     combined = np.sort(np.unique(subset.reshape(-1)))
     return combined.astype(quad_dtype)
 
@@ -318,6 +360,15 @@ def refine_kmesh(
     correct Voronoi cell width is used at every iteration regardless of the
     local mesh density around the point being refined.
 
+    Weights are split *per parent*: each child of a parent carries
+    ``w_parent / n_children(parent)``.  A parent's cell is exactly tiled by
+    its own children, so this is the only split that conserves weight
+    locally.  (Redistributing the pooled removed weight uniformly over all
+    children of all parents conserves the total as well, but transfers weight
+    between parents whenever their weights differ -- which is the generic
+    case for an irreducible input mesh, where the weight encodes the star
+    multiplicity.)
+
     Returns
     -------
     merged_points  : ndarray (M, 3)
@@ -340,7 +391,10 @@ def refine_kmesh(
     tol    = quad_dtype(tolerance)
     target = quad_dtype(target_energy)
 
-    mask    = np.any(np.isclose(energies, target, atol=tol), axis=1)
+    # Explicit absolute window.  np.isclose would add its default relative
+    # term rtol*|target| = 1e-5*|mu|, silently widening the window by an
+    # amount that depends on the (arbitrary) energy zero of the model.
+    mask    = np.any(np.abs(energies - target) <= tol, axis=1)
     indices = np.where(mask)[0]
 
     if indices.size == 0:
@@ -350,10 +404,11 @@ def refine_kmesh(
         )
         return k_points.copy(), weights.copy(), cell_deltas.copy()
 
-    keep_mask                 = np.ones(k_points.shape[0], dtype=bool)
-    removed_weights           = []
-    refined_points_collection = []
-    refined_deltas_collection = []
+    keep_mask                  = np.ones(k_points.shape[0], dtype=bool)
+    removed_weights            = []
+    refined_points_collection  = []
+    refined_deltas_collection  = []
+    refined_weights_collection = []
 
     one     = quad_dtype(1.0)
     n       = refinement_factor
@@ -381,6 +436,12 @@ def refine_kmesh(
 
         n_children = refined.shape[0]
         refined_deltas_collection.append(np.tile(child_deltas, (n_children, 1)))
+        # per-parent weight split: the parent cell is exactly tiled by these
+        # n_children sub-cells, so each carries 1/n_children of its weight.
+        refined_weights_collection.append(
+            np.full(n_children, weights[idx] / quad_dtype(n_children),
+                    dtype=quad_dtype)
+        )
 
     k_points_filtered = k_points[keep_mask]
     weights_filtered  = weights[keep_mask]
@@ -389,12 +450,16 @@ def refine_kmesh(
     total_removed = np.sum(removed_weights) if removed_weights else quad_dtype(0.0)
 
     if refined_points_collection:
-        refined_points  = np.concatenate(refined_points_collection, axis=0)
+        refined_points  = np.concatenate(refined_points_collection,  axis=0)
         refined_deltas  = np.concatenate(refined_deltas_collection,  axis=0)
-        n_refined       = refined_points.shape[0]
-        refined_weights = np.full(n_refined,
-                                  total_removed / quad_dtype(n_refined),
-                                  dtype=quad_dtype)
+        refined_weights = np.concatenate(refined_weights_collection, axis=0)
+        if not np.allclose(np.sum(refined_weights).astype(float),
+                           np.float64(total_removed), rtol=1e-12, atol=1e-14):
+            logger.warning(
+                "Per-parent weight split does not reproduce the removed "
+                "weight: removed=%s redistributed=%s",
+                float(total_removed), float(np.sum(refined_weights)),
+            )
     else:
         refined_points  = np.empty((0, 3), dtype=quad_dtype)
         refined_deltas  = np.empty((0, 3), dtype=quad_dtype)

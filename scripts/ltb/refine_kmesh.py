@@ -76,6 +76,13 @@ from scripts.kmesh_refinement import RefinementParams, run_refinement
 LOG_FORMAT = "%(levelname)s: %(message)s"
 logger = logging.getLogger(__name__)
 
+# Numerical floor for T_min [K].  beta = 1/(kB*T) diverges at T = 0, while the
+# df/da kernel itself stays finite there for any gamma > 0 (it becomes the
+# Lorentzian gamma / (pi*(gamma^2 + eps^2))).  The floor is therefore purely a
+# guard against the division, not a physical temperature: at 5e-4 K the
+# thermal width kB*T ~ 43 neV is negligible against any realistic gamma.
+T_MIN_FLOOR_K = 5e-4
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -117,9 +124,10 @@ Positional arguments
     parser.add_argument("gamma_min", type=float,
                         help="Minimum gamma parameter [eV] for df/da.")
     parser.add_argument("T_min", type=float,
-                        help="Minimum temperature [K] for df/da. "
-                        "If 0 is supplied, it is increased to 0.0005 K, "
-                        "since df/da diverges at T=0.")
+                        help="Minimum temperature [K] for df/da; enters as "
+                        "beta = 1/(kB*T) in eV^-1. If 0 is supplied it is "
+                        "raised to %g K, since beta diverges at T=0."
+                        % T_MIN_FLOOR_K)
 
     # Refinement loop options
     parser.add_argument("--error_tol", type=float, default=5e-3,
@@ -184,10 +192,10 @@ def validate_inputs(args: argparse.Namespace) -> None:
         raise ValueError("Temperature must be non-negative")
     if args.T_min == 0.0:
         logger.warning(
-            "T_min = 0 is not supported (df/da diverges)."
-            "Increasing to T_min = 0.0005 K."
+            "T_min = 0 is not supported (beta = 1/(kB*T) diverges). "
+            "Increasing to T_min = %g K.", T_MIN_FLOOR_K
             )
-        args.T_min = 0.0005
+        args.T_min = T_MIN_FLOOR_K
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
