@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-08-08 (patch 08).
+Last updated: 2026-08-08 (patch 09).
 
 ---
 
@@ -31,9 +31,10 @@ Last updated: 2026-08-08 (patch 08).
 | | |
 |---|---|
 | Severity | **high** (raised 2026-08-08) |
-| Confidence | confirmed (two reproducers below) |
+| Confidence | confirmed (two reproducers below); consumption confirmed in `response.F90` |
 | Location | `structure/wannier.py:computeHamiltonian`, `structure/tb.py:_computeHk` |
-| Affects | `/kPoint/*/momentsBfield` (inter-band elements only) |
+| Affects | `/kPoint/*/momentsBfield` (inter-band only) -> `L11B`/`L12B`/`L22B` inter-band contributions, i.e. runs with `BFieldMode` **and** full B moments |
+| Not affected | energies, `moments`, `momentsDiagonalBfield`, and every band-diagonal magnetic quantity |
 
 **Symptom.** Band off-diagonal B-field moments change when the k-point batch
 size changes, even though the physics does not. Diagonal elements, energies and
@@ -91,14 +92,71 @@ h_b.velocities[0][6,0,1,:] / h_a.velocities[0][6,0,1,:]
 The band gap at that k-point is 0.8 eV, so this is *not* a degenerate-subspace
 ambiguity — it is the ordinary U(1) freedom of a non-degenerate eigenvector.
 
+**Is it used? Yes, and linearly.** (`src_linretrace/response.F90`, read
+2026-08-08; nothing in the Fortran core was changed.)
+
+The inter-band magnetic response is accumulated as
+
+```fortran
+if (algo%lBfield .and. edisp%lBFullMoments) then
+  do idir1=1,3 ; do idir2=1,3 ; do idir3=1,3
+    resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) = &
+    resp%sB_full(idir3,idir2,idir1,iband1,is,info%ik) + calc_sigmaB &
+                 * edisp%MBopt(idir3,idir2,idir1,iband2,iband1,is,info%ik)
+```
+
+inside the `iband1`/`iband2` double loop, i.e.
+
+    sB_full[..., n] = sum_m  K(eps_n, eps_m, Gamma_n, Gamma_m) * MBopt[..., m, n]
+
+`calc_sigmaB` (and `calc_alphaB`, `calc_xiB`) are built only from band
+energies, quasi-particle weights and scattering rates -- all gauge invariant --
+and enter as a **linear** coefficient. So each term in the sum over `m` carries
+its own arbitrary factor `e^{i(phi_m - phi_n)}`, the phases do not cancel, and
+the sum is arbitrary. `L11B`, `L12B`, `L22B` inter-band contributions inherit
+this directly.
+
+Contrast the non-magnetic response a few lines above, which uses
+`edisp%Mopt(idir,iband2,iband1)`. `Mopt` is `v_a^*[n,m] v_b[n,m]` -- bilinear
+in the *same* ordered pair -- so the phases cancel inside each element and
+`resp%s_full` is gauge invariant. The band-diagonal magnetic path
+(`MBoptDiag`, `n == m`) is likewise invariant and is the one that is
+unconditionally required (`if (algo%lBfield .and. .not. edisp%lBIntraMoments)
+call stop_with_message`). Only the optional `lBFullMoments` path is affected.
+
+**Structural observation (hypothesis, not a claim).** The moment is built as
+
+    MBopt[n,m] ~ eps_zij  v_a^*[n,m]  v_i[n,m]  c_yj[n,m]
+
+-- three factors all carrying the *same* ordered band pair `(n,m)`, hence a net
+`e^{i(phi_m - phi_n)}`. A quantity built from band-basis matrix elements is
+gauge invariant iff its band indices form closed loops: `v^*[n,m] v[m,n]`
+(two-index loop, as in `Mopt`), or `v[n,m] v[m,l] c[l,n]` (three-index loop).
+The present expression is not of either form, which suggests the trilinear
+object should contract over an intermediate band index rather than repeat the
+pair. That is consistent with the expectation that the correct multi-orbital
+expression is gauge invariant -- and with the possibility that terms are
+missing: for `n != m` the plain curvature matrix element `c = d2H/dk dk`
+rotated into the band basis is not the gauge-covariant derivative of the
+inter-band velocity, which additionally involves the Berry connection
+`A[n,m] = i <u_n | d_k u_m>`. This is exactly the kind of term a careful
+derivation of the response at finite vector potential and finite `q` with
+orbital indices would settle.
+
+**A cheap consistency test for any candidate expression.** Apply a random
+diagonal phase `U -> U diag(e^{i phi_n})` after `eigh` and recompute. The
+correct expression must be invariant to machine precision. The current one is
+not: see the 29 % magnitude shift above, which arose merely from changing the
+batch shape handed to LAPACK.
+
 **Open questions before fixing.**
 
-1. **Is `momentsBfield[n != m]` used at all?** This is now the first question
-   to settle, and it is a Fortran-side reading task
-   (`src_linretrace/response.F90`). If the inter-band B-field elements are
-   never consumed, the honest fix is to stop writing them (which would also
-   close KI-02, since they are the per-k-point datasets). If they are
-   consumed, the current numbers cannot be trusted.
+1. Settle the derivation first. Gauge-fixing the eigenvectors would make the
+   present numbers *reproducible* without making them *right*, and would
+   therefore mask the problem rather than solve it. If a gauge convention is
+   introduced anyway -- and it is worth having for bitwise reproducibility
+   across LAPACK/NumPy versions -- it should be introduced together with a
+   note that it does not validate `lBFullMoments` output.
 2. If a fix is needed, the standard remedy is a gauge fixing convention applied
    right after `eigh`, e.g. rotate each eigenvector so that its
    largest-modulus component is real and positive. That is cheap
@@ -298,12 +356,43 @@ the **entire** mesh — including the k-points that were already evaluated in th
 previous iteration and were not touched by the subdivision. After a few
 iterations most of the mesh is unchanged, so most of the work is repeated.
 
-A fix requires extending the `MeshGenerator` protocol with an optional
-`generate_incremental(new_points, new_weights, parent_hdf5, output_path)` and
-having the loop pass the parent file. The bookkeeping is not trivial: the
-refinement removes parents and adds children, so the merge has to track which
-rows of the parent arrays survive. Worth doing now that PERF-R1 is closed; the
-two touch the same code.
+**The mesh is purely additive.** With the enforced odd `refinement_factor`
+the central child of a subdivided parent sits exactly on the parent, so every
+parent coordinate survives; only its weight and `cell_delta` shrink. Verified
+on a 4-parent test mesh: 4 parents in, 56 points out, **52 added, 0 removed**.
+Since the per-k physics (energies, velocities, curvatures, moments) depends
+only on the coordinate, every surviving row could be copied verbatim rather
+than recomputed.
+
+**What makes it non-trivial is bookkeeping, not physics** -- and *not*
+symmetry: the star average at a k-point depends only on that k-point,
+`symop` and `h(r)`, so a reused row stays valid on the symmetrised path too.
+The obstacles are:
+
+1. **Row indices are permuted.** `refine_kmesh` concatenates survivors and
+   children and then calls `_merge_duplicates_with_tolerance`, which uses
+   `np.unique` on rounded coordinates and therefore returns a
+   lexicographically sorted mesh. A parent at row 0 came back at row 13 in the
+   test above. An incremental generator needs an explicit
+   `old_row -> new_row` map, which the refinement would have to return.
+2. **The generator writes a fresh file from a fresh calculation object.**
+   Reusing rows means reading the parent HDF5 back and splicing `energies`,
+   `velocities`, `curvatures`, `moments` and `momentsBfield` into the new
+   arrays -- and `momentsBfield` is stored as one dataset per k-point
+   (KI-02), so the splice is `nkp` reads.
+3. **Global quantities must still be recomputed** -- `_calcFermiLevel`, the
+   gap detection, and the `opticalMoments[...,6:]` truncation test all look at
+   the whole mesh. These are cheap, but they have to run after the splice, not
+   before.
+4. **`refinement_factor` must stay odd** for the additive property to hold.
+   It is currently forced odd, but an incremental generator would depend on
+   that invariant rather than merely benefit from it, so it should be asserted
+   explicitly.
+
+A fix therefore means extending the `MeshGenerator` protocol with an optional
+`generate_incremental(new_points, new_weights, row_map, parent_hdf5,
+output_path)` and having `refine_kmesh` return the row map. Worth doing now
+that PERF-R1 is closed; the two touch the same code.
 
 Cheaper intermediate step with most of the benefit for large Wannier models:
 keep the calculation object alive across iterations (resetting the accumulator
