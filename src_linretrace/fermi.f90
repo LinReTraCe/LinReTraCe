@@ -1,5 +1,7 @@
 module Mfermi
   use Mparams
+  use psi_fast, only: psi_range_dp, psi_range_qp, psi0_dp, psi0_qp, &
+                      psi0_imag_dp, psi0_imag_qp, psi123_dp, psi123_qp
   implicit none
 
   ! fermi function
@@ -196,21 +198,41 @@ module Mfermi
 
   ! these functions represent the psi_1 approximation
   ! i.e. all higher order psi_i i>1 are thrown out
+  ! psi_range_dp / psi_range_qp (module psi_fast)
+  !
+  !   call psi_range_xp(z, klo, khi, psi [, ierr])
+  !     z    complex(8|16), argument; Re z > 0 for every LinReTraCe argument
+  !     klo  integer, lowest derivative order wanted   (0 <= klo <= khi <= 4)
+  !     khi  integer, highest derivative order wanted
+  !     psi  complex(8|16) psi(klo:khi), psi(K) = psi^(K)(z) on return
+  !     ierr optional integer, PSI_ERR_OK / PSI_ERR_ORDER / PSI_ERR_POLE
+  !
+  !   All requested orders come out of a single recurrence pass, so asking
+  !   for a narrow range costs correspondingly less: with klo = khi = 1 only
+  !   1/V**2 is accumulated.
   function polygamma2psi1_dp(gamma,eps,beta)
     implicit none
     real(8), intent(in) :: gamma,eps,beta
-    complex(8), external :: wpsipg
     real(8) :: polygamma2psi1_dp
-    polygamma2psi1_dp = real(wpsipg(0.5d0 + beta/2.d0/pi * (gamma + ci*eps),1))
+    complex(8) :: psi(1:1)
+    call psi_range_dp(0.5d0 + beta/2.d0/pi * (gamma + ci*eps), 1, 1, psi)
+    polygamma2psi1_dp = real(psi(1))
+    ! --- deprecated CERNLIB path (kept until wpsipg is retired) -------------
+    ! complex(8), external :: wpsipg
+    ! polygamma2psi1_dp = real(wpsipg(0.5d0 + beta/2.d0/pi * (gamma + ci*eps),1))
   end function polygamma2psi1_dp
 
   function polygamma2psi1_qp(gamma,eps,beta)
     implicit none
     real(16), intent(in) :: eps,beta
     real(8), intent(in)  :: gamma
-    complex(16), external :: wpsipghp
     real(16) :: polygamma2psi1_qp
-    polygamma2psi1_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
+    complex(16) :: psi(1:1)
+    call psi_range_qp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps), 1, 1, psi)
+    polygamma2psi1_qp = real(psi(1))
+    ! --- deprecated CERNLIB path (kept until wpsipghp is retired) ----------
+    ! complex(16), external :: wpsipghp
+    ! polygamma2psi1_qp = real(wpsipghp(0.5q0 + beta/2.q0/piQ * (gamma + ciQ*eps),1))
   end function polygamma2psi1_qp
 
 !________________________________________________________

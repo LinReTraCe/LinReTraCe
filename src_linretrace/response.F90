@@ -3,6 +3,7 @@ module Mresponse
   use Mtypes
   use Mparams
   use Mfermi
+  use psi_fast, only: psi123_dp, psi123_qp, psi0_imag_qp
 
   implicit none
 
@@ -1696,9 +1697,11 @@ subroutine calc_polygamma_D(PolyGamma, edisp, sct, kmesh, algo, info)
 
   complex(8) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
-  complex(8), external :: wpsipg
   complex(8), allocatable :: to_evaluate(:,:,:)
-  integer :: ipg, iband, ik, is
+  integer :: iband, ik, is
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(8), external :: wpsipg
+  ! integer :: ipg
 
   allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
@@ -1710,9 +1713,23 @@ subroutine calc_polygamma_D(PolyGamma, edisp, sct, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
-        do ipg = 1,3
-          PolyGamma(ipg,iband,ik,is) = wpsipg(to_evaluate(iband,ik,is),ipg)
-        enddo
+        ! psi123_dp (module psi_fast)
+        !
+        !   call psi123_dp(z, psi [, ierr])
+        !     z    complex(8), argument
+        !     psi  complex(8) psi(1:3), psi(K) = psi^(K)(z) for K = 1,2,3
+        !     ierr optional integer, PSI_ERR_OK / _ORDER / _POLE
+        !
+        !   All three orders come from ONE recurrence pass: the shifted
+        !   argument sequence and the reciprocal 1/V are shared, and the
+        !   higher powers follow by multiplication.  The loop below called
+        !   the CERNLIB routine once per order, repeating the whole argument
+        !   reduction three times.
+        call psi123_dp(to_evaluate(iband,ik,is), PolyGamma(1:3,iband,ik,is))
+        ! --- deprecated CERNLIB path -----------------------------------
+        ! do ipg = 1,3
+        !   PolyGamma(ipg,iband,ik,is) = wpsipg(to_evaluate(iband,ik,is),ipg)
+        ! enddo
       enddo
     enddo
   enddo
@@ -1733,9 +1750,11 @@ subroutine calc_polygamma_Q(PolyGamma, edisp, sct, kmesh, algo, info)
 
   complex(16) :: PolyGamma(3,edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin)
 
-  complex(16), external :: wpsipghp
   complex(16), allocatable :: to_evaluate(:,:,:)
-  integer :: ipg, iband, ik, is
+  integer :: iband, ik, is
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(16), external :: wpsipghp
+  ! integer :: ipg
 
   allocate(to_evaluate(edisp%nbopt_min:edisp%nbopt_max, ikstr:ikend, edisp%ispin))
 
@@ -1747,9 +1766,12 @@ subroutine calc_polygamma_Q(PolyGamma, edisp, sct, kmesh, algo, info)
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband = edisp%nbopt_min,edisp%nbopt_max
-        do ipg = 1,3
-          PolyGamma(ipg,iband,ik,is) = wpsipghp(to_evaluate(iband,ik,is),ipg)
-        enddo
+        ! psi123_qp(z, psi(1:3) [, ierr]) -- see calc_polygamma_D above
+        call psi123_qp(to_evaluate(iband,ik,is), PolyGamma(1:3,iband,ik,is))
+        ! --- deprecated CERNLIB path -----------------------------------
+        ! do ipg = 1,3
+        !   PolyGamma(ipg,iband,ik,is) = wpsipghp(to_evaluate(iband,ik,is),ipg)
+        ! enddo
       enddo
     enddo
   enddo
@@ -1776,8 +1798,8 @@ subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, i
   complex(16), allocatable :: to_evaluate(:,:,:)
   real(16), allocatable    :: energy_post_factor(:,:,:)
   real(16), allocatable    :: energy(:,:,:)
-  !external variables
-  complex(16), external :: wpsipghp
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(16), external :: wpsipghp
 
   allocate(to_evaluate(edisp%nband_max, ikstr:ikend, edisp%ispin))
   allocate(energy_post_factor(edisp%nband_max, ikstr:ikend, edisp%ispin))
@@ -1793,7 +1815,19 @@ subroutine calc_total_energy_digamma(energy_tot, edisp, sct, kmesh, imp, algo, i
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        energy(iband,ik,is) = 0.5q0 + aimag(wpsipghp(to_evaluate(iband,ik,is),0))/piQ ! this is the occupation
+        ! psi0_imag_qp (module psi_fast)
+        !
+        !   x = psi0_imag_qp(z [, ierr])
+        !     z    complex(16), argument
+        !     x    real(16), Im psi^(0)(z)
+        !     ierr optional integer, PSI_ERR_OK / _ORDER / _POLE
+        !
+        !   Only the imaginary part is wanted, so the complex logarithm that
+        !   psi_0 needs at the end is replaced by atan2 -- in quad that is
+        !   ~2050 ns against ~660 ns.
+        energy(iband,ik,is) = 0.5q0 + psi0_imag_qp(to_evaluate(iband,ik,is))/piQ ! this is the occupation
+        ! --- deprecated CERNLIB path -----------------------------------
+        ! energy(iband,ik,is) = 0.5q0 + aimag(wpsipghp(to_evaluate(iband,ik,is),0))/piQ
         energy(iband,ik,is) = energy(iband,ik,is) * kmesh%weightQ(ik) * energy_post_factor(iband,ik,is) ! multiplied with weight and energy gives the energy
       enddo
     enddo
@@ -1890,8 +1924,8 @@ subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmes
   real(16) :: elecsmpi
   real(16) :: holesmpi
 
-  !external variables
-  complex(16), external :: wpsipghp
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(16), external :: wpsipghp
 
   ! evaluate the function
   elecssum = 0.q0
@@ -1900,8 +1934,12 @@ subroutine calc_elecholes_digamma(electrons_total, holes_total, edisp, sct, kmes
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
-        elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ &
-          * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - info%muQ)),0))/piQ ! this is the occupation
+        ! psi0_imag_qp(z [, ierr]) -> real(16) Im psi^(0)(z); see above
+        elecs = 0.5q0 - psi0_imag_qp(0.5q0 + info%beta2pQ &
+          * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - info%muQ)))/piQ ! this is the occupation
+        ! --- deprecated CERNLIB path ---------------------------------
+        ! elecs = 0.5q0 - aimag(wpsipghp(0.5q0 + info%beta2pQ &
+        !   * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - info%muQ)),0))/piQ
         holes = 1.q0 - elecs ! should be enough accuracy
 
         if (algo%lTMODE .and. edisp%gapped(is)) then
@@ -1965,8 +2003,9 @@ subroutine calc_elecholes_fermi(electrons_total, holes_total, edisp, sct, kmesh,
   real(16) :: elecsmpi
   real(16) :: holesmpi
 
-  !external variables
-  complex(8), external :: wpsipg
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! (this declaration was already unused: the routine below has no wpsipg call)
+  ! complex(8), external :: wpsipg
 
   ! evaluate the function
   elecssum = 0.q0

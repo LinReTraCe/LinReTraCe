@@ -4,6 +4,7 @@ module Mroot
   use Mtypes
   use Mfermi
   use Mauxiliary
+  use psi_fast, only: psi0_imag_dp, psi0_imag_qp
 
   interface ndeviation
     module procedure ndeviation_D, ndeviation_Q
@@ -985,18 +986,34 @@ subroutine occ_digamma_D(mu, occ_tot, edisp, sct, kmesh, algo, info)
 
   real(8) :: occ_loc
   integer :: is, ik, iband
-  !external variables
-  complex(8), external :: wpsipg
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(8), external :: wpsipg
 
   occ_loc = 0.d0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
+        ! psi0_imag_dp (module psi_fast)
+        !
+        !   x = psi0_imag_dp(z [, ierr])
+        !     z    complex(8), argument
+        !     x    real(8), Im psi^(0)(z)
+        !     ierr optional integer, PSI_ERR_OK / _ORDER / _POLE
+        !
+        !   This is the most frequently executed floating-point kernel in the
+        !   program: nband_max x nkp evaluations per root-finder iteration.
+        !   Only psi_0 is needed here -- the higher orders are computed once,
+        !   after mu has converged, by calc_polygamma.
         occ_loc = occ_loc + (0.5d0 + &
-        aimag(wpsipg(0.5d0 + info%beta2p * &
-             (sct%gam(iband,ik,is) - ci*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/pi) &
+        psi0_imag_dp(0.5d0 + info%beta2p * &
+             (sct%gam(iband,ik,is) - ci*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)))/pi) &
         * kmesh%weight(ik)
+        ! --- deprecated CERNLIB path -----------------------------------
+        ! occ_loc = occ_loc + (0.5d0 + &
+        ! aimag(wpsipg(0.5d0 + info%beta2p * &
+        !      (sct%gam(iband,ik,is) - ci*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/pi) &
+        ! * kmesh%weight(ik)
       enddo
     enddo
   enddo
@@ -1027,18 +1044,24 @@ subroutine occ_digamma_Q(mu, occ_tot, edisp, sct, kmesh, algo, info)
   !local variables
   real(16) :: occ_loc
   integer  :: iband, is, ik
-  !external variables
-  complex(16), external :: wpsipghp
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(16), external :: wpsipghp
 
   occ_loc = 0.q0
   ! evaluate the function
   do is = 1,edisp%ispin
     do ik = ikstr, ikend
       do iband=1,edisp%nband_max
+        ! psi0_imag_qp(z [, ierr]) -> real(16) Im psi^(0)(z); see occ_digamma_D
         occ_loc = occ_loc + (0.5q0 + &
-        aimag(wpsipghp(0.5q0 + info%beta2pQ * &
-             (sct%gam(iband,ik,is) - ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ) &
+        psi0_imag_qp(0.5q0 + info%beta2pQ * &
+             (sct%gam(iband,ik,is) - ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)))/piQ) &
         * kmesh%weightQ(ik)
+        ! --- deprecated CERNLIB path -----------------------------------
+        ! occ_loc = occ_loc + (0.5q0 + &
+        ! aimag(wpsipghp(0.5q0 + info%beta2pQ * &
+        !      (sct%gam(iband,ik,is) - ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is) - mu)),0))/piQ) &
+        ! * kmesh%weightQ(ik)
       enddo
     enddo
   enddo
@@ -1321,7 +1344,8 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
   real(16) :: densii, eneii, dist
   real(16) :: occimp
 
-  complex(16), external :: wpsipghp
+  ! --- deprecated CERNLIB path -------------------------------------------
+  ! complex(16), external :: wpsipghp
 
   sumelec = 0.q0
   sumhole = 0.q0
@@ -1395,8 +1419,12 @@ subroutine occ_refine(mu, deviation, edisp, sct, kmesh, imp, algo, info)
       do ik = ikstr, ikend
         do iband=1,edisp%nband_max
           ! only calculate the '0th' polygamma function
-          psikern = 1.q0/piQ * aimag(wpsipghp(0.5q0 + info%betaQ/2.q0/piQ &
-                             * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)),0))
+          ! psi0_imag_qp(z [, ierr]) -> real(16) Im psi^(0)(z); see occ_digamma_D
+          psikern = 1.q0/piQ * psi0_imag_qp(0.5q0 + info%betaQ/2.q0/piQ &
+                             * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)))
+          ! --- deprecated CERNLIB path -------------------------------
+          ! psikern = 1.q0/piQ * aimag(wpsipghp(0.5q0 + info%betaQ/2.q0/piQ &
+          !                    * (sct%gam(iband,ik,is) + ciQ*sct%zqp(iband,ik,is)*(edisp%band(iband,ik,is)-mu)),0))
           elec = 0.5q0 - psikern
           hole = 0.5q0 + psikern
           ! here we take the smaller of the two quantities
