@@ -1,0 +1,287 @@
+% documentation/adaptive_kmesh.tex
+%
+% Notes on the adaptive k-mesh refinement in LinReTraCe.
+% Compile with: pdflatex adaptive_kmesh.tex
+%
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[T1]{fontenc}
+
+\newcommand{\dfda}{\partial f/\partial\varepsilon}
+\newcommand{\kk}{\mathbf{k}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Adaptive $k$-mesh refinement in LinReTraCe}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Motivation}
+
+Every transport coefficient LinReTraCe evaluates has the structure
+\begin{equation}
+  L^{ij} \;\propto\; \sum_{\kk n} w_{\kk}\, M^{ij}_{n}(\kk)\,
+                     K\!\left(\varepsilon_{n\kk}-\mu\right),
+  \label{eq:transport}
+\end{equation}
+with $M^{ij}$ the optical elements and $K$ a kernel peaked at $\mu$ with
+half-width
+\begin{equation}
+  W \;=\; \max\!\left(k_B T,\ \Gamma\right).
+  \label{eq:width}
+\end{equation}
+For the parameter ranges LinReTraCe is designed for, $W$ can be three or more
+orders of magnitude below the bandwidth. A uniform mesh fine enough to place
+several distinct band energies inside $W$ is then absurdly dense everywhere
+that does not contribute. The adaptive scheme subdivides only where the
+integration demonstrably fails.
+
+The entry points are
+\begin{verbatim}
+  ltb   refine coarse.hdf5 tb_file        <mu> <gamma_min> <T_min> [options]
+  lwann refine coarse.hdf5 <w90 folder>   <mu> <gamma_min> <T_min> [options]
+\end{verbatim}
+where \code{gamma\_min} and \code{T\_min} are the \emph{worst-case corner} of
+the sweep to be run afterwards, i.e.\ the values that make $W$ in
+Eq.~\eqref{eq:width} smallest.
+
+\section{The error metric}
+\label{sec:metric}
+
+\subsection{Sum rule on the energy axis}
+
+Let $B=\{\varepsilon_1<\dots<\varepsilon_N\}$ be the sorted set of distinct
+band energies of the current mesh (all bands, all $k$-points). Because
+\begin{equation}
+  \int_{-\infty}^{\infty} \frac{\partial f}{\partial\varepsilon}\,
+  \mathrm{d}\varepsilon \;=\; 1 ,
+  \label{eq:sumrule}
+\end{equation}
+the accuracy with which the trapezoid rule on $B$ reproduces this integral
+measures whether the sampled energies resolve the kernel. Writing the
+per-panel defect
+\begin{equation}
+  d_i \;=\; \underbrace{\tfrac{1}{2}\left(\varepsilon_{i+1}-\varepsilon_i\right)
+            \left[g(\varepsilon_i)+g(\varepsilon_{i+1})\right]}_{\text{trapezoid}}
+       \;-\; \underbrace{\int_{\varepsilon_i}^{\varepsilon_{i+1}}
+            g(\varepsilon)\,\mathrm{d}\varepsilon}_{\text{exact}},
+  \qquad g \equiv \dfda ,
+  \label{eq:defect}
+\end{equation}
+the metric reported by \code{compute\_error} is
+\begin{equation}
+  \boxed{\;
+  \mathcal{E} \;=\; \sum_i \left|d_i\right|
+              \;+\; \left|1-\sum_i \int_{\varepsilon_i}^{\varepsilon_{i+1}}
+                    g\,\mathrm{d}\varepsilon\right| \; }
+  \label{eq:metric}
+\end{equation}
+The second term is the truncation of the sampled range $[\varepsilon_1,
+\varepsilon_N]$ and is usually negligible ($\sim 2\times10^{-4}$ for
+graphene).
+
+The exact panel integrals are evaluated by five-point Gauss--Legendre
+quadrature. The analytic kernel is available in closed form, so there is no
+reason to estimate $d_i$ by an embedded (bisection) rule; that estimator
+collapses precisely where it matters most, on a coarse mesh whose panels are
+far wider than the kernel, because neither the trapezoid nor its bisection
+resolves the peak. On the graphene $48\times48\times1$ starting mesh it
+reported $20.3$ against a true defect of $39.7$. Five nodes is converged: on a
+$7.1\times10^{5}$-panel mesh it gives $0.006653$ against $0.006652$ with
+twenty nodes, at a fifth of the cost.
+
+\subsection{Why the absolute value is taken per panel}
+
+The historical metric was $\left|\sum_i d_i\right| = \left|1-\int_B
+g\right|$, the absolute value of the \emph{signed} sum. That is not a usable
+optimisation target. The trapezoid rule underestimates a concave integrand and
+overestimates a convex one, and $\dfda$ is a peak: concave over its top,
+convex in both tails. The two contributions therefore \emph{always} carry
+opposite signs, in every system. Whenever they happen to be of comparable
+magnitude, an iterate whose peak defect cancels part of the tail defect scores
+better than the strictly finer mesh that follows it. Refinement only ever adds
+$k$-points, so a rising signed metric never means a worse mesh --- but the
+loop cannot know that.
+
+Graphene, $48\times48\times1$ irreducible start, $\Gamma=1$~meV, $T=1$~K:
+
+\begin{center}
+\begin{tabular}{rrr}
+\toprule
+$N_\varepsilon$ & signed $\left|\sum d_i\right|$ & $\sum\left|d_i\right|$ \\
+\midrule
+     475 & 0.04480 & 0.04501 \\
+     587 & 0.02301 & 0.04242 \\
+    1435 & 0.02966 & 0.03135 \\
+  714051 & 0.00644 & 0.00665 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The signed metric dips at $N_\varepsilon=587$ and rebounds at $1435$; the
+plateau detector read that as a $-29\%$ regression and stopped. The
+per-panel absolute sum falls monotonically throughout.
+
+Since $\left|\sum_i d_i\right|\le\sum_i\left|d_i\right|$, the new metric is
+conservative: a mesh that passes it would also have passed the old test, so
+nothing previously converged becomes unconverged. The price is that runs which
+used to pass through accidental cancellation now need more iterations.
+
+\section{Hotspot selection}
+\label{sec:selection}
+
+The loop now optimises the same quantity it reports. Panels are sorted by
+$|d_i|$ and marked until their cumulative defect reaches a fraction
+\code{--defect\_fraction} (default $0.9$) of the total. A $k$-point is a
+hotspot if any of its band energies is an endpoint of a marked panel;
+subdividing exactly those $k$-points is what halves the offending panel widths
+on the next iteration.
+
+Two earlier design choices were wrong and are worth recording.
+
+\paragraph{Pointwise defects cannot reach the tails.}
+The previous criterion flagged energies where the linear interpolant of
+$\dfda$ through $B$ deviated pointwise from the analytic kernel, and turned
+the spread of those energies into a $\mu$-centred radius. The kernel amplitude
+is $1/(\pi\Gamma)$ at $\mu$ against $\Gamma/(\pi\varepsilon^2)$ in the tails, a
+ratio of $(\varepsilon/\Gamma)^2$. A pointwise criterion therefore ranks the
+peak orders of magnitude above the tails however coarse the tails are. On
+graphene the window collapsed onto its floor of $2W$ from the fourth iteration
+onward, while the residual sat between $10^{-2}$ and $10^{-1}$~eV; the metric
+then fell only as $N^{-0.26}$.
+
+\paragraph{A radius is all-or-nothing.}
+Selecting whole panels rather than a radius also avoids dragging in every
+$k$-point closer to $\mu$ than the offending one. Forcing the window open to
+its $0.1$~eV ceiling did reach the target, but needed $5.2\times10^{5}$ wedge
+$k$-points.
+
+\paragraph{Window guard.}
+\code{--energy\_window} (default $0.1$~eV) is a \emph{ceiling}, not the
+refinement region: it only excludes far-away van Hove defects at the band
+edges, which carry real defect but no transport weight. A panel counts as
+in-window when it \emph{overlaps} $[\mu-W_{\max},\mu+W_{\max}]$, not when its
+centre lies inside --- on a coarse mesh the panel straddling $\mu$ can be far
+wider than the window. Graphene $24\times24\times1$ has its first energy above
+the Dirac point near $0.25$~eV, so the single panel holding the entire defect
+has its centre at $-0.125$~eV; a centre test declared convergence at an error
+of $81.9$.
+
+\section{Mesh bookkeeping}
+
+Each hotspot $k$-point is replaced by $n^{d}$ children ($n=$
+\code{--refinement\_factor}, odd, default 3; $d$ = number of active axes)
+placed at
+\begin{equation}
+  \kk_\text{child} \;=\; \kk_\text{parent}
+    + \left(j-\tfrac{n-1}{2}\right)\frac{\boldsymbol{\delta}_\text{parent}}{n},
+  \qquad j=0,\dots,n-1 ,
+\end{equation}
+where $\boldsymbol{\delta}$ is the per-point cell width stored in
+\code{/.kmesh/cell\_deltas}. For odd $n$ the central child coincides with the
+parent, so the parent survives every refinement and each iterate is a strict
+superset of its predecessor. Weights are split \emph{per parent},
+$w_\text{child}=w_\text{parent}/n^{d}$: the parent cell is exactly tiled by
+its own children, so this is the only split that conserves weight locally.
+Pooling the removed weight and redistributing it uniformly conserves the total
+but transfers weight between parents, which is wrong whenever their weights
+differ --- the generic case for an irreducible mesh, where the weight encodes
+the star multiplicity.
+
+\section{Irreducible meshes}
+
+An irreducible coarse mesh is the cheaper starting point and is fully
+supported. Band energies are symmetry invariant, but the optical elements are
+not: a raw weighted sum over the wedge breaks the point-group symmetry of the
+Onsager tensor. The evaluation therefore replaces the moments at every wedge
+point by their group average
+\begin{equation}
+  M_\text{sym}(\kk) \;=\; \frac{1}{N_\text{sym}}
+    \sum_{S} M\!\left(S\kk\right).
+\end{equation}
+On a regular grid this reproduces the full-zone sum to machine precision for
+any lattice.
+
+\paragraph{Two subtleties.}
+First, a refined mesh is written with \code{.kmesh/irreducible = False} plus a
+\code{.kmesh/symmetrized} marker. The former flag means, to
+\code{linretrace}, only that the weights are reconstructible as
+$m_{\kk}\,w_\text{sum}/(n_x n_y n_z)$ --- true for a regular Monkhorst--Pack
+grid and false for any adaptive mesh, whose weights must be read from
+\code{.kmesh/weights}. The marker preserves the symmetrisation for
+continuation runs.
+
+Second, on a refined wedge the group average is a valid quadrature but not
+identical to refining the reducible mesh, unless the point group acts on the
+\emph{fractional} axes by signed permutation. That holds for cubic,
+tetragonal, orthorhombic, monoclinic and triclinic lattices; it fails for
+hexagonal, trigonal and rhombohedral ones, where a $60^\circ$ rotation carries
+the axis-aligned $n\times n$ patch of children onto a sheared one. Both
+quadratures carry correct weights and converge to the same integral; they
+sample different points. For graphene, $8\times8\times1$ subdivided by 3, the
+two differ by $0.11\%$ while each is $0.4\%$ from the converged value.
+
+\section{Stopping}
+
+The loop stops when $\mathcal{E}\le$ \code{--error\_tol} (default
+$5\times10^{-3}$), when no panel inside the window still carries a significant
+defect, at \code{--max\_iter}, or on a plateau: an iteration improving
+$\mathcal{E}$ by less than \code{--plateau\_tol} (default $5\%$), checked from
+the fourth refinement step onward. With the metric of
+Sec.~\ref{sec:metric} a \emph{rising} $\mathcal{E}$ should no longer occur; if
+it does, the loop reports it as a metric failure rather than as a regression,
+and keeps the last (finest) mesh.
+
+\section{Performance}
+
+Graphene, $\Gamma=1$~meV, $T=1$~K, default settings, irreducible start:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+start & iterations & final $k$-points & $\mathcal{E}$ \\
+\midrule
+$24\times24\times1$ & 7 &  357 & 0.00112 \\
+$48\times48\times1$ & 6 &  425 & 0.00207 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Under the previous metric and selection the same $48\times48\times1$ run
+never converged: it stopped on a false plateau at 1435 $k$-points, and with
+the plateau check disabled reached only $\mathcal{E}=0.0064$ at
+$3.6\times10^{5}$ $k$-points.
+
+The metric costs one $\dfda$ evaluation per band-axis node plus five per
+panel, chunked at $2\times10^{6}$ panels ($\sim80$~MB). Measured at
+$7.1\times10^{5}$ panels: $2.6$~s, against minutes for the Hamiltonian
+evaluation at that mesh size. On the symmetrising path each iteration
+diagonalises $N_k \times N_\text{sym}$ matrices, so an irreducible run trades
+a factor $N_\text{sym}$ in work per point against a factor $N_\text{sym}$
+fewer points.
+
+\section{Limitation: the metric is a proxy}
+\label{sec:proxy}
+
+$\mathcal{E}$ is a pure energy-axis criterion. It never sees the $k$-point
+weights, so two meshes with identical energy sets score identically however
+differently they sample the Brillouin zone. Resolving the kernel in energy is
+necessary for Eq.~\eqref{eq:transport} to be accurate; it is not sufficient.
+
+Concretely: the graphene mesh that reaches $\mathcal{E}=0.0021$ at 425
+$k$-points gives a total conductivity about $12\%$ below the converged
+dense-grid value, and that deviation is insensitive to
+\code{--defect\_fraction} (tested at $0.9$, $0.99$, $0.999$). Treat
+\code{--error\_tol} as ``is the kernel resolved in energy'', and confirm
+convergence of the observable itself by continuing the refinement or starting
+from a finer coarse mesh until it stops moving.
+
+\end{document}

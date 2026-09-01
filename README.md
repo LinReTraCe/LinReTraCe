@@ -109,6 +109,51 @@ $$ H(\mathbf{k}) = -\sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} (1-2\delta_{\
 
 If instead one wants to provide energies and optical elements that cannot be created with the above tools we provide a **generic interface** `linterface` that contains the class `StructureFromArrays` that supports the load-in of the necessary data (multiplicity, energies, optical elements, ...).
 
+### Adaptive k-mesh refinement
+
+Transport coefficients are integrals over a kernel of half-width
+$\max(k_BT,\Gamma)$ centred on the chemical potential. When that width is
+small compared with the band dispersion, a uniform mesh dense enough to
+resolve it is wasteful almost everywhere else. `ltb refine` and `lwann refine`
+grow a non-uniform mesh instead, subdividing only where the integration
+actually fails:
+
+`ltb refine coarse.hdf5 tb_file <mu> <gamma_min> <T_min> [options]`
+
+`lwann refine coarse.hdf5 <wannier90 folder> <mu> <gamma_min> <T_min> [options]`
+
+`gamma_min` and `T_min` are the *worst-case corner* of the sweep you intend to
+run afterwards: the smallest scattering rate and the lowest temperature, which
+together set the narrowest kernel the mesh will have to resolve.
+
+Each iteration diagonalises the model on the current mesh, measures how well
+the sampled band energies integrate $\partial f/\partial \varepsilon$, marks
+the energy intervals carrying the quadrature error, and subdivides the
+k-points that bracket them by `--refinement_factor` (3) per active axis. Cell
+widths are carried in `/.kmesh/cell_deltas` so that weights stay exact and a
+run can be continued from any `refined_iter_N.hdf5`.
+
+Irreducible coarse meshes are supported and are the cheaper route: the wedge
+is kept, and the optical elements are averaged over the star of every k-point.
+Refined meshes are written with `.kmesh/irreducible = False` (they are not
+regular grids, so their weights come from `.kmesh/weights`) plus a
+`.kmesh/symmetrized` marker so continuation runs keep symmetrising.
+
+Graphene at $\Gamma = 1$ meV, starting from a 48x48x1 irreducible mesh,
+reaches the default target in seven iterations at 425 k-points — against
+roughly 68000 for a uniform mesh of comparable accuracy.
+
+**The metric is a proxy, not a convergence proof.** It asks whether the set of
+sampled *energies* can integrate the kernel; it never sees the k-point
+weights, so it cannot tell whether the Brillouin zone is sampled densely
+enough. For graphene the converged mesh above still gives a total conductivity
+about 12% below the dense-grid value. Always confirm convergence of the
+observable you care about by continuing the refinement (or starting from a
+finer coarse mesh) until it stops moving.
+
+See `documentation/adaptive_kmesh.tex` for the algorithm and `ltb refine
+--help` for all options.
+
 ### Scattering File
 Arbitrary (momentum, band, and spin dependent) scattering rates (quasi particle weights and energy shifts) are supported through a custom HDF5 scattering file. The workflow to create a custom file follows
 - Copy `lscat_template` from the installation folder into your working direction.

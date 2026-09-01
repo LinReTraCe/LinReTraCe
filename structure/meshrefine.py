@@ -340,14 +340,110 @@ def build_band_axis(bands: np.ndarray, max_bands: "int | None" = None) -> np.nda
     return combined.astype(quad_dtype)
 
 
-def compute_error(band: np.ndarray, temperature: float, gamma: float) -> float:
-    """Return |1 - int df_da d epsilon| for the supplied band grid."""
+# Gauss-Legendre nodes for the per-panel reference integral of df/da.
+# Five nodes is converged: on a 714k-panel graphene mesh the L1 metric is
+# 0.006653 with 5 nodes against 0.006652 with 20, i.e. four significant
+# figures, at a fifth of the cost (2.6 s vs 14 s).
+_GL_NODES = 5
+_GL_X, _GL_W = np.polynomial.legendre.leggauss(_GL_NODES)
 
-    dfda = df_da(band, temperature, gamma)
-    # np.trapz was removed in numpy 2.x in favour of np.trapezoid
-    _trapz = getattr(np, "trapezoid", None) or np.trapz
-    integral = _trapz(dfda, band)
-    return float(np.abs(1.0 - integral))
+# Panels processed per chunk.  Each chunk holds an (n, _GL_NODES) float64
+# temporary, i.e. ~80 MB at 2e6 panels.
+_PANEL_CHUNK = 2_000_000
+
+
+def panel_defects(
+    band:        np.ndarray,
+    temperature: float,
+    gamma:       float,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Per-panel trapezoid defect of df/da on the band axis.
+
+    For each panel [e_i, e_i+1] of the sorted band axis this returns the
+    SIGNED defect
+
+        d_i = trapezoid_i - exact_i,   exact_i = int_{e_i}^{e_i+1} df/da de
+
+    with ``exact_i`` evaluated by ``_GL_NODES``-point Gauss-Legendre.  The
+    analytic kernel is available in closed form, so there is no reason to
+    estimate the defect by an embedded (bisection) rule: that estimator
+    collapses exactly where it is needed most, on a coarse mesh whose panels
+    are far wider than the kernel, because neither the trapezoid nor its
+    bisection resolves the peak.  Measured on the graphene 48x48 start it
+    reported 20.3 against a true defect of 39.7.
+
+    Returns
+    -------
+    midpoints : ndarray (n_panels,)
+        Panel centres, used to locate the defect in energy.
+    defects : ndarray (n_panels,)
+        Signed defects d_i.
+    exact_total : float
+        sum_i exact_i, i.e. the exact integral of df/da over the SAMPLED
+        energy range.  1 - exact_total is the truncation error of that range.
+    """
+
+    band = np.asarray(band, dtype=np.float64).ravel()
+    if band.size < 2:
+        return (np.empty(0), np.empty(0), 0.0)
+
+    lo, hi = band[:-1], band[1:]
+    half   = 0.5 * (hi - lo)
+    mid    = 0.5 * (lo + hi)
+
+    node_f = df_da(band, temperature, gamma)
+    trap   = half * (node_f[:-1] + node_f[1:])
+
+    exact = np.empty_like(trap)
+    for start in range(0, trap.size, _PANEL_CHUNK):
+        stop  = min(start + _PANEL_CHUNK, trap.size)
+        m, hw = mid[start:stop, None], half[start:stop, None]
+        nodes = m + hw * _GL_X[None, :]
+        exact[start:stop] = half[start:stop] * np.sum(
+            df_da(nodes, temperature, gamma) * _GL_W[None, :], axis=1
+        )
+
+    return mid, trap - exact, float(np.sum(exact))
+
+
+def compute_error(band: np.ndarray, temperature: float, gamma: float) -> float:
+    """Quadrature defect of the df/da sum rule on the supplied band axis.
+
+        error = sum_i |d_i|  +  |1 - sum_i exact_i|
+                (discretisation)    (truncation of the sampled range)
+
+    The first term replaces the historical ``|1 - int df/da|``, which was the
+    absolute value of the SIGNED sum of the same defects.  df/da is a peak at
+    mu, concave over its top and convex in both tails, so the trapezoid rule
+    underestimates near mu and overestimates in the tails: the two
+    contributions ALWAYS carry opposite signs, in every system.  Whenever they
+    happen to be of comparable magnitude the signed sum can dip on one iterate
+    through accidental cancellation and rise again on the next, strictly finer
+    one -- refinement only ever adds k-points, so a rising signed metric never
+    means a worse mesh.  Graphene 48x48x1 at gamma = 1 meV showed exactly this:
+
+        nE      signed    this metric
+        475    0.04480      0.04501
+        587    0.02301      0.04242     <- signed dips (cancellation)
+        1435   0.02966      0.03135     <- signed rebounds, L1 keeps falling
+        714051 0.00644      0.00665
+
+    Because |sum d_i| <= sum |d_i|, the new value is never smaller than the old
+    one: a mesh that passes this test would also have passed the old one, so
+    nothing previously converged becomes unconverged.  The converse is the
+    price -- runs that used to pass through cancellation now need more
+    iterations.
+
+    NOTE this is an energy-axis criterion only: it never sees the k-point
+    weights.  Two meshes with identical energy sets score identically however
+    differently they sample the Brillouin zone.  Treat it as "is the kernel
+    resolved in energy", not as "is sigma converged".
+    """
+
+    _, defects, exact_total = panel_defects(band, temperature, gamma)
+    if defects.size == 0:
+        return float("inf")
+    return float(np.sum(np.abs(defects)) + abs(1.0 - exact_total))
 
 
 def kernel_width(temperature: float, gamma: float) -> float:
@@ -568,6 +664,134 @@ def detect_refinement_scale(
     return significant.astype(quad_dtype), tolerance
 
 
+def select_refinement_panels(
+    band:               np.ndarray,
+    temperature:        float,
+    gamma:              float,
+    chemical_potential: float,
+    energy_window:      float = 0.1,
+    defect_fraction:    float = 0.9,
+    defect_rtol:        float = 1e-3,
+) -> Tuple[np.ndarray, dict]:
+    """Mark the band-axis panels that carry the bulk of the quadrature defect.
+
+    This is the selection counterpart of :func:`compute_error`: the loop now
+    optimises exactly the quantity it reports.  The previous criterion --
+    ``detect_refinement_scale``, which flagged energies by the POINTWISE
+    interpolation defect ``|analytic - interpolated|`` and turned their spread
+    into a mu-centred radius -- measured something else, and did so with a
+    systematic bias.  The kernel amplitude is ``1/(pi*gamma)`` at mu against
+    ``gamma/(pi*eps^2)`` in the tails, a ratio of ``(eps/gamma)^2``, so a
+    pointwise criterion always ranks the peak orders of magnitude above the
+    tails no matter how coarse the tails are.  On graphene that pinned the
+    window at its ``2*kernel_width`` floor from the fourth iteration onward
+    while the residual sat between 0.01 and 0.1 eV, and the metric fell only
+    as N^-0.26.
+
+    Selecting whole PANELS rather than a radius also stops the refinement
+    from being all-or-nothing in energy: a radius wide enough to reach a bad
+    tail panel necessarily drags in every k-point closer to mu as well, which
+    is what made the forced-wide-window experiment need 5.2e5 wedge points.
+
+    Parameters
+    ----------
+    band : ndarray
+        Sorted unique band energies (the band axis).
+    temperature, gamma : float
+        Kelvin and eV; the worst-case corner of the planned sweep.
+    chemical_potential : float
+        mu [eV]; used only for reporting and for the ``energy_window`` guard.
+    energy_window : float
+        Panels whose centre lies further than this from mu are never marked.
+        Guards against chasing van Hove defects at the band edges, which carry
+        real defect but no transport weight.
+    defect_fraction : float
+        Mark the largest-defect panels until their cumulative |d_i| reaches
+        this fraction of the total defect inside the window.
+    defect_rtol : float
+        If the total defect is at or below this, report convergence by
+        returning an all-False mask.
+
+    Returns
+    -------
+    marked : ndarray (n_panels,) of bool
+    info : dict
+        Diagnostics for logging: ``n_marked``, ``n_panels``, ``total``,
+        ``captured``, ``reach`` (largest |centre - mu| among marked panels).
+    """
+
+    mid, defects, _ = panel_defects(band, temperature, gamma)
+    if defects.size == 0:
+        return np.zeros(0, dtype=bool), {"n_marked": 0, "n_panels": 0,
+                                         "total": 0.0, "captured": 0.0,
+                                         "reach": 0.0}
+
+    absd = np.abs(defects)
+    # A panel counts as in-window if it OVERLAPS [mu - W, mu + W], not if its
+    # centre happens to fall inside.  On a coarse mesh the panel straddling mu
+    # can be far wider than the window -- graphene 24x24x1 has its first
+    # energy above the Dirac point around 0.25 eV, so the single panel holding
+    # the entire 81.9 defect has its centre at -0.125 eV and a centre test
+    # discards it, reporting "converged" at an error of 81.9.
+    band64 = np.asarray(band, dtype=np.float64).ravel()
+    lo, hi = band64[:-1], band64[1:]
+    mu     = float(chemical_potential)
+    W      = float(energy_window)
+    inside = (hi >= mu - W) & (lo <= mu + W)
+    absd_in = np.where(inside, absd, 0.0)
+    total = float(absd_in.sum())
+
+    marked = np.zeros(defects.size, dtype=bool)
+    info = {"n_marked": 0, "n_panels": int(defects.size),
+            "total": total, "captured": 0.0, "reach": 0.0}
+
+    if total <= float(defect_rtol):
+        logger.info(
+            "Panel defect inside the energy window is %.3e (<= defect_rtol=%.3e); "
+            "no panel needs subdivision.", total, defect_rtol,
+        )
+        return marked, info
+
+    order = np.argsort(absd_in)[::-1]
+    cum   = np.cumsum(absd_in[order])
+    need  = int(np.searchsorted(cum, float(defect_fraction) * total) + 1)
+    need  = min(need, int(np.count_nonzero(absd_in)))
+    take  = order[:need]
+    marked[take] = True
+
+    info["n_marked"] = int(need)
+    info["captured"] = float(cum[need - 1]) if need > 0 else 0.0
+    info["reach"]    = float(np.max(np.abs(mid[take] - float(chemical_potential))))
+    return marked, info
+
+
+def hotspot_mask_from_panels(
+    energies: np.ndarray,
+    band:     np.ndarray,
+    marked:   np.ndarray,
+) -> np.ndarray:
+    """k-points that bracket at least one marked panel.
+
+    A panel is bounded by two band-axis nodes, and every node is a band energy
+    of at least one k-point.  Subdividing those k-points is what halves the
+    panel width on the next iteration, so the hotspot set is exactly the
+    k-points owning a node adjacent to a marked panel.
+    """
+
+    if marked.size == 0 or not marked.any():
+        return np.zeros(energies.shape[0], dtype=bool)
+
+    node_flag           = np.zeros(band.size, dtype=bool)
+    node_flag[:-1]     |= marked
+    node_flag[1:]      |= marked
+
+    # every entry of *energies* is present in *band* by construction
+    idx = np.searchsorted(np.asarray(band, dtype=np.float64),
+                          np.asarray(energies, dtype=np.float64))
+    idx = np.clip(idx, 0, band.size - 1)
+    return np.any(node_flag[idx], axis=1)
+
+
 def _merge_duplicates_with_tolerance(
     points:      np.ndarray,
     weights:     np.ndarray,
@@ -599,6 +823,7 @@ def refine_kmesh(
     tolerance:         float,
     refinement_factor: int   = 3,
     uniqueness_tol:    float = 1e-12,
+    hotspot_mask:      "np.ndarray | None" = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return refined (points, weights, cell_deltas) preserving total weight.
 
@@ -645,21 +870,34 @@ def refine_kmesh(
     weights     = band_data.weights
     cell_deltas = band_data.cell_deltas
 
-    tol    = quad_dtype(tolerance)
-    target = quad_dtype(target_energy)
+    if hotspot_mask is not None:
+        # Panel-defect selection (see select_refinement_panels): the hotspots
+        # are the k-points bracketing the panels that carry the quadrature
+        # error, which is not in general a mu-centred ball.
+        mask    = np.asarray(hotspot_mask, dtype=bool)
+        if mask.shape[0] != k_points.shape[0]:
+            raise ValueError("hotspot_mask length {} does not match {} k-points"
+                             .format(mask.shape[0], k_points.shape[0]))
+        indices = np.where(mask)[0]
+        if indices.size == 0:
+            logger.warning("Hotspot mask selected no k-points.")
+            return k_points.copy(), weights.copy(), cell_deltas.copy()
+    else:
+        tol    = quad_dtype(tolerance)
+        target = quad_dtype(target_energy)
 
-    # Explicit absolute window.  np.isclose would add its default relative
-    # term rtol*|target| = 1e-5*|mu|, silently widening the window by an
-    # amount that depends on the (arbitrary) energy zero of the model.
-    mask    = np.any(np.abs(energies - target) <= tol, axis=1)
-    indices = np.where(mask)[0]
+        # Explicit absolute window.  np.isclose would add its default relative
+        # term rtol*|target| = 1e-5*|mu|, silently widening the window by an
+        # amount that depends on the (arbitrary) energy zero of the model.
+        mask    = np.any(np.abs(energies - target) <= tol, axis=1)
+        indices = np.where(mask)[0]
 
-    if indices.size == 0:
-        logger.warning(
-            "No k-points within tolerance %.3e of target energy %.3e.",
-            tolerance, target_energy,
-        )
-        return k_points.copy(), weights.copy(), cell_deltas.copy()
+        if indices.size == 0:
+            logger.warning(
+                "No k-points within tolerance %.3e of target energy %.3e.",
+                tolerance, target_energy,
+            )
+            return k_points.copy(), weights.copy(), cell_deltas.copy()
 
     keep_mask                  = np.ones(k_points.shape[0], dtype=bool)
     removed_weights            = []

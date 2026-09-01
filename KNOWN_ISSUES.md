@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-09-01 (patch 13/14).
+Last updated: 2026-09-01 (patch 13-19).
 
 ---
 
@@ -515,6 +515,48 @@ re-reduced, which costs the whole point of working in the wedge.
 
 ---
 
+### KI-13 — The refinement metric is necessary but not sufficient for transport convergence
+
+| | |
+|---|---|
+| Severity | medium (a converged-looking mesh can still be well off) |
+| Confidence | confirmed by reproducer |
+| Location | `structure/meshrefine.py:compute_error` |
+
+The sum-rule metric is a pure **energy-axis** criterion: it asks whether the set
+of sampled band energies can integrate `df/da`. It never sees the k-point
+weights, so two meshes with identical energy sets score identically however
+differently they sample the Brillouin zone. Resolving the kernel in energy is
+necessary for the transport integral to be accurate; it is not sufficient.
+
+Graphene, `T = 300 K`, `gamma = 0.01 eV`, total `L11` (intra + inter):
+
+```
+mesh                              nkp      L11        vs converged
+adaptive from 48x48 irr           425   1.3527e+06      -12.3%
+adaptive from 24x24 irr           357   1.3343e+06      -13.5%
+uniform 601x601 irr             30401   1.5431e+06       -0.1%
+uniform 901x901 irr             68101   1.5432e+06        ---
+```
+
+The adaptive mesh reports `error = 0.0021`, comfortably inside the default
+`error_tol = 5e-3`, while the observable is 12% low. The deviation is
+insensitive to `--defect_fraction` (0.9, 0.99, 0.999 all give -12.3 to -12.1%),
+so it is not a selection-tuning artefact — it is the metric's blind spot. Note
+the adaptive mesh is still a large improvement on its own parent: uniform
+48x48 irreducible (217 k-points) gives `3.74e+06`, i.e. +142%.
+
+A weighted metric would be the natural remedy, but there is no exact sum rule to
+anchor it: the weighted sum converges to `int DOS(e) K(e) de`, not to 1. Options
+worth exploring are a self-consistency criterion (compare the transport integral
+on the current mesh against the same integral on a once-more-refined mesh) or
+Richardson extrapolation in the mesh density. Until then the documented
+guidance — README "Adaptive k-mesh refinement" and
+`documentation/adaptive_kmesh.tex` Sec. "Limitation: the metric is a proxy" —
+is to confirm convergence of the observable itself.
+
+---
+
 ## Performance opportunities (identified, not implemented)
 
 ### PERF-02 — The generator re-reads and re-evaluates everything each iteration
@@ -651,6 +693,11 @@ move to `scripts/openmp_utils.py` with a re-export shim left behind, as part of
 the planned refactor of the refinement into a fully input-agnostic module.
 
 ### PERF-05 — `detect_refinement_scale` probe grid is larger than it needs to be
+
+**Superseded by patch 19 (KI-R14):** `detect_refinement_scale` no longer drives
+the refinement; selection goes through `select_refinement_panels`, which needs
+no probe grid at all. The function is retained only for callers that still
+import it. Entry kept for provenance.
 
 | | |
 |---|---|
@@ -924,6 +971,100 @@ plots made from the *energy* file, which uses `.kmesh/weights`. Now written as
 saturates at the electron count. **Note:** this changes the normalization of
 `.structure/weights` for regular grids as well; anything downstream that
 re-normalized the old array should be checked.
+
+### KI-R14 — Refinement metric was a signed sum and could rise on a finer mesh
+
+*Closed by patch 19.* **Severity: medium — no wrong results, but the loop could
+not converge and reported a false regression.**
+
+`compute_error` returned `|1 - int df/da|` over the sampled band axis, i.e. the
+absolute value of the SIGNED sum of per-panel trapezoid defects. The trapezoid
+rule underestimates a concave integrand and overestimates a convex one, and
+`df/da` is a peak: concave over its top, convex in both tails. The two
+contributions therefore always carry opposite signs, in every system. When they
+are of comparable size, an iterate whose peak defect cancels part of the tail
+defect scores better than the strictly finer mesh that follows it.
+
+Graphene 48x48x1 irreducible, `gamma = 1 meV`, `T = 1 K`:
+
+```
+nE        signed |sum d_i|    sum |d_i|
+475            0.04480         0.04501
+587            0.02301         0.04242   <- signed dips (cancellation)
+1435           0.02966         0.03135   <- signed rebounds, L1 keeps falling
+714051         0.00644         0.00665
+```
+
+The plateau detector read the 587 -> 1435 step as a **-28.89% regression** and
+stopped. Refinement only adds k-points, so iteration 6 contained every point of
+iteration 5 and was strictly the better sampling.
+
+A second, independent defect made the target unreachable anyway.
+`detect_refinement_scale` flagged energies by the POINTWISE interpolation defect
+`|analytic - interpolated|` and converted their spread into a mu-centred radius.
+The kernel amplitude is `1/(pi*gamma)` at mu against `gamma/(pi*eps^2)` in the
+tails, a ratio of `(eps/gamma)^2`, so the peak always outranks the tails however
+coarse the tails are. The window collapsed onto its `2*kernel_width` floor from
+iteration 4 while the residual sat between 0.01 and 0.1 eV. Panel-resolved
+budget at 714051 energies: peak `+0.00011`, tails `+0.00654`. The metric fell as
+`N^-0.26`; with `--plateau_tol 0` the run reached only 0.0064 at 357217
+k-points. Forcing the window open to its 0.1 eV ceiling did hit the target, but
+needed 521905 k-points.
+
+**Fix.** Both halves now use the same quantity, the per-panel quadrature defect
+`d_i = trapezoid_i - exact_i` with `exact_i` from 5-point Gauss-Legendre:
+
+* `compute_error` returns `sum|d_i| + |1 - sum exact_i|` (discretisation plus
+  truncation of the sampled range). Monotone under refinement.
+* `select_refinement_panels` marks panels by `|d_i|` until they account for
+  `--defect_fraction` (0.9) of the total; `hotspot_mask_from_panels` selects the
+  k-points bracketing them. Whole panels rather than a radius, so reaching a bad
+  tail panel no longer drags in every k-point closer to mu.
+
+Because `|sum d_i| <= sum|d_i|`, the metric is conservative: nothing previously
+converged becomes unconverged. Runs that used to pass through cancellation now
+need more iterations.
+
+**Result.** Graphene, default settings, irreducible start:
+
+```
+start        iterations   final k-points   error
+24x24x1           7            357         0.00112
+48x48x1           6            425         0.00207
+```
+
+against *never converging* before. Controls unaffected: simple cubic 8^3
+(gamma=1e-3, T=10K) converges in 3 iterations, cubic 16^3 (gamma=1e-2, T=300K)
+in 1, square 16^2 in 2, and the `lwann refine` route in 7.
+
+Rejected along the way: estimating `d_i` by the embedded rule
+`(4/3)|trap_h - trap_h/2|`. It is 6x cheaper but collapses exactly where it is
+needed, on a coarse mesh whose panels are wider than the kernel — 20.3 against a
+true 39.7 on the graphene start. The kernel is closed-form, so Gauss-Legendre is
+the right tool; 5 nodes is converged to four figures (0.006653 vs 0.006652 at 20
+nodes) and costs 2.6 s at 714k panels.
+
+### KI-R15 — Interband was documented as on by default and coded as off
+
+*Closed by patch 16.* `config.f90:133` set `algo%lInterbandQuantities = .false.`
+while `documentation/configspec:16` had always said `Interband = (default = T)`.
+A hand-written config omitting the key silently produced an intraband-only run.
+`lconfig` writes the key explicitly, so interactive users were unaffected.
+Default is now `.true.`; the new `algo%lInterbandExplicit` (set from the
+`bool_find` return) distinguishes an explicit request — missing full optical
+elements remain a hard error — from the default being on, where main.F90 now
+deactivates interband with a warning instead of aborting on `--intraonly` files.
+
+### KI-R16 — `--energy_window` help text described a ceiling as the window
+
+*Closed by patch 18.* `ltb refine --help` said "Energy window around mu for
+hotspot detection. Default: 0.1", which reads as though 0.1 is the window in
+force. It is a ceiling: the window used was
+`min(energy_window, max(floor, reach))` and sat at its `2*kernel_width` floor
+for most of a run. `lwann` already said "Ceiling for"; both now spell out the
+formula and point at the per-iteration log line. (Patch 19 replaced the radius
+mechanism entirely — see KI-R14 — but `energy_window` survives as the guard
+against band-edge van Hove defects.)
 
 ### PERF-R1 — Symmetrising branch was a Python loop over k-points
 

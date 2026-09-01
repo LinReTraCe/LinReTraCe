@@ -33,6 +33,8 @@ from structure.meshrefine import (
     load_band_data,
     refine_kmesh,
     write_custom_mesh,
+    select_refinement_panels,
+    hotspot_mask_from_panels,
 )
 from structure.units import kB_eV
 
@@ -67,9 +69,11 @@ class RefinementParams:
     refinement_factor : int
         Number of subdivisions per k-axis for hotspot regions; should be odd.
     energy_window : float
-        Half-width (eV) of the mu-centred window used by hotspot detection.
-        Also used as the tolerance in refine_kmesh: k-points with any band
-        energy within energy_window of mu are flagged as hotspots.
+        CEILING (eV) on the distance from mu at which a band-axis panel may
+        still be marked for refinement.  It is not the refinement region:
+        panels are selected by the quadrature defect they carry, and this
+        only excludes far-away van Hove defects at the band edges, which
+        carry real defect but no transport weight.
     workdir : Path
         Directory where intermediate mesh and HDF5 files are written.
     keep_intermediate : bool
@@ -83,6 +87,11 @@ class RefinementParams:
         stages.  The persisting plateau value shrinks with a finer initial
         mesh, so on plateau the loop stops with a warning suggesting one.
         Set to 0 (or negative) to disable the check.
+    defect_fraction : float
+        Fraction (default 0.9) of the total in-window panel defect that the
+        marked panels must account for.  Lower values refine fewer k-points
+        per iteration and converge more slowly; higher values approach
+        "refine everything that is imperfect" and grow the mesh faster.
     """
     initial_hdf5:        Path
     chemical_potential:  float
@@ -95,6 +104,7 @@ class RefinementParams:
     workdir:             Path  = Path('.')
     keep_intermediate:   bool  = False
     plateau_tol:         float = 0.05
+    defect_fraction:     float = 0.9
 
 
 # first iteration index (0-based) at which the plateau check is active,
@@ -555,42 +565,53 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
         previous_error = final_error
 
         # ── 4. Detect hotspots ────────────────────────────────────────────
+        # Selection and metric are the same quantity: the per-panel quadrature
+        # defect of the df/da sum rule.  See select_refinement_panels for why
+        # the previous pointwise criterion could not reach the kernel tails.
         try:
-            hotspots, tolerance = detect_refinement_scale(
+            marked, panel_info = select_refinement_panels(
                 band_axis,
                 params.T_min,
                 params.gamma_min,
                 params.chemical_potential,
                 energy_window=params.energy_window,
+                defect_fraction=params.defect_fraction,
             )
         except MissingDependencyError as exc:
             logger.error("%s", exc)
             return 1
 
-        if tolerance == 0.0:
+        if not marked.any():
             logger.warning(
-                "The current band axis already resolves the df/da kernel to "
-                "within the defect tolerance: no undersampled energies remain, "
-                "so additional k-points near mu cannot reduce the error "
-                "further (residual %.6f is set by the band range / initial "
-                "mesh). Stopping.", final_error,
+                "No band-axis panel inside the energy window still carries a "
+                "significant quadrature defect, so additional k-points cannot "
+                "reduce the error further (residual %.6f is set by the band "
+                "range / initial mesh). Stopping.", final_error,
             )
             break
 
+        hotspot_mask = hotspot_mask_from_panels(data.energies, band_axis, marked)
+
         logger.info(
-            "Hotspot window: %.4e eV (ceiling energy_window=%.4e, "
-            "kernel half-width=%.4e; %d probe energies flagged as "
-            "undersampled).",
-            tolerance, params.energy_window,
-            max(kB_eV * params.T_min, params.gamma_min), hotspots.size,
+            "Hotspot panels: %d of %d carry %.1f%% of the defect (%.4e of "
+            "%.4e); reach %.4e eV from mu (ceiling energy_window=%.4e, kernel "
+            "half-width=%.4e); %d of %d k-points selected.",
+            panel_info["n_marked"], panel_info["n_panels"],
+            100.0 * panel_info["captured"] / panel_info["total"]
+            if panel_info["total"] > 0 else 0.0,
+            panel_info["captured"], panel_info["total"], panel_info["reach"],
+            params.energy_window,
+            max(kB_eV * params.T_min, params.gamma_min),
+            int(hotspot_mask.sum()), hotspot_mask.size,
         )
 
         # ── 5. Refine mesh ────────────────────────────────────────────────
         refined_points, refined_weights, refined_deltas = refine_kmesh(
             data,
             target_energy=params.chemical_potential,
-            tolerance=tolerance,
+            tolerance=0.0,
             refinement_factor=params.refinement_factor,
+            hotspot_mask=hotspot_mask,
         )
 
         n_before = data.k_points.shape[0]

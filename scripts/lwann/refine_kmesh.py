@@ -144,6 +144,12 @@ Positional arguments
                         help="Maximum refinement iterations. Default: 10.")
     parser.add_argument("--refinement_factor", type=int, default=3,
                         help="Subdivisions per axis for refined regions. Default: 3.")
+    parser.add_argument("--defect_fraction", type=float, default=0.9,
+                        help="Fraction of the total panel quadrature defect that the "
+                             "marked panels must account for each iteration. Lower "
+                             "refines fewer k-points per step (slower, smaller meshes); "
+                             "higher approaches 'refine everything imperfect'. "
+                             "Default: 0.9.")
     parser.add_argument("--energy_window", type=float, default=0.1,
                         help="CEILING [eV] for the mu-centred hotspot window, not the "
                              "window itself. The window actually used each iteration is "
@@ -286,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         max_iter           = args.max_iter,
         refinement_factor  = args.refinement_factor,
         energy_window      = args.energy_window,
+        defect_fraction    = args.defect_fraction,
         workdir            = args.workdir,
         keep_intermediate  = args.keep_intermediate,
         plateau_tol        = args.plateau_tol / 100.0,  # CLI takes percent
