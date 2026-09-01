@@ -24,6 +24,10 @@ module Mtypes
     logical :: lScatteringFile       ! do we get the scattering information from another file (hdf5)
     logical :: lScatteringText       ! do we get the scattering information from a text file
     logical :: lInterBandQuantities  ! calc inter band response
+    logical :: lInterBandExplicit    ! 'Interband' was present in the config file.
+                                     ! Distinguishes an explicit request (missing full
+                                     ! optical elements = hard error) from the default
+                                     ! being on (missing elements = warn and deactivate).
     logical :: lIntraBandQuantities  ! calc intra band response
     ! logical :: lEnergyOutput  ! output renormalized energies
     logical :: lBoltzmann     ! calc boltzmann response

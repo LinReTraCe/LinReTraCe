@@ -130,7 +130,14 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   algo%lScatteringFile      = .false.
   algo%lScatteringText      = .false.
   algo%lImpurities          = .false.
-  algo%lInterbandQuantities = .false.
+  ! Interband transitions are a distinguishing capability of LinReTraCe and the
+  ! documented default (documentation/configspec) has always been T; the code
+  ! said otherwise, so a config that omitted the key silently produced an
+  ! intraband-only run.  Default is now ON.  Energy files without full optical
+  ! elements (e.g. 'ltb run --intraonly') do not error out on this: main.F90
+  ! deactivates interband with a warning unless the user asked for it by name.
+  algo%lInterbandQuantities = .true.
+  algo%lInterbandExplicit   = .false.
   algo%lIntrabandQuantities = .true.
 
   algo%lRedoMudft     = .false.
@@ -214,6 +221,7 @@ subroutine read_config(algo, edisp, sct, temp, pot, imp)
   ! call bool_find('EnergyOutput', algo%lEnergyOutput, search_start, search_end, found)
   ! call bool_find('BoltzFermi',algo%lBoltzmannFermi, search_start, search_end, found)
   call bool_find('Interband', algo%lInterbandQuantities, search_start, search_end, found)
+  algo%lInterbandExplicit = found
   call bool_find('Intraband', algo%lIntrabandQuantities, search_start, search_end, found)
   call bool_find('QuadResponse', algo%lQuad, search_start, search_end, found)
 

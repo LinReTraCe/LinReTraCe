@@ -114,7 +114,17 @@ program main
   endif
 
   if (algo%lInterbandQuantities .and. .not. edisp%lFullMoments) then
-    call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
+    if (algo%lInterbandExplicit) then
+      call stop_with_message(stderr, 'Full optical elements required for Interband quantities')
+    else
+      ! Interband is on by default; an energy file carrying only the band-diagonal
+      ! moments cannot supply it.  Deactivate rather than abort, but say so --
+      ! silently dropping interband is how the old .false. default went unnoticed.
+      algo%lInterbandQuantities = .false.
+      call log_master(stdout, 'Warning: energy file has no full optical elements;')
+      call log_master(stdout, '         interband response deactivated (intraband only).')
+      call log_master(stdout, '         Regenerate the energy file without --intraonly to enable it.')
+    endif
   endif
 
   if (.not. algo%lIntrabandQuantities .and. .not. algo%lInterbandQuantities) then
