@@ -265,19 +265,35 @@ def read_source_dims(path: Path):
 
 
 def read_source_symmetry(path: Path):
-    """Return ``(irreducible, symop)`` of *path*.
+    """Return ``(wedge, symop)`` of *path*.
+
+    ``wedge`` is True when the stored k-points cover only an irreducible part
+    of the Brillouin zone, which is the case for
+
+      * a regular irreducible grid from ``ltb run``   -> ``.kmesh/irreducible``
+      * a refined custom mesh derived from one        -> ``.kmesh/symmetrized``
+
+    The second marker is needed because a custom mesh must be written with
+    ``.kmesh/irreducible = False`` (its weights are non-uniform and cannot be
+    reconstructed from ``multiplicity/(nkx*nky*nkz)``, which is the only thing
+    linretrace uses that flag for).  Without it a continuation run
+    (``ltb refine refined_iter_N.hdf5 ...``) would silently drop the
+    symmetrisation of the optical elements.
 
     ``symop`` is the ``.unitcell/symop`` array, returned only when the mesh is
-    flagged irreducible and carries more than the identity; otherwise None.
-    Generators pass it on to setCustomKmesh, which then makes the evaluation
-    symmetrise the optical / B-field moments over the star of every k-point.
+    a wedge and carries more than the identity; otherwise None.  Generators
+    pass it on to setCustomKmesh, which then makes the evaluation symmetrise
+    the optical / B-field moments over the star of every k-point.
     """
     try:
         with h5py.File(path, "r") as f:
             irr = bool(f["/.kmesh/irreducible"][()]) if "/.kmesh/irreducible" in f else False
-            if not irr or "/.unitcell/symop" not in f:
-                return irr, None
+            sym = bool(f["/.kmesh/symmetrized"][()]) if "/.kmesh/symmetrized" in f else False
+            wedge = irr or sym
+            if not wedge or "/.unitcell/symop" not in f:
+                return wedge, None
             symop = np.asarray(f["/.unitcell/symop"][()], dtype=float)
+            irr = wedge
     except Exception as exc:                      # pragma: no cover
         logger.warning("Could not read symmetry information from %s: %s", path, exc)
         return False, None
@@ -304,7 +320,9 @@ def _reject_unsymmetrised_irreducible(path: Path, generator) -> bool:
     are fine.  Anything else must refuse.
     """
     with h5py.File(path, "r") as f:
-        if "/.kmesh/irreducible" not in f or not bool(f["/.kmesh/irreducible"][()]):
+        irr = "/.kmesh/irreducible" in f and bool(f["/.kmesh/irreducible"][()])
+        sym = "/.kmesh/symmetrized" in f and bool(f["/.kmesh/symmetrized"][()])
+        if not (irr or sym):
             return False
 
     if getattr(generator, "symop", None) is not None:
@@ -401,15 +419,16 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
         logger.error("Cannot inspect %s: %s", current_hdf5, exc)
         return 1
 
-    # A continuation input was itself produced by this loop and is therefore
-    # already a reducible custom mesh; only fresh coarse input needs the check.
-    if not is_continuation:
-        try:
-            if _reject_unsymmetrised_irreducible(current_hdf5, generator):
-                return 1
-        except Exception as exc:
-            logger.error("Cannot inspect %s: %s", current_hdf5, exc)
+    # Both fresh coarse input and a continuation input may be an irreducible
+    # wedge (the latter carries .kmesh/symmetrized), so the check applies to
+    # both: a wedge evaluated through the non-symmetrising path gives a wrong
+    # transport tensor while the band energies still look correct.
+    try:
+        if _reject_unsymmetrised_irreducible(current_hdf5, generator):
             return 1
+    except Exception as exc:
+        logger.error("Cannot inspect %s: %s", current_hdf5, exc)
+        return 1
     # resume after the input's iteration index, and never number below
     # refinement files already present in the working directory
     next_index = max(

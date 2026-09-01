@@ -46,7 +46,13 @@ class ElectronicStructure(ABC):
     self.weightsum      = 0    # sum of the weights
     self.kpoints        = None # list of the k-points ... shape [nkp,3] float64
     self.kshift         = False# shifted from gamma origin
-    self.irreducible    = False# irreducible or reducible k-grid
+    self.irreducible    = False# REGULAR irreducible grid: weights are reconstructible
+                               # from multiplicity / (nkx.nky.nkz).  This is what
+                               # gets written to .kmesh/irreducible and is the ONLY
+                               # thing linretrace uses it for -- see main.F90.
+    self.symmetrize     = False# moments must be group-averaged over the star of
+                               # every k-point (wedge that is NOT a regular grid,
+                               # i.e. a refined/custom irreducible mesh)
     self.ortho          = False# orthogonal unit cell
 
     self.spins          = 1    # number of inequivalent spins we are considering
@@ -362,21 +368,40 @@ class ElectronicStructure(ABC):
 
     The symmetrising branch of _computeHk / computeHamiltonian fixes this by
     replacing the moment at every k-point with its group average
-    M_sym(k) = (1/nsym) sum_S M(S k).  That average is exact for a REFINED
-    wedge as well, even though the children of a high-symmetry parent
-    generally have a smaller stabiliser than the parent whose weight they
-    inherit:
+    M_sym(k) = (1/nsym) sum_S M(S k).  On a REGULAR grid this is exact: the
+    wedge sum then reproduces the full-BZ sum to machine precision, whatever
+    the lattice.
+
+    On a REFINED wedge the group average is still the right object -- the
+    Onsager tensor comes out with the full point-group symmetry, the weights
+    are correct and the total weight is conserved -- but the identity
 
       sum_c (w_p/n^3) M_sym(k_c)
         = w_p/(n^3 nsym) sum_S sum_c M(S k_c)
+        = w_p * <M> over the union of the image cells
 
-    For each S the points {S k_c} are the sub-cell centres of the image cell
-    S.(parent cell); each distinct image cell is produced by exactly g
-    operations, where g is the order of the stabiliser of k_p, and there are
-    mult_p = nsym/g distinct images.  The sum therefore collapses to
-    w_p * <M> over the union of the images -- the same identity that makes
-    the coarse irreducible case correct, independent of the children's own
-    stabilisers.
+    requires that for each S the points {S k_c} are again the sub-cell centres
+    of the image cell S.(parent cell), i.e. that the n x n x n sub-tiling of a
+    cell is invariant under the point group.  That holds when the operations
+    merely permute and flip the fractional axes (cubic, tetragonal,
+    orthorhombic) -- the case this was originally validated on -- and FAILS for
+    lattices whose operations mix the axes non-trivially, hexagonal above all:
+    a 60 degree rotation carries the parallelogram patch of children onto a
+    sheared one, so the union of the images is not the refined reducible grid.
+
+    The consequence is a different QUADRATURE, not a wrong one.  Both routes
+    converge to the same integral; they simply sample different points, so a
+    refined wedge and the refined reducible mesh it descends from must not be
+    expected to agree bitwise on a non-orthogonal lattice.  Measured for
+    graphene (hexagonal), 8x8x1 subdivided by 3, sum_k w_k |v_xx|^2:
+
+      refined reducible : 1.167906   (identical to the plain 24x24 grid)
+      refined wedge     : 1.169197   (0.11% apart)
+      converged 192x192 : 1.172925   (both ~0.4% away from this)
+
+    See testsuite/tests/test_refined_mesh_flags.py, which asserts the exact
+    equality on the coarse grid and only the quadrature-level agreement after
+    refinement.
 
     Parameters
     ----------
@@ -385,20 +410,41 @@ class ElectronicStructure(ABC):
         partners of k are obtained as k_red = P^T . k_irr.  Read back from
         .unitcell/symop of the parent HDF5.  None marks the mesh reducible.
     '''
+    ''' A custom mesh is never a REGULAR grid, so its weights can never be
+        reconstructed from multiplicity / (nkx.nky.nkz).  self.irreducible is
+        exactly that reconstructability flag on the HDF5 side (linretrace uses
+        .kmesh/irreducible for nothing else), so it must stay False here and
+        the explicit .kmesh/weights must be used downstream.  The symmetrising
+        code path is selected by the separate self.symmetrize flag. '''
+    self.irreducible = False
+
     if symop is None:
-      self.irreducible = False
+      self.symmetrize = False
       return
 
-    symop = np.asarray(symop, dtype=np.float64)
+    symop = np.asarray(symop)
     if symop.ndim != 3 or symop.shape[1:] != (3, 3):
       raise ValueError('symop must be an (nsym,3,3) array')
+    ''' Point-group operations in the reciprocal-lattice basis are integer
+        matrices.  Read back from HDF5 they arrive as float64, which would
+        make a refined file carry a float .unitcell/symop where the coarse
+        file it descends from carries an int one.  Restore the integer dtype
+        whenever the entries are integral -- the einsum in _computeHk is
+        agnostic, but the HDF5 schema should not drift between iterations. '''
+    symint = np.rint(symop).astype(int)
+    if np.allclose(symop, symint, rtol=0.0, atol=1e-10):
+      symop = symint
+    else:
+      symop = np.asarray(symop, dtype=np.float64)
 
-    self.symop       = symop
-    self.nsym        = symop.shape[0]
-    self.invsymop    = np.linalg.inv(symop)
-    self.irreducible = True
-    logger.info('   Custom k-mesh treated as irreducible: moments will be '
-                'group-averaged over {} symmetry operations.'.format(self.nsym))
+    self.symop      = symop
+    self.nsym       = symop.shape[0]
+    self.invsymop   = np.linalg.inv(symop)
+    self.symmetrize = True
+    logger.info('   Custom k-mesh treated as an irreducible wedge: moments will '
+                'be group-averaged over {} symmetry operations. The mesh itself '
+                'is written as non-uniform (.kmesh/irreducible = False) so that '
+                'the explicit weights are used.'.format(self.nsym))
 
   def _checkBrillouinZone(self, kpoints, name='custom k-mesh'):
     '''

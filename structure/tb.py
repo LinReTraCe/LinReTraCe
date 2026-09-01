@@ -39,10 +39,13 @@ class TightBinding(Model):
       symop : (nsym,3,3) array or None
         Point-group operations of the parent calculation (.unitcell/symop of
         the coarse HDF5).  When supplied, the mesh is treated as an
-        IRREDUCIBLE wedge: _computeHk takes the symmetrising path and the
-        optical / B-field moments are group-averaged over the star of every
-        k-point.  This is required for correctness whenever the mesh does not
-        cover the full Brillouin zone -- see _setCustomSymmetries.
+        IRREDUCIBLE wedge: _computeHk takes the symmetrising path (selected by
+        self.symmetrize) and the optical / B-field moments are group-averaged
+        over the star of every k-point.  This is required for correctness
+        whenever the mesh does not cover the full Brillouin zone -- see
+        _setCustomSymmetries.  Note that self.irreducible stays False either
+        way: a custom mesh is never a regular grid, so .kmesh/weights -- not
+        multiplicity/(nkx.nky.nkz) -- is the only valid source of weights.
         When None, the mesh is assumed to be reducible (full BZ).
     '''
     if custom_kpoints.ndim != 2 or custom_kpoints.shape[1] != 3:
@@ -82,7 +85,7 @@ class TightBinding(Model):
       # Log a message indicating that the custom mesh is used.
       logging.getLogger(__name__).info("Using custom k-mesh provided by setCustomKmesh.")
 
-    if self.irreducible:
+    if self.irreducible or self.symmetrize:
       self._checkSymmetriesTightbinding()
       if self.customMesh:
         # _checkSymmetriesKmesh validates the spacing 1/nk_i against the
@@ -531,7 +534,7 @@ class TightBinding(Model):
           levmatrix[i,j,k] = levicivita(i,j,k)
 
 
-    if self.irreducible:
+    if self.irreducible or self.symmetrize:
       '''
       as we deal with a general multi-orbital case here
       we cannot apply velocity / curvature rotations
@@ -765,7 +768,7 @@ class TightBinding(Model):
       self.BopticalDiag[0][...]    = mbdiag
 
     # if not self.irreducible and logging.getLogger().isEnabledFor(logging.DEBUG):
-    if not self.irreducible and self.vector:
+    if not (self.irreducible or self.symmetrize) and self.vector:
       self.hk           = hk
       self.hvk          = hvk
       self.hck          = hck

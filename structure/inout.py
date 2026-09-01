@@ -50,7 +50,29 @@ def h5output(outfile, escalc, velcalc=None, peierls=False):
       raise IOError('kpoints must be array of np.float64')
     h5out['.kmesh/points']        = escalc.kpoints
     h5out['.kmesh/shift']         = escalc.kshift
+    ''' .kmesh/irreducible is a statement about the k-MESH, not about the
+        symmetry treatment: linretrace uses it for exactly one thing, namely
+        to reconstruct the weights in quad precision as
+            w_k = multiplicity_k * weightsum / (nkx*nky*nkz)
+        and to SKIP reading .kmesh/weights entirely (input.f90 / main.F90).
+        It may therefore only be True for a regular (Monkhorst-Pack) grid, for
+        which sum(multiplicity) == nkx*nky*nkz holds.  A refined / custom mesh
+        is non-uniform and carries nkx=nky=nkz=1 and multiplicity=1, so the
+        reconstruction would hand every k-point the full weightsum. '''
+    if escalc.irreducible:
+      nkred = int(escalc.nkx) * int(escalc.nky) * int(escalc.nkz)
+      if int(np.sum(escalc.multiplicity)) != nkred:
+        raise IOError('Inconsistent k-mesh: .kmesh/irreducible is True but '
+                      'sum(multiplicity) = {} != nkx*nky*nkz = {}. The weights '
+                      'of this mesh are not reconstructible from the grid '
+                      'dimensions and it must be written with '
+                      'irreducible = False.'.format(int(np.sum(escalc.multiplicity)), nkred))
     h5out['.kmesh/irreducible']   = escalc.irreducible
+    ''' Marks a mesh whose optical / B-field moments have already been
+        group-averaged over the star of every k-point (custom irreducible
+        wedge).  Not read by linretrace; used by the refinement loop to keep
+        symmetrising when it continues from such a file. '''
+    h5out['.kmesh/symmetrized']   = bool(getattr(escalc, 'symmetrize', False))
 
     h5out['.unitcell/volume']     = float(escalc.vol)
     h5out['.unitcell/ndim']       = int(escalc.ndim)

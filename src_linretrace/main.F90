@@ -136,7 +136,11 @@ program main
   ! define kpoint weights on the MPI range
   allocate(kmesh%weightQ(ikstr:ikend))
   allocate(kmesh%weight(ikstr:ikend))
-  if (kmesh%irreducible) then
+  ! The integer reconstruction below is exact in quad precision, but it is only
+  ! DEFINED for a regular grid -- hence the additional uniformgrid guard set in
+  ! read_preproc_energy.  A refined / adaptive mesh flagged irreducible would
+  ! otherwise get weightQ = weightsum for every k-point (nkx*nky*nkz == 1).
+  if (kmesh%irreducible .and. kmesh%uniformgrid) then
      nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
      do ik=ikstr,ikend
         ! these integer statements here ARE NECESSARY TO PRODUCE THE REQUIRED ACCURACY

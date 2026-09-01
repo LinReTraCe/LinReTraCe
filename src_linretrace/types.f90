@@ -57,6 +57,10 @@ module Mtypes
     real(8), allocatable  :: inputweight(:)
     integer, allocatable  :: multiplicity(:)
     real(8)               :: minimal_weight ! smalles occuring weight
+    logical               :: uniformgrid    ! .kmesh is a regular (Monkhorst-Pack) grid,
+                                            ! i.e. sum(multiplicity) == nkx*nky*nkz and the
+                                            ! weights are reconstructible from it.
+                                            ! .false. for a refined / adaptive (custom) mesh.
     integer               :: nkp
     integer               :: nkx
     integer               :: nky

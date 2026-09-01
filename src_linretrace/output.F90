@@ -101,7 +101,16 @@ subroutine output_auxiliary(algo, info, pot, temp, kmesh, edisp, sct, imp)
   call hdf5_write_data(ifile, '.structure/nkp',     kmesh%nkp)
 
   allocate(weights(kmesh%nkp))
-  weights = kmesh%multiplicity / real(kmesh%nkp,8) ! since we only have them on the MPI range saved
+  ! kmesh%weight only exists on the local MPI range, so the global weights are
+  ! taken from the input array instead.  The old expression
+  !   weights = multiplicity / nkp
+  ! was uniform for any custom (refined) mesh -- it discarded exactly the
+  ! adaptive weighting -- and was normalized inconsistently between reducible
+  ! (sum = 1) and irreducible (sum = nkx*nky*nkz/nkp) grids.  .kmesh/weights
+  ! sums to weightsum in every case, which is what postproc's calcDOS needs for
+  ! the NOS to saturate at the electron count, and matches what lprint uses
+  ! when it reads the energy file directly.
+  weights = kmesh%inputweight
   call hdf5_write_data(ifile, '.structure/weights', weights)
   deallocate(weights)
 

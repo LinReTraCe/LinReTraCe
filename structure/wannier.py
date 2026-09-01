@@ -129,8 +129,11 @@ class Wannier90Calculation(DftCalculation):
 
       *symop* (.unitcell/symop of the coarse HDF5) marks the mesh as an
       IRREDUCIBLE wedge: computeHamiltonian then takes the symmetrising path
-      and group-averages the optical / B-field moments over the star of every
-      k-point.  Without it the mesh is assumed to cover the full BZ.  See
+      (selected by self.symmetrize) and group-averages the optical / B-field
+      moments over the star of every k-point.  Without it the mesh is assumed
+      to cover the full BZ.  self.irreducible stays False in both cases: a
+      custom mesh is never a regular grid, so its weights can only come from
+      the explicit .kmesh/weights dataset.  See
       ElectronicStructure._setCustomSymmetries for why this matters.
 
       NOTE: a custom mesh is NOT a regular grid.  Any code path that indexes
@@ -422,7 +425,7 @@ class Wannier90Calculation(DftCalculation):
       # k-block.  Allocating them here at full (nkp,nproj,nproj[,3/6]) size
       # cost 160*nproj^2 bytes per k-point for nothing.
 
-      if self.irreducible:
+      if self.irreducible or self.symmetrize:
         ''' irreducible grid : every k-point is expanded into its full star
             of nsym symmetry partners, all of them are evaluated, and the
             optical / B-field moments are the average over the star.

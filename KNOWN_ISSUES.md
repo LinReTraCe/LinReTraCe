@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-08-08 (patch 12).
+Last updated: 2026-09-01 (patch 13/14).
 
 ---
 
@@ -432,6 +432,89 @@ of the double/quad split in the core is addressed; not worth doing on its own.
 
 ---
 
+### KI-11 — Exactly degenerate bands give gauge-dependent `momentsDiagonal`, and a spurious gap
+
+| | |
+|---|---|
+| Severity | medium (restricted regime: exact band degeneracies on the mesh) |
+| Confidence | confirmed by reproducer |
+| Location | `structure/tb.py:_computeHk`, `structure/wannier.py:computeHamiltonian` |
+
+Sibling of KI-01, on the band-*diagonal* elements this time, and it does not
+need the B-field path. Where two bands are exactly degenerate at a mesh point,
+`eigh` returns an arbitrary basis inside the degenerate subspace, and
+`|v_nn|^2` is not invariant under that rotation.
+
+Graphene at `K = (2/3, 1/3, 0)` on a mesh whose divisions are a multiple of 3:
+
+```
+ltb   (H(K) truncated to exactly 0 by the |h|<1e-14 clamp) : momentsDiagonal = 0
+lwann (same model round-tripped through hr.dat, H(K) ~ 1e-8): momentsDiagonal = (0.1875, 0.5625, 0)
+```
+
+The 1e-8 asymmetry in `hr.dat` lifts the degeneracy numerically and rotates the
+eigenvectors into the physically meaningful basis, which is arguably the
+*better* answer — the `ltb` value of zero is an artifact of the clamp. The same
+1e-8 also opens a fake `7.3e-08 eV` gap, so `.bands/bandgap/gapped` flips to
+`True` and `linretrace` switches root method. On a 12x12x1 coarse graphene mesh
+the two files give `L11_xx` of 2.1e+02 and 1.4e+07 respectively.
+
+Refinement masks the symptom, because subdivided points no longer sit exactly on
+`K`; it does not fix it. A proper fix needs degenerate-subspace handling
+(diagonalise the velocity operator within each degenerate block) rather than
+relying on the numerical noise to do it. Until then: prefer meshes that avoid
+placing points exactly on a Dirac/Weyl node, or refine.
+
+---
+
+### KI-12 — Refined-wedge star average is a different quadrature on non-orthogonal lattices
+
+| | |
+|---|---|
+| Severity | low (documentation / expectation, not a wrong result) |
+| Confidence | confirmed by reproducer |
+| Location | `structure/es.py:_setCustomSymmetries` (docstring corrected in patch 13) |
+
+The star average `M_sym(k) = (1/nsym) sum_S M(S k)` is **exact** on a regular
+grid: the wedge sum reproduces the full-BZ sum to machine precision for any
+lattice. The docstring further claimed it is exact on a *refined* wedge, via
+
+```
+sum_c (w_p/n^3) M_sym(k_c) = w_p * <M> over the union of the image cells
+```
+
+That collapse needs `{S k_c}` to be again the sub-cell centres of the image
+cell `S.(parent cell)`, i.e. the `n x n x n` sub-tiling of a cell must be
+invariant under the point group. True when the operations only permute and flip
+the fractional axes (cubic / tetragonal / orthorhombic — KI-R3 was validated on
+a cubic model). False for hexagonal, where a 60 degree rotation carries the
+parallelogram patch of children onto a sheared one, so the union of the images
+is not the refined reducible grid.
+
+Graphene, 8x8x1 subdivided by 3, `sum_k w_k |v_xx|^2`:
+
+```
+refined reducible : 1.167906   (identical to the plain 24x24 grid)
+refined wedge     : 1.169197   (0.11% apart)
+converged 192x192 : 1.172925   (both ~0.4% away)
+```
+
+Both routes carry correct weights, exact group-averaged moments and conserved
+total weight, and both converge to the same integral — they sample different
+points. Nothing needs fixing in the code; what needed fixing was the claim.
+The practical consequence is for *testing*: a refined wedge and the refined
+reducible mesh it descends from must not be compared bitwise on a
+non-orthogonal lattice. `testsuite/tests/test_refined_mesh_flags.py` asserts
+machine precision on the coarse grid and only quadrature-level agreement after
+refinement.
+
+If bitwise agreement between the two routes is ever wanted, the subdivision
+would have to be performed in a basis in which the point group acts by
+permutation — or the children generated as the union over the star and then
+re-reduced, which costs the whole point of working in the wedge.
+
+---
+
 ## Performance opportunities (identified, not implemented)
 
 ### PERF-02 — The generator re-reads and re-evaluates everything each iteration
@@ -630,6 +713,11 @@ path. Validated: a refined *irreducible* mesh of 113 k-points and the
 corresponding refined *reducible* mesh of 2280 k-points now agree to eight
 decimal places.
 
+**Follow-up:** the mechanism used to select that path — setting
+`self.irreducible = True` in `_setCustomSymmetries` — also flipped
+`.kmesh/irreducible` in the output file, which on the Fortran side means
+something entirely different and broke the weights. See KI-R11.
+
 ### KI-R4 — Weight redistribution mixed inequivalent parents
 
 *Closed by patch 01.* `refine_kmesh` pooled all removed parent weights and
@@ -743,6 +831,99 @@ argument that just fails the gate and one that just passes it both land within
 4 x epsilon (`|V| = 28`, no walk, 16 terms: 2.2e-34). The double branch walks
 to `|V| = 12` with a 9-term series, which is both more accurate and two steps
 cheaper than the old `Re V ~ 15` with 7 terms.
+
+### KI-R11 — `.kmesh/irreducible` conflated "wedge" with "regular grid", destroying refined-mesh weights
+
+*Closed by patch 13 (Python) and patch 14 (Fortran).* **Severity: high — wrong
+physical results, silently.**
+
+`.kmesh/irreducible` has exactly one consumer in `linretrace`, and it is not
+about symmetry at all. `input.f90` reads `/.kmesh/weights` only when the flag is
+`.false.`, and `main.F90` otherwise reconstructs the weights in quad precision as
+
+```fortran
+nkred = kmesh%nkx*kmesh%nky*kmesh%nkz
+kmesh%weightQ(ik) = kmesh%multiplicity(ik) * kmesh%weightsum / real(nkred,16)
+```
+
+The flag is therefore a promise that *the weights are reconstructible from the
+grid dimensions*, which is true only for a regular Monkhorst-Pack grid.
+
+The KI-R3 fix made `_setCustomSymmetries` set `self.irreducible = True` in
+order to select the symmetrising branch of `_computeHk`. `h5output` writes that
+same attribute, so every refined wedge went out flagged `irreducible = True`
+while carrying the custom-mesh convention `nkx = nky = nkz = 1` and
+`multiplicity = 1`. `linretrace` then discarded the (correct) `/.kmesh/weights`
+and assigned `weightQ = weightsum` to **every** k-point.
+
+Graphene, `templates/graphene.tbdata`, 12x12x1 coarse, three refinement steps,
+`T = 300 K`, `gamma = 0.01 eV`, `L11` intra:
+
+```
+                          nkp        mu [eV]      L11_xx        L11_yy
+reducible refined         192     2.5e-15      1.0939e+06    1.2040e+06
+irreducible refined        43    -2.95        6.1484e+07    6.1484e+07   <- wrong
+irreducible refined (fix)  43     2.5e-15     1.1490e+06    1.1490e+06
+reducible 300x300       90000     6.3e-13     1.3772e+06    1.3772e+06
+```
+
+The total weight was `nkp * weightsum` instead of `weightsum`, so `L11` came out
+a factor `nkp` too large and the chemical-potential search collapsed to the
+bottom of the band. Reducible refined meshes were unaffected, which is why the
+two routes disagreed.
+
+**Python fix (patch 13).** The two meanings are now separate attributes:
+`self.irreducible` keeps the grid-reconstructability meaning and is always
+`False` for a custom mesh; the new `self.symmetrize` selects the star-averaging
+code path. `h5output` writes `.kmesh/symmetrized` so that a continuation run
+(`ltb refine refined_iter_N.hdf5 ...`) still picks up `symop`, and raises if
+`irreducible` is set while `sum(multiplicity) != nkx*nky*nkz`.
+
+**Fortran fix (patch 14).** `/.kmesh/weights` is now read unconditionally, and
+the quad reconstruction is guarded by the same consistency condition
+(`kmesh%uniformgrid`). Files written by the unpatched Python are therefore
+rescued rather than silently mis-integrated. Verified: the legacy 43-point file
+above reproduces the patched result bit for bit under the patched binary.
+
+**Validation.** The symmetrised wedge equals the direction-average of the
+reducible refinement of the same underlying mesh to 2e-11 relative:
+
+```
+refined reducible  (208 pts):  (L11_xx + L11_yy)/2 = 1181844.8306559924
+refined irreducible (51 pts):   L11_xx = L11_yy    = 1181844.8306336943
+```
+
+Regular (ir)reducible grids are bit-identical before and after both patches.
+
+### KI-R12 — `minimal_weight` was 1.0 for every custom mesh
+
+*Closed by patch 14.* `input.f90` derived
+
+```fortran
+kmesh%minimal_weight = minval(kmesh%multiplicity) / real(kmesh%nkx*kmesh%nky*kmesh%nkz,8)
+```
+
+which for the custom-mesh convention collapses to `1/1 = 1.0`. It is the exit
+criterion of the bisection in `find_mu_DFT` (`root.F90:128-129`), so with
+`ElectronOccupation`, a `Bandgap` scissor, or scattering-file band shifts the
+search returned after a single step, with an occupation deviation of up to one
+full electron and a correspondingly arbitrary `mu_dft` and gap classification.
+This affected **reducible** refined meshes too. Replaced by
+`minval(inputweight) / weightsum`, which is algebraically identical for a
+regular grid and correct for an adaptive one.
+
+### KI-R13 — `.structure/weights` in the output file was uniform for adaptive meshes
+
+*Closed by patch 14.* `output.F90` wrote `multiplicity / nkp`, which is uniform
+for any custom mesh — exactly the adaptive weighting thrown away — and was
+normalized inconsistently between reducible (sum = 1) and irreducible
+(sum = nkx*nky*nkz/nkp) grids. `postproc/output.py` feeds this array to
+`calcDOS`, so DOS/NOS plots made from the *output* file disagreed with the same
+plots made from the *energy* file, which uses `.kmesh/weights`. Now written as
+`kmesh%inputweight`, i.e. summing to `weightsum` in every case, so the NOS
+saturates at the electron count. **Note:** this changes the normalization of
+`.structure/weights` for regular grids as well; anything downstream that
+re-normalized the old array should be checked.
 
 ### PERF-R1 — Symmetrising branch was a Python loop over k-points
 

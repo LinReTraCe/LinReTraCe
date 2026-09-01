@@ -37,11 +37,33 @@ subroutine read_preproc_energy(algo, kmesh, edisp, sct, pot, imp)
   call hdf5_read_data(ifile, "/.kmesh/nkz",         kmesh%nkz)
   call hdf5_read_data(ifile, "/.kmesh/weightsum",   kmesh%weightsum)
   call hdf5_read_data(ifile, "/.kmesh/irreducible", kmesh%irreducible)
-  if (.NOT.kmesh%irreducible) then ! weights needed for adaptive (non-uniform) k-mesh
-     call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%inputweight)
-  endif
   call hdf5_read_data(ifile, "/.kmesh/multiplicity",kmesh%multiplicity)
-  kmesh%minimal_weight = minval(kmesh%multiplicity) / real(kmesh%nkx*kmesh%nky*kmesh%nkz,8)
+  ! /.kmesh/weights is written by every generator and is always authoritative.
+  ! It used to be read only for .NOT.irreducible, which silently discarded the
+  ! weights of an adaptive mesh that was (incorrectly) flagged irreducible.
+  ! Read it unconditionally: it is one rank-1 array of nkp doubles, and it is
+  ! also the only well-defined source for minimal_weight below.
+  call hdf5_read_data(ifile, "/.kmesh/weights",     kmesh%inputweight)
+
+  ! The quad-precision reconstruction in main.F90,
+  !    w_k = multiplicity_k * weightsum / (nkx*nky*nkz),
+  ! is only valid for a REGULAR (Monkhorst-Pack) grid, for which
+  ! sum(multiplicity) == nkx*nky*nkz holds by construction.  A refined /
+  ! adaptive mesh carries the custom-mesh convention nkx=nky=nkz=1 and
+  ! multiplicity=1, so the reconstruction would assign the full weightsum to
+  ! every single k-point.  Detect the mismatch here rather than trusting the
+  ! flag alone.
+  kmesh%uniformgrid = (sum(kmesh%multiplicity) == kmesh%nkx*kmesh%nky*kmesh%nkz)
+  if (kmesh%irreducible .and. (.not. kmesh%uniformgrid)) then
+     call log_master(stdout, 'Warning: .kmesh/irreducible is set but sum(multiplicity) /= nkx*nky*nkz.')
+     call log_master(stdout, '         This is a non-uniform (refined) mesh; using .kmesh/weights.')
+  endif
+
+  ! smallest occurring k-point weight, normalized exactly as before:
+  ! for a regular grid minval(weights)/weightsum == minval(multiplicity)/(nkx*nky*nkz).
+  ! For an adaptive mesh the old expression collapsed to 1/1 = 1.0, which made
+  ! the bisection in find_mu_DFT exit on its first step.
+  kmesh%minimal_weight = minval(kmesh%inputweight) / real(kmesh%weightsum,8)
 
   ! band information + charge
   call hdf5_read_data(ifile, "/.bands/mu",             pot%mu_dft_file)
