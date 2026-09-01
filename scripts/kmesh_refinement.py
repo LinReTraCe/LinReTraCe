@@ -495,6 +495,23 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
         # iteration reduced the error by less than plateau_tol (relative);
         # active from the 4th refinement step onward only, since the error
         # may equilibrate non-monotonically in the early stages.
+        #
+        # Two distinct events land here and they must not be reported alike:
+        #
+        #   stalled  -- 0 <= improvement < plateau_tol.  The mesh is being
+        #               refined but the metric no longer responds.
+        #   backward -- improvement < 0, i.e. the metric went UP.  This does
+        #               NOT mean the mesh got worse: refinement only ever ADDS
+        #               k-points, so each iterate is a strict superset of its
+        #               predecessor and is strictly better as a BZ sampling.
+        #               The sum-rule metric is |1 - int df/da|, a SIGNED sum of
+        #               per-panel trapezoid defects, and those defects carry
+        #               opposite signs in the peak and in the tails.  An
+        #               iterate whose peak defect happens to cancel part of the
+        #               tail defect scores better than the finer mesh that
+        #               follows it.  Reporting that as a regression -- or worse,
+        #               keeping the coarser mesh -- would be wrong.  The final
+        #               mesh written is always the last (finest) one.
         if (
             params.plateau_tol > 0
             and iteration >= PLATEAU_MIN_ITER
@@ -502,18 +519,37 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
             and previous_error > 0
             and (previous_error - final_error) < params.plateau_tol * previous_error
         ):
+            improvement = 100.0 * (previous_error - final_error) / previous_error
+            if final_error > previous_error:
+                logger.warning(
+                    "Sum-rule metric increased at iteration %d (%.6f -> %.6f). "
+                    "The mesh itself did not get worse -- refinement only adds "
+                    "k-points, so this iterate contains every point of the "
+                    "previous one. The metric is a signed sum of per-panel "
+                    "quadrature defects whose peak and tail contributions have "
+                    "opposite signs, so an accidental cancellation at the "
+                    "previous iterate can score better than a strictly finer "
+                    "mesh. Stopping here: the metric can no longer steer the "
+                    "refinement.",
+                    iteration, previous_error, final_error,
+                )
+            else:
+                logger.warning(
+                    "Error plateau detected: iteration %d reduced the error by "
+                    "only %.2f%% (%.6f -> %.6f), less than the plateau threshold "
+                    "of %.2f%%.",
+                    iteration, improvement, previous_error, final_error,
+                    100.0 * params.plateau_tol,
+                )
             logger.warning(
-                "Error plateau detected: iteration %d reduced the error by only "
-                "%.2f%% (%.6f -> %.6f), less than the plateau threshold of %.2f%%. "
-                "The target precision (%.6f) could NOT be reached; the persisting "
-                "error is limited by the resolution of the initial mesh. "
-                "Restart the refinement from a finer initial mesh, or override "
-                "this check via the plateau option (--plateau_tol 0 disables it).",
-                iteration,
-                100.0 * (previous_error - final_error) / previous_error,
-                previous_error, final_error,
-                100.0 * params.plateau_tol,
-                params.error_tol,
+                "Target precision (%.6f) NOT reached; final metric %.6f on %d "
+                "k-points. The residual is dominated by the trapezoid error in "
+                "the kernel TAILS (|e-mu| well beyond the %.2e eV kernel width), "
+                "which the hotspot window does not target. Options: start from a "
+                "finer initial mesh, widen --energy_window, relax --error_tol, or "
+                "disable this check with --plateau_tol 0.",
+                params.error_tol, final_error, band_axis.shape[0],
+                max(kB_eV * params.T_min, params.gamma_min),
             )
             break
         previous_error = final_error

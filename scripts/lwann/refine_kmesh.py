@@ -38,7 +38,9 @@ Optional arguments
     --plateau_tol PERCENT   Error-plateau detection threshold (default: 5).
     --max_iter N            Maximum refinement iterations (default: 10).
     --refinement_factor F   Subdivisions per axis for refined hotspots (default: 3).
-    --energy_window E       mu-centred energy window ceiling (default: 0.1).
+    --energy_window E       CEILING for the mu-centred hotspot window (default: 0.1).
+                            The window in force is min(E, max(floor, reach)) and shrinks
+                            as the mesh improves; the per-iteration value is logged.
     --charge C              Number of electrons in the projected bands.
     --soc                   Wannier90 calculation includes spin-orbit coupling.
     --nocorrection          Skip the Peierls correction term.
@@ -143,8 +145,14 @@ Positional arguments
     parser.add_argument("--refinement_factor", type=int, default=3,
                         help="Subdivisions per axis for refined regions. Default: 3.")
     parser.add_argument("--energy_window", type=float, default=0.1,
-                        help="Ceiling for the mu-centred hotspot window [eV]. "
-                             "Default: 0.1.")
+                        help="CEILING [eV] for the mu-centred hotspot window, not the "
+                             "window itself. The window actually used each iteration is "
+                             "min(energy_window, max(floor, reach)), where 'reach' is the "
+                             "spread of the undersampled energies and the floor is twice "
+                             "the kernel half-width max(kB*T_min, gamma_min). It therefore "
+                             "shrinks below this value as the mesh improves; see the "
+                             "'Hotspot window:' line of each iteration for the value in "
+                             "force. Default: 0.1.")
     parser.add_argument("--keep_intermediate", action="store_true",
                         help="Keep intermediate mesh and output files instead of "
                              "deleting them.")
