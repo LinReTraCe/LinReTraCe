@@ -847,13 +847,13 @@ def suggest_mesh_ratio(
     return raw, sug
 
 
-# The measured exponent is taken at the coarse end of the curve, where the
-# metric falls faster than it will just beyond the current mesh, so the
-# extrapolation is biased LOW: measured 286 against a true 420 (graphene,
-# 1 meV), 194 against 440 (graphene, 10 meV) and 29 against 32 (cubic).  A
-# modest safety factor recentres it, and erring high is the right direction
-# for a check that REFUSES.
-_DENSITY_SAFETY = 1.5
+# Residual spread of the estimate against known crossings (graphene 264 at
+# 500 K, 420 at 300 K, cubic 32) is 0.78x to 1.32x of the truth before any
+# safety margin.  This factor lifts nearly all of that above 1, so a single
+# regeneration usually suffices; a mesh landing marginally short still needs a
+# second pass, which is why the message says to confirm with inspect-mesh.
+# Erring high is the right direction for a check that REFUSES.
+_DENSITY_SAFETY = 1.35
 
 
 def recommend_density(
@@ -929,7 +929,7 @@ def recommend_density(
                   "to repeat this step." % max_growth)
     return (tuple(out), True,
             "grow every active axis by about %.1fx, from the measured decay "
-            "n^-%.2f plus a safety factor of %.1f. Rough estimate, good to "
+            "n^-%.2f plus a safety factor of %.2f. Rough estimate, good to "
             "about a factor of two -- confirm with inspect-mesh before a long "
             "run.%s"
             % (growth, exponent, safety, capped))
@@ -986,65 +986,92 @@ def decimate_mask(
     return keep
 
 
-def estimate_metric_exponent(
+def estimate_metric_scaling(
     k_points:    np.ndarray,
     energies:    np.ndarray,
     nk:          "tuple[int, int, int]",
     temperature: float,
     gamma:       float,
-    lo:          float = 1.75,
-    hi:          float = 4.0,
-) -> "tuple[float, float]":
-    """Local exponent ``p`` of ``metric ~ n**-p``, measured by decimation.
+    max_factor:  int = 6,
+    min_points:  int = 8,
+) -> "tuple[float, float, float, int]":
+    """Fit the amplitude of ``metric ~ A * n**-d`` over decimations of a mesh.
 
-    Returns ``(exponent, metric_on_the_full_mesh)``.
+    Returns ``(exponent, metric_raw, metric_fitted, n_used)``, where
+    *metric_raw* is measured on the given mesh and *metric_fitted* is what the
+    trend gives at that mesh size.  The recommended density then follows as
+    ``(A / target) ** (1/d)``.
 
-    The metric does NOT fall as ``1/n``.  Measured on graphene at
-    ``(300 K, 1 meV)`` the local slope runs 2.05, 1.17, 2.38, 2.48, 2.34, 2.26,
-    2.12, 1.82, 1.22 across ``n = 48 ... 1800`` -- steeper than ``1/n``
-    throughout the useful range and flattening only as the metric approaches
-    its saturation floor.  Assuming ``1/n`` therefore over-estimates the
-    required density badly: it asked for ``768x768`` where ``420x420`` reaches
-    the target.
+    Fixed exponent, fitted amplitude
+    --------------------------------
+    The exponent is FIXED at the number of active dimensions rather than
+    fitted.  Measured local slopes are 2.3 for graphene (d = 2) and 3.1 for
+    simple cubic (d = 3), so ``p = d`` is a slight under-estimate and
+    therefore errs towards recommending a denser mesh -- the safe direction
+    for a check that refuses.  Fitting the slope instead is markedly worse,
+    because the metric is NOT monotone in density: commensurability between
+    the grid and the band structure makes individual meshes lucky, e.g.
+    graphene at ``(500 K, 1 meV)``
 
-    The exponent is taken from the finest available decimation pair, which is
-    the most representative of the behaviour just beyond the current mesh.  A
-    least-squares fit over several decimations was tried and is not better:
-    it helped one starting mesh and hurt two others, because the wiggle is
-    real structure (commensurability between the mesh and the Dirac point),
-    not noise to be averaged away.
+        n =  32   0.58212
+        n =  48   0.04135     <-- lucky
+        n =  66   0.07377     <-- finer, yet WORSE
+        n = 132   0.02305
+        n = 264   0.00435     <-- where the target is really met
 
-    It is clipped to ``[lo, hi]``.  The floor matters and is principled: the
-    trapezoid argument of :func:`stage_tolerances` gives an error of
-    ``(h/W)**2``, so the asymptotic exponent on a regular grid is 2, and a
-    materially smaller measured slope is a local artefact rather than the
-    trend.  Unclipped, a local slope of 1.17 measured on a 192x192 graphene
-    mesh asked for 1412 divisions where 420 suffices.
+    so a slope measured across two such points is dominated by their luck.
+    Accuracy against known crossings, as a ratio to the true density:
 
-    ACCURACY.  This is a rough estimate and can be out by a factor of about
-    two in either direction -- the curve is not a power law and it flattens as
-    the metric nears its saturation floor.  Verifying an actual mesh with
-    ``inspect-mesh`` takes seconds and is the reliable route.
+        estimator                        range        within-corner spread
+        raw value at one anchor       0.32 - 1.33            4.1x
+        fitted slope and amplitude    0.75 - 1.73            1.8x
+        fixed p = d, fitted amplitude 0.78 - 1.32            1.4x
+
+    The amplitude is a geometric mean of ``e_i * n_i**d`` over every available
+    decimation, which is what averages the luck away; decimations are free,
+    see :func:`decimate_mask`.
+
+    ACCURACY.  Still an estimate, good to roughly 30% on the cases measured
+    and not better than a factor of two in general: the curve is not a power
+    law and it flattens as the metric nears its saturation floor.  Verifying a
+    real mesh with ``inspect-mesh`` takes seconds.
     """
 
     nk = tuple(int(v) for v in nk)
-    full = compute_error(build_band_axis(energies), temperature, gamma)
+    n0 = float(max(nk))
+    ndim = max(sum(1 for n in nk if n > 1), 1)
+    raw = compute_error(build_band_axis(energies), temperature, gamma)
 
-    for factor in (2, 3):
+    if not (np.isfinite(raw) and raw > 0.0):
+        return float(ndim), raw, raw, 0
+
+    ns, es = [n0], [raw]
+    for factor in range(2, int(max_factor) + 1):
         if not all(n % factor == 0 or n <= 1 for n in nk):
             continue
+        if n0 / factor < min_points:
+            continue
         mask = decimate_mask(k_points, nk, factor)
-        if int(mask.sum()) < 8:
+        if int(mask.sum()) < 4:
             continue
-        coarse = compute_error(build_band_axis(energies[mask]), temperature, gamma)
-        if not (np.isfinite(coarse) and coarse > full > 0.0):
-            continue
-        p = float(np.log(coarse / full) / np.log(float(factor)))
-        return float(np.clip(p, lo, hi)), full
+        err = compute_error(build_band_axis(energies[mask]), temperature, gamma)
+        if np.isfinite(err) and err > 0.0:
+            ns.append(n0 / factor)
+            es.append(err)
 
-    logger.debug("Could not measure the metric exponent by decimation; "
-                 "falling back to 1/n.")
-    return 1.0, full
+    ns = np.asarray(ns, dtype=float)
+    es = np.asarray(es, dtype=float)
+    amplitude = float(np.exp(np.mean(np.log(es * ns ** ndim))))
+    fitted = amplitude / n0 ** ndim
+    if not np.isfinite(fitted) or fitted <= 0.0:
+        fitted = raw
+    return float(ndim), float(raw), float(fitted), len(ns)
+
+
+def estimate_metric_exponent(*args, **kwargs) -> "tuple[float, float]":
+    """Backwards-compatible shim: exponent and the RAW metric only."""
+    exponent, raw, _fitted, _n = estimate_metric_scaling(*args, **kwargs)
+    return exponent, raw
 
 
 def _build_probe_grid(

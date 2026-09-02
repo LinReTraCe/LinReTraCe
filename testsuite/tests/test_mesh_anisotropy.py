@@ -19,7 +19,7 @@ if str(_root) not in sys.path:
 import numpy as np
 
 from structure.meshrefine import (axis_anisotropy, compute_error, build_band_axis,
-                                  decimate_mask, estimate_metric_exponent,
+                                  decimate_mask, estimate_metric_scaling,
                                   infer_mesh_multiple, recommend_density,
                                   suggest_mesh_ratio, _symmetry_axis_orbits)
 
@@ -201,28 +201,48 @@ def test_decimation_reproduces_the_coarser_mesh_exactly():
     check("test_decimation_reproduces_the_coarser_mesh_exactly", ok)
 
 
-def test_measured_exponent_is_steeper_than_one_over_n():
-    """Assuming 1/n asked for 768x768 where 420x420 reaches the target."""
+def test_exponent_is_the_active_dimension_count():
+    """Assuming 1/n asked for 768x768 where 420x420 reaches the target.
+
+    Measured local slopes are 2.3 in 2D and 3.1 in 3D, so p = d slightly
+    under-estimates and therefore errs towards a denser mesh.
+    """
     pts, E = graphene_grid(48)
-    p, err = estimate_metric_exponent(pts, E, (48, 48, 1), 300.0, 1e-3)
-    check("test_measured_exponent_is_steeper_than_one_over_n",
-          2.0 < p < 2.6 and abs(err - 0.30230) < 1e-4, "p=%.3f err=%.5f" % (p, err))
+    p2, raw, _fit, _n = estimate_metric_scaling(pts, E, (48, 48, 1), 300.0, 1e-3)
+    pts3 = np.stack(np.meshgrid(*(np.arange(8) / 8,) * 3, indexing='ij'), -1).reshape(-1, 3)
+    E3 = (-0.5 * np.sum(np.cos(2 * np.pi * pts3), axis=1)).reshape(-1, 1)
+    p3, _, _, _ = estimate_metric_scaling(pts3, E3, (8, 8, 8), 300.0, 1e-2)
+    check("test_exponent_is_the_active_dimension_count",
+          p2 == 2.0 and p3 == 3.0 and abs(raw - 0.30230) < 1e-4,
+          "p2=%s p3=%s raw=%.5f" % (p2, p3, raw))
 
 
-def test_exponent_floor_rejects_an_implausible_local_slope():
-    """A regular grid decaying slower than the trapezoid exponent is a local
-    artefact; unclipped it asked for 1412 divisions where 420 suffices."""
-    pts, E = graphene_grid(192)
-    p, _ = estimate_metric_exponent(pts, E, (192, 192, 1), 300.0, 1e-3)
-    check("test_exponent_floor_rejects_an_implausible_local_slope",
-          p >= 1.75 - 1e-12, "p=%.3f" % p)
+def test_estimate_survives_a_non_monotone_metric():
+    """The metric is not monotone in density: graphene at (500 K, 1 meV) scores
+    0.0414 at n=48 but 0.0738 at n=66, so an estimate anchored on one lucky
+    mesh swung between 132 and 480 for a true answer near 264.  Fitting the
+    amplitude at a fixed exponent must keep two very different starting meshes
+    in rough agreement.
+    """
+    recs = []
+    for n in (48, 96):
+        pts, E = graphene_grid(n)
+        p, _raw, fit, _k = estimate_metric_scaling(pts, E, (n, n, 1), 500.0, 1e-3)
+        rec, ok, _ = recommend_density((n, n, 1), fit, 5e-3,
+                                       np.array([True, True, False]),
+                                       multiple=6, exponent=p)
+        recs.append(rec[0])
+    ratio = max(recs) / min(recs)
+    check("test_estimate_survives_a_non_monotone_metric",
+          ratio < 1.6 and all(200 <= r <= 420 for r in recs),
+          "recs=%s ratio=%.2f" % (recs, ratio))
 
 
 def test_recommendation_lands_on_the_target():
     """Graphene 48x48 at (300 K, 1 meV) must suggest about 420, not 768."""
     pts, E = graphene_grid(48)
-    p, err = estimate_metric_exponent(pts, E, (48, 48, 1), 300.0, 1e-3)
-    rec, ok, _ = recommend_density((48, 48, 1), err, 5e-3,
+    p, _raw, fit, _n = estimate_metric_scaling(pts, E, (48, 48, 1), 300.0, 1e-3)
+    rec, ok, _ = recommend_density((48, 48, 1), fit, 5e-3,
                                    np.array([True, True, False]),
                                    multiple=6, exponent=p)
     check("test_recommendation_lands_on_the_target",
@@ -242,8 +262,8 @@ def main():
     test_recommendation_is_a_noop_when_already_converged()
     test_commensurability_is_inherited_from_the_starting_mesh()
     test_decimation_reproduces_the_coarser_mesh_exactly()
-    test_measured_exponent_is_steeper_than_one_over_n()
-    test_exponent_floor_rejects_an_implausible_local_slope()
+    test_exponent_is_the_active_dimension_count()
+    test_estimate_survives_a_non_monotone_metric()
     test_recommendation_lands_on_the_target()
     return 1 if FAILURES else 0
 

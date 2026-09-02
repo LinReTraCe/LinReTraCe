@@ -31,7 +31,7 @@ from structure.meshrefine import (
     axis_anisotropy,
     compute_error,
     detect_refinement_scale,
-    estimate_metric_exponent,
+    estimate_metric_scaling,
     infer_mesh_multiple,
     kernel_ladder,
     kernel_width,
@@ -460,9 +460,9 @@ def inspect_mesh(
     # The coarse end of the metric-versus-density curve is available for free
     # by decimating this mesh, so the extrapolation exponent is measured rather
     # than assumed.  Only meaningful on a regular grid.
-    exponent = 1.0
+    exponent, fitted, n_fit = 1.0, error, 0
     if uniform:
-        exponent, _ = estimate_metric_exponent(
+        exponent, _raw, fitted, n_fit = estimate_metric_scaling(
             data.k_points, data.energies, nk, temperature, gamma,
         )
 
@@ -472,6 +472,7 @@ def inspect_mesh(
         'width': kernel_width(temperature, gamma),
         'temperature': temperature, 'gamma': gamma,
         'error': error, 'target': target, 'exponent': exponent,
+        'fitted': fitted, 'n_fit': n_fit,
         'raw_ratio': None, 'suggested_ratio': None, 'anisotropy': None,
     }
 
@@ -492,8 +493,11 @@ def inspect_mesh(
         multiple = infer_mesh_multiple(nk, dims)
         # A second, coarser evaluation is not available here, so the
         # saturation floor is left to the caller when it has one.
+        # Extrapolate from the fitted trend, not from this mesh's raw metric:
+        # the metric is not monotone in density, so a lucky mesh would
+        # otherwise pull the recommendation far too low.
         rec, reachable, message = recommend_density(
-            nk, error, target, dims, multiple=multiple, exponent=exponent,
+            nk, fitted, target, dims, multiple=multiple, exponent=exponent,
         )
         result.update({'recommended_nk': rec, 'reachable': reachable,
                        'message': message, 'multiple': multiple})
@@ -513,8 +517,9 @@ def format_inspection(info: dict) -> str:
         % (info['temperature'], info['gamma'], info['width']),
         "  sum-rule metric at this width: %.6f%s"
         % (info['error'],
-           "   (falls as n^-%.2f on this mesh)" % info['exponent']
-           if info.get('exponent') and info['exponent'] != 1.0 else ""),
+           "   (trend %.6f, falling as n^-%.2f over %d densities)"
+           % (info['fitted'], info['exponent'], info['n_fit'])
+           if info.get('n_fit') else ""),
     ]
     if info.get('target') is not None:
         verdict = "OK" if info['error'] <= info['target'] else "TOO COARSE"
