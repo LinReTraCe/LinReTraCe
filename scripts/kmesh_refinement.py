@@ -1098,24 +1098,42 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
                 return 1
 
             # ── 2. Evaluate error ─────────────────────────────────────────────
+            # Convergence is judged on the REFINABLE component.  The rest of
+            # the metric is kernel weight lying beyond the band range, fixed by
+            # the bandwidth relative to the kernel width, and no number of
+            # k-points reduces it -- so testing the total against the tolerance
+            # asks the loop to move something it cannot.  It is also what
+            # select_refinement_panels already acts on, so this makes the
+            # stopping criterion agree with the selection criterion.  On an
+            # orthorhombic model with a 1.2 eV bandwidth the floor is 0.0107
+            # against a 5e-3 tolerance, and a mesh whose refinable defect had
+            # fallen to 0.0011 -- transport error +0.19%, i.e. converged -- was
+            # reported as a failure.
             try:
-                final_error = compute_error(band_axis, stage_T, stage_gamma)
+                total_error, final_error, floor_error = metric_components(
+                    band_axis, stage_T, stage_gamma)
             except MissingDependencyError as exc:
                 logger.error("%s", exc)
                 return 1
 
+            floor_note = ("" if floor_error < 0.1 * stage_tol
+                          else "  [+ %.6f mesh-independent floor]" % floor_error)
             if len(ladder) > 1:
-                logger.info("Stage %d/%d iteration %d: error = %.6f (W = %.4e eV)",
+                logger.info("Stage %d/%d iteration %d: error = %.6f (W = %.4e eV)%s",
                             stage_index + 1, len(ladder), iteration, final_error,
-                            stage_width)
+                            stage_width, floor_note)
             else:
-                logger.info("Iteration %d: error = %.6f", iteration, final_error)
+                logger.info("Iteration %d: error = %.6f%s",
+                            iteration, final_error, floor_note)
 
             # ── 3. Convergence check ──────────────────────────────────────────
             if final_error <= stage_tol:
                 logger.info(
-                    "Target error reached (%.6f <= %.6f)%s.", final_error, stage_tol,
+                    "Target error reached (%.6f <= %.6f)%s.%s", final_error, stage_tol,
                     " at W = %.4e eV" % stage_width if len(ladder) > 1 else "",
+                    ("  The total metric is %.6f; the difference is kernel weight "
+                     "beyond the band range, which no mesh can reduce."
+                     % total_error) if floor_note else "",
                 )
                 break
 
@@ -1362,11 +1380,12 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
                 final_axis = build_band_axis(load_band_data(h5file).energies)
             logger.info("Final mesh evaluated at every rung of the ladder:")
             for (t, g), tol in zip(ladder, tolerances):
-                err = compute_error(final_axis, t, g)
+                _tot, err, flr = metric_components(final_axis, t, g)
                 logger.info(
                     "  W = %.4e eV (T = %.6g K, gamma = %.4e eV): error = %.6f "
-                    "%s tol %.4e", kernel_width(t, g), t, g, err,
+                    "%s tol %.4e%s", kernel_width(t, g), t, g, err,
                     "<=" if err <= tol else " >", tol,
+                    "  [+ %.6f floor]" % flr if flr >= 0.1 * tol else "",
                 )
         except Exception as exc:                       # pragma: no cover
             logger.debug("Could not build the cascade summary: %s", exc)

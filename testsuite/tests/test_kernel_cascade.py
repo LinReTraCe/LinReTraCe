@@ -18,7 +18,8 @@ if str(_root) not in sys.path:
 
 import numpy as np
 
-from structure.meshrefine import kernel_ladder, kernel_width, stage_tolerances
+from structure.meshrefine import (build_band_axis, kernel_ladder, kernel_width,
+                                  metric_components, stage_tolerances)
 from scripts.kmesh_refinement import format_bytes, parse_size, predict_output_bytes
 from structure.units import kB_eV
 
@@ -156,6 +157,27 @@ def test_format_bytes_is_readable():
           format_bytes(1024))
 
 
+def test_convergence_is_judged_on_the_refinable_component():
+    """The stopping criterion must agree with the selection criterion.
+
+    select_refinement_panels acts on the per-panel defects, so the loop must
+    stop on those too.  Testing the TOTAL against the tolerance asks the loop
+    to move the band-range floor, which no mesh can: on a 1.2 eV-bandwidth
+    model the floor is 0.0107 against a 5e-3 tolerance, and a converged mesh
+    (refinable 0.0011, transport error +0.19%) was reported as a failure.
+    """
+    n = 64
+    i = np.arange(n) / n
+    X, Y = np.meshgrid(i, i, indexing='ij')
+    # narrow band: half-bandwidth 0.6 eV, so the floor is large
+    E = (-0.5 * (np.cos(2 * np.pi * X) + 0.2 * np.cos(2 * np.pi * Y))).ravel()
+    axis = build_band_axis(np.stack([E, -E], axis=-1))
+    total, refinable, floor = metric_components(axis, 300.0, 1e-2)
+    check("test_convergence_is_judged_on_the_refinable_component",
+          abs(total - (refinable + floor)) < 1e-12 and floor > refinable,
+          "total=%.6f refinable=%.6f floor=%.6f" % (total, refinable, floor))
+
+
 def main():
     import tempfile
     test_default_ladder_is_a_single_stage()
@@ -171,6 +193,7 @@ def main():
     with tempfile.TemporaryDirectory() as d:
         test_output_size_prediction_is_linear_in_the_kpoint_count(Path(d))
     test_format_bytes_is_readable()
+    test_convergence_is_judged_on_the_refinable_component()
     return 1 if FAILURES else 0
 
 
