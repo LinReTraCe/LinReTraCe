@@ -190,9 +190,19 @@ ltb refine coarse.hdf5 model.tb 0.0 1e-3 10 --T_max 300 --gamma_max 0.01
 Without these flags the behaviour is unchanged and the mesh is certified at the
 narrow corner only. With them, the starting mesh is first **qualified** at the
 wide corner and the run refuses with a recommended `nk` if it is too coarse
-(`--parent_tol`, default `--error_tol`; `--skip_parent_check` to bypass). The
-closing summary re-evaluates the final mesh at every rung, so residual
-inadequacy at wide kernels is printed rather than implied.
+(`--parent_tol`, default `--error_tol`; `--skip_parent_check` to bypass). A
+badly proportioned mesh is warned about but never refused, since the ratio
+estimate from a coarse mesh may be unreliable — `inspect-mesh` is the place to
+follow that up. The closing summary re-evaluates the final mesh at every rung,
+so residual inadequacy at wide kernels is printed rather than implied.
+
+`--error_tol` applies to the **refinable** component of the metric, not the
+total (see "Inspecting a mesh" below). On systems where the band-range floor is
+negligible the two agree to three digits; on narrow-band systems the floor can
+exceed the tolerance outright, and testing the total there would ask the loop to
+move something no mesh can move. Hotspot selection has always acted on the
+refinable part, so this keeps the stopping criterion and the selection criterion
+in agreement.
 
 Other options: `--ladder_ratio` (3, matching `--refinement_factor`),
 `--ladder_max_stages` (6), `--stage_tol_exponent` (0, i.e. the same tolerance
@@ -204,16 +214,49 @@ generator runs and stops, keeping the last mesh that fitted.
 #### Inspecting a mesh
 
 `ltb inspect-mesh` and `lwann inspect-mesh` report what a mesh can resolve at
-one kernel width, answering two questions that need two different criteria:
+one kernel width:
 
 ```
-ltb inspect-mesh mesh.hdf5 --T 300 --gamma 0.01 --target 5e-3
+ltb inspect-mesh mesh.hdf5 --T 300 --gamma 0.01
 ```
 
-*Density* is judged by the sum-rule metric, and a recommended `nk` is given
-when it falls short. *Axis proportions* are judged separately, by the
-band-diagonal velocity tensor, because the metric is blind to them — it ranks a
-32x32 mesh above a 64x8 one that is 250x more accurate at the same cost.
+Give the **widest** corner of the planned sweep — a mesh adequate at 1 meV can
+be useless at 26 meV, and the wide corner is the one a starting mesh must get
+right because refinement cannot repair it afterwards. When gamma is temperature
+dependent, pass its maximum over the sweep: that can only over-estimate the
+kernel width, never under-estimate it.
+
+`--target` defaults to `5e-3`, the same default as `refine`'s `--error_tol` and
+`--parent_tol`, so the two commands agree on what "converged" means. Pass
+`--target 0` to report the metric without a verdict, and `--debug` to see the
+decimation table the estimate is built from. Exit code 2 means "below target",
+for scripting.
+
+The command answers two questions that need two different criteria.
+
+**Density**, judged by the sum-rule metric, with a recommended `nk` when it
+falls short. The metric is reported as two numbers, because only one of them
+responds to k-points:
+
+```
+  sum-rule metric at this width: 0.010997
+     refinable by a finer mesh: 0.000321
+     mesh-independent floor:    0.010676
+```
+
+The floor is kernel weight lying beyond the band range: $\partial f/\partial
+\varepsilon$ integrates to one over infinite energy, but the bands span a
+finite interval, and the missing tail weight cannot be recovered by any mesh.
+It is fixed by the bandwidth relative to the kernel width — 0.0107 for a 1.2 eV
+band against 0.0002 for graphene's 6 eV — and **no setting reduces it**. On a
+narrow-band system it can exceed the target outright, so convergence is judged
+on the refinable part alone. `refine` uses the same split, which is also what
+its hotspot selection has always acted on.
+
+**Axis proportions**, judged separately by the band-diagonal velocity tensor,
+because the metric is blind to them — it ranks a 32x32 mesh above a 64x8 one
+that is 250x more accurate at the same cost. Mesh anisotropy is a k-space
+property while the metric lives on the energy axis.
 
 The proportions matter more than they look. On an orthorhombic model with
 $t_x/t_y = 5$, at matched cost: 1:1 gives +12.3%, 2:1 +2.1%, 4.6:1 +0.50%, and
@@ -222,9 +265,39 @@ tight-binding model the hoppings are given per lattice vector, so stretching a
 cell axis does not flatten the band along it. What matters is the energy
 variation per fractional step, which is what `inspect-mesh` measures. The
 reported ratio is a lower bound and is rounded up in the suggestion; the
-accuracy plateau is broad, so over-shooting is close to free.
+plateau is broad, so over-shooting is close to free.
 
-Exit code 2 means "below target", for scripting.
+When a mesh is both too coarse and badly proportioned, two meshes are
+suggested — one preserving the current proportions, one at the suggested ratio.
+They carry the **same** number of k-points: the metric falls as $n^{-d}$, i.e.
+inversely with the total count however it is shared between axes, so the ratio
+does not reduce the count needed. What it buys is transport accuracy.
+
+#### How the recommended density is estimated
+
+The metric is assumed to fall as $n^{-d}$ with $d$ the number of active
+dimensions, and only the amplitude is fitted, as a geometric mean over
+decimations of the mesh in hand. Decimating a regular mesh — keeping the
+k-points that also lie on a coarser grid — reproduces the coarser mesh's energy
+set exactly, so the coarse end of the curve costs nothing to measure.
+
+Two things make this less obvious than it looks, and both are worth knowing
+when reading a recommendation:
+
+- **The exponent is assumed, not fitted.** Measured local slopes are 2.3 in 2D
+  and 3.1 in 3D, so $p = d$ slightly under-estimates and therefore errs towards
+  a denser mesh. Fitting the slope instead is markedly worse, for the next
+  reason.
+- **The metric is not monotone in density.** Commensurability between the grid
+  and the band structure makes individual meshes lucky. Graphene at
+  (500 K, 1 meV) scores 0.0414 at $n = 48$ but 0.0738 at $n = 66$ — finer, yet
+  worse — with the target really met near $n = 264$. An estimate anchored on a
+  single mesh inherits its luck; averaging the amplitude over several densities
+  is what removes it.
+
+The result is good to roughly 30% on the cases measured, and a mesh landing
+marginally short needs a second pass. `inspect-mesh` on a trial mesh confirms in
+seconds and is the reliable route.
 
 See `documentation/adaptive_kmesh.tex` for the algorithm and `ltb refine
 --help` for all options.

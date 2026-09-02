@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-09-02 (patch 20-21).
+Last updated: 2026-09-02 (patch 20-29).
 
 ---
 
@@ -629,6 +629,21 @@ every mesh tested: `sum_k w_k |v_xx|^2` is 2.000000 on all uniform meshes and
 distributed *in energy*, not in the weights themselves. An earlier reading of
 this entry blamed the weights; that reading is wrong.
 
+**A fourth face of the same blindness: the metric is not monotone in density.**
+Commensurability between the grid and the band structure makes individual
+meshes lucky, so a coarser mesh can score better than a finer one — graphene at
+`(500 K, 1 meV)` gives 0.0414 at n=48 and 0.0738 at n=66. "The metric improved"
+and "the mesh improved" are therefore not the same statement, which is the same
+gap as above seen from a different angle. See KI-R19 for the consequences and
+the workaround.
+
+**Not to be confused with the band-range floor.** Part of the metric is
+untouchable by refinement for an unrelated and entirely benign reason: kernel
+weight lying beyond the band range (KI-R20). That part is understood, reported
+separately, and excluded from the convergence test. The blind spot described
+here is about the *refinable* part being an unreliable proxy for transport
+accuracy, and is not addressed by that split.
+
 **Mitigation shipped (patches 20, 21).** None of this is fixed, but it is no
 longer silent:
 
@@ -641,7 +656,10 @@ longer silent:
   kernel, with a concrete recommended `nk`, because that error is not
   recoverable by refining.
 - `ltb inspect-mesh` / `lwann inspect-mesh` report density and axis proportions
-  independently.
+  independently, the latter because the metric is blind to mesh anisotropy too:
+  it ranks a 32x32 mesh above a 64x8 one that is 250x more accurate at matched
+  cost, since anisotropy is a k-space property and the metric lives on the
+  energy axis.
 
 **Guidance until this is fixed.** Converge a *uniform* mesh at the widest kernel
 of the planned sweep — cheap, and the metric is a valid proxy there — and use
@@ -1240,6 +1258,129 @@ documented escape and still works.
 (For the record: the warning was working correctly and had been printing all
 along. It was missed during the patch-20 investigation because the diagnostic
 runs grepped stdout down to k-point counts.)
+
+### KI-R18 — Density recommendation assumed the metric falls as 1/n
+
+*Closed by patches 23 and 24.* `recommend_density` extrapolated the required
+mesh as `error / target`, i.e. assuming `metric ~ 1/n`. The metric falls
+considerably faster over the useful range — local slopes of 2.3 for graphene
+and 3.1 for cubic — so the recommendation was badly inflated: it asked for
+768x768 where 420x420 reaches the target.
+
+Patch 23 measured the local slope by decimation. Patch 24 replaced that with a
+fixed exponent equal to the active dimension count and a fitted amplitude,
+after the measured-slope version proved unstable (see KI-R19).
+
+Decimation is the enabling trick and costs nothing: keeping the k-points of a
+regular mesh whose fractional coordinates also lie on a coarser grid reproduces
+the coarser mesh's energy set *exactly*, verified to machine precision against
+separately generated 24x24, 16x16 and 12x12 graphene meshes. Symmetry
+operations are integer matrices in fractional coordinates, so the star of a
+coarse-grid point stays on the coarse grid, which makes this valid on an
+irreducible wedge; and only the band axis is needed, not the weights.
+
+---
+
+### KI-R19 — Density recommendation was anchored on a single mesh's metric
+
+*Closed by patch 24.* The metric is **not monotone in mesh density**.
+Commensurability between the grid and the band structure makes individual
+meshes lucky or unlucky. Graphene at `(500 K, 1 meV)`:
+
+```
+n =  32   0.58212
+n =  48   0.04135     <-- lucky
+n =  66   0.07377     <-- finer, yet WORSE
+n =  96   0.04733
+n = 132   0.02305
+n = 264   0.00435     <-- where the target is really met
+```
+
+Extrapolating from the raw value at one anchor inherits that anchor's luck:
+anchored on `n = 48` the recommendation was 132, anchored on `n = 132` it was
+480, for a true answer near 264. The fix fixes the exponent at the active
+dimension count and fits only the amplitude, as a geometric mean of
+`e_i * n_i**d` over every available decimation. Comparing the three estimators
+against known crossings:
+
+```
+estimator                        range        within-corner spread
+raw value at one anchor       0.32 - 1.33            4.1x
+fitted slope and amplitude    0.75 - 1.73            1.8x
+fixed p = d, fitted amplitude 0.78 - 1.32            1.4x
+```
+
+Note the non-monotonicity is real structure, not noise: a mesh can be genuinely
+better than a finer one when it sits favourably relative to a band feature. So
+"the metric improved" and "the mesh improved" are not the same statement — a
+close relative of KI-13.
+
+---
+
+### KI-R20 — Convergence was judged on a metric component no mesh can reduce
+
+*Closed by patches 27 and 29.* The metric is a sum of a per-panel trapezoid
+defect and a truncation term `|1 - sum exact_i|`, and only the first responds
+to k-points. The second is kernel weight lying beyond the band range: `df/da`
+integrates to one over infinite energy while the bands span a finite interval.
+Once the mesh resolves the band edges it stops falling.
+
+```
+mesh (orthorhombic, 1.2 eV band)   nkp    metric    sum|d|   |1-exact|
+32x16                              153   0.02185   0.01117    0.01068
+76x40                              819   0.01100   0.00032    0.01068
+240x48                            3025   0.01073   0.00005    0.01068
+320x64                            5313   0.01070   0.00002    0.01068
+```
+
+With the default 5e-3 tolerance applied to the *total*, no mesh of this system
+could ever converge. `refine` reported a mesh whose refinable defect was
+0.001106 — transport error +0.19%, i.e. converged — as a failure, blaming the
+initial mesh. Both `refine` and `inspect-mesh` now judge the refinable part and
+report the floor separately.
+
+This also explains the cubic saturation at ~0.0043 recorded earlier as an
+unexplained floor: it is exactly that model's truncation term. Graphene's is
+only 0.0002, which is why the problem went unnoticed there.
+
+Caveat recorded during the fix: the floor is only *asymptotically*
+mesh-independent. On graphene it runs 0.0480, 0.0050, 0.00012, 0.00021 for
+n = 12, 24, 48, 96 and is settled from about n = 96; on a very coarse mesh the
+band edges are unresolved and a measured floor is a lower bound.
+
+**`--energy_window` does not affect the floor.** That parameter enters hotspot
+selection only, never `compute_error` or `panel_defects`. An earlier draft of
+this fix advised widening it; that advice was wrong and is contradicted by
+direct measurement (floor 0.010676 at windows of 0.1, 0.3, 1.0 and 3.0 eV).
+Nothing reduces the floor except a different model: it is set by the bandwidth
+relative to the kernel width. The dead `--energy_window` flag was removed from
+`inspect-mesh`, where it had been accepted, documented, and inert.
+
+---
+
+### KI-R21 — `inspect-mesh` output was misleading in four ways
+
+*Closed by patches 25 and 26.* Reported together because they surfaced from one
+user session on a 2D graphene mesh.
+
+- `--target` defaulted to `None`, so the verdict and the recommendation — the
+  most useful output — were silently omitted unless the user knew to ask. It now
+  defaults to 5e-3, matching `refine`'s `--error_tol` and `--parent_tol`, with
+  `--target 0` to suppress the verdict.
+- The rationale for rounding the axis ratio up printed even on an isotropic
+  mesh, where the suggestion is 1:1:1 and there is nothing to act on.
+- "falling as n^-2.00" claimed a measurement that patch 24 had replaced with an
+  assumed exponent and a fitted amplitude.
+- `--debug` produced no additional output; it now prints the decimation table
+  the estimate is built from.
+
+Layout was also changed: inactive dimensions are named (`kz inactive: 1
+division`) instead of appearing as a bare `1` in the ratio, which invited the
+reading that a 2D system had a meaningful third component; and the verdict and
+recommendation moved to the end of the block, where the actionable line is
+visible.
+
+---
 
 ### PERF-R1 — Symmetrising branch was a Python loop over k-points
 

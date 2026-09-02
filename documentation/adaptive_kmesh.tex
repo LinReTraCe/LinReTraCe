@@ -230,14 +230,31 @@ two differ by $0.11\%$ while each is $0.4\%$ from the converged value.
 
 \section{Stopping}
 
-The loop stops when $\mathcal{E}\le$ \code{--error\_tol} (default
+The loop stops when the \emph{refinable} part of $\mathcal{E}$, i.e.\ the first
+term of Eq.~\eqref{eq:split}, falls to \code{--error\_tol} (default
 $5\times10^{-3}$), when no panel inside the window still carries a significant
-defect, at \code{--max\_iter}, or on a plateau: an iteration improving
+defect, at \code{--max\_iter} (counted \emph{per cascade stage}), or on a
+plateau: an iteration improving
 $\mathcal{E}$ by less than \code{--plateau\_tol} (default $5\%$), checked from
 the fourth refinement step onward. With the metric of
 Sec.~\ref{sec:metric} a \emph{rising} $\mathcal{E}$ should no longer occur; if
 it does, the loop reports it as a metric failure rather than as a regression,
 and keeps the last (finest) mesh.
+
+The tolerance deliberately applies to the refinable term and not to
+$\mathcal{E}$ itself, for the reason given in Sec.~\ref{sec:floor}: the floor
+is untouchable by refinement, so a tolerance below it could never be met. The
+total is still reported alongside whenever the floor is non-negligible, so
+nothing is hidden.
+
+A further stopping condition applies before the loop begins. When a wide corner
+is declared (Sec.~\ref{sec:cascade}), the starting mesh is qualified at that
+corner against \code{--parent\_tol} and the run REFUSES if it is too coarse,
+with a recommended $n_k$ from Sec.~\ref{sec:density}. This is a refusal rather
+than a warning because the accuracy at the wide corner is set by the parent and
+cannot be recovered later: at $W_\text{min}$ those panels carry no selectable
+defect. A badly proportioned mesh, by contrast, is only warned about, since the
+ratio estimate from a coarse mesh may be unreliable.
 
 \section{Performance}
 
@@ -325,6 +342,106 @@ it converged with \emph{half} the points of a narrow-only run.
 
 Choosing $p>0$ loosens the wide stages, but the shortfall is not recoverable:
 at $W_\text{min}$ those panels carry negligible defect and are never selected.
+
+\section{What the metric can and cannot fix}
+\label{sec:floor}
+
+The metric of Sec.~\ref{sec:metric} is a sum of two parts that behave quite
+differently under refinement,
+\begin{equation}
+  \mathcal{E} \;=\; \underbrace{\sum_i |d_i|}_{\text{refinable}}
+                \;+\; \underbrace{\Bigl|1 - \sum_i \mathcal{I}_i\Bigr|}_{\text{floor}} ,
+  \label{eq:split}
+\end{equation}
+where $d_i$ is the per-panel trapezoid defect and $\mathcal{I}_i$ the exact
+panel integral. The second term is kernel weight lying \emph{beyond the band
+range}: $\partial f/\partial\varepsilon$ integrates to one over infinite
+energy, but the bands span a finite interval, and the missing tail weight is
+irrecoverable. Once the mesh resolves the band edges it stops falling, however
+many $k$-points are added.
+
+Measured on graphene at $(300\,\mathrm{K}, 1\,\mathrm{meV})$ the floor runs
+$0.0480$, $0.0050$, $0.00012$, $0.00021$, $0.00021$, $0.00021$ for
+$n = 12 \ldots 300$ --- settled from $n \simeq 96$ --- while the refinable part
+falls from $3.86$ to $0.011$ over the same range. On an orthorhombic model of
+$1.2$~eV bandwidth it is $0.010676$ on \emph{every} mesh from $32\times16$ to
+$320\times64$. It is fixed by the bandwidth relative to the kernel width, and
+no parameter reduces it; in particular \code{--energy\_window} does not, since
+that enters hotspot selection only and never Eq.~\eqref{eq:split}.
+
+Convergence must therefore be judged on the refinable part alone. This is not
+a cosmetic distinction. On the orthorhombic model the floor is $0.0107$ against
+a default tolerance of $5\times10^{-3}$, so a mesh whose refinable defect had
+fallen to $0.0011$ --- transport error $+0.19\%$, i.e.\ converged --- was
+reported as a failure while no mesh could ever have satisfied the total. The
+split also makes the stopping criterion agree with the selection criterion,
+since \code{select\_refinement\_panels} has always acted on the $d_i$.
+
+\section{Estimating the required density}
+\label{sec:density}
+
+\code{inspect-mesh} recommends a uniform mesh that would reach a target at a
+given corner. The metric is assumed to fall as $n^{-d}$ with $d$ the number of
+active dimensions, and only the amplitude is fitted,
+\begin{equation}
+  A \;=\; \exp\Bigl\langle \ln\bigl(\mathcal{E}^{\text{ref}}_j\, n_j^{\,d}\bigr) \Bigr\rangle_j ,
+  \qquad
+  n_\text{target} \;=\; \left(\frac{A}{\varepsilon_\text{target}}\right)^{1/d} ,
+\end{equation}
+the average running over decimations of the mesh in hand. Decimating a regular
+mesh --- keeping the $k$-points whose fractional coordinates also lie on a
+coarser grid --- reproduces the coarser mesh's energy set \emph{exactly},
+because the symmetry operations are integer matrices in fractional coordinates
+and the star of a coarse-grid point stays on the coarse grid. The coarse end of
+the curve is therefore free, and the construction is valid on an irreducible
+wedge.
+
+Two points deserve emphasis.
+
+\paragraph{The exponent is assumed, not fitted.} Measured local slopes are
+$2.3$ in 2D and $3.1$ in 3D, so $p = d$ slightly under-estimates and errs
+towards a denser mesh --- the safe direction for a check that refuses.
+
+\paragraph{The metric is not monotone in density.} Commensurability between the
+grid and the band structure makes individual meshes lucky. Graphene at
+$(500\,\mathrm{K}, 1\,\mathrm{meV})$:
+
+\begin{center}
+\begin{tabular}{rl}
+\toprule
+$n$ & $\mathcal{E}$ \\
+\midrule
+ 32 & 0.58212 \\
+ 48 & 0.04135 \quad (lucky) \\
+ 66 & 0.07377 \quad (finer, yet worse) \\
+132 & 0.02305 \\
+264 & 0.00435 \quad (target met) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+An estimate anchored on a single mesh inherits its luck: anchored on $n=48$ the
+recommendation came out at $132$, anchored on $n=132$ at $480$, for a true
+answer near $264$. Averaging the amplitude over several densities removes this.
+Comparing the three estimators against known crossings:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+estimator & range & within-corner spread \\
+\midrule
+raw value at one anchor        & $0.32 - 1.33$ & $4.1\times$ \\
+fitted slope and amplitude     & $0.75 - 1.73$ & $1.8\times$ \\
+fixed $p=d$, fitted amplitude  & $0.78 - 1.32$ & $1.4\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The recommendation is good to roughly $30\%$ on the cases measured. A mesh
+landing marginally short needs a second pass; re-running \code{inspect-mesh}
+takes seconds.
 
 \section{Mesh anisotropy}
 \label{sec:anisotropy}
