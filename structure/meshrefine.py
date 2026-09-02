@@ -928,10 +928,10 @@ def recommend_density(
         capped = (" The required growth was capped at %.0fx per axis; expect "
                   "to repeat this step." % max_growth)
     return (tuple(out), True,
-            "grow every active axis by about %.1fx, from the measured decay "
-            "n^-%.2f plus a safety factor of %.2f. Rough estimate, good to "
-            "about a factor of two -- confirm with inspect-mesh before a long "
-            "run.%s"
+            "grow every active axis by about %.1fx, assuming the metric falls "
+            "as n^-%.0f (the active dimension count) with the amplitude fitted "
+            "to this mesh, plus a safety factor of %.2f. Rough estimate -- "
+            "confirm with inspect-mesh before a long run.%s"
             % (growth, exponent, safety, capped))
 
 
@@ -1062,6 +1062,15 @@ def estimate_metric_scaling(
     ns = np.asarray(ns, dtype=float)
     es = np.asarray(es, dtype=float)
     amplitude = float(np.exp(np.mean(np.log(es * ns ** ndim))))
+    logger.debug(
+        "Metric scaling at T = %.6g K, gamma = %.4e eV, assuming n^-%d:",
+        temperature, gamma, ndim,
+    )
+    for n_i, e_i in zip(ns, es):
+        logger.debug("    n = %6.0f   metric = %.6f   amplitude = %.4g",
+                     n_i, e_i, e_i * n_i ** ndim)
+    logger.debug("    geometric-mean amplitude %.4g -> trend %.6f at n = %.0f",
+                 amplitude, amplitude / n0 ** ndim, n0)
     fitted = amplitude / n0 ** ndim
     if not np.isfinite(fitted) or fitted <= 0.0:
         fitted = raw

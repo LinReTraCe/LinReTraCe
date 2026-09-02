@@ -39,6 +39,7 @@ Optional arguments
     --ladder_ratio R        Kernel-width ratio between cascade stages (default: 3).
     --ladder_max_stages N   Cap on the number of cascade stages (default: 6).
     --stage_tol_exponent P  Loosen wide stages as error_tol*(W/W_min)**P (default: 0).
+    (inspect-mesh: ltb inspect-mesh mesh.hdf5 [--T K] [--gamma EV] [--target TOL])
     --parent_tol TOL        Metric the STARTING mesh must meet at the widest kernel
                             (default: error_tol). Refuses if unmet.
     --skip_parent_check     Bypass that check (expert).

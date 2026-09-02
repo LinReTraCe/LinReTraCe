@@ -517,7 +517,7 @@ def format_inspection(info: dict) -> str:
         % (info['temperature'], info['gamma'], info['width']),
         "  sum-rule metric at this width: %.6f%s"
         % (info['error'],
-           "   (trend %.6f, falling as n^-%.2f over %d densities)"
+           "   (trend %.6f, from n^-%.0f fitted over %d densities)"
            % (info['fitted'], info['exponent'], info['n_fit'])
            if info.get('n_fit') else ""),
     ]
@@ -543,14 +543,21 @@ def format_inspection(info: dict) -> str:
             % np.array2string(info['anisotropy'], precision=4),
             "  raw axis ratio:       %s"
             % " : ".join("%.2f" % v for v in raw),
-            "  suggested (rounded):  %s"
-            % " : ".join("%d" % round(v) for v in sug),
-            "  Rounding up is the cheap direction to err in: on an orthorhombic "
-            "test model the raw ratio 6.97 sat right at the onset of the "
-            "accuracy plateau (4.6:1 gave +0.50%, 8:1 gave +0.004%), and the "
-            "plateau extended to at least 32:1, while 1:1 gave +12.3% at the "
-            "same cost.",
+            "  suggested (rounded):  %s%s"
+            % (" : ".join("%d" % round(v) for v in sug),
+               "   (the axes are equivalent; nothing to change)"
+               if np.allclose(sug, sug.flat[0]) else ""),
         ]
+        # The rationale is only worth printing when there is something to act
+        # on; on an isotropic mesh it is noise.
+        if not np.allclose(sug, sug.flat[0]):
+            lines.append(
+                "  Rounding up is the cheap direction to err in: on an "
+                "orthorhombic test model the raw ratio 6.97 sat right at the "
+                "onset of the accuracy plateau (4.6:1 gave +0.50%, 8:1 gave "
+                "+0.004%), and the plateau extended to at least 32:1, while "
+                "1:1 gave +12.3% at the same cost."
+            )
     return "\n".join(lines)
 
 

@@ -50,9 +50,13 @@ def build_parser(prog: str = "inspect-mesh") -> argparse.ArgumentParser:
                              "temperature dependent, its maximum over the sweep is "
                              "the safe choice, since that can only over-estimate the "
                              "kernel width, never under-estimate it. Default: 0.01.")
-    parser.add_argument("--target", type=float, default=None, metavar="TOL",
-                        help="If given, judge the density against this metric target "
-                             "and suggest the divisions needed to reach it.")
+    parser.add_argument("--target", type=float, default=5e-3, metavar="TOL",
+                        help="Metric target to judge the density against; the "
+                             "divisions needed to reach it are then suggested. "
+                             "Defaults to 5e-3, the same default as refine's "
+                             "--error_tol and --parent_tol, so that inspect-mesh and "
+                             "refine agree on what 'converged' means. Pass 0 to "
+                             "report the metric without a verdict.")
     parser.add_argument("--energy_window", type=float, default=0.1, metavar="EV",
                         help="Half-width of the band-axis window used by the metric. "
                              "Default: 0.1.")
@@ -74,11 +78,12 @@ def main(argv=None) -> int:
         logger.error("No such file: %s", args.mesh)
         return 1
 
-    info = inspect_mesh(args.mesh, args.T, args.gamma, target=args.target,
+    target = None if args.target is not None and args.target <= 0 else args.target
+    info = inspect_mesh(args.mesh, args.T, args.gamma, target=target,
                         energy_window=args.energy_window)
     print(format_inspection(info))
 
-    if args.target is not None and info["error"] > args.target:
+    if target is not None and info["error"] > target:
         return 2          # distinguishable exit code for scripting
     return 0
 
