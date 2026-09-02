@@ -57,9 +57,6 @@ def build_parser(prog: str = "inspect-mesh") -> argparse.ArgumentParser:
                              "--error_tol and --parent_tol, so that inspect-mesh and "
                              "refine agree on what 'converged' means. Pass 0 to "
                              "report the metric without a verdict.")
-    parser.add_argument("--energy_window", type=float, default=0.1, metavar="EV",
-                        help="Half-width of the band-axis window used by the metric. "
-                             "Default: 0.1.")
     parser.add_argument("--debug", action="store_true", help="Verbose logging.")
     return parser
 
@@ -79,8 +76,10 @@ def main(argv=None) -> int:
         return 1
 
     target = None if args.target is not None and args.target <= 0 else args.target
-    info = inspect_mesh(args.mesh, args.T, args.gamma, target=target,
-                        energy_window=args.energy_window)
+    # NOTE: no --energy_window here.  That parameter enters hotspot SELECTION
+    # during refinement, never compute_error/panel_defects, so it would have no
+    # effect on anything this command reports.
+    info = inspect_mesh(args.mesh, args.T, args.gamma, target=target)
     print(format_inspection(info))
 
     if target is not None and info["error"] > target:

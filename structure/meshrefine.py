@@ -908,7 +908,7 @@ def recommend_density(
             "the metric on this system saturates near %.4e -- set by the band "
             "range and the kernel tails, not by the mesh -- so the target "
             "%.4e cannot be reached by refining a uniform grid at all. Relax "
-            "the target above roughly %.4e, or widen --energy_window."
+            "the target above roughly %.4e."
             % (floor_error, target, floor_error * 1.2)
         )
 
@@ -1014,7 +1014,17 @@ def metric_components(
     against a target below the floor asks for a mesh that cannot exist: on the
     orthorhombic model the transport result was already exact to 0.000% while
     the total metric sat at 0.011 against a 5e-3 target, and no mesh would ever
-    have satisfied it.  Widening ``--energy_window`` is what lowers the floor.
+    have satisfied it.
+
+    NO SETTING REDUCES THE FLOOR.  It is fixed by the band range of the model
+    relative to the kernel width: df/da integrates to one over infinite energy,
+    but the bands span a finite interval, and the missing tail weight is the
+    floor.  ``--energy_window`` does NOT affect it -- that parameter enters
+    hotspot selection only, never :func:`compute_error` or
+    :func:`panel_defects` -- so widening it changes nothing here (verified: the
+    floor is 0.010676 at windows of 0.1, 0.3, 1.0 and 3.0 eV).  A narrow-band
+    model simply has a larger floor: 0.0107 for a 1.2 eV bandwidth against
+    0.0002 for graphene's 6 eV, at the same kernel width.
     """
 
     _mid, defects, exact = panel_defects(band_axis, temperature, gamma)

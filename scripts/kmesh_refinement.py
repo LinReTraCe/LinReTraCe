@@ -421,7 +421,6 @@ def inspect_mesh(
     temperature: float,
     gamma:       float,
     target:      "float | None" = None,
-    energy_window: float = 0.1,
 ) -> dict:
     """Report what a mesh can and cannot resolve at one kernel width.
 
@@ -531,6 +530,55 @@ def inspect_mesh(
 _AXIS_NAMES = ("kx", "ky", "kz")
 
 
+def _floor_flag(info: dict) -> str:
+    """Inline marker for a floor large enough that the user should know."""
+    floor, target = info['floor'], info.get('target')
+    if target is not None and floor >= float(target):
+        return "   <-- EXCEEDS the target"  # total can never reach it
+    if target is not None and floor >= 0.5 * float(target):
+        return "   <-- comparable to the target"
+    if floor > info['error']:
+        return "   <-- dominates the metric"
+    return ""
+
+
+def _floor_advice(info: dict) -> "list[str]":
+    """Explain a substantial floor and name the knob that reduces it.
+
+    The comparison that matters is floor against TARGET, not floor against the
+    refinable part: a floor of 0.0107 against a 5e-3 target is worth saying
+    even when the refinable part is momentarily larger, because the user will
+    refine that away and then find the total metric parked at 0.0107 with no
+    explanation ever offered.
+    """
+    floor, target = info['floor'], info.get('target')
+    if target is None:
+        if floor <= info['error']:
+            return []
+        threshold_msg = "is the larger part of the metric on this mesh"
+    elif floor >= float(target):
+        threshold_msg = ("is %.1fx the target, so the TOTAL metric cannot go "
+                         "below it however many k-points are added"
+                         % (floor / float(target)))
+    elif floor >= 0.5 * float(target):
+        threshold_msg = ("is %.0f%% of the target, so the TOTAL metric "
+                         "saturates just under it and a finer mesh buys little"
+                         % (100.0 * floor / float(target)))
+    else:
+        return []
+
+    return [
+        "  The mesh-independent floor %s." % threshold_msg,
+        "     It is the kernel weight lying beyond the band range: df/da "
+        "integrates to one over infinite energy, but the bands span a finite "
+        "interval. NO setting reduces it -- it is fixed by the bandwidth "
+        "relative to the kernel width (a 1.2 eV band gives 0.0107 where "
+        "graphene's 6 eV gives 0.0002). --energy_window does not affect it; "
+        "that knob enters hotspot selection only. This is why convergence "
+        "above is judged on the refinable part alone.",
+    ]
+
+
 def format_inspection(info: dict) -> str:
     """Human-readable rendering of :func:`inspect_mesh`.
 
@@ -561,9 +609,7 @@ def format_inspection(info: dict) -> str:
            % (info['fitted'], info['exponent'], info['n_fit'])
            if info.get('n_fit') else ""),
         "     mesh-independent floor:    %.6f%s"
-        % (info['floor'],
-           "   <-- dominates; widen --energy_window to reduce it"
-           if info['floor'] > info['error'] else ""),
+        % (info['floor'], _floor_flag(info)),
     ]
 
     if info.get('raw_ratio') is not None:
@@ -592,6 +638,8 @@ def format_inspection(info: dict) -> str:
                 "+0.004%), and the plateau extended to at least 32:1, while "
                 "1:1 gave +12.3% at the same cost."
             )
+
+    lines += _floor_advice(info)
 
     # The verdict and the recommendation go last: they are what the user acts on.
     if info.get('target') is not None:
@@ -656,8 +704,7 @@ def qualify_parent_mesh(params: RefinementParams, path: Path) -> bool:
     g_w = params.gamma_max if params.gamma_max is not None else params.gamma_min
     target = params.parent_tol if params.parent_tol is not None else params.error_tol
 
-    info = inspect_mesh(path, T_w, g_w, target=target,
-                        energy_window=params.energy_window)
+    info = inspect_mesh(path, T_w, g_w, target=target)
 
     logger.info("Parent mesh qualification at the widest kernel:\n%s",
                 format_inspection(info))
