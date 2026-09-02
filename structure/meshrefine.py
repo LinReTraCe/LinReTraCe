@@ -866,6 +866,7 @@ def recommend_density(
     max_growth:  float = 16.0,
     exponent:    float = 1.0,
     safety:      float = _DENSITY_SAFETY,
+    ratio:       "np.ndarray | None" = None,
 ) -> "tuple[tuple[int, int, int], bool, str]":
     """Suggest a uniform mesh that would reach *target* at the wide corner.
 
@@ -911,22 +912,44 @@ def recommend_density(
             % (floor_error, target, floor_error * 1.2)
         )
 
-    ratio  = float(error) / float(target)
-    growth = min(safety * ratio ** (1.0 / max(float(exponent), 1e-6)), max_growth)
+    shortfall = float(error) / float(target)
+    growth = min(safety * shortfall ** (1.0 / max(float(exponent), 1e-6)),
+                 max_growth)
+
+    active = [ax for ax in range(3) if dims[ax] and nk[ax] > 1]
+
+    if ratio is None:
+        # Scale the CURRENT proportions.
+        scaled = {ax: nk[ax] * growth for ax in active}
+    else:
+        # Same total k-point count, redistributed along *ratio*.  The metric
+        # falls as n**-d with d the active dimension count, i.e. it is
+        # inversely proportional to the TOTAL number of k-points, so the count
+        # needed to reach the target does not depend on how it is shared out
+        # between the axes -- only the transport accuracy does.
+        r = np.array([max(float(ratio[ax]), 1e-30) for ax in active])
+        n_target = float(np.prod([nk[ax] for ax in active])) * growth ** len(active)
+        c = (n_target / float(np.prod(r))) ** (1.0 / len(active))
+        scaled = {ax: c * r[i] for i, ax in enumerate(active)}
+
     out = []
     for ax in range(3):
-        if not dims[ax] or nk[ax] <= 1:
+        if ax not in scaled:
             out.append(max(nk[ax], 1))
             continue
-        n = int(np.ceil(nk[ax] * growth))
+        n = int(np.ceil(scaled[ax]))
         if multiple > 1:
             n = int(np.ceil(n / multiple) * multiple)
-        out.append(max(n, nk[ax] + 1))
+        out.append(max(n, multiple if multiple > 1 else 1))
 
     capped = ""
-    if safety * ratio ** (1.0 / max(float(exponent), 1e-6)) > max_growth:
+    if safety * shortfall ** (1.0 / max(float(exponent), 1e-6)) > max_growth:
         capped = (" The required growth was capped at %.0fx per axis; expect "
                   "to repeat this step." % max_growth)
+    if ratio is not None:
+        return (tuple(out), True,
+                "same total k-point count, redistributed along the suggested "
+                "ratio.%s" % capped)
     return (tuple(out), True,
             "grow every active axis by about %.1fx, assuming the metric falls "
             "as n^-%.0f (the active dimension count) with the amplitude fitted "
@@ -957,6 +980,47 @@ def infer_mesh_multiple(nk: "tuple[int, int, int]", dims: np.ndarray) -> int:
             best = m
             break
     return best
+
+
+def metric_components(
+    band_axis:   np.ndarray,
+    temperature: float,
+    gamma:       float,
+) -> "tuple[float, float, float]":
+    """Split the metric into the part a finer mesh can fix, and the part it cannot.
+
+    Returns ``(total, refinable, floor)`` where
+
+        total     = sum |d_i|  +  |1 - sum exact_i|   (what compute_error gives)
+        refinable = sum |d_i|                          per-panel trapezoid defect
+        floor     = |1 - sum exact_i|                  kernel weight outside the
+                                                       sampled band range
+
+    The floor is the part of the kernel lying outside the band range the mesh
+    samples, so once the mesh resolves the band edges it stops falling however
+    many k-points are added.  It converges quickly and then sits still --
+    graphene at (300 K, 1 meV) gives 0.0480, 0.0050, 0.00012, 0.00021, 0.00021,
+    0.00021, 0.00021 for n = 12 ... 420, i.e. settled from n = 96 -- while the
+    refinable part keeps falling (3.86 -> 0.0046 over the same range).  On an
+    orthorhombic model it is 0.01068 on every mesh from 32x16 to 320x64, and it
+    is 0.00425 for the cubic model, which is exactly the saturation floor
+    observed there.
+
+    It is therefore NOT reliable on a very coarse mesh, where the band edges
+    are still poorly resolved; treat a floor measured on such a mesh as a lower
+    bound.
+
+    Convergence must therefore be judged on *refinable*.  Judging the total
+    against a target below the floor asks for a mesh that cannot exist: on the
+    orthorhombic model the transport result was already exact to 0.000% while
+    the total metric sat at 0.011 against a 5e-3 target, and no mesh would ever
+    have satisfied it.  Widening ``--energy_window`` is what lowers the floor.
+    """
+
+    _mid, defects, exact = panel_defects(band_axis, temperature, gamma)
+    refinable = float(np.sum(np.abs(defects)))
+    floor = float(abs(1.0 - exact))
+    return refinable + floor, refinable, floor
 
 
 def decimate_mask(
@@ -1040,7 +1104,10 @@ def estimate_metric_scaling(
     nk = tuple(int(v) for v in nk)
     n0 = float(max(nk))
     ndim = max(sum(1 for n in nk if n > 1), 1)
-    raw = compute_error(build_band_axis(energies), temperature, gamma)
+    # Fit the REFINABLE component only: the floor does not move with the mesh,
+    # so including it would flatten the trend and under-predict the density.
+    _tot, raw, _floor = metric_components(
+        build_band_axis(energies), temperature, gamma)
 
     if not (np.isfinite(raw) and raw > 0.0):
         return float(ndim), raw, raw, 0
@@ -1054,7 +1121,8 @@ def estimate_metric_scaling(
         mask = decimate_mask(k_points, nk, factor)
         if int(mask.sum()) < 4:
             continue
-        err = compute_error(build_band_axis(energies[mask]), temperature, gamma)
+        _t, err, _f = metric_components(
+            build_band_axis(energies[mask]), temperature, gamma)
         if np.isfinite(err) and err > 0.0:
             ns.append(n0 / factor)
             es.append(err)

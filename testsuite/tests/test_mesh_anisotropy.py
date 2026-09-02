@@ -20,6 +20,7 @@ import numpy as np
 
 from structure.meshrefine import (axis_anisotropy, compute_error, build_band_axis,
                                   decimate_mask, estimate_metric_scaling,
+                                  metric_components,
                                   infer_mesh_multiple, recommend_density,
                                   suggest_mesh_ratio, _symmetry_axis_orbits)
 
@@ -212,9 +213,30 @@ def test_exponent_is_the_active_dimension_count():
     pts3 = np.stack(np.meshgrid(*(np.arange(8) / 8,) * 3, indexing='ij'), -1).reshape(-1, 3)
     E3 = (-0.5 * np.sum(np.cos(2 * np.pi * pts3), axis=1)).reshape(-1, 1)
     p3, _, _, _ = estimate_metric_scaling(pts3, E3, (8, 8, 8), 300.0, 1e-2)
+    # raw is now the REFINABLE component, not the total (floor 0.000123 here)
     check("test_exponent_is_the_active_dimension_count",
-          p2 == 2.0 and p3 == 3.0 and abs(raw - 0.30230) < 1e-4,
-          "p2=%s p3=%s raw=%.5f" % (p2, p3, raw))
+          p2 == 2.0 and p3 == 3.0 and abs(raw - 0.302175) < 1e-4,
+          "p2=%s p3=%s raw=%.6f" % (p2, p3, raw))
+
+
+def test_metric_splits_into_a_refinable_part_and_a_fixed_floor():
+    """The floor is kernel weight outside the sampled band range and does not
+    move with the mesh, so convergence must be judged on the refinable part."""
+    floors, refinables = [], []
+    for n in (96, 192):
+        _pts, E = graphene_grid(n)
+        tot, ref, floor = metric_components(build_band_axis(E), 300.0, 1e-3)
+        floors.append(floor)
+        refinables.append(ref)
+        if abs(tot - (ref + floor)) > 1e-12:
+            floors.append(float('nan'))
+    # The floor settles once the band edges are resolved (from n = 96 here);
+    # the refinable part keeps falling.
+    check("test_metric_splits_into_a_refinable_part_and_a_fixed_floor",
+          len(floors) == 2
+          and abs(floors[0] - floors[1]) < 0.05 * max(floors)
+          and refinables[1] < 0.6 * refinables[0],
+          "floors=%s refinable=%s" % (floors, refinables))
 
 
 def test_estimate_survives_a_non_monotone_metric():
@@ -263,6 +285,7 @@ def main():
     test_commensurability_is_inherited_from_the_starting_mesh()
     test_decimation_reproduces_the_coarser_mesh_exactly()
     test_exponent_is_the_active_dimension_count()
+    test_metric_splits_into_a_refinable_part_and_a_fixed_floor()
     test_estimate_survives_a_non_monotone_metric()
     test_recommendation_lands_on_the_target()
     return 1 if FAILURES else 0

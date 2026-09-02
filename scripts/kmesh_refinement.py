@@ -33,6 +33,7 @@ from structure.meshrefine import (
     detect_refinement_scale,
     estimate_metric_scaling,
     infer_mesh_multiple,
+    metric_components,
     kernel_ladder,
     kernel_width,
     load_band_data,
@@ -455,7 +456,9 @@ def inspect_mesh(
                    if 'momentsDiagonal' in h5file else None)
 
     band_axis = build_band_axis(data.energies)
-    error = compute_error(band_axis, temperature, gamma)
+    # Judge convergence on the refinable component: the floor is the kernel
+    # weight outside the sampled band range and no mesh can reduce it.
+    total, error, floor = metric_components(band_axis, temperature, gamma)
 
     # The coarse end of the metric-versus-density curve is available for free
     # by decimating this mesh, so the extrapolation exponent is measured rather
@@ -471,7 +474,8 @@ def inspect_mesh(
         'uniform_grid': uniform, 'dims': dims,
         'width': kernel_width(temperature, gamma),
         'temperature': temperature, 'gamma': gamma,
-        'error': error, 'target': target, 'exponent': exponent,
+        'error': error, 'total': total, 'floor': floor,
+        'target': target, 'exponent': exponent,
         'fitted': fitted, 'n_fit': n_fit,
         'raw_ratio': None, 'suggested_ratio': None, 'anisotropy': None,
     }
@@ -500,14 +504,49 @@ def inspect_mesh(
             nk, fitted, target, dims, multiple=multiple, exponent=exponent,
         )
         result.update({'recommended_nk': rec, 'reachable': reachable,
-                       'message': message, 'multiple': multiple})
+                       'message': message, 'multiple': multiple,
+                       'restructured_nk': None})
+
+        # Second recommendation at the suggested proportions, when the mesh is
+        # badly proportioned.  Same k-point count -- the metric is inversely
+        # proportional to the total, however it is shared out -- but far better
+        # transport accuracy, which is what the ratio actually buys.
+        sug = result.get('suggested_ratio')
+        if reachable and sug is not None:
+            act = [i for i in range(3) if dims[i] and nk[i] > 1]
+            if act:
+                have = np.array([float(nk[i]) for i in act]); have /= have.min()
+                want = np.array([float(sug[i]) for i in act]); want /= want.min()
+                if np.any(np.abs(np.log(want / np.maximum(have, 1e-30)))
+                          > np.log(1.5)):
+                    alt, alt_ok, _ = recommend_density(
+                        nk, fitted, target, dims, multiple=multiple,
+                        exponent=exponent, ratio=sug,
+                    )
+                    if alt_ok and tuple(alt) != tuple(rec):
+                        result['restructured_nk'] = tuple(alt)
     return result
 
 
-def format_inspection(info: dict) -> str:
-    """Human-readable rendering of :func:`inspect_mesh`."""
+_AXIS_NAMES = ("kx", "ky", "kz")
 
-    nk = info['nk']
+
+def format_inspection(info: dict) -> str:
+    """Human-readable rendering of :func:`inspect_mesh`.
+
+    Inactive dimensions are named rather than shown as a bare ``1``: a "1 : 1 :
+    1" ratio on a 2D system invites the reading that kz carries a meaningful
+    ratio, when it simply has a single division.  The density recommendation
+    is the actionable line, so it goes last.
+    """
+
+    nk   = info['nk']
+    dims = np.asarray(info['dims']).astype(bool).ravel()[:3]
+    active = [i for i in range(3) if dims[i]]
+    idle   = [i for i in range(3) if not dims[i]]
+    idle_note = ("   (%s inactive: 1 division)"
+                 % ", ".join(_AXIS_NAMES[i] for i in idle)) if idle else ""
+
     lines = [
         "Mesh:            %s" % info['path'],
         "  divisions:     %d x %d x %d  (%d k-points in file, %s)"
@@ -515,42 +554,37 @@ def format_inspection(info: dict) -> str:
            "regular grid" if info['uniform_grid'] else "not a regular grid"),
         "  kernel:        T = %.6g K, gamma = %.4e eV  ->  W = %.4e eV"
         % (info['temperature'], info['gamma'], info['width']),
-        "  sum-rule metric at this width: %.6f%s"
+        "  sum-rule metric at this width: %.6f" % info['total'],
+        "     refinable by a finer mesh: %.6f%s"
         % (info['error'],
            "   (trend %.6f, from n^-%.0f fitted over %d densities)"
            % (info['fitted'], info['exponent'], info['n_fit'])
            if info.get('n_fit') else ""),
+        "     mesh-independent floor:    %.6f%s"
+        % (info['floor'],
+           "   <-- dominates; widen --energy_window to reduce it"
+           if info['floor'] > info['error'] else ""),
     ]
-    if info.get('target') is not None:
-        verdict = "OK" if info['error'] <= info['target'] else "TOO COARSE"
-        lines.append("  target %.4e -> %s" % (info['target'], verdict))
-        if info['error'] > info['target']:
-            if info['reachable']:
-                rec = info['recommended_nk']
-                lines.append("  suggested divisions: %d x %d x %d  (%s)"
-                             % (rec[0], rec[1], rec[2], info['message']))
-                if info.get('multiple', 1) > 1:
-                    lines.append("  kept commensurate with a multiple of %d, "
-                                 "inherited from the current mesh"
-                                 % info['multiple'])
-            else:
-                lines.append("  NOT REACHABLE: %s" % info['message'])
 
     if info.get('raw_ratio') is not None:
         raw, sug = info['raw_ratio'], info['suggested_ratio']
+        aniso = info['anisotropy']
+        isotropic = np.allclose([sug[i] for i in active], sug[active[0]]) \
+            if active else True
         lines += [
-            "  axis anisotropy (RMS dE per fractional step): %s"
-            % np.array2string(info['anisotropy'], precision=4),
+            "  axis anisotropy (RMS dE per fractional step):  %s%s"
+            % ("   ".join("%s %.4f" % (_AXIS_NAMES[i], aniso[i]) for i in active),
+               idle_note),
             "  raw axis ratio:       %s"
-            % " : ".join("%.2f" % v for v in raw),
+            % " : ".join("%s %.2f" % (_AXIS_NAMES[i], raw[i]) for i in active),
             "  suggested (rounded):  %s%s"
-            % (" : ".join("%d" % round(v) for v in sug),
+            % (" : ".join("%s %d" % (_AXIS_NAMES[i], round(sug[i])) for i in active),
                "   (the axes are equivalent; nothing to change)"
-               if np.allclose(sug, sug.flat[0]) else ""),
+               if isotropic else ""),
         ]
         # The rationale is only worth printing when there is something to act
         # on; on an isotropic mesh it is noise.
-        if not np.allclose(sug, sug.flat[0]):
+        if not isotropic:
             lines.append(
                 "  Rounding up is the cheap direction to err in: on an "
                 "orthorhombic test model the raw ratio 6.97 sat right at the "
@@ -558,6 +592,46 @@ def format_inspection(info: dict) -> str:
                 "+0.004%), and the plateau extended to at least 32:1, while "
                 "1:1 gave +12.3% at the same cost."
             )
+
+    # The verdict and the recommendation go last: they are what the user acts on.
+    if info.get('target') is not None:
+        lines.append("")
+        if info['error'] <= info['target']:
+            lines.append("  target %.4e -> OK" % info['target'])
+        elif not info['reachable']:
+            lines += ["  target %.4e -> NOT REACHABLE" % info['target'],
+                      "     %s" % info['message']]
+        else:
+            rec = info['recommended_nk']
+            lines += [
+                "  target %.4e -> TOO COARSE" % info['target'],
+                "  ==> suggested divisions:  %d x %d x %d"
+                % (rec[0], rec[1], rec[2]),
+                "      %s" % info['message'],
+            ]
+            if info.get('multiple', 1) > 1:
+                lines.append("      kept commensurate with a multiple of %d, "
+                             "inherited from the current mesh" % info['multiple'])
+            # The first recommendation scales the CURRENT proportions, since
+            # inspect-mesh will not silently restructure a mesh the user chose.
+            # When the proportions are off, offer the restructured mesh too.
+            alt = info.get('restructured_nk')
+            if alt is not None:
+                sug = info['suggested_ratio']
+                have = np.array([float(nk[i]) for i in active]); have /= have.min()
+                lines += [
+                    "      (this keeps the current %s proportions, %s)"
+                    % (":".join(_AXIS_NAMES[i] for i in active),
+                       " : ".join("%.2g" % v for v in have)),
+                    "  ==> or, at the suggested %s ratio:  %d x %d x %d"
+                    % (" : ".join("%d" % round(sug[i]) for i in active),
+                       alt[0], alt[1], alt[2]),
+                    "      same total k-point count, but proportioned to the "
+                    "band structure. The metric target needs the same number of "
+                    "k-points either way; what the ratio buys is transport "
+                    "accuracy, which on a test model was 250x better at matched "
+                    "cost.",
+                ]
     return "\n".join(lines)
 
 
