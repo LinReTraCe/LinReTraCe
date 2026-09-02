@@ -31,6 +31,7 @@ from structure.meshrefine import (
     axis_anisotropy,
     compute_error,
     detect_refinement_scale,
+    estimate_metric_exponent,
     infer_mesh_multiple,
     kernel_ladder,
     kernel_width,
@@ -456,12 +457,21 @@ def inspect_mesh(
     band_axis = build_band_axis(data.energies)
     error = compute_error(band_axis, temperature, gamma)
 
+    # The coarse end of the metric-versus-density curve is available for free
+    # by decimating this mesh, so the extrapolation exponent is measured rather
+    # than assumed.  Only meaningful on a regular grid.
+    exponent = 1.0
+    if uniform:
+        exponent, _ = estimate_metric_exponent(
+            data.k_points, data.energies, nk, temperature, gamma,
+        )
+
     result = {
         'path': str(path), 'nk': nk, 'nkp': int(data.k_points.shape[0]),
         'uniform_grid': uniform, 'dims': dims,
         'width': kernel_width(temperature, gamma),
         'temperature': temperature, 'gamma': gamma,
-        'error': error, 'target': target,
+        'error': error, 'target': target, 'exponent': exponent,
         'raw_ratio': None, 'suggested_ratio': None, 'anisotropy': None,
     }
 
@@ -483,7 +493,7 @@ def inspect_mesh(
         # A second, coarser evaluation is not available here, so the
         # saturation floor is left to the caller when it has one.
         rec, reachable, message = recommend_density(
-            nk, error, target, dims, multiple=multiple,
+            nk, error, target, dims, multiple=multiple, exponent=exponent,
         )
         result.update({'recommended_nk': rec, 'reachable': reachable,
                        'message': message, 'multiple': multiple})
@@ -501,7 +511,10 @@ def format_inspection(info: dict) -> str:
            "regular grid" if info['uniform_grid'] else "not a regular grid"),
         "  kernel:        T = %.6g K, gamma = %.4e eV  ->  W = %.4e eV"
         % (info['temperature'], info['gamma'], info['width']),
-        "  sum-rule metric at this width: %.6f" % info['error'],
+        "  sum-rule metric at this width: %.6f%s"
+        % (info['error'],
+           "   (falls as n^-%.2f on this mesh)" % info['exponent']
+           if info.get('exponent') and info['exponent'] != 1.0 else ""),
     ]
     if info.get('target') is not None:
         verdict = "OK" if info['error'] <= info['target'] else "TOO COARSE"

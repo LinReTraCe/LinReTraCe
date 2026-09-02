@@ -847,6 +847,15 @@ def suggest_mesh_ratio(
     return raw, sug
 
 
+# The measured exponent is taken at the coarse end of the curve, where the
+# metric falls faster than it will just beyond the current mesh, so the
+# extrapolation is biased LOW: measured 286 against a true 420 (graphene,
+# 1 meV), 194 against 440 (graphene, 10 meV) and 29 against 32 (cubic).  A
+# modest safety factor recentres it, and erring high is the right direction
+# for a check that REFUSES.
+_DENSITY_SAFETY = 1.5
+
+
 def recommend_density(
     nk:          "tuple[int, int, int]",
     error:       float,
@@ -855,15 +864,25 @@ def recommend_density(
     floor_error: "float | None" = None,
     multiple:    int = 1,
     max_growth:  float = 16.0,
+    exponent:    float = 1.0,
+    safety:      float = _DENSITY_SAFETY,
 ) -> "tuple[tuple[int, int, int], bool, str]":
     """Suggest a uniform mesh that would reach *target* at the wide corner.
 
-    The sum-rule metric on a UNIFORM mesh falls close to ``1/n`` (measured:
-    graphene 0.1866 / 0.0708 / 0.0245 / 0.0098 for n = 48 / 96 / 192 / 300,
-    cubic 0.2806 / 0.0326 / 0.0080 / 0.0050 for n = 8 / 16 / 24 / 32), so the
-    factor by which every active axis must grow is estimated as
-    ``error / target``.  That extrapolation is only used to make a
-    suggestion; nothing depends on its accuracy.
+    Every active axis is grown by ``(error / target) ** (1 / exponent)``, with
+    *exponent* the local slope of ``metric ~ n**-p`` measured by
+    :func:`estimate_metric_exponent`.  Measuring it matters: the metric falls
+    considerably faster than ``1/n`` over the useful range (graphene at 1 meV
+    has a local slope of about 2.3), and assuming ``1/n`` over-estimated the
+    required density by a factor 1.8 -- asking for ``768x768`` where
+    ``420x420`` reaches the target.  The default ``exponent = 1.0`` reproduces
+    the old behaviour for callers that cannot measure it.
+
+    The result is an estimate: the curve is not a true power law, and it
+    flattens as the metric approaches its saturation floor, so a target close
+    to that floor will be under-estimated.  ``ltb inspect-mesh`` verifies an
+    actual mesh in seconds and is the cheap way to confirm before committing
+    to a long run.
 
     IMPORTANT -- the metric SATURATES.  Its floor is set by the band range and
     the trapezoid defect in the kernel tails, not by the mesh: about 0.0043
@@ -892,7 +911,8 @@ def recommend_density(
             % (floor_error, target, floor_error * 1.2)
         )
 
-    growth = min(float(error) / float(target), max_growth)
+    ratio  = float(error) / float(target)
+    growth = min(safety * ratio ** (1.0 / max(float(exponent), 1e-6)), max_growth)
     out = []
     for ax in range(3):
         if not dims[ax] or nk[ax] <= 1:
@@ -904,11 +924,15 @@ def recommend_density(
         out.append(max(n, nk[ax] + 1))
 
     capped = ""
-    if float(error) / float(target) > max_growth:
+    if safety * ratio ** (1.0 / max(float(exponent), 1e-6)) > max_growth:
         capped = (" The required growth was capped at %.0fx per axis; expect "
                   "to repeat this step." % max_growth)
     return (tuple(out), True,
-            "grow every active axis by about %.1fx.%s" % (growth, capped))
+            "grow every active axis by about %.1fx, from the measured decay "
+            "n^-%.2f plus a safety factor of %.1f. Rough estimate, good to "
+            "about a factor of two -- confirm with inspect-mesh before a long "
+            "run.%s"
+            % (growth, exponent, safety, capped))
 
 
 def infer_mesh_multiple(nk: "tuple[int, int, int]", dims: np.ndarray) -> int:
@@ -933,6 +957,94 @@ def infer_mesh_multiple(nk: "tuple[int, int, int]", dims: np.ndarray) -> int:
             best = m
             break
     return best
+
+
+def decimate_mask(
+    k_points: np.ndarray,
+    nk:       "tuple[int, int, int]",
+    factor:   int,
+) -> np.ndarray:
+    """Mask selecting the k-points of a regular mesh that lie on a coarser one.
+
+    Symmetry operations are integer matrices in fractional coordinates, so the
+    star of a point whose coordinates are multiples of ``factor/nk`` consists
+    entirely of such points.  The decimated subset of an IRREDUCIBLE wedge is
+    therefore exactly the wedge of the coarser mesh, and in particular the SET
+    OF ENERGIES is identical -- verified to machine precision against
+    separately generated 24x24, 16x16 and 12x12 graphene meshes.
+
+    This makes the coarser end of the metric-versus-density curve available for
+    free, with no generator call: only the band axis is needed for
+    :func:`compute_error`, and the band axis does not depend on the weights.
+    """
+
+    keep = np.ones(k_points.shape[0], dtype=bool)
+    for ax in range(3):
+        if nk[ax] > 1:
+            j = k_points[:, ax] * nk[ax]
+            keep &= np.abs(j / factor - np.rint(j / factor)) < 1e-8
+    return keep
+
+
+def estimate_metric_exponent(
+    k_points:    np.ndarray,
+    energies:    np.ndarray,
+    nk:          "tuple[int, int, int]",
+    temperature: float,
+    gamma:       float,
+    lo:          float = 1.75,
+    hi:          float = 4.0,
+) -> "tuple[float, float]":
+    """Local exponent ``p`` of ``metric ~ n**-p``, measured by decimation.
+
+    Returns ``(exponent, metric_on_the_full_mesh)``.
+
+    The metric does NOT fall as ``1/n``.  Measured on graphene at
+    ``(300 K, 1 meV)`` the local slope runs 2.05, 1.17, 2.38, 2.48, 2.34, 2.26,
+    2.12, 1.82, 1.22 across ``n = 48 ... 1800`` -- steeper than ``1/n``
+    throughout the useful range and flattening only as the metric approaches
+    its saturation floor.  Assuming ``1/n`` therefore over-estimates the
+    required density badly: it asked for ``768x768`` where ``420x420`` reaches
+    the target.
+
+    The exponent is taken from the finest available decimation pair, which is
+    the most representative of the behaviour just beyond the current mesh.  A
+    least-squares fit over several decimations was tried and is not better:
+    it helped one starting mesh and hurt two others, because the wiggle is
+    real structure (commensurability between the mesh and the Dirac point),
+    not noise to be averaged away.
+
+    It is clipped to ``[lo, hi]``.  The floor matters and is principled: the
+    trapezoid argument of :func:`stage_tolerances` gives an error of
+    ``(h/W)**2``, so the asymptotic exponent on a regular grid is 2, and a
+    materially smaller measured slope is a local artefact rather than the
+    trend.  Unclipped, a local slope of 1.17 measured on a 192x192 graphene
+    mesh asked for 1412 divisions where 420 suffices.
+
+    ACCURACY.  This is a rough estimate and can be out by a factor of about
+    two in either direction -- the curve is not a power law and it flattens as
+    the metric nears its saturation floor.  Verifying an actual mesh with
+    ``inspect-mesh`` takes seconds and is the reliable route.
+    """
+
+    nk = tuple(int(v) for v in nk)
+    full = compute_error(build_band_axis(energies), temperature, gamma)
+
+    for factor in (2, 3):
+        if not all(n % factor == 0 or n <= 1 for n in nk):
+            continue
+        mask = decimate_mask(k_points, nk, factor)
+        if int(mask.sum()) < 8:
+            continue
+        coarse = compute_error(build_band_axis(energies[mask]), temperature, gamma)
+        if not (np.isfinite(coarse) and coarse > full > 0.0):
+            continue
+        p = float(np.log(coarse / full) / np.log(float(factor)))
+        return float(np.clip(p, lo, hi)), full
+
+    logger.debug("Could not measure the metric exponent by decimation; "
+                 "falling back to 1/n.")
+    return 1.0, full
 
 
 def _build_probe_grid(

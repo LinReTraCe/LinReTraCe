@@ -18,9 +18,10 @@ if str(_root) not in sys.path:
 
 import numpy as np
 
-from structure.meshrefine import (axis_anisotropy, infer_mesh_multiple,
-                                  recommend_density, suggest_mesh_ratio,
-                                  _symmetry_axis_orbits)
+from structure.meshrefine import (axis_anisotropy, compute_error, build_band_axis,
+                                  decimate_mask, estimate_metric_exponent,
+                                  infer_mesh_multiple, recommend_density,
+                                  suggest_mesh_ratio, _symmetry_axis_orbits)
 
 FAILURES = []
 
@@ -173,6 +174,61 @@ def test_commensurability_is_inherited_from_the_starting_mesh():
           got[0] == 6 and got[1] == 4 and got[2] == 1, repr(got))
 
 
+def graphene_grid(n):
+    """Regular graphene mesh: fractional points and the two band energies."""
+    i = np.arange(n) / n
+    KX, KY = np.meshgrid(i, i, indexing='ij')
+    pts = np.stack([KX.ravel(), KY.ravel(), np.zeros(n * n)], axis=-1)
+    E = np.abs(1 + np.exp(2j * np.pi * KX) + np.exp(2j * np.pi * KY)).ravel()
+    return pts, np.stack([-E, E], axis=-1)
+
+
+def test_decimation_reproduces_the_coarser_mesh_exactly():
+    """Decimating a regular mesh must give the coarse mesh's ENERGY SET.
+
+    Symmetry operations are integer matrices in fractional coordinates, so the
+    star of a coarse-grid point stays on the coarse grid; this is what makes
+    the trick valid on an irreducible wedge too.
+    """
+    pts, E = graphene_grid(48)
+    ok = True
+    for m in (2, 3, 4):
+        mask = decimate_mask(pts, (48, 48, 1), m)
+        got = compute_error(build_band_axis(E[mask]), 300.0, 1e-3)
+        _, Ec = graphene_grid(48 // m)
+        want = compute_error(build_band_axis(Ec), 300.0, 1e-3)
+        ok = ok and abs(got - want) < 1e-9
+    check("test_decimation_reproduces_the_coarser_mesh_exactly", ok)
+
+
+def test_measured_exponent_is_steeper_than_one_over_n():
+    """Assuming 1/n asked for 768x768 where 420x420 reaches the target."""
+    pts, E = graphene_grid(48)
+    p, err = estimate_metric_exponent(pts, E, (48, 48, 1), 300.0, 1e-3)
+    check("test_measured_exponent_is_steeper_than_one_over_n",
+          2.0 < p < 2.6 and abs(err - 0.30230) < 1e-4, "p=%.3f err=%.5f" % (p, err))
+
+
+def test_exponent_floor_rejects_an_implausible_local_slope():
+    """A regular grid decaying slower than the trapezoid exponent is a local
+    artefact; unclipped it asked for 1412 divisions where 420 suffices."""
+    pts, E = graphene_grid(192)
+    p, _ = estimate_metric_exponent(pts, E, (192, 192, 1), 300.0, 1e-3)
+    check("test_exponent_floor_rejects_an_implausible_local_slope",
+          p >= 1.75 - 1e-12, "p=%.3f" % p)
+
+
+def test_recommendation_lands_on_the_target():
+    """Graphene 48x48 at (300 K, 1 meV) must suggest about 420, not 768."""
+    pts, E = graphene_grid(48)
+    p, err = estimate_metric_exponent(pts, E, (48, 48, 1), 300.0, 1e-3)
+    rec, ok, _ = recommend_density((48, 48, 1), err, 5e-3,
+                                   np.array([True, True, False]),
+                                   multiple=6, exponent=p)
+    check("test_recommendation_lands_on_the_target",
+          ok and 350 <= rec[0] <= 550 and rec[2] == 1, repr(rec))
+
+
 def main():
     test_anisotropy_recovers_the_hopping_ratio()
     test_isotropic_model_returns_unity()
@@ -185,6 +241,10 @@ def main():
     test_saturation_floor_is_reported_as_unreachable()
     test_recommendation_is_a_noop_when_already_converged()
     test_commensurability_is_inherited_from_the_starting_mesh()
+    test_decimation_reproduces_the_coarser_mesh_exactly()
+    test_measured_exponent_is_steeper_than_one_over_n()
+    test_exponent_floor_rejects_an_implausible_local_slope()
+    test_recommendation_lands_on_the_target()
     return 1 if FAILURES else 0
 
 
