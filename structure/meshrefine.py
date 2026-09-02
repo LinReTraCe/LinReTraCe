@@ -861,7 +861,6 @@ def recommend_density(
     error:       float,
     target:      float,
     dims:        np.ndarray,
-    floor_error: "float | None" = None,
     multiple:    int = 1,
     max_growth:  float = 16.0,
     exponent:    float = 1.0,
@@ -872,7 +871,7 @@ def recommend_density(
 
     Every active axis is grown by ``(error / target) ** (1 / exponent)``, with
     *exponent* the local slope of ``metric ~ n**-p`` measured by
-    :func:`estimate_metric_exponent`.  Measuring it matters: the metric falls
+    :func:`estimate_metric_scaling`.  Measuring it matters: the metric falls
     considerably faster than ``1/n`` over the useful range (graphene at 1 meV
     has a local slope of about 2.3), and assuming ``1/n`` over-estimated the
     required density by a factor 1.8 -- asking for ``768x768`` where
@@ -885,32 +884,19 @@ def recommend_density(
     actual mesh in seconds and is the cheap way to confirm before committing
     to a long run.
 
-    IMPORTANT -- the metric SATURATES.  Its floor is set by the band range and
-    the trapezoid defect in the kernel tails, not by the mesh: about 0.0043
-    for the cubic model and 0.002 for graphene.  A target at or below the
-    floor is unreachable by ANY uniform mesh, and recommending an ever-larger
-    nk would be a lie.  When *floor_error* is supplied and the target is not
-    comfortably above it, this returns ``reachable = False`` and an
-    explanation instead of a recommendation.
+    *error* must be the REFINABLE component of the metric (see
+    :func:`metric_components`), which a finer mesh can always reduce.  The
+    band-range floor cannot be reduced by any mesh, so feeding the total here
+    would ask for a density that does not exist.
 
-    Returns ``(nk, reachable, message)``.
+    Returns ``(nk, message)``.
     """
 
     nk   = tuple(int(v) for v in nk)
     dims = np.asarray(dims).astype(bool).ravel()[:3]
 
     if error <= target:
-        return nk, True, "already at or below the target"
-
-    if floor_error is not None and target <= floor_error * 1.2:
-        return (
-            nk, False,
-            "the metric on this system saturates near %.4e -- set by the band "
-            "range and the kernel tails, not by the mesh -- so the target "
-            "%.4e cannot be reached by refining a uniform grid at all. Relax "
-            "the target above roughly %.4e."
-            % (floor_error, target, floor_error * 1.2)
-        )
+        return nk, "already at or below the target"
 
     shortfall = float(error) / float(target)
     growth = min(safety * shortfall ** (1.0 / max(float(exponent), 1e-6)),
@@ -947,10 +933,10 @@ def recommend_density(
         capped = (" The required growth was capped at %.0fx per axis; expect "
                   "to repeat this step." % max_growth)
     if ratio is not None:
-        return (tuple(out), True,
+        return (tuple(out),
                 "same total k-point count, redistributed along the suggested "
                 "ratio.%s" % capped)
-    return (tuple(out), True,
+    return (tuple(out),
             "grow every active axis by about %.1fx, assuming the metric falls "
             "as n^-%.0f (the active dimension count) with the amplitude fitted "
             "to this mesh, plus a safety factor of %.2f. Rough estimate -- "
@@ -1153,12 +1139,6 @@ def estimate_metric_scaling(
     if not np.isfinite(fitted) or fitted <= 0.0:
         fitted = raw
     return float(ndim), float(raw), float(fitted), len(ns)
-
-
-def estimate_metric_exponent(*args, **kwargs) -> "tuple[float, float]":
-    """Backwards-compatible shim: exponent and the RAW metric only."""
-    exponent, raw, _fitted, _n = estimate_metric_scaling(*args, **kwargs)
-    return exponent, raw
 
 
 def _build_probe_grid(

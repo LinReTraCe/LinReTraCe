@@ -140,28 +140,32 @@ def test_symmetry_orbits_merge_only_coupled_axes():
 
 
 def test_density_recommendation_grows_only_active_axes():
-    rec, ok, _ = recommend_density((32, 32, 1), 0.0178, 5e-3,
-                                   np.array([True, True, False]), multiple=2)
+    rec, _msg = recommend_density((32, 32, 1), 0.0178, 5e-3,
+                                  np.array([True, True, False]), multiple=2)
     check("test_density_recommendation_grows_only_active_axes",
-          ok and rec[2] == 1 and rec[0] == rec[1] and rec[0] > 32
+          rec[2] == 1 and rec[0] == rec[1] and rec[0] > 32
           and rec[0] % 2 == 0, repr(rec))
 
 
-def test_saturation_floor_is_reported_as_unreachable():
-    """Below the metric's floor no uniform mesh can help, and saying 'grow the
-    mesh' would be a lie."""
-    rec, ok, msg = recommend_density((16, 16, 16), 0.0050, 1e-3,
-                                     np.array([True, True, True]),
-                                     floor_error=0.0043)
-    check("test_saturation_floor_is_reported_as_unreachable",
-          not ok and "saturates" in msg and rec == (16, 16, 16), msg)
+def test_recommendation_redistributes_at_a_requested_ratio():
+    """The metric goes as n**-d, i.e. inversely with the TOTAL k-point count
+    however it is shared out, so a ratio-constrained recommendation must carry
+    the same count as the proportional one, not fewer."""
+    dims = np.array([True, True, False])
+    prop, _ = recommend_density((32, 16, 1), 0.0145, 5e-3, dims, multiple=4)
+    alt, _ = recommend_density((32, 16, 1), 0.0145, 5e-3, dims, multiple=4,
+                               ratio=np.array([7.0, 1.0, 1.0]))
+    n_prop, n_alt = prop[0] * prop[1], alt[0] * alt[1]
+    check("test_recommendation_redistributes_at_a_requested_ratio",
+          alt[0] > alt[1] and abs(np.log(n_alt / n_prop)) < np.log(1.5)
+          and alt[2] == 1, "prop=%s alt=%s" % (prop, alt))
 
 
 def test_recommendation_is_a_noop_when_already_converged():
-    rec, ok, _ = recommend_density((48, 48, 1), 1e-4, 5e-3,
-                                   np.array([True, True, False]))
+    rec, _msg = recommend_density((48, 48, 1), 1e-4, 5e-3,
+                                  np.array([True, True, False]))
     check("test_recommendation_is_a_noop_when_already_converged",
-          ok and rec == (48, 48, 1), repr(rec))
+          rec == (48, 48, 1), repr(rec))
 
 
 def test_commensurability_is_inherited_from_the_starting_mesh():
@@ -250,9 +254,9 @@ def test_estimate_survives_a_non_monotone_metric():
     for n in (48, 96):
         pts, E = graphene_grid(n)
         p, _raw, fit, _k = estimate_metric_scaling(pts, E, (n, n, 1), 500.0, 1e-3)
-        rec, ok, _ = recommend_density((n, n, 1), fit, 5e-3,
-                                       np.array([True, True, False]),
-                                       multiple=6, exponent=p)
+        rec, _msg = recommend_density((n, n, 1), fit, 5e-3,
+                                      np.array([True, True, False]),
+                                      multiple=6, exponent=p)
         recs.append(rec[0])
     ratio = max(recs) / min(recs)
     check("test_estimate_survives_a_non_monotone_metric",
@@ -264,11 +268,11 @@ def test_recommendation_lands_on_the_target():
     """Graphene 48x48 at (300 K, 1 meV) must suggest about 420, not 768."""
     pts, E = graphene_grid(48)
     p, _raw, fit, _n = estimate_metric_scaling(pts, E, (48, 48, 1), 300.0, 1e-3)
-    rec, ok, _ = recommend_density((48, 48, 1), fit, 5e-3,
-                                   np.array([True, True, False]),
-                                   multiple=6, exponent=p)
+    rec, _msg = recommend_density((48, 48, 1), fit, 5e-3,
+                                  np.array([True, True, False]),
+                                  multiple=6, exponent=p)
     check("test_recommendation_lands_on_the_target",
-          ok and 350 <= rec[0] <= 550 and rec[2] == 1, repr(rec))
+          350 <= rec[0] <= 550 and rec[2] == 1, repr(rec))
 
 
 def main():
@@ -280,7 +284,7 @@ def main():
     test_suggested_ratio_rounds_up_and_keeps_the_base_at_one()
     test_symmetry_orbits_merge_only_coupled_axes()
     test_density_recommendation_grows_only_active_axes()
-    test_saturation_floor_is_reported_as_unreachable()
+    test_recommendation_redistributes_at_a_requested_ratio()
     test_recommendation_is_a_noop_when_already_converged()
     test_commensurability_is_inherited_from_the_starting_mesh()
     test_decimation_reproduces_the_coarser_mesh_exactly()

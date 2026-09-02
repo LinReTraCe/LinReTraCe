@@ -29,8 +29,6 @@ from structure.meshrefine import (
     MissingDependencyError,
     build_band_axis,
     axis_anisotropy,
-    compute_error,
-    detect_refinement_scale,
     estimate_metric_scaling,
     infer_mesh_multiple,
     metric_components,
@@ -499,30 +497,29 @@ def inspect_mesh(
         # Extrapolate from the fitted trend, not from this mesh's raw metric:
         # the metric is not monotone in density, so a lucky mesh would
         # otherwise pull the recommendation far too low.
-        rec, reachable, message = recommend_density(
+        rec, message = recommend_density(
             nk, fitted, target, dims, multiple=multiple, exponent=exponent,
         )
-        result.update({'recommended_nk': rec, 'reachable': reachable,
-                       'message': message, 'multiple': multiple,
-                       'restructured_nk': None})
+        result.update({'recommended_nk': rec, 'message': message,
+                       'multiple': multiple, 'restructured_nk': None})
 
         # Second recommendation at the suggested proportions, when the mesh is
         # badly proportioned.  Same k-point count -- the metric is inversely
         # proportional to the total, however it is shared out -- but far better
         # transport accuracy, which is what the ratio actually buys.
         sug = result.get('suggested_ratio')
-        if reachable and sug is not None:
+        if sug is not None:
             act = [i for i in range(3) if dims[i] and nk[i] > 1]
             if act:
                 have = np.array([float(nk[i]) for i in act]); have /= have.min()
                 want = np.array([float(sug[i]) for i in act]); want /= want.min()
                 if np.any(np.abs(np.log(want / np.maximum(have, 1e-30)))
                           > np.log(1.5)):
-                    alt, alt_ok, _ = recommend_density(
+                    alt, _msg = recommend_density(
                         nk, fitted, target, dims, multiple=multiple,
                         exponent=exponent, ratio=sug,
                     )
-                    if alt_ok and tuple(alt) != tuple(rec):
+                    if tuple(alt) != tuple(rec):
                         result['restructured_nk'] = tuple(alt)
     return result
 
@@ -646,9 +643,6 @@ def format_inspection(info: dict) -> str:
         lines.append("")
         if info['error'] <= info['target']:
             lines.append("  target %.4e -> OK" % info['target'])
-        elif not info['reachable']:
-            lines += ["  target %.4e -> NOT REACHABLE" % info['target'],
-                      "     %s" % info['message']]
         else:
             rec = info['recommended_nk']
             lines += [
@@ -750,22 +744,16 @@ def qualify_parent_mesh(params: RefinementParams, path: Path) -> bool:
         return True
 
     rec = info.get('recommended_nk')
-    if info.get('reachable'):
-        logger.error(
-            "STARTING MESH TOO COARSE at the widest kernel: metric %.6f "
-            "against the target %.4e at W = %.4e eV. Refinement cannot repair "
-            "this -- the accuracy at the wide corner is set by the parent, and "
-            "points not placed there are never recovered, because at the "
-            "narrow corner those panels carry no selectable defect. "
-            "Regenerate the starting mesh with about %d x %d x %d divisions "
-            "and try again, or raise --parent_tol if you accept the error.",
-            info['error'], target, info['width'], rec[0], rec[1], rec[2],
-        )
-    else:
-        logger.error(
-            "STARTING MESH cannot be qualified at the widest kernel: %s",
-            info['message'],
-        )
+    logger.error(
+        "STARTING MESH TOO COARSE at the widest kernel: metric %.6f "
+        "against the target %.4e at W = %.4e eV. Refinement cannot repair "
+        "this -- the accuracy at the wide corner is set by the parent, and "
+        "points not placed there are never recovered, because at the "
+        "narrow corner those panels carry no selectable defect. "
+        "Regenerate the starting mesh with about %d x %d x %d divisions "
+        "and try again, or raise --parent_tol if you accept the error.",
+        info['error'], target, info['width'], rec[0], rec[1], rec[2],
+    )
     return False
 
 
