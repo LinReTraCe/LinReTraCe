@@ -19,6 +19,14 @@ if len(sys.argv) > 1 and sys.argv[1] == 'refine':
   sys.argv = ['lwann refine'] + sys.argv[2:]
   from scripts.lwann import refine_kmesh as _refine_kmesh
   sys.exit(_refine_kmesh.main())
+elif len(sys.argv) > 1 and sys.argv[1] == 'inspect-mesh':
+  from pathlib import Path
+  _root = Path(__file__).resolve().parent
+  if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+  sys.argv = ['lwann inspect-mesh'] + sys.argv[2:]
+  from scripts.lwann import inspect_mesh as _inspect_mesh
+  sys.exit(_inspect_mesh.main())
 elif len(sys.argv) > 1 and sys.argv[1] == 'run':
   # strip the token and continue into the standard mode below
   sys.argv = ['lwann run'] + sys.argv[2:]

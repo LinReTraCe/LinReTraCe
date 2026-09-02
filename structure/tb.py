@@ -796,9 +796,16 @@ class TightBinding(Model):
         rvec_transformed = rvecsym[isym]
 
         for itb2 in range(len(self.tbdata)):
-          band2_1  = int(self.tbdata[itb1][3]) - 1 # band identifier
-          band2_2  = int(self.tbdata[itb1][4]) - 1 # band identifier
-          if band1_1 != band2_1 or band2_2 != band2_2: continue
+          ''' NOTE: these MUST be read from itb2, and the second orbital must be
+              compared against band1_2.  Reading them from itb1 (and comparing
+              band2_2 against itself) made this filter inert, so a hopping of
+              orbital pair (a,a) could be matched against an entry belonging to
+              a DIFFERENT orbital pair that happened to share an r-vector and a
+              hopping value -- i.e. the check could report True on a
+              multi-orbital model whose symmetry is genuinely broken. '''
+          band2_1  = int(self.tbdata[itb2][3]) - 1 # band identifier
+          band2_2  = int(self.tbdata[itb2][4]) - 1 # band identifier
+          if band1_1 != band2_1 or band1_2 != band2_2: continue
 
           rvec2  = self.tbdata[itb2][:3].astype(int)
           hop2   = self.tbdata[itb2][5]
@@ -810,9 +817,23 @@ class TightBinding(Model):
           if np.allclose(rvec_transformed,rvec2) and np.abs(hop1-hop2) < 1e-6:
             break
         else:
-          logger.warning('\n\nIntra-orbital tight binding symmetry check: False' + \
-                        '\n    Symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) + \
-                        '\n    Break unit cell symmetry or avoid irreducible calculation if this is done on purpose.\n\n')
+          msg = ('Intra-orbital tight binding symmetry check: False' +
+                 '\n    Symmetry of r-vector {} does not respect point group symmetries'.format(rvec1) +
+                 '\n    The hoppings are less symmetric than the unit cell, so the' +
+                 '\n    irreducible reduction would fold k-points onto a star that the' +
+                 '\n    band structure does not possess, and the result would be wrong.' +
+                 '\n    Break the unit cell symmetry, or run on a reducible grid (--red).')
+          ''' On a reducible grid no symmetry is applied, so this is merely
+              informative.  On an irreducible grid it is fatal: proceeding
+              silently produced a 32% error on a test model whose hoppings
+              broke the C4 symmetry of its cubic cell. '''
+          if self.irreducible:
+            logger.critical('\n\n' + msg + '\n\n')
+            raise ValueError(
+              'Tight-binding hoppings do not respect the unit cell point group; '
+              'refusing to build an irreducible k-mesh. Use --red, or break the '
+              'unit cell symmetry so that it matches the Hamiltonian.')
+          logger.warning('\n\n' + msg + '\n\n')
           return
     else:
       logger.info('Intra-orbital tight binding symmetry check: True')

@@ -6,6 +6,7 @@ Subcommands
 -----------
   run        Build a regular k-mesh HDF5 file from a tight-binding model (default).
   refine     Iteratively refine an existing k-mesh towards a target error threshold.
+  inspect-mesh  Report a mesh's resolving power and axis proportions at one kernel width.
   supercell  Create a periodic or finite supercell from a TB file.
   tb2xyz      Convert a TB file to XYZ format.
 
@@ -14,6 +15,7 @@ Usage
   ltb run    tb_file nkx nky nkz filling [options]   # explicit
   ltb        tb_file nkx nky nkz filling [options]   # implicit run (backwards compatible)
   ltb refine initial.hdf5 tb_file mu gamma_min T_min [options]
+  ltb inspect-mesh mesh.hdf5 [--T K] [--gamma EV] [--target TOL]
 
 Run 'ltb <subcommand> --help' for subcommand-specific options.
 '''
@@ -26,11 +28,12 @@ _root = Path(__file__).resolve().parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from scripts.ltb import run, refine_kmesh, supercell, tb2xyz
+from scripts.ltb import run, refine_kmesh, inspect_mesh, supercell, tb2xyz
 
 SUBCOMMANDS = {
     'run':       run,
     'refine':    refine_kmesh,
+    'inspect-mesh': inspect_mesh,
     'supercell': supercell,
     'tb2xyz':     tb2xyz,
 }
@@ -41,6 +44,7 @@ Subcommands
 -----------
   run        Build a regular k-mesh HDF5 file from a tight-binding model (default).
   refine     Iteratively refine an existing k-mesh towards a target error threshold.
+  inspect-mesh  Report a mesh's resolving power and axis proportions at one kernel width.
   supercell  Create a periodic or finite supercell from a TB file.
   tb2xyz      Convert a TB file to XYZ format.
 
@@ -49,6 +53,7 @@ Usage
   ltb run    tb_file nkx nky nkz filling [options]
   ltb        tb_file nkx nky nkz filling [options]   (backwards compatible)
   ltb refine initial.hdf5 tb_file mu gamma_min T_min [options]
+  ltb inspect-mesh mesh.hdf5 [--T K] [--gamma EV] [--target TOL]
 
 Run 'ltb <subcommand> --help' for subcommand-specific options.
 '''

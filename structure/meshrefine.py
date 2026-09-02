@@ -458,6 +458,483 @@ def kernel_width(temperature: float, gamma: float) -> float:
     return max(kB_eV * float(temperature), float(gamma))
 
 
+# Default ratio between successive kernel widths of the refinement cascade.
+# Three matches the default refinement_factor: one ladder step then costs
+# roughly one subdivision of the shell that the step exposes.
+_LADDER_RATIO_DEFAULT = 3.0
+_LADDER_MAX_STAGES_DEFAULT = 6
+
+
+def kernel_ladder(
+    T_min:      float,
+    gamma_min:  float,
+    T_max:      "float | None" = None,
+    gamma_max:  "float | None" = None,
+    ratio:      float = _LADDER_RATIO_DEFAULT,
+    max_stages: int   = _LADDER_MAX_STAGES_DEFAULT,
+) -> "list[tuple[float, float]]":
+    """Kernel-width ladder for the refinement cascade, WIDEST FIRST.
+
+    Returns ``[(T_0, gamma_0), ..., (T_min, gamma_min)]`` with strictly
+    decreasing ``kernel_width``.  The last entry is always exactly
+    ``(T_min, gamma_min)``, so a single-stage ladder (the default, when no
+    maxima are given) reproduces the pre-cascade behaviour exactly.
+
+    Why widest first
+    ----------------
+    The wide stage places k-points across the whole ``+-W_max`` shell while
+    the shell is still cheap to cover, and those points become the parents
+    that the narrow stages subdivide.  The alternative -- taking ``max()`` of
+    the metric over the ladder inside a single loop -- does NOT do this: on a
+    coarse mesh the narrow-kernel defect dwarfs the wide one (39.7 against
+    much less on the graphene 48x48 start), so the maximum is always the
+    narrow entry and the loop degenerates into today's narrow-first
+    behaviour.  The ordering has to be explicit.
+
+    Spacing
+    -------
+    Stages are spaced geometrically in ``W = max(kB*T, gamma)``, i.e.
+    uniformly in ``log W`` -- the two descriptions are the same thing.  The
+    *ratio* is pinned rather than the stage count, so a wider span costs more
+    stages instead of larger jumps per stage; ``max_stages`` caps the total.
+    ``T`` and ``gamma`` are interpolated independently on the same normalised
+    parameter, so a ladder that moves only one of them leaves the other fixed.
+
+    Parameters
+    ----------
+    T_min, gamma_min : float
+        The narrow (target) corner: Kelvin and eV.
+    T_max, gamma_max : float or None
+        The wide corner.  ``None`` means "same as the minimum", which yields a
+        one-entry ladder.  Values below the corresponding minimum are raised
+        to it with a warning: the ladder must end at the target corner.
+    ratio : float
+        Ratio between the widths of successive stages (> 1).
+    max_stages : int
+        Hard cap on the number of stages.
+
+    Returns
+    -------
+    list of (temperature, gamma) tuples, widest kernel first.
+    """
+
+    T_min     = float(T_min)
+    gamma_min = float(gamma_min)
+    T_max     = T_min     if T_max     is None else float(T_max)
+    gamma_max = gamma_min if gamma_max is None else float(gamma_max)
+
+    if T_max < T_min:
+        logger.warning(
+            "T_max = %.6g K is below T_min = %.6g K; the cascade must end at "
+            "the target corner, so T_max is raised to T_min.", T_max, T_min,
+        )
+        T_max = T_min
+    if gamma_max < gamma_min:
+        logger.warning(
+            "gamma_max = %.4e eV is below gamma_min = %.4e eV; the cascade "
+            "must end at the target corner, so gamma_max is raised to "
+            "gamma_min.", gamma_max, gamma_min,
+        )
+        gamma_max = gamma_min
+
+    if ratio <= 1.0:
+        raise ValueError("ladder ratio must be greater than 1, got %r" % ratio)
+    if max_stages < 1:
+        raise ValueError("max_stages must be at least 1, got %r" % max_stages)
+
+    W_min = kernel_width(T_min, gamma_min)
+    W_max = kernel_width(T_max, gamma_max)
+
+    # Nothing to cascade over: the two corners resolve the same energy scale.
+    if W_min <= 0.0 or W_max <= W_min * (1.0 + 1e-12):
+        return [(T_min, gamma_min)]
+
+    n_stages = int(np.ceil(np.log(W_max / W_min) / np.log(ratio))) + 1
+    if n_stages > max_stages:
+        logger.info(
+            "Kernel ladder from %.4e to %.4e eV at ratio %.3g would need %d "
+            "stages; capped at max_stages = %d (effective ratio %.3g).",
+            W_max, W_min, ratio, n_stages, max_stages,
+            (W_max / W_min) ** (1.0 / max(max_stages - 1, 1)),
+        )
+        n_stages = max_stages
+
+    # The ladder is geometric in the WIDTH, which is the only energy scale the
+    # metric resolves (see kernel_width).  Interpolating T and gamma
+    # independently does NOT achieve that: max(kB*T, gamma) switches which of
+    # the two controls the width part-way down the ladder, and the widths then
+    # come out unevenly spaced (measured 5.57, 2.15, 2.15 for a nominal ratio
+    # of 3).  So the widths are laid out first, and each is realised on
+    # whichever channel is free to carry it:
+    #
+    #   gamma_j = clip(W_j,         gamma_min, gamma_max)
+    #   T_j     = clip(W_j / kB,    T_min,     T_max)
+    #
+    # each clipped to its own requested range and held at its minimum when
+    # that channel was not asked to vary.  Because W_max is by construction
+    # attained at the wide corner, at least one channel reaches W_j for every
+    # rung, so max(kB*T_j, gamma_j) == W_j exactly; and a gamma-only cascade
+    # leaves the temperature alone, as a user who moved only gamma expects.
+    widths = np.geomspace(W_max, W_min, n_stages)
+
+    T_varies     = T_max     > T_min
+    gamma_varies = gamma_max > gamma_min
+
+    ladder = []
+    for w in widths:
+        t = (min(max(float(w) / kB_eV, T_min), T_max)) if T_varies else T_min
+        g = (min(max(float(w), gamma_min), gamma_max)) if gamma_varies else gamma_min
+        ladder.append((float(t), float(g)))
+
+    # Guard the endpoints against float drift in the geomspace/clip round trip.
+    ladder[0]  = (T_max, gamma_max)
+    ladder[-1] = (T_min, gamma_min)
+    return ladder
+
+
+def stage_tolerances(
+    ladder:    "list[tuple[float, float]]",
+    error_tol: float,
+    exponent:  float = 0.0,
+) -> "list[float]":
+    """Per-stage error tolerance for a cascade ladder.
+
+        tol_j = error_tol * (W_j / W_min) ** exponent
+
+    ``exponent = 0`` (the default) applies the SAME tolerance at every kernel
+    width.  That is not merely the conservative choice, it is the physically
+    natural one: the per-panel trapezoid defect of a kernel of width ``W``
+    sampled with panel width ``h`` is
+
+        eps ~ (|g''|/12) * (h/W)**2                     (see kernel_width)
+
+    -- a function of ``h/W`` alone.  Holding ``eps`` fixed across the ladder
+    therefore holds ``h/W`` fixed, i.e. produces a mesh whose local energy
+    spacing is proportional to its distance from mu.  That self-similar
+    grading is exactly what a peaked kernel with power-law tails wants.
+
+    It is also affordable.  For a ``(d-1)``-dimensional Fermi surface in a
+    ``d``-dimensional zone the shell ``|e - mu| < W`` has volume ``~ W`` and
+    is covered by cells of side ``h/v``, so a stage costs
+    ``N_j ~ W_j / h_j**d ~ W_j**(1-d)`` at ``exponent = 0``: the wide stages
+    are CHEAPER than the narrow one (``1/W`` in 2D, ``1/W**2`` in 3D) and the
+    cascade costs barely more than the narrow stage alone.  Only for a point
+    node (graphene at the Dirac point, a 0-dimensional Fermi surface) is
+    ``N_j`` constant per stage, and the cascade then costs ``n_stages`` times
+    the narrow-only run -- on a few-hundred-point mesh, nothing.
+
+    ``exponent > 0`` loosens the wide stages geometrically along with the
+    width and is offered for cases where the wide corner is only meant to
+    bracket.  It is not free: points not placed in the ``W_max`` shell while
+    that stage is running are never recovered, because at ``W_min`` those
+    panels carry negligible defect and are never selected by
+    :func:`select_refinement_panels`.  The final mesh is then converged at
+    ``W_min`` and loose by ``(W_max/W_min)**exponent`` at ``W_max``.
+    """
+
+    if not ladder:
+        return []
+    widths = [kernel_width(t, g) for t, g in ladder]
+    w_min  = widths[-1]
+    if w_min <= 0.0 or exponent == 0.0:
+        return [float(error_tol)] * len(ladder)
+    return [float(error_tol) * (w / w_min) ** float(exponent) for w in widths]
+
+
+def _symmetry_axis_orbits(symop: np.ndarray, dims: np.ndarray) -> "list[list[int]]":
+    """Partition the three reciprocal axes into orbits under the point group.
+
+    Axes that a symmetry operation maps into one another MUST carry the same
+    number of divisions, or the resulting grid is not invariant under the
+    group and the irreducible reduction silently falls back to a smaller
+    subgroup.  ``symop`` is the stack of integer rotation matrices stored in
+    ``/.unitcell/symop``; an operation connects axes i and j when its matrix
+    has a non-zero entry coupling them.
+
+    Inactive dimensions (``dims[i] is False``) are returned as singleton
+    orbits and are never merged with active ones.
+    """
+
+    parent = list(range(3))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    ops = np.asarray(symop)
+    if ops.size:
+        ops = ops.reshape(-1, 3, 3)
+        for op in ops:
+            for i in range(3):
+                for j in range(3):
+                    if i != j and abs(op[i, j]) > 1e-8 and dims[i] and dims[j]:
+                        union(i, j)
+
+    orbits: "dict[int, list[int]]" = {}
+    for ax in range(3):
+        orbits.setdefault(find(ax), []).append(ax)
+    return list(orbits.values())
+
+
+def axis_anisotropy(
+    energies:    np.ndarray,
+    moments:     np.ndarray,
+    weights:     np.ndarray,
+    kvec:        np.ndarray,
+    dims:        np.ndarray,
+    temperature: float,
+    gamma:       float,
+    symop:       "np.ndarray | None" = None,
+) -> np.ndarray:
+    """RMS energy variation per unit fractional step along each reciprocal axis.
+
+    The natural number of divisions along axis ``i`` is proportional to the
+    returned ``d[i]``.  Minimising the total discretisation error, which goes
+    as ``sum_j (d_j / W)**2``, at fixed cost ``N = prod_j n_j`` gives
+    ``n_j**3 ~ c_j**2 * n_j`` and hence ``n_j ~ d_j`` -- LINEAR, with no
+    additional velocity weighting, which would over-steepen the ratio.
+
+    The estimate uses the band-diagonal velocity tensor rather than finite
+    differences between neighbouring k-points:
+
+        d_i**2 = sum_kn w_kn (b_i . M(k,n) . b_i) / sum_kn w_kn
+        w_kn   = weights_k * df/da(E_n(k) - mu ; W)
+
+    which has four properties finite differences do not:
+
+    * No neighbour structure is needed, so it works directly on an
+      IRREDUCIBLE wedge, on a refined mesh, or on any custom point set.
+    * Band selection is automatic.  The kernel weight at the WIDE corner
+      suppresses bands far from mu, so each band contributes in proportion to
+      what it actually contributes to transport; no band window is needed,
+      and no band-ordering problem arises because nothing is differenced
+      across k.
+    * Non-orthogonal lattices are handled, because the full tensor is
+      contracted with the reciprocal vectors instead of picking out diagonal
+      Cartesian components.  This is why graphene returns exactly 1:1 on
+      hexagonal axes.
+    * It is gauge-safe at degeneracies.  Per KI-11 the band-diagonal moments
+      are gauge-arbitrary within a degenerate multiplet and only their sum is
+      well defined -- but degenerate partners share an energy, hence an
+      identical kernel weight, so the weighted sum is gauge-invariant.
+
+    Note on accuracy: the estimate is a good predictor but should be treated
+    as a LOWER bound.  On an orthorhombic model with t_x/t_y = 5 it returns
+    6.97, which sits right at the onset of the accuracy plateau: at matched
+    cost 1:1 gives +12.3%, 2:1 +2.1%, 4.6:1 +0.50%, 8:1 +0.004%, and the
+    plateau extends to at least 32:1.  Over-shooting is therefore nearly free
+    while under-shooting is not, so :func:`suggest_mesh_ratio` rounds up.
+    The estimate is settled by about nk = 32 per axis; a coarser trial mesh
+    under-estimates it (6.09 at nk = 16), again erring in the safe direction.
+
+    Parameters
+    ----------
+    energies : (nkp, nbands) array, already referenced to mu.
+    moments  : (nkp, nbands, ncomp) band-diagonal moments; ncomp is 3
+        (xx, yy, zz) for orthogonal cells and 6 (xx, yy, zz, xy, xz, yz)
+        otherwise.
+    weights  : (nkp,) k-point weights.
+    kvec     : (3, 3) reciprocal lattice vectors, one per row.
+    dims     : (3,) boolean mask of active dimensions.
+    temperature, gamma : the WIDE corner of the planned sweep.
+    symop    : optional (nsym, 3, 3) rotations; when given, axes in the same
+        symmetry orbit are averaged so that symmetry-equivalent directions
+        come out exactly equal rather than merely nearly so.
+
+    Returns
+    -------
+    (3,) array; entries for inactive dimensions are 0.
+    """
+
+    energies = np.asarray(energies, dtype=float)
+    moments  = np.real(np.asarray(moments))
+    weights  = np.asarray(weights, dtype=float)
+    kvec     = np.asarray(kvec, dtype=float).reshape(3, 3)
+    dims     = np.asarray(dims).astype(bool).ravel()[:3]
+
+    omega = weights[:, None] * df_da(energies, temperature, gamma)
+    total = float(np.sum(omega))
+    if not np.isfinite(total) or total <= 0.0:
+        logger.warning(
+            "Axis anisotropy: the kernel weight vanishes on this mesh at "
+            "T = %.6g K, gamma = %.4e eV, so the aspect ratio cannot be "
+            "estimated. Is mu inside the band range?", temperature, gamma,
+        )
+        return np.zeros(3)
+
+    ncomp = moments.shape[2]
+    d = np.zeros(3)
+    for ax in range(3):
+        if not dims[ax]:
+            continue
+        b = kvec[ax]
+        q = (b[0] ** 2 * moments[:, :, 0]
+             + b[1] ** 2 * moments[:, :, 1]
+             + b[2] ** 2 * moments[:, :, 2])
+        if ncomp >= 6:
+            q = q + 2.0 * (b[0] * b[1] * moments[:, :, 3]
+                           + b[0] * b[2] * moments[:, :, 4]
+                           + b[1] * b[2] * moments[:, :, 5])
+        d[ax] = np.sqrt(max(float(np.sum(omega * q)) / total, 0.0))
+
+    if symop is not None:
+        raw = d.copy()
+        for orbit in _symmetry_axis_orbits(symop, dims):
+            active = [a for a in orbit if dims[a]]
+            if len(active) > 1:
+                d[active] = float(np.mean(d[active]))
+        # A large disagreement means the stored point group relates axes that
+        # the BAND STRUCTURE does not, i.e. /.unitcell/symop overstates the
+        # symmetry of the Hamiltonian.  ltb refuses to build an irreducible
+        # mesh in that case, but a Wannier or DFT-derived file can still carry
+        # it, and the irreducible reduction would then be invalid.
+        scale = np.max(np.abs(raw)) or 1.0
+        if np.max(np.abs(raw - d)) > 0.1 * scale:
+            logger.warning(
+                "The stored point group averages axes whose measured energy "
+                "anisotropy differs substantially (%s before symmetrisation, "
+                "%s after). The symmetry operations in /.unitcell/symop relate "
+                "directions that the band structure does not, so this mesh's "
+                "irreducible reduction may be invalid. Verify the symmetry, or "
+                "work on a reducible grid.",
+                np.array2string(raw, precision=4),
+                np.array2string(d, precision=4),
+            )
+    return d
+
+
+def suggest_mesh_ratio(
+    d:        np.ndarray,
+    dims:     np.ndarray,
+    round_up: bool = True,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Raw and rounded-up axis ratios from :func:`axis_anisotropy`.
+
+    Returns ``(raw, suggested)``, both normalised so the smallest ACTIVE axis
+    is 1.  The suggestion rounds each ratio UP to the next integer, because
+    the estimator is a lower bound (see :func:`axis_anisotropy`) and the
+    optimum is broad, so over-shooting is the cheap direction to err in.
+
+    Parity is deliberately NOT imposed here.  An odd division count misses the
+    zone-boundary plane along that axis and is worth avoiding, but that is a
+    property of the final divisions rather than of the ratio: forcing each
+    ratio to be even and then renormalising halves it (a raw 6.97 came out as
+    4:1 instead of 7:1).  Evenness is applied in :func:`recommend_density`,
+    where actual division counts are formed.
+    """
+
+    d    = np.asarray(d, dtype=float).ravel()[:3]
+    dims = np.asarray(dims).astype(bool).ravel()[:3]
+
+    active = dims & (d > 0.0)
+    raw = np.ones(3)
+    sug = np.ones(3)
+    if not np.any(active):
+        return raw, sug
+
+    base = float(np.min(d[active]))
+    raw[active] = d[active] / base
+    sug[active] = (np.maximum(np.ceil(raw[active] - 1e-9), 1.0) if round_up
+                   else np.maximum(np.round(raw[active]), 1.0))
+    sug[~dims] = 1.0
+    return raw, sug
+
+
+def recommend_density(
+    nk:          "tuple[int, int, int]",
+    error:       float,
+    target:      float,
+    dims:        np.ndarray,
+    floor_error: "float | None" = None,
+    multiple:    int = 1,
+    max_growth:  float = 16.0,
+) -> "tuple[tuple[int, int, int], bool, str]":
+    """Suggest a uniform mesh that would reach *target* at the wide corner.
+
+    The sum-rule metric on a UNIFORM mesh falls close to ``1/n`` (measured:
+    graphene 0.1866 / 0.0708 / 0.0245 / 0.0098 for n = 48 / 96 / 192 / 300,
+    cubic 0.2806 / 0.0326 / 0.0080 / 0.0050 for n = 8 / 16 / 24 / 32), so the
+    factor by which every active axis must grow is estimated as
+    ``error / target``.  That extrapolation is only used to make a
+    suggestion; nothing depends on its accuracy.
+
+    IMPORTANT -- the metric SATURATES.  Its floor is set by the band range and
+    the trapezoid defect in the kernel tails, not by the mesh: about 0.0043
+    for the cubic model and 0.002 for graphene.  A target at or below the
+    floor is unreachable by ANY uniform mesh, and recommending an ever-larger
+    nk would be a lie.  When *floor_error* is supplied and the target is not
+    comfortably above it, this returns ``reachable = False`` and an
+    explanation instead of a recommendation.
+
+    Returns ``(nk, reachable, message)``.
+    """
+
+    nk   = tuple(int(v) for v in nk)
+    dims = np.asarray(dims).astype(bool).ravel()[:3]
+
+    if error <= target:
+        return nk, True, "already at or below the target"
+
+    if floor_error is not None and target <= floor_error * 1.2:
+        return (
+            nk, False,
+            "the metric on this system saturates near %.4e -- set by the band "
+            "range and the kernel tails, not by the mesh -- so the target "
+            "%.4e cannot be reached by refining a uniform grid at all. Relax "
+            "the target above roughly %.4e, or widen --energy_window."
+            % (floor_error, target, floor_error * 1.2)
+        )
+
+    growth = min(float(error) / float(target), max_growth)
+    out = []
+    for ax in range(3):
+        if not dims[ax] or nk[ax] <= 1:
+            out.append(max(nk[ax], 1))
+            continue
+        n = int(np.ceil(nk[ax] * growth))
+        if multiple > 1:
+            n = int(np.ceil(n / multiple) * multiple)
+        out.append(max(n, nk[ax] + 1))
+
+    capped = ""
+    if float(error) / float(target) > max_growth:
+        capped = (" The required growth was capped at %.0fx per axis; expect "
+                  "to repeat this step." % max_growth)
+    return (tuple(out), True,
+            "grow every active axis by about %.1fx.%s" % (growth, capped))
+
+
+def infer_mesh_multiple(nk: "tuple[int, int, int]", dims: np.ndarray) -> int:
+    """Largest small divisor shared by all active axes of *nk*.
+
+    Preserving it keeps a recommended mesh commensurate with whatever the user
+    already had -- which matters because high-symmetry points fall on the grid
+    only for particular divisors.  Graphene needs n divisible by 3 to put K on
+    the mesh; a parent without it stalls the refinement completely (measured:
+    a 193x193 start froze at metric 1.339 and returned 9.79e3 against a
+    4.43e5 reference).  Even counts are also preferred, since an odd count
+    misses the zone-boundary plane along that axis.
+    """
+
+    dims = np.asarray(dims).astype(bool).ravel()[:3]
+    active = [int(nk[a]) for a in range(3) if dims[a] and nk[a] > 1]
+    if not active:
+        return 1
+    best = 1
+    for m in (6, 4, 3, 2):
+        if all(n % m == 0 for n in active):
+            best = m
+            break
+    return best
+
+
 def _build_probe_grid(
     band_min:           float,
     band_max:           float,

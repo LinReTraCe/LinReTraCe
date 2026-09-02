@@ -35,6 +35,16 @@ Positional arguments
 Optional arguments
 ------------------
     --error_tol ERR         Target df/da error threshold (default: 0.005).
+    --T_max K               Widest temperature of the refinement cascade
+                            (default: T_min, i.e. a single stage).
+    --gamma_max EV          Widest scattering rate of the cascade (default: gamma_min).
+    --ladder_ratio R        Kernel-width ratio between cascade stages (default: 3).
+    --ladder_max_stages N   Cap on the number of cascade stages (default: 6).
+    --stage_tol_exponent P  Loosen wide stages as error_tol*(W/W_min)**P (default: 0).
+    --parent_tol TOL        Metric the STARTING mesh must meet at the widest kernel
+                            (default: error_tol). Refuses if unmet.
+    --skip_parent_check     Bypass that check (expert).
+    --max_output_size SIZE  Refuse to write an HDF5 larger than SIZE, e.g. 4GB.
     --plateau_tol PERCENT   Error-plateau detection threshold (default: 5).
     --max_iter N            Maximum refinement iterations (default: 10).
     --refinement_factor F   Subdivisions per axis for refined hotspots (default: 3).
@@ -76,8 +86,9 @@ import argparse
 import logging
 
 from structure.generators.lwann_gen import WannGenerator
-from scripts.kmesh_refinement import (RefinementParams, read_source_dims,
-                                       read_source_symmetry, run_refinement)
+from scripts.kmesh_refinement import (RefinementParams, add_cascade_arguments,
+                                       read_source_dims, read_source_symmetry,
+                                       run_refinement, validate_cascade_args)
 
 LOG_FORMAT = "%(levelname)s: %(message)s"
 logger = logging.getLogger(__name__)
@@ -159,6 +170,7 @@ Positional arguments
                              "shrinks below this value as the mesh improves; see the "
                              "'Hotspot window:' line of each iteration for the value in "
                              "force. Default: 0.1.")
+    add_cascade_arguments(parser)
     parser.add_argument("--keep_intermediate", action="store_true",
                         help="Keep intermediate mesh and output files instead of "
                              "deleting them.")
@@ -215,6 +227,7 @@ def validate_inputs(args: argparse.Namespace) -> None:
 
     if args.error_tol <= 0:
         raise ValueError("error_tol must be positive.")
+    validate_cascade_args(args)
     if args.max_iter <= 0:
         raise ValueError("max_iter must be positive.")
     if args.refinement_factor < 1:
@@ -296,6 +309,14 @@ def main(argv: list[str] | None = None) -> int:
         workdir            = args.workdir,
         keep_intermediate  = args.keep_intermediate,
         plateau_tol        = args.plateau_tol / 100.0,  # CLI takes percent
+        T_max              = args.T_max,
+        gamma_max          = args.gamma_max,
+        ladder_ratio       = args.ladder_ratio,
+        ladder_max_stages  = args.ladder_max_stages,
+        stage_tol_exponent = args.stage_tol_exponent,
+        max_output_bytes   = args.max_output_bytes,
+        parent_tol         = args.parent_tol,
+        skip_parent_check  = args.skip_parent_check,
     )
 
     return run_refinement(params, generator)

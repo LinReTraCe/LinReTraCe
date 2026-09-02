@@ -28,10 +28,17 @@ from structure.meshrefine import (
     BandData,
     MissingDependencyError,
     build_band_axis,
+    axis_anisotropy,
     compute_error,
     detect_refinement_scale,
+    infer_mesh_multiple,
+    kernel_ladder,
+    kernel_width,
     load_band_data,
+    recommend_density,
     refine_kmesh,
+    stage_tolerances,
+    suggest_mesh_ratio,
     write_custom_mesh,
     select_refinement_panels,
     hotspot_mask_from_panels,
@@ -92,6 +99,43 @@ class RefinementParams:
         marked panels must account for.  Lower values refine fewer k-points
         per iteration and converge more slowly; higher values approach
         "refine everything that is imperfect" and grow the mesh faster.
+    T_max, gamma_max : float or None
+        Wide corner of the CASCADE.  ``None`` (the default) means "same as
+        the minimum", which gives a one-stage ladder and reproduces the
+        pre-cascade behaviour exactly.  When either is larger than its
+        minimum, the refinement loop is run once per stage of
+        :func:`structure.meshrefine.kernel_ladder`, WIDEST KERNEL FIRST, so
+        that the wide stage places k-points across the whole +-W_max shell
+        while it is still cheap and those points become the parents of the
+        narrow stages.  T_min/gamma_min alone say how FINE the mesh must be
+        near mu and nothing about how FAR from mu it must be sampled; a mesh
+        refined for a 1 meV kernel is otherwise certified converged while
+        being useless at 26 meV.
+    ladder_ratio : float
+        Ratio between the kernel widths of successive cascade stages.
+        Default 3.0, matching the default refinement_factor.
+    ladder_max_stages : int
+        Cap on the number of cascade stages.
+    stage_tol_exponent : float
+        ``tol_j = error_tol * (W_j/W_min)**exponent``.  0 (default) applies
+        the same tolerance at every width, which yields a self-similar mesh
+        whose local energy spacing is proportional to its distance from mu.
+        See :func:`structure.meshrefine.stage_tolerances`.
+    parent_tol : float or None
+        Target for the sum-rule metric that the STARTING mesh must already
+        meet at the widest kernel, before any refinement.  ``None`` means
+        "use error_tol".  Refinement cannot repair a parent that is too
+        coarse at the wide corner, so this check refuses rather than warns.
+        Kept separate from ``error_tol`` because the two answer different
+        questions and because the metric saturates at a system-dependent
+        floor (about 0.0043 for the cubic model, 0.002 for graphene).
+    skip_parent_check : bool
+        Bypass the parent qualification entirely.
+    max_output_bytes : int or None
+        Refuse to generate a mesh whose HDF5 file is predicted to exceed this
+        size, estimated from the bytes-per-k-point of the current file.  The
+        run then stops and keeps the last mesh that fitted.  None disables
+        the check.
     """
     initial_hdf5:        Path
     chemical_potential:  float
@@ -105,6 +149,14 @@ class RefinementParams:
     keep_intermediate:   bool  = False
     plateau_tol:         float = 0.05
     defect_fraction:     float = 0.9
+    T_max:               Optional[float] = None
+    gamma_max:           Optional[float] = None
+    ladder_ratio:        float = 3.0
+    ladder_max_stages:   int   = 6
+    stage_tol_exponent:  float = 0.0
+    max_output_bytes:    Optional[int] = None
+    parent_tol:          Optional[float] = None
+    skip_parent_check:   bool = False
 
 
 # first iteration index (0-based) at which the plateau check is active,
@@ -248,6 +300,355 @@ def _reserve_iteration_paths(
             bumped_from, index, bumped_from, bumped_from, workdir,
         )
     return mesh_path, output_path, index
+
+
+# ---------------------------------------------------------------------------
+# Shared CLI surface for the cascade (used by every generator entry point)
+# ---------------------------------------------------------------------------
+
+_SIZE_UNITS = {
+    "":    1,
+    "B":   1,
+    "K":   1000,     "KB":  1000,     "KIB": 1024,
+    "M":   1000**2,  "MB":  1000**2,  "MIB": 1024**2,
+    "G":   1000**3,  "GB":  1000**3,  "GIB": 1024**3,
+    "T":   1000**4,  "TB":  1000**4,  "TIB": 1024**4,
+}
+
+
+def parse_size(text: str) -> int:
+    """Parse '500MB', '4 GiB', '1e9' or '2048' into a byte count.
+
+    Decimal prefixes are powers of 1000 and binary ones (kiB, MiB, ...) powers
+    of 1024, following IEC, so that a budget written as the number read off a
+    filesystem quota means what the user expects.
+    """
+    s = str(text).strip().replace(" ", "")
+    m = re.fullmatch(r"([0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)([A-Za-z]*)", s)
+    if not m:
+        raise ValueError("cannot parse size %r; use e.g. 500MB, 4GiB or 2048" % text)
+    value, unit = float(m.group(1)), m.group(2).upper()
+    if unit not in _SIZE_UNITS:
+        raise ValueError("unknown size unit %r in %r; use B, kB, MB, GB, TB or "
+                         "their binary forms kiB, MiB, GiB, TiB" % (m.group(2), text))
+    n = int(value * _SIZE_UNITS[unit])
+    if n <= 0:
+        raise ValueError("size must be positive, got %r" % text)
+    return n
+
+
+def add_cascade_arguments(parser) -> None:
+    """Add the cascade / size-budget options to a generator's argparse parser.
+
+    Kept here rather than in each entry point so that ltb and lwann cannot
+    drift apart in defaults or wording.
+    """
+    parser.add_argument("--T_max", type=float, default=None, metavar="K",
+                        help="Widest temperature [K] of the refinement CASCADE. "
+                             "gamma_min/T_min only say how FINE the mesh must be near "
+                             "mu; they say nothing about how FAR from mu it has to be "
+                             "sampled, so a mesh refined for a 1 meV kernel is "
+                             "certified converged while being useless at 26 meV. Give "
+                             "the widest corner of the planned sweep here and the loop "
+                             "runs once per kernel width, widest first. "
+                             "Default: T_min (single stage, previous behaviour).")
+    parser.add_argument("--gamma_max", type=float, default=None, metavar="EV",
+                        help="Widest scattering rate [eV] of the refinement cascade. "
+                             "See --T_max. Default: gamma_min.")
+    parser.add_argument("--ladder_ratio", type=float, default=3.0,
+                        help="Ratio between the kernel widths of successive cascade "
+                             "stages, i.e. the step of the logarithmic ladder from "
+                             "W_max down to W_min. Default: 3 (one stage step = one "
+                             "refinement_factor subdivision).")
+    parser.add_argument("--ladder_max_stages", type=int, default=6,
+                        help="Cap on the number of cascade stages. Default: 6.")
+    parser.add_argument("--stage_tol_exponent", type=float, default=0.0,
+                        help="Loosen the wide cascade stages: the stage tolerance is "
+                             "error_tol * (W_stage/W_min)**EXPONENT. 0 (default) uses "
+                             "the same tolerance at every width, which grades the mesh "
+                             "self-similarly (local energy spacing proportional to the "
+                             "distance from mu) and is what the metric's (h/W)**2 "
+                             "scaling asks for. Positive values trade accuracy at the "
+                             "wide end for speed; the shortfall is NOT recoverable "
+                             "later, since at W_min those panels carry no selectable "
+                             "defect.")
+    parser.add_argument("--parent_tol", type=float, default=None, metavar="TOL",
+                        help="Sum-rule metric the STARTING mesh must already meet at "
+                             "the widest kernel, before any refinement. Refinement "
+                             "cannot repair a parent that is too coarse there -- the "
+                             "wide-corner accuracy is set by the parent and points not "
+                             "placed there are never recovered -- so this check "
+                             "REFUSES rather than warns. Default: error_tol.")
+    parser.add_argument("--skip_parent_check", action="store_true",
+                        help="Bypass the starting-mesh qualification. Expert flag: the "
+                             "wide-corner error is then unverified.")
+    parser.add_argument("--max_output_size", type=str, default=None, metavar="SIZE",
+                        help="Upper limit on the HDF5 file the refinement may produce, "
+                             "e.g. '500MB', '4GB', '2.5GiB' or a plain byte count. The "
+                             "size of the NEXT output is predicted from the current "
+                             "file's bytes-per-k-point before the generator runs, so "
+                             "nothing oversized is ever written; the run stops and "
+                             "keeps the last mesh that fitted. Default: no limit.")
+
+
+def validate_cascade_args(args) -> None:
+    """Range-check the cascade options and set ``args.max_output_bytes``."""
+    if args.ladder_ratio <= 1.0:
+        raise ValueError("ladder_ratio must be greater than 1.")
+    if args.ladder_max_stages < 1:
+        raise ValueError("ladder_max_stages must be at least 1.")
+    if args.stage_tol_exponent < 0.0:
+        raise ValueError("stage_tol_exponent must be non-negative: a negative "
+                         "value would demand MORE accuracy at the wide kernel "
+                         "than at the target one.")
+    if args.T_max is not None and args.T_max < args.T_min:
+        raise ValueError("T_max must not be below T_min; the cascade ends at "
+                         "the target corner.")
+    if args.gamma_max is not None and args.gamma_max < args.gamma_min:
+        raise ValueError("gamma_max must not be below gamma_min; the cascade "
+                         "ends at the target corner.")
+    if args.parent_tol is not None and args.parent_tol <= 0:
+        raise ValueError("parent_tol must be positive.")
+    args.max_output_bytes = (
+        None if args.max_output_size is None else parse_size(args.max_output_size)
+    )
+
+
+def inspect_mesh(
+    path:        Path,
+    temperature: float,
+    gamma:       float,
+    target:      "float | None" = None,
+    energy_window: float = 0.1,
+) -> dict:
+    """Report what a mesh can and cannot resolve at one kernel width.
+
+    Answers two independent questions, which need two different criteria
+    because they are not the same question:
+
+    * DENSITY -- is the mesh fine enough?  Judged by the sum-rule metric at
+      the given corner.  On a uniform mesh this is a good proxy: it tracks
+      the transport error monotonically (cubic 0.2806/0.0326/0.0080/0.0050
+      against +145/+21.6/+8.2/+1.8%).  On an ADAPTIVE mesh it is not, which
+      is why the qualifier only trusts it for regular grids.
+    * ASPECT RATIO -- are the axes divided in the right proportion?  The
+      metric is blind to this, ranking a 32x32 mesh above a 64x8 one that is
+      250x more accurate, because mesh anisotropy is a k-space property and
+      the metric lives on the energy axis.  Judged instead by
+      :func:`structure.meshrefine.axis_anisotropy`.
+
+    Returns a dict with the raw numbers; formatting is the caller's job.
+    """
+
+    with h5py.File(path, 'r') as h5file:
+        data = load_band_data(h5file)
+        kvec  = np.asarray(h5file['.unitcell/kvec'][()]).reshape(3, 3)
+        dims  = np.asarray(h5file['.unitcell/dims'][()]).astype(bool).ravel()[:3]
+        symop = (np.asarray(h5file['.unitcell/symop'][()])
+                 if '.unitcell/symop' in h5file else None)
+        nk = tuple(int(np.asarray(h5file['.kmesh/%s' % k][()]).ravel()[0])
+                   for k in ('nkx', 'nky', 'nkz'))
+        uniform = bool(np.asarray(h5file['.kmesh/irreducible'][()]).ravel()[0]) \
+            if '.kmesh/irreducible' in h5file else False
+        moments = (np.real(np.asarray(h5file['momentsDiagonal'][()]))
+                   if 'momentsDiagonal' in h5file else None)
+
+    band_axis = build_band_axis(data.energies)
+    error = compute_error(band_axis, temperature, gamma)
+
+    result = {
+        'path': str(path), 'nk': nk, 'nkp': int(data.k_points.shape[0]),
+        'uniform_grid': uniform, 'dims': dims,
+        'width': kernel_width(temperature, gamma),
+        'temperature': temperature, 'gamma': gamma,
+        'error': error, 'target': target,
+        'raw_ratio': None, 'suggested_ratio': None, 'anisotropy': None,
+    }
+
+    if moments is not None:
+        d = axis_anisotropy(data.energies, moments, data.weights, kvec, dims,
+                            temperature, gamma, symop=symop)
+        raw, sug = suggest_mesh_ratio(d, dims)
+        result['anisotropy'] = d
+        result['raw_ratio'] = raw
+        result['suggested_ratio'] = sug
+    else:
+        logger.warning(
+            "%s has no momentsDiagonal dataset, so the aspect ratio cannot be "
+            "estimated; only the density check is reported.", path,
+        )
+
+    if target is not None:
+        multiple = infer_mesh_multiple(nk, dims)
+        # A second, coarser evaluation is not available here, so the
+        # saturation floor is left to the caller when it has one.
+        rec, reachable, message = recommend_density(
+            nk, error, target, dims, multiple=multiple,
+        )
+        result.update({'recommended_nk': rec, 'reachable': reachable,
+                       'message': message, 'multiple': multiple})
+    return result
+
+
+def format_inspection(info: dict) -> str:
+    """Human-readable rendering of :func:`inspect_mesh`."""
+
+    nk = info['nk']
+    lines = [
+        "Mesh:            %s" % info['path'],
+        "  divisions:     %d x %d x %d  (%d k-points in file, %s)"
+        % (nk[0], nk[1], nk[2], info['nkp'],
+           "regular grid" if info['uniform_grid'] else "not a regular grid"),
+        "  kernel:        T = %.6g K, gamma = %.4e eV  ->  W = %.4e eV"
+        % (info['temperature'], info['gamma'], info['width']),
+        "  sum-rule metric at this width: %.6f" % info['error'],
+    ]
+    if info.get('target') is not None:
+        verdict = "OK" if info['error'] <= info['target'] else "TOO COARSE"
+        lines.append("  target %.4e -> %s" % (info['target'], verdict))
+        if info['error'] > info['target']:
+            if info['reachable']:
+                rec = info['recommended_nk']
+                lines.append("  suggested divisions: %d x %d x %d  (%s)"
+                             % (rec[0], rec[1], rec[2], info['message']))
+                if info.get('multiple', 1) > 1:
+                    lines.append("  kept commensurate with a multiple of %d, "
+                                 "inherited from the current mesh"
+                                 % info['multiple'])
+            else:
+                lines.append("  NOT REACHABLE: %s" % info['message'])
+
+    if info.get('raw_ratio') is not None:
+        raw, sug = info['raw_ratio'], info['suggested_ratio']
+        lines += [
+            "  axis anisotropy (RMS dE per fractional step): %s"
+            % np.array2string(info['anisotropy'], precision=4),
+            "  raw axis ratio:       %s"
+            % " : ".join("%.2f" % v for v in raw),
+            "  suggested (rounded):  %s"
+            % " : ".join("%d" % round(v) for v in sug),
+            "  Rounding up is the cheap direction to err in: on an orthorhombic "
+            "test model the raw ratio 6.97 sat right at the onset of the "
+            "accuracy plateau (4.6:1 gave +0.50%, 8:1 gave +0.004%), and the "
+            "plateau extended to at least 32:1, while 1:1 gave +12.3% at the "
+            "same cost.",
+        ]
+    return "\n".join(lines)
+
+
+def qualify_parent_mesh(params: RefinementParams, path: Path) -> bool:
+    """Check a starting mesh at the WIDE corner before refining it.
+
+    Refinement cannot repair a parent that is too coarse for the widest
+    kernel of the planned sweep: the accuracy at that corner is set by the
+    parent and is not recoverable later, because at W_min those panels carry
+    no selectable defect.  Measured on graphene, tightening error_tol by 100x
+    moved the 300 K result by 0.02% while changing the parent from 48 to 300
+    moved it from -12.3% to -1.0%.  On the cubic model refinement made the
+    observable WORSE than its own coarse parent (+21.6% -> -29.9%).
+
+    Returns True when refinement should proceed.
+    """
+
+    if params.T_max is None and params.gamma_max is None:
+        return True                      # no wide corner declared, nothing to check
+
+    T_w = params.T_max if params.T_max is not None else params.T_min
+    g_w = params.gamma_max if params.gamma_max is not None else params.gamma_min
+    target = params.parent_tol if params.parent_tol is not None else params.error_tol
+
+    info = inspect_mesh(path, T_w, g_w, target=target,
+                        energy_window=params.energy_window)
+
+    logger.info("Parent mesh qualification at the widest kernel:\n%s",
+                format_inspection(info))
+
+    # ── Aspect ratio: warn loudly, never refuse ───────────────────────────
+    sug = info.get('suggested_ratio')
+    raw = info.get('raw_ratio')
+    if sug is not None:
+        nk = np.array(info['nk'], dtype=float)
+        dims = info['dims']
+        active = dims & (nk > 0)
+        if np.any(active):
+            have = nk[active] / np.min(nk[active])
+            want = np.asarray(sug)[active]
+            if np.any(want / np.maximum(have, 1e-30) > 1.5) or \
+               np.any(have / np.maximum(want, 1e-30) > 1.5):
+                logger.warning(
+                    "ASPECT RATIO: this mesh is divided %s but the band "
+                    "structure suggests %s (raw %s). The sum-rule metric "
+                    "CANNOT see this -- it ranked a 32x32 mesh above a 64x8 "
+                    "one that was 250x more accurate -- so the density check "
+                    "below may pass while the mesh is still badly "
+                    "proportioned. Refinement will proceed, but run "
+                    "'inspect-mesh' and consider regenerating the starting "
+                    "mesh with the suggested proportions.",
+                    " : ".join("%d" % v for v in np.array(info['nk'])),
+                    " : ".join("%d" % round(v) for v in sug),
+                    " : ".join("%.2f" % v for v in raw),
+                )
+
+    # ── Density: refuse ───────────────────────────────────────────────────
+    if info['error'] <= target:
+        return True
+
+    if not info['uniform_grid']:
+        logger.warning(
+            "The starting mesh is not a regular grid, and the sum-rule metric "
+            "is only a reliable density proxy on regular grids, so the wide "
+            "corner cannot be qualified (metric %.6f against target %.4e). "
+            "Proceeding, but the result at the wide corner is unverified.",
+            info['error'], target,
+        )
+        return True
+
+    rec = info.get('recommended_nk')
+    if info.get('reachable'):
+        logger.error(
+            "STARTING MESH TOO COARSE at the widest kernel: metric %.6f "
+            "against the target %.4e at W = %.4e eV. Refinement cannot repair "
+            "this -- the accuracy at the wide corner is set by the parent, and "
+            "points not placed there are never recovered, because at the "
+            "narrow corner those panels carry no selectable defect. "
+            "Regenerate the starting mesh with about %d x %d x %d divisions "
+            "and try again, or raise --parent_tol if you accept the error.",
+            info['error'], target, info['width'], rec[0], rec[1], rec[2],
+        )
+    else:
+        logger.error(
+            "STARTING MESH cannot be qualified at the widest kernel: %s",
+            info['message'],
+        )
+    return False
+
+
+def format_bytes(n: float) -> str:
+    """Human-readable byte count (binary prefixes)."""
+    for unit in ("B", "kiB", "MiB", "GiB", "TiB"):
+        if abs(n) < 1024.0 or unit == "TiB":
+            return f"{n:.1f} {unit}" if unit != "B" else f"{n:.0f} B"
+        n /= 1024.0
+    return f"{n:.1f} TiB"                              # pragma: no cover
+
+
+def predict_output_bytes(current_hdf5: Path, n_before: int, n_after: int) -> float:
+    """Estimate the size of the next generator output.
+
+    The generator writes one ``moments`` and one ``momentsBfield`` dataset per
+    k-point (KI-02), so the file size is very nearly linear in the k-point
+    count with a small fixed header.  Scaling the current file's
+    bytes-per-k-point is therefore accurate to a few percent, which is all a
+    budget check needs.  Returns 0.0 if the current size cannot be read.
+    """
+    try:
+        size = float(current_hdf5.stat().st_size)
+    except OSError as exc:                             # pragma: no cover
+        logger.debug("Cannot stat %s for the size estimate: %s", current_hdf5, exc)
+        return 0.0
+    if n_before <= 0:
+        return 0.0
+    return size * float(n_after) / float(n_before)
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +814,28 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
         1.0 / thermal_width if thermal_width > 0 else float('inf'),
         max(thermal_width, params.gamma_min),
     )
+    # T_min/gamma_min say how FINE the mesh must be near mu, and nothing about
+    # how FAR from mu it must be sampled; without a wide corner the loop
+    # certifies a mesh that is useless at any larger kernel width.
+    if params.T_max is None and params.gamma_max is None:
+        logger.info(
+            "No cascade requested: the mesh will be certified at W = %.4e eV "
+            "only. If the planned sweep reaches higher temperatures or "
+            "scattering rates, give --T_max / --gamma_max so that the refinement "
+            "also samples the wider kernel.",
+            max(thermal_width, params.gamma_min),
+        )
+
+    # ── Qualify the starting mesh at the WIDE corner, before refining ─────
+    if params.skip_parent_check:
+        if params.T_max is not None or params.gamma_max is not None:
+            logger.warning(
+                "Parent qualification skipped at the user's request. The "
+                "accuracy at the wide corner is set by the starting mesh and "
+                "refinement cannot repair it.",
+            )
+    elif not qualify_parent_mesh(params, params.initial_hdf5.resolve()):
+        return 1
 
     current_hdf5: Path            = params.initial_hdf5.resolve()
     final_error:  Optional[float] = None
@@ -446,249 +869,361 @@ def run_refinement(params: RefinementParams, generator: MeshGenerator) -> int:
         _max_existing_index(workdir) + 1,
     )
 
-    for iteration in range(params.max_iter):
-        logger.info("--- Iteration %d ---", iteration)
+    # ── Cascade over kernel widths, WIDEST FIRST ──────────────────────────
+    ladder = kernel_ladder(
+        params.T_min, params.gamma_min, params.T_max, params.gamma_max,
+        ratio=params.ladder_ratio, max_stages=params.ladder_max_stages,
+    )
+    tolerances = stage_tolerances(ladder, params.error_tol,
+                                  params.stage_tol_exponent)
 
-        # ── 1. Load band data ─────────────────────────────────────────────
+    if len(ladder) > 1:
+        logger.info(
+            "Refinement cascade: %d stages from W = %.4e eV down to %.4e eV "
+            "(ratio %.3g). Widest first, so the wide stage places the parents "
+            "that the narrow stages subdivide.",
+            len(ladder), kernel_width(*ladder[0]), kernel_width(*ladder[-1]),
+            params.ladder_ratio,
+        )
+        for j, ((t, g), tol) in enumerate(zip(ladder, tolerances)):
+            logger.info(
+                "  stage %d/%d: T = %.6g K, gamma = %.4e eV -> W = %.4e eV, "
+                "error_tol = %.4e", j + 1, len(ladder), t, g,
+                kernel_width(t, g), tol,
+            )
+
+    first_stage = True
+    stop_cascade = False
+
+    for stage_index, ((stage_T, stage_gamma), stage_tol) in enumerate(
+        zip(ladder, tolerances)
+    ):
+        if stop_cascade:
+            break
+
+        stage_width = kernel_width(stage_T, stage_gamma)
+        if len(ladder) > 1:
+            logger.info(
+                "=== Cascade stage %d/%d: T = %.6g K, gamma = %.4e eV "
+                "(W = %.4e eV), error_tol = %.4e ===",
+                stage_index + 1, len(ladder), stage_T, stage_gamma,
+                stage_width, stage_tol,
+            )
+
+        # the plateau test compares consecutive iterations of the SAME stage
+        previous_error = None
+
+        for iteration in range(params.max_iter):
+            logger.info("--- Iteration %d ---", iteration)
+
+            # ── 1. Load band data ─────────────────────────────────────────────
+            try:
+                with h5py.File(current_hdf5, 'r') as h5file:
+                    data: BandData = load_band_data(h5file)
+                    band_axis = build_band_axis(data.energies)
+
+                    if iteration == 0 and first_stage:
+                        first_stage = False
+                        if is_continuation:
+                            assert data.cell_deltas_source == "file", (
+                                "continuation input must provide /.kmesh/cell_deltas"
+                            )
+                            logger.info(
+                                "Initial mesh is an already-refined custom mesh "
+                                "(%d k-points; produced by refinement iteration %s). "
+                                "Continuing refinement: per-point cell widths read "
+                                "from /.kmesh/cell_deltas, output numbering resumes "
+                                "at %d.",
+                                data.k_points.shape[0],
+                                str(last_iter) if last_iter is not None else "unknown",
+                                next_index,
+                            )
+                        else:
+                            irreducible = bool(h5file['/.kmesh/irreducible'][()])
+                            mesh_type   = "irreducible" if irreducible else "reducible"
+                            logger.info(
+                                "Initial mesh is %s (%d k-points). "
+                                "Cell widths initialised from coarse grid steps 1/nk_i.",
+                                mesh_type, data.k_points.shape[0],
+                            )
+            except ValueError as exc:
+                # e.g. custom-mesh file without cell_deltas (see load_band_data)
+                logger.error("%s", exc)
+                return 1
+
+            # ── 2. Evaluate error ─────────────────────────────────────────────
+            try:
+                final_error = compute_error(band_axis, stage_T, stage_gamma)
+            except MissingDependencyError as exc:
+                logger.error("%s", exc)
+                return 1
+
+            if len(ladder) > 1:
+                logger.info("Stage %d/%d iteration %d: error = %.6f (W = %.4e eV)",
+                            stage_index + 1, len(ladder), iteration, final_error,
+                            stage_width)
+            else:
+                logger.info("Iteration %d: error = %.6f", iteration, final_error)
+
+            # ── 3. Convergence check ──────────────────────────────────────────
+            if final_error <= stage_tol:
+                logger.info(
+                    "Target error reached (%.6f <= %.6f)%s.", final_error, stage_tol,
+                    " at W = %.4e eV" % stage_width if len(ladder) > 1 else "",
+                )
+                break
+
+            # ── 3b. Error-plateau check ───────────────────────────────────────
+            # The refinement error typically plateaus after a few steps at a
+            # value dictated by the resolution of the initial mesh.  Stop once an
+            # iteration reduced the error by less than plateau_tol (relative);
+            # active from the 4th refinement step onward only, since the error
+            # may equilibrate non-monotonically in the early stages.
+            #
+            # Two distinct events land here and they must not be reported alike:
+            #
+            #   stalled  -- 0 <= improvement < plateau_tol.  The mesh is being
+            #               refined but the metric no longer responds.
+            #   backward -- improvement < 0, i.e. the metric went UP.  This does
+            #               NOT mean the mesh got worse: refinement only ever ADDS
+            #               k-points, so each iterate is a strict superset of its
+            #               predecessor and is strictly better as a BZ sampling.
+            #               The sum-rule metric is |1 - int df/da|, a SIGNED sum of
+            #               per-panel trapezoid defects, and those defects carry
+            #               opposite signs in the peak and in the tails.  An
+            #               iterate whose peak defect happens to cancel part of the
+            #               tail defect scores better than the finer mesh that
+            #               follows it.  Reporting that as a regression -- or worse,
+            #               keeping the coarser mesh -- would be wrong.  The final
+            #               mesh written is always the last (finest) one.
+            if (
+                params.plateau_tol > 0
+                and iteration >= PLATEAU_MIN_ITER
+                and previous_error is not None
+                and previous_error > 0
+                and (previous_error - final_error) < params.plateau_tol * previous_error
+            ):
+                improvement = 100.0 * (previous_error - final_error) / previous_error
+                if final_error > previous_error:
+                    logger.warning(
+                        "Sum-rule metric increased at iteration %d (%.6f -> %.6f). "
+                        "The mesh itself did not get worse -- refinement only adds "
+                        "k-points, so this iterate contains every point of the "
+                        "previous one. The metric is a signed sum of per-panel "
+                        "quadrature defects whose peak and tail contributions have "
+                        "opposite signs, so an accidental cancellation at the "
+                        "previous iterate can score better than a strictly finer "
+                        "mesh. Stopping here: the metric can no longer steer the "
+                        "refinement.",
+                        iteration, previous_error, final_error,
+                    )
+                else:
+                    logger.warning(
+                        "Error plateau detected: iteration %d reduced the error by "
+                        "only %.2f%% (%.6f -> %.6f), less than the plateau threshold "
+                        "of %.2f%%.",
+                        iteration, improvement, previous_error, final_error,
+                        100.0 * params.plateau_tol,
+                    )
+                if stage_index + 1 < len(ladder):
+                    # An intermediate stage is only there to place parents for
+                    # the narrower ones; a plateau at a wide kernel is not a
+                    # failure of the run, so hand over instead of alarming.
+                    logger.warning(
+                        "Stage %d/%d (W = %.4e eV) plateaued at %.6f above its "
+                        "tolerance %.6f; handing the mesh to the next, narrower "
+                        "stage.",
+                        stage_index + 1, len(ladder), stage_width, final_error,
+                        stage_tol,
+                    )
+                else:
+                    logger.warning(
+                        "Target precision (%.6f) NOT reached; final metric %.6f on %d "
+                        "k-points. The residual is dominated by the trapezoid error in "
+                        "the kernel TAILS (|e-mu| well beyond the %.2e eV kernel width), "
+                        "which the hotspot window does not target. Options: start from a "
+                        "finer initial mesh, widen --energy_window, relax --error_tol, or "
+                        "disable this check with --plateau_tol 0.",
+                        stage_tol, final_error, band_axis.shape[0],
+                        max(kB_eV * stage_T, stage_gamma),
+                    )
+                break
+            previous_error = final_error
+
+            # ── 4. Detect hotspots ────────────────────────────────────────────
+            # Selection and metric are the same quantity: the per-panel quadrature
+            # defect of the df/da sum rule.  See select_refinement_panels for why
+            # the previous pointwise criterion could not reach the kernel tails.
+            try:
+                marked, panel_info = select_refinement_panels(
+                    band_axis,
+                    stage_T,
+                    stage_gamma,
+                    params.chemical_potential,
+                    energy_window=params.energy_window,
+                    defect_fraction=params.defect_fraction,
+                )
+            except MissingDependencyError as exc:
+                logger.error("%s", exc)
+                return 1
+
+            if not marked.any():
+                logger.warning(
+                    "No band-axis panel inside the energy window still carries a "
+                    "significant quadrature defect, so additional k-points cannot "
+                    "reduce the error further (residual %.6f is set by the band "
+                    "range / initial mesh). Stopping.", final_error,
+                )
+                break
+
+            hotspot_mask = hotspot_mask_from_panels(data.energies, band_axis, marked)
+
+            logger.info(
+                "Hotspot panels: %d of %d carry %.1f%% of the defect (%.4e of "
+                "%.4e); reach %.4e eV from mu (ceiling energy_window=%.4e, kernel "
+                "half-width=%.4e); %d of %d k-points selected.",
+                panel_info["n_marked"], panel_info["n_panels"],
+                100.0 * panel_info["captured"] / panel_info["total"]
+                if panel_info["total"] > 0 else 0.0,
+                panel_info["captured"], panel_info["total"], panel_info["reach"],
+                params.energy_window,
+                max(kB_eV * stage_T, stage_gamma),
+                int(hotspot_mask.sum()), hotspot_mask.size,
+            )
+
+            # ── 5. Refine mesh ────────────────────────────────────────────────
+            refined_points, refined_weights, refined_deltas = refine_kmesh(
+                data,
+                target_energy=params.chemical_potential,
+                tolerance=0.0,
+                refinement_factor=params.refinement_factor,
+                hotspot_mask=hotspot_mask,
+            )
+
+            n_before = data.k_points.shape[0]
+            n_after  = refined_points.shape[0]
+
+            if n_after == n_before:
+                logger.warning(
+                    "Refinement did not modify the mesh; stopping to avoid "
+                    "infinite loop."
+                )
+                break
+
+            predicted = predict_output_bytes(current_hdf5, n_before, n_after)
+            logger.info("Mesh size: %d → %d k-points (next output ~%s).",
+                        n_before, n_after, format_bytes(predicted))
+
+            # ── 5b. Output-size budget ────────────────────────────────────────
+            # The generator writes a moments dataset per k-point (KI-02), so the
+            # file grows linearly in the mesh and a refinement chasing an
+            # extended Fermi surface can reach tens of GB without warning.  The
+            # check happens BEFORE the generator runs, so nothing oversized is
+            # ever written; the last mesh that fitted is kept and reported.
+            if (
+                params.max_output_bytes is not None
+                and predicted > float(params.max_output_bytes)
+            ):
+                logger.warning(
+                    "Refining to %d k-points would produce an HDF5 of about %s, "
+                    "over the budget of %s set by --max_output_size. Stopping "
+                    "here and keeping the current %d-k-point mesh (metric %.6f "
+                    "at W = %.4e eV). Raise the budget, relax --error_tol, "
+                    "lower --defect_fraction to grow the mesh more slowly, or "
+                    "narrow the cascade with --T_max / --gamma_max.",
+                    n_after, format_bytes(predicted),
+                    format_bytes(float(params.max_output_bytes)),
+                    n_before, final_error, stage_width,
+                )
+                stop_cascade = True
+                break
+
+            before_weight = np.sum(data.weights)
+            after_weight  = np.sum(refined_weights)
+            if not np.allclose(before_weight, after_weight, rtol=1e-10, atol=1e-12):
+                logger.warning(
+                    "Weight conservation check failed: before=%s after=%s",
+                    before_weight, after_weight,
+                )
+
+            # ── 6. Write mesh file and call generator ─────────────────────────
+            # Collision-free naming: never overwrite existing files (outputs of
+            # earlier runs, or the input file of a continuation run in the same
+            # working directory).  next_index resumes after the input's iteration
+            # for continuation runs.
+            mesh_path, output_path, next_index = _reserve_iteration_paths(
+                workdir, next_index, forbidden={params.initial_hdf5.resolve()},
+            )
+
+            write_custom_mesh(str(mesh_path), refined_points, refined_weights,
+                              refined_deltas)
+            created_by_run.add(mesh_path)
+
+            try:
+                generator.generate(refined_points, refined_weights, str(output_path))
+            except Exception as exc:
+                logger.error("Generator failed on iteration %d: %s", iteration, exc)
+                return 1
+            created_by_run.add(output_path)
+
+            # ── 7. Patch cell_deltas and provenance into the generator output ─
+            # generator.generate() calls h5output which does not know about
+            # cell_deltas.  Copy it from mesh_path into output_path so that the
+            # next iteration's (or a later continuation run's) load_band_data
+            # finds it directly and never falls back to the nkx/nky/nkz path
+            # (which always gives 1 for custom meshes).  Also stamp the global
+            # iteration index so continuation runs resume the numbering.
+            try:
+                _patch_refinement_metadata(output_path, mesh_path,
+                                           iteration_index=next_index,
+                                           parent=current_hdf5)
+            except Exception as exc:
+                logger.error("Failed to patch refinement metadata into %s: %s",
+                             output_path, exc)
+                return 1
+
+            # ── 8. Clean up intermediate files ────────────────────────────────
+            # Only files created by this run are ever deleted; the input file
+            # (params.initial_hdf5) is never in created_by_run.
+            if not params.keep_intermediate:
+                if mesh_path.exists():
+                    mesh_path.unlink()
+                if current_hdf5 in created_by_run and current_hdf5.exists():
+                    # output of the previous iteration of this run, now superseded
+                    current_hdf5.unlink()
+
+            current_hdf5 = output_path
+            next_index  += 1
+
+        else:
+            logger.warning(
+                "Maximum iterations (%d) reached%s. Final error = %.6f. "
+                "max_iter is counted PER CASCADE STAGE.",
+                params.max_iter,
+                " in stage %d/%d (W = %.4e eV)"
+                % (stage_index + 1, len(ladder), stage_width)
+                if len(ladder) > 1 else "",
+                final_error if final_error is not None else float('nan'),
+            )
+
+    # ── Cascade summary: the metric at every rung, on the final mesh ──────
+    # The single number reported by the last stage only certifies the
+    # NARROWEST kernel.  Printing the whole ladder makes the remaining
+    # inadequacy at wider kernels visible instead of implicit.
+    if len(ladder) > 1:
         try:
             with h5py.File(current_hdf5, 'r') as h5file:
-                data: BandData = load_band_data(h5file)
-                band_axis = build_band_axis(data.energies)
-
-                if iteration == 0:
-                    if is_continuation:
-                        assert data.cell_deltas_source == "file", (
-                            "continuation input must provide /.kmesh/cell_deltas"
-                        )
-                        logger.info(
-                            "Initial mesh is an already-refined custom mesh "
-                            "(%d k-points; produced by refinement iteration %s). "
-                            "Continuing refinement: per-point cell widths read "
-                            "from /.kmesh/cell_deltas, output numbering resumes "
-                            "at %d.",
-                            data.k_points.shape[0],
-                            str(last_iter) if last_iter is not None else "unknown",
-                            next_index,
-                        )
-                    else:
-                        irreducible = bool(h5file['/.kmesh/irreducible'][()])
-                        mesh_type   = "irreducible" if irreducible else "reducible"
-                        logger.info(
-                            "Initial mesh is %s (%d k-points). "
-                            "Cell widths initialised from coarse grid steps 1/nk_i.",
-                            mesh_type, data.k_points.shape[0],
-                        )
-        except ValueError as exc:
-            # e.g. custom-mesh file without cell_deltas (see load_band_data)
-            logger.error("%s", exc)
-            return 1
-
-        # ── 2. Evaluate error ─────────────────────────────────────────────
-        try:
-            final_error = compute_error(band_axis, params.T_min, params.gamma_min)
-        except MissingDependencyError as exc:
-            logger.error("%s", exc)
-            return 1
-
-        logger.info("Iteration %d: error = %.6f", iteration, final_error)
-
-        # ── 3. Convergence check ──────────────────────────────────────────
-        if final_error <= params.error_tol:
-            logger.info(
-                "Target error reached (%.6f <= %.6f).", final_error, params.error_tol
-            )
-            break
-
-        # ── 3b. Error-plateau check ───────────────────────────────────────
-        # The refinement error typically plateaus after a few steps at a
-        # value dictated by the resolution of the initial mesh.  Stop once an
-        # iteration reduced the error by less than plateau_tol (relative);
-        # active from the 4th refinement step onward only, since the error
-        # may equilibrate non-monotonically in the early stages.
-        #
-        # Two distinct events land here and they must not be reported alike:
-        #
-        #   stalled  -- 0 <= improvement < plateau_tol.  The mesh is being
-        #               refined but the metric no longer responds.
-        #   backward -- improvement < 0, i.e. the metric went UP.  This does
-        #               NOT mean the mesh got worse: refinement only ever ADDS
-        #               k-points, so each iterate is a strict superset of its
-        #               predecessor and is strictly better as a BZ sampling.
-        #               The sum-rule metric is |1 - int df/da|, a SIGNED sum of
-        #               per-panel trapezoid defects, and those defects carry
-        #               opposite signs in the peak and in the tails.  An
-        #               iterate whose peak defect happens to cancel part of the
-        #               tail defect scores better than the finer mesh that
-        #               follows it.  Reporting that as a regression -- or worse,
-        #               keeping the coarser mesh -- would be wrong.  The final
-        #               mesh written is always the last (finest) one.
-        if (
-            params.plateau_tol > 0
-            and iteration >= PLATEAU_MIN_ITER
-            and previous_error is not None
-            and previous_error > 0
-            and (previous_error - final_error) < params.plateau_tol * previous_error
-        ):
-            improvement = 100.0 * (previous_error - final_error) / previous_error
-            if final_error > previous_error:
-                logger.warning(
-                    "Sum-rule metric increased at iteration %d (%.6f -> %.6f). "
-                    "The mesh itself did not get worse -- refinement only adds "
-                    "k-points, so this iterate contains every point of the "
-                    "previous one. The metric is a signed sum of per-panel "
-                    "quadrature defects whose peak and tail contributions have "
-                    "opposite signs, so an accidental cancellation at the "
-                    "previous iterate can score better than a strictly finer "
-                    "mesh. Stopping here: the metric can no longer steer the "
-                    "refinement.",
-                    iteration, previous_error, final_error,
+                final_axis = build_band_axis(load_band_data(h5file).energies)
+            logger.info("Final mesh evaluated at every rung of the ladder:")
+            for (t, g), tol in zip(ladder, tolerances):
+                err = compute_error(final_axis, t, g)
+                logger.info(
+                    "  W = %.4e eV (T = %.6g K, gamma = %.4e eV): error = %.6f "
+                    "%s tol %.4e", kernel_width(t, g), t, g, err,
+                    "<=" if err <= tol else " >", tol,
                 )
-            else:
-                logger.warning(
-                    "Error plateau detected: iteration %d reduced the error by "
-                    "only %.2f%% (%.6f -> %.6f), less than the plateau threshold "
-                    "of %.2f%%.",
-                    iteration, improvement, previous_error, final_error,
-                    100.0 * params.plateau_tol,
-                )
-            logger.warning(
-                "Target precision (%.6f) NOT reached; final metric %.6f on %d "
-                "k-points. The residual is dominated by the trapezoid error in "
-                "the kernel TAILS (|e-mu| well beyond the %.2e eV kernel width), "
-                "which the hotspot window does not target. Options: start from a "
-                "finer initial mesh, widen --energy_window, relax --error_tol, or "
-                "disable this check with --plateau_tol 0.",
-                params.error_tol, final_error, band_axis.shape[0],
-                max(kB_eV * params.T_min, params.gamma_min),
-            )
-            break
-        previous_error = final_error
-
-        # ── 4. Detect hotspots ────────────────────────────────────────────
-        # Selection and metric are the same quantity: the per-panel quadrature
-        # defect of the df/da sum rule.  See select_refinement_panels for why
-        # the previous pointwise criterion could not reach the kernel tails.
-        try:
-            marked, panel_info = select_refinement_panels(
-                band_axis,
-                params.T_min,
-                params.gamma_min,
-                params.chemical_potential,
-                energy_window=params.energy_window,
-                defect_fraction=params.defect_fraction,
-            )
-        except MissingDependencyError as exc:
-            logger.error("%s", exc)
-            return 1
-
-        if not marked.any():
-            logger.warning(
-                "No band-axis panel inside the energy window still carries a "
-                "significant quadrature defect, so additional k-points cannot "
-                "reduce the error further (residual %.6f is set by the band "
-                "range / initial mesh). Stopping.", final_error,
-            )
-            break
-
-        hotspot_mask = hotspot_mask_from_panels(data.energies, band_axis, marked)
-
-        logger.info(
-            "Hotspot panels: %d of %d carry %.1f%% of the defect (%.4e of "
-            "%.4e); reach %.4e eV from mu (ceiling energy_window=%.4e, kernel "
-            "half-width=%.4e); %d of %d k-points selected.",
-            panel_info["n_marked"], panel_info["n_panels"],
-            100.0 * panel_info["captured"] / panel_info["total"]
-            if panel_info["total"] > 0 else 0.0,
-            panel_info["captured"], panel_info["total"], panel_info["reach"],
-            params.energy_window,
-            max(kB_eV * params.T_min, params.gamma_min),
-            int(hotspot_mask.sum()), hotspot_mask.size,
-        )
-
-        # ── 5. Refine mesh ────────────────────────────────────────────────
-        refined_points, refined_weights, refined_deltas = refine_kmesh(
-            data,
-            target_energy=params.chemical_potential,
-            tolerance=0.0,
-            refinement_factor=params.refinement_factor,
-            hotspot_mask=hotspot_mask,
-        )
-
-        n_before = data.k_points.shape[0]
-        n_after  = refined_points.shape[0]
-
-        if n_after == n_before:
-            logger.warning(
-                "Refinement did not modify the mesh; stopping to avoid "
-                "infinite loop."
-            )
-            break
-
-        logger.info("Mesh size: %d → %d k-points.", n_before, n_after)
-
-        before_weight = np.sum(data.weights)
-        after_weight  = np.sum(refined_weights)
-        if not np.allclose(before_weight, after_weight, rtol=1e-10, atol=1e-12):
-            logger.warning(
-                "Weight conservation check failed: before=%s after=%s",
-                before_weight, after_weight,
-            )
-
-        # ── 6. Write mesh file and call generator ─────────────────────────
-        # Collision-free naming: never overwrite existing files (outputs of
-        # earlier runs, or the input file of a continuation run in the same
-        # working directory).  next_index resumes after the input's iteration
-        # for continuation runs.
-        mesh_path, output_path, next_index = _reserve_iteration_paths(
-            workdir, next_index, forbidden={params.initial_hdf5.resolve()},
-        )
-
-        write_custom_mesh(str(mesh_path), refined_points, refined_weights,
-                          refined_deltas)
-        created_by_run.add(mesh_path)
-
-        try:
-            generator.generate(refined_points, refined_weights, str(output_path))
-        except Exception as exc:
-            logger.error("Generator failed on iteration %d: %s", iteration, exc)
-            return 1
-        created_by_run.add(output_path)
-
-        # ── 7. Patch cell_deltas and provenance into the generator output ─
-        # generator.generate() calls h5output which does not know about
-        # cell_deltas.  Copy it from mesh_path into output_path so that the
-        # next iteration's (or a later continuation run's) load_band_data
-        # finds it directly and never falls back to the nkx/nky/nkz path
-        # (which always gives 1 for custom meshes).  Also stamp the global
-        # iteration index so continuation runs resume the numbering.
-        try:
-            _patch_refinement_metadata(output_path, mesh_path,
-                                       iteration_index=next_index,
-                                       parent=current_hdf5)
-        except Exception as exc:
-            logger.error("Failed to patch refinement metadata into %s: %s",
-                         output_path, exc)
-            return 1
-
-        # ── 8. Clean up intermediate files ────────────────────────────────
-        # Only files created by this run are ever deleted; the input file
-        # (params.initial_hdf5) is never in created_by_run.
-        if not params.keep_intermediate:
-            if mesh_path.exists():
-                mesh_path.unlink()
-            if current_hdf5 in created_by_run and current_hdf5.exists():
-                # output of the previous iteration of this run, now superseded
-                current_hdf5.unlink()
-
-        current_hdf5 = output_path
-        next_index  += 1
-
-    else:
-        logger.warning(
-            "Maximum iterations (%d) reached. Final error = %.6f",
-            params.max_iter,
-            final_error if final_error is not None else float('nan'),
-        )
+        except Exception as exc:                       # pragma: no cover
+            logger.debug("Could not build the cascade summary: %s", exc)
 
     logger.info("Refinement completed. Final mesh: %s", current_hdf5)
     return 0
