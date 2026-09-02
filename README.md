@@ -122,9 +122,12 @@ actually fails:
 
 `lwann refine coarse.hdf5 <wannier90 folder> <mu> <gamma_min> <T_min> [options]`
 
-`gamma_min` and `T_min` are the *worst-case corner* of the sweep you intend to
-run afterwards: the smallest scattering rate and the lowest temperature, which
-together set the narrowest kernel the mesh will have to resolve.
+`gamma_min` and `T_min` are the *narrow corner* of the sweep you intend to run
+afterwards: the smallest scattering rate and the lowest temperature, which
+together set the narrowest kernel the mesh will have to resolve. Note that
+$\Gamma$ floors the width — at $T = 10$ K, $k_BT = 0.86$ meV, so a run at
+$\Gamma = 10$ meV is Lorentzian-dominated at both ends of a 10–300 K sweep and
+the kernel width spans only a factor 2.6.
 
 Each iteration diagonalises the model on the current mesh, measures how well
 the sampled band energies integrate $\partial f/\partial \varepsilon$, marks
@@ -139,17 +142,89 @@ Refined meshes are written with `.kmesh/irreducible = False` (they are not
 regular grids, so their weights come from `.kmesh/weights`) plus a
 `.kmesh/symmetrized` marker so continuation runs keep symmetrising.
 
-Graphene at $\Gamma = 1$ meV, starting from a 48x48x1 irreducible mesh,
-reaches the default target in seven iterations at 425 k-points — against
-roughly 68000 for a uniform mesh of comparable accuracy.
+#### Read this before relying on a refined mesh
 
-**The metric is a proxy, not a convergence proof.** It asks whether the set of
-sampled *energies* can integrate the kernel; it never sees the k-point
-weights, so it cannot tell whether the Brillouin zone is sampled densely
-enough. For graphene the converged mesh above still gives a total conductivity
-about 12% below the dense-grid value. Always confirm convergence of the
-observable you care about by continuing the refinement (or starting from a
-finer coarse mesh) until it stops moving.
+**Refinement cannot repair a starting mesh that is too coarse at the widest
+kernel of your sweep.** The accuracy there is set by the parent and is not
+recoverable afterwards, because at the narrow corner those energy intervals
+carry no selectable quadrature defect. Measured on graphene, tightening
+`--error_tol` by a factor 100 moved the 300 K result by 0.02%, while changing
+the parent from 48x48 to 300x300 moved it from -12.3% to -1.0%.
+
+**On an extended Fermi surface, refinement can make the observable worse than
+its own coarse parent.** Simple cubic at half filling, 300 K, $\Gamma = 10$ meV,
+against a converged reference of `2.0281e+07`: the 16^3 parent (165 k-points)
+gives +21.6%, refining it to 3675 k-points gives **-29.9%**, and a plain
+uniform 44^3 mesh (2300 k-points) gives +0.2%. The metric is an energy-axis
+criterion, and with a two-dimensional Fermi surface the energy axis near $\mu$
+is dense for free while the k-space sampling of the shell stays inhomogeneous.
+
+So the recommended workflow is:
+
+1. Converge a **uniform** mesh at the *widest* kernel of the planned sweep.
+   This is cheap and the metric is a valid proxy on a regular grid, where it
+   tracks the transport error monotonically.
+2. Refine from that mesh only to reach the **narrow** corner, which is the one
+   no uniform mesh can afford (the metric at 1 meV is still 0.267 on a
+   3001x3001 graphene grid and falls only as $1/n$).
+
+Refinement is a low-temperature tool layered on a high-temperature-converged
+parent, not a substitute for one. Where the Fermi surface is extended, a finer
+uniform mesh is often simply better. See KI-13 in `KNOWN_ISSUES.md` for the
+full measurements.
+
+#### Declaring the wide corner: the cascade
+
+`--T_max` and `--gamma_max` declare the *widest* corner of the sweep. The
+refinement then runs once per rung of a logarithmic ladder of kernel widths,
+**widest first**, so that the wide stage places k-points across the whole
+$\pm W_\mathrm{max}$ shell while it is still cheap and those points become the
+parents the narrow stages subdivide. Taking the maximum over the ladder inside
+a single loop would not do this: on a coarse mesh the narrow-kernel defect
+dominates, so the maximum is always the narrow entry.
+
+```
+ltb refine coarse.hdf5 model.tb 0.0 1e-3 10 --T_max 300 --gamma_max 0.01
+```
+
+Without these flags the behaviour is unchanged and the mesh is certified at the
+narrow corner only. With them, the starting mesh is first **qualified** at the
+wide corner and the run refuses with a recommended `nk` if it is too coarse
+(`--parent_tol`, default `--error_tol`; `--skip_parent_check` to bypass). The
+closing summary re-evaluates the final mesh at every rung, so residual
+inadequacy at wide kernels is printed rather than implied.
+
+Other options: `--ladder_ratio` (3, matching `--refinement_factor`),
+`--ladder_max_stages` (6), `--stage_tol_exponent` (0, i.e. the same tolerance
+at every width — this grades the mesh self-similarly, which is what the
+metric's $(h/W)^2$ scaling asks for), and `--max_output_size` (e.g. `4GB`),
+which predicts the next file from the current bytes-per-k-point *before* the
+generator runs and stops, keeping the last mesh that fitted.
+
+#### Inspecting a mesh
+
+`ltb inspect-mesh` and `lwann inspect-mesh` report what a mesh can resolve at
+one kernel width, answering two questions that need two different criteria:
+
+```
+ltb inspect-mesh mesh.hdf5 --T 300 --gamma 0.01 --target 5e-3
+```
+
+*Density* is judged by the sum-rule metric, and a recommended `nk` is given
+when it falls short. *Axis proportions* are judged separately, by the
+band-diagonal velocity tensor, because the metric is blind to them — it ranks a
+32x32 mesh above a 64x8 one that is 250x more accurate at the same cost.
+
+The proportions matter more than they look. On an orthorhombic model with
+$t_x/t_y = 5$, at matched cost: 1:1 gives +12.3%, 2:1 +2.1%, 4.6:1 +0.50%, and
+8:1 +0.004%. Note this is **not** the usual DFT rule $n_i \propto |b_i|$: in a
+tight-binding model the hoppings are given per lattice vector, so stretching a
+cell axis does not flatten the band along it. What matters is the energy
+variation per fractional step, which is what `inspect-mesh` measures. The
+reported ratio is a lower bound and is rounded up in the suggestion; the
+accuracy plateau is broad, so over-shooting is close to free.
+
+Exit code 2 means "below target", for scripting.
 
 See `documentation/adaptive_kmesh.tex` for the algorithm and `ltb refine
 --help` for all options.

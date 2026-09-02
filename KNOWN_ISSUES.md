@@ -20,7 +20,7 @@ analysis.
 - *Confidence*: whether the diagnosis is confirmed by a reproducer or is still
   a reading of the code.
 
-Last updated: 2026-09-01 (patch 13-19).
+Last updated: 2026-09-02 (patch 20-21).
 
 ---
 
@@ -519,41 +519,183 @@ re-reduced, which costs the whole point of working in the wedge.
 
 | | |
 |---|---|
-| Severity | medium (a converged-looking mesh can still be well off) |
-| Confidence | confirmed by reproducer |
-| Location | `structure/meshrefine.py:compute_error` |
+| Severity | **high** (refinement can make the observable worse than its own coarse parent) |
+| Confidence | confirmed by reproducer, on three lattices |
+| Location | `structure/meshrefine.py:compute_error`, `select_refinement_panels` |
 
 The sum-rule metric is a pure **energy-axis** criterion: it asks whether the set
-of sampled band energies can integrate `df/da`. It never sees the k-point
-weights, so two meshes with identical energy sets score identically however
-differently they sample the Brillouin zone. Resolving the kernel in energy is
-necessary for the transport integral to be accurate; it is not sufficient.
+of sampled band energies can integrate `df/da`. It never sees where in the
+Brillouin zone those energies came from, so two meshes with identical energy
+sets score identically however differently they sample k-space. Resolving the
+kernel in energy is necessary for the transport integral to be accurate; it is
+not sufficient.
 
-Graphene, `T = 300 K`, `gamma = 0.01 eV`, total `L11` (intra + inter):
+This entry was previously rated *medium* and suspected of being an artefact of
+a temperature/scale mismatch. Measurement (patch 20 session) shows the opposite:
+the scale mismatch is real but secondary, and the blind spot is worse than
+documented. Three independent symptoms, in increasing order of severity.
+
+**1. The blind spot is specific to adaptive meshes.** On a *uniform* mesh the
+energy axis and the k-space sampling are locked together, and the metric is a
+good proxy — it tracks the transport error monotonically:
 
 ```
-mesh                              nkp      L11        vs converged
-adaptive from 48x48 irr           425   1.3527e+06      -12.3%
-adaptive from 24x24 irr           357   1.3343e+06      -13.5%
-uniform 601x601 irr             30401   1.5431e+06       -0.1%
-uniform 901x901 irr             68101   1.5432e+06        ---
+uniform cubic     nkp    metric(300K,10meV)   L11 error
+8^3                35          0.2806            +145%
+16^3              165          0.0326           +21.6%
+24^3              455          0.0080            +8.2%
+32^3              969          0.0050            +1.8%
+44^3             2300          0.0043            +0.2%
+56^3             4495          0.0043            +0.0%
 ```
 
-The adaptive mesh reports `error = 0.0021`, comfortably inside the default
-`error_tol = 5e-3`, while the observable is 12% low. The deviation is
-insensitive to `--defect_fraction` (0.9, 0.99, 0.999 all give -12.3 to -12.1%),
-so it is not a selection-tuning artefact — it is the metric's blind spot. Note
-the adaptive mesh is still a large improvement on its own parent: uniform
-48x48 irreducible (217 k-points) gives `3.74e+06`, i.e. +142%.
+Graphene behaves the same way (0.1866 / 0.0708 / 0.0245 / 0.0098 against
++142 / +22 / +3.3 / +0.6%). Adaptivity is what decouples the two, and only
+then does the metric stop being informative. This is why
+`scripts/kmesh_refinement.py:qualify_parent_mesh` trusts the metric for regular
+grids and explicitly declines to trust it otherwise.
+
+**2. At comparable metric, the transport error spans an order of magnitude.**
+Graphene, `T = 300 K`, `gamma = 0.01 eV`, total `L11`, converged reference
+`1.5432e+06`:
+
+```
+mesh                        nkp   metric(300K)      L11        error
+uniform 48x48 irr           217      0.1866      3.7434e+06   +142%
+adaptive <- 48 (iter 6)     441      0.0078      1.3525e+06   -12.3%
+adaptive <- 48 (iter 7)     833      0.0037      1.3566e+06   -12.1%
+adaptive <- 96             1201      0.0045      1.4294e+06    -7.4%
+adaptive <- 192            3441      0.0044      1.5099e+06    -2.2%
+adaptive <- 300            8011      0.0026      1.5281e+06    -1.0%
+uniform 300x300 irr        7651      0.0098      1.5532e+06    +0.6%
+```
+
+The `adaptive <- 48` and `adaptive <- 192` meshes score 0.0078 and 0.0044 while
+being 12.3% and 2.2% off. The uniform 300 mesh scores *worse* (0.0098) than
+either and is 0.6% off. **The metric does not order the meshes by accuracy.**
+
+Tightening the metric does not help: driving `error_tol` from 5e-3 to 5e-5 on
+the graphene adaptive mesh saturates at 993 k-points and returns `1.3568e+06`,
+i.e. it moves the observable by 0.02% while the deficit stays at 12%. The
+residual is fixed by the *parent* mesh, not by refinement effort. The deviation
+is likewise insensitive to `--defect_fraction` (0.9 / 0.99 / 0.999 give
+-12.3 / -12.3 / -12.1%), so it is not a selection-tuning artefact.
+
+**3. On an extended Fermi surface, refinement makes the observable WORSE than
+its coarse parent.** Simple cubic at half filling, `T = 300 K`,
+`gamma = 0.01 eV`, reference `2.0281e+07` (48^3 and 72^3 agree to 0.1%):
+
+```
+mesh                        nkp        L11         error
+uniform 16^3 (the parent)   165     2.4655e+07    +21.6%
+cascade   <- 16^3          1881     1.5493e+07    -23.6%
+narrow-only <- 16^3        3675     1.4219e+07    -29.9%
+uniform 44^3               2300     2.0332e+07     +0.2%
+uniform 56^3               4495     2.0287e+07     +0.0%
+```
+
+Refining 165 -> 3675 k-points moves the result from +22% to -30%, and a plain
+uniform mesh of comparable size is two orders of magnitude more accurate. The
+same sign appears on the square lattice (16^2 parent +53.6%, narrow-only
+-21.3%, cascade -16.4%).
+
+The reason is structural: with a `(d-1)`-dimensional Fermi surface, band
+energies near `mu` are dense *for free* — thousands of k-points already supply
+them — so the energy-axis criterion is satisfied almost immediately while the
+k-space sampling of the shell remains grossly inhomogeneous. The blind spot is
+widest exactly where the Fermi surface is largest. Graphene's point node is the
+easy case, and it is the case the method was tuned on.
+
+**4. For an extended Fermi surface the narrow corner does not converge at
+all.** Refining cubic to `(1 K, 1 meV)` from four different parents:
+
+```
+parent     nkp        L11(1K, 1meV)
+8^3       7835         1.0966e+08
+16^3      3675         5.0645e+07
+24^3      4199         1.1800e+08
+32^3      2477         7.7313e+07
+```
+
+A factor 2.3 of scatter, non-monotonic, no limit in sight. By contrast graphene
+converges cleanly at its own corner (4.3182 / 4.3877 / 4.4279 / 4.4293 e+05
+from parents 48 / 96 / 192 / 300, settling on 4.429e+05, with the 441-point
+mesh only -2.5% off). So "the method works at the corner it was refined for"
+holds for a point node and fails for a Fermi surface.
+
+**What is not wrong.** The k-point weights and optical elements are exact on
+every mesh tested: `sum_k w_k |v_xx|^2` is 2.000000 on all uniform meshes and
+1.999995 on the adaptive ones. The error is entirely in how weight is
+distributed *in energy*, not in the weights themselves. An earlier reading of
+this entry blamed the weights; that reading is wrong.
+
+**Mitigation shipped (patches 20, 21).** None of this is fixed, but it is no
+longer silent:
+
+- `--T_max` / `--gamma_max` run the refinement as a cascade over kernel widths,
+  widest first, and the closing summary re-evaluates the final mesh at every
+  rung so residual inadequacy at wide kernels is printed rather than implied.
+  This improved graphene from -12.3% to -12.1% and cubic from -29.9% to -23.6%:
+  visibility, not a cure.
+- `qualify_parent_mesh` refuses a starting mesh that is too coarse at the widest
+  kernel, with a concrete recommended `nk`, because that error is not
+  recoverable by refining.
+- `ltb inspect-mesh` / `lwann inspect-mesh` report density and axis proportions
+  independently.
+
+**Guidance until this is fixed.** Converge a *uniform* mesh at the widest kernel
+of the planned sweep — cheap, and the metric is a valid proxy there — and use
+refinement only to reach the narrow corner that no uniform mesh can afford (the
+metric at 1 meV is still 0.267 on a 3001^2 graphene grid and falls as `1/n`).
+Refinement is a low-temperature tool layered on a high-temperature-converged
+parent, not a substitute for one. On an extended Fermi surface, prefer a finer
+uniform mesh outright.
 
 A weighted metric would be the natural remedy, but there is no exact sum rule to
-anchor it: the weighted sum converges to `int DOS(e) K(e) de`, not to 1. Options
-worth exploring are a self-consistency criterion (compare the transport integral
-on the current mesh against the same integral on a once-more-refined mesh) or
-Richardson extrapolation in the mesh density. Until then the documented
-guidance — README "Adaptive k-mesh refinement" and
-`documentation/adaptive_kmesh.tex` Sec. "Limitation: the metric is a proxy" —
-is to confirm convergence of the observable itself.
+anchor it: the weighted sum converges to `int DOS(e) K(e) de`, not to 1. The
+options worth exploring are a self-consistency criterion (compare the transport
+integral on the current mesh against the same integral on a once-more-refined
+mesh) or Richardson extrapolation in the mesh density. Note that
+`momentsDiagonal` is a single contiguous dataset, so a weighted criterion is
+cheap to evaluate — it does not pay the per-k-point read penalty of KI-02.
+
+---
+
+### KI-14 — `lwann` has no check that the Hamiltonian respects the cell symmetry
+
+| | |
+|---|---|
+| Severity | medium (wrong results, but only for hand-built low-symmetry input) |
+| Confidence | confirmed by reading the code; the ltb analogue is confirmed by reproducer |
+| Location | `structure/wannier.py`; cf. `structure/tb.py:_checkSymmetriesTightbinding` |
+
+`ltb` verifies that the intra-orbital hoppings map onto themselves under the
+point group spglib derives from the *structure*, and since patch 21 it raises
+rather than warns when they do not (see KI-R17). `lwann` has no equivalent
+check.
+
+For genuine Wannier90 output this is a near-non-issue: the Hamiltonian was
+derived from the same structure spglib is reading, so the two symmetries agree
+by construction. The hazard is a hand-assembled or edited `_hr.dat`, or a model
+written in Wannier format, whose hoppings are less symmetric than the cell. The
+irreducible reduction would then fold k-points onto a star the band structure
+does not possess. On the ltb side the same situation produced a 32% error in
+`L11` on a test model before the check was escalated.
+
+A hopping-pattern check like ltb's needs the orbital representation matrices
+`D(g)`, which are real work for p/d manifolds. A cheaper representation-free
+alternative is to sample a few hundred k-points and compare the *sorted*
+eigenvalue spectrum at `k` and `g.k`: gauge-invariant, independent of orbital
+count, and it tests exactly the property the reduction relies on,
+`E_n(g k) = E_n(k)`. Cost scales as `norb^3`, so it would be reasonable as a
+default up to a few orbitals and opt-in above. The same sampling could check
+`M(g k) = g M(k) g^T` for the star average at negligible extra cost.
+
+Partial mitigation exists: `structure/meshrefine.py:axis_anisotropy` warns when
+symmetrising the measured axis anisotropy changes it by more than 10%, which is
+the symptom of a stored point group that overstates the Hamiltonian's.
+
+---
 
 ---
 
@@ -1065,6 +1207,39 @@ for most of a run. `lwann` already said "Ceiling for"; both now spell out the
 formula and point at the per-iteration log line. (Patch 19 replaced the radius
 mechanism entirely — see KI-R14 — but `energy_window` survives as the guard
 against band-edge van Hove defects.)
+
+### KI-R17 — Intra-orbital symmetry check had an inert orbital filter, and only warned
+
+*Closed by patch 21.* Two defects in
+`structure/tb.py:_checkSymmetriesTightbinding`.
+
+First, the orbital filter never fired:
+
+```python
+band2_1  = int(self.tbdata[itb1][3]) - 1   # itb1 -- should be itb2
+band2_2  = int(self.tbdata[itb1][4]) - 1   # itb1 -- should be itb2
+if band1_1 != band2_1 or band2_2 != band2_2: continue   # name vs itself
+```
+
+Both identifiers were read from `itb1`, so `band2_1` was trivially equal to
+`band1_1`, and `band2_2 != band2_2` is always false. A hopping belonging to
+orbital pair `(a,a)` could therefore be matched against an entry from a
+*different* orbital pair that happened to share an r-vector and a hopping
+value, making the check too permissive on multi-orbital models — it could
+report `True` on genuinely broken symmetry. Single-orbital models were
+unaffected, which is why it went unnoticed.
+
+Second, a failed check only warned and then built the irreducible mesh anyway.
+On a test model whose hoppings broke the C4 symmetry of its cubic cell, that
+produced `L11 = 2.886e+07` against the correct reducible-grid value of
+`3.816e+07` — a 32% error that does not close with mesh density, because the
+reduction folds each wedge point onto a star the band structure does not
+possess. The check now raises on irreducible grids; `--red` remains the
+documented escape and still works.
+
+(For the record: the warning was working correctly and had been printing all
+along. It was missed during the patch-20 investigation because the diagnostic
+runs grepped stdout down to k-point counts.)
 
 ### PERF-R1 — Symmetrising branch was a Python loop over k-points
 
