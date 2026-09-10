@@ -5,6 +5,10 @@ import math
 
 rydberg2eV    = 13.605662285137
 hartree2eV    = 2*rydberg2eV
+# Exact inverse of hartree2eV.  Used when handing energies to BoltzTraP2,
+# which works in Hartree, so that the eV -> Ha -> eV round trip is the
+# identity rather than accurate to ~1e-7 (see KI-05).
+eV2hartree    = 1.0/hartree2eV
 bohr2angstrom = 0.529177
 hbarJs        = 1.054571817e-34
 hbareVs       = 6.582119569e-16

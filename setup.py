@@ -16,6 +16,7 @@ setup(name='linretrace',
       license='GPLv3',
       packages=['postproc','scattering','structure','structure.generators','structure.symmetries','structure.symmetries.onedim','structure.symmetries.twodim','structure.symmetries.threedim',
                 'scripts','scripts.ltb','scripts.lwann','scripts.linspect'],
-      install_requires=['numpy>=1.14','scipy>=1.10','h5py>=2.7','matplotlib>=2.2','ase>=3.17','spglib>=1.16'],
+      install_requires=['numpy>=1.26,<3','scipy>=1.10','h5py>=2.7','matplotlib>=2.2','ase>=3.17','spglib>=1.16'],
+      extras_require={'interpolation': ['BoltzTraP2>=25.11,<27']},
       scripts=['laverage','lconfig','ldft','linspect','lprint','ltb','ltb-run','lscat','lwann']
      )

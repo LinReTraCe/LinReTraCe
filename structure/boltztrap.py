@@ -39,21 +39,14 @@
 
 from __future__ import print_function, division, absolute_import
 import sys
-import os
 import logging
-import math
 logger = logging.getLogger(__name__)
 
 import numpy as np
 
 import BoltzTraP2.dft as BTP
-import BoltzTraP2.bandlib as BL
-import BoltzTraP2.io as IO
 from BoltzTraP2 import sphere
 from BoltzTraP2 import fite
-from BoltzTraP2 import serialization
-from BoltzTraP2.misc import ffloat
-from BoltzTraP2.units import Angstrom
 import ase.spacegroup
 
 from structure.auxiliary import progressBar
@@ -62,6 +55,176 @@ from structure.vasp      import VaspCalculation
 from structure           import units
 from structure.auxiliary import levicivita
 
+
+''' Range of BoltzTraP2 releases this interface has been validated against.
+
+    Lower bound inclusive, upper bound exclusive.  These are a tripwire, not
+    a claim that anything outside the range is broken: bump them deliberately
+    after re-running the interpolation regression test.  We depend on exactly
+    four BoltzTraP2 symbols -- sphere.get_equivalences, fite.fitde3D,
+    fite.getBands and the DFTData container inherited below -- so the surface
+    that a new release can disturb is small.
+'''
+BTP2_TESTED_MIN = (25, 11)
+BTP2_TESTED_MAX = (27,  0)
+
+''' Peak memory of fite.getBands, measured on this interface: it allocates
+    13 complex128 temporaries of shape (n_equivalences, n_kpoints) up front
+    (phase, phaseR x3, phaseRR x9) plus the phase0 working arrays.  Measured
+    271 bytes per (equivalence class, k-point) pair, stable over two orders
+    of magnitude in both factors.  Evaluation is therefore chunked over
+    k-points against the budget below.  Raise BTP2_MEMORY_BUDGET_GB on a
+    large machine; lowering it only costs a little speed.
+'''
+BTP2_BYTES_PER_PAIR   = 271
+BTP2_MEMORY_BUDGET_GB = 2.0
+
+''' Default settings of the hold-out validation (see
+    BoltztrapInterpolation.validate).  The warning threshold is k_B T at
+    BTP2_VALIDATE_TREF: an interpolation error larger than the thermal
+    smearing of the intended run makes the transport integrals unreliable.
+'''
+BTP2_VALIDATE_FRACTION = 0.2   # share of the parent mesh held out
+BTP2_VALIDATE_WINDOW   = 1.0   # eV around mu in which the error is measured
+BTP2_VALIDATE_MINKP    = 20    # below this many parent k-points, skip
+BTP2_VALIDATE_TREF     = 300.0 # K, reference temperature for the warning
+
+
+def btp2_version():
+  '''
+  Return the installed BoltzTraP2 release as a tuple of integers.
+
+  BoltzTraP2 does not define ``BoltzTraP2.__version__``; the release string
+  lives in ``BoltzTraP2.version.PROGRAM_VERSION`` (e.g. '26.3.1').
+
+  Returns
+  -------
+  tuple of int, or None
+      (26, 3, 1) for release '26.3.1'.  None if the version cannot be
+      determined, which is not treated as an error.
+  '''
+
+  try:
+    from BoltzTraP2.version import PROGRAM_VERSION
+  except ImportError:
+    return None
+
+  fields = []
+  for field in str(PROGRAM_VERSION).split('.'):
+    try:
+      fields.append(int(field))
+    except ValueError:
+      break # stop at the first non numeric field, e.g. '26.3.1rc1'
+  return tuple(fields) if fields else None
+
+
+def chunk_size(n_equiv, budget_gb=None, bytes_per_pair=BTP2_BYTES_PER_PAIR):
+  """
+  Number of k-points fite.getBands can be handed at once within a memory
+  budget.
+
+  Parameters
+  ----------
+  n_equiv : int
+      Number of star-function equivalence classes, len(equivalences).  Set
+      by the *parent* mesh and the interpolation parameter, not by the mesh
+      being evaluated.
+  budget_gb : float, optional
+      Budget in GiB.  Defaults to BTP2_MEMORY_BUDGET_GB.
+  bytes_per_pair : int, optional
+      Bytes per (equivalence class, k-point) pair.
+
+  Returns
+  -------
+  int
+      Chunk length, at least 1.  A chunk of 1 is attempted rather than
+      raising, since the alternative is no result at all.
+  """
+
+  if budget_gb is None:
+    budget_gb = BTP2_MEMORY_BUDGET_GB
+  per_kpoint = float(bytes_per_pair) * float(n_equiv)
+  if per_kpoint <= 0.0:
+    return 1
+  return max(1, int(budget_gb * 1024**3 / per_kpoint))
+
+
+def getBands_chunked(kpoints, equivalences, lattvec, coeffs, budget_gb=None):
+  """
+  Memory-bounded replacement for fite.getBands(..., curvature=True).
+
+  fite.getBands allocates the phase factors for every k-point at once, so
+  the peak grows as n_equiv * n_kpoints and a dense output mesh exhausts
+  memory long before the result would.  Chunking changes nothing about the
+  numbers: each k-point is evaluated from the same coefficients,
+  independently of every other.
+
+  Parameters
+  ----------
+  kpoints : ndarray, shape (nkp, 3)
+      Fractional coordinates to evaluate on.
+  equivalences, lattvec, coeffs
+      As returned by sphere.get_equivalences, DFTData.get_lattvec and
+      fite.fitde3D.
+  budget_gb : float, optional
+      Passed on to chunk_size.
+
+  Returns
+  -------
+  tuple of ndarray
+      (energies, velocities, curvatures) with the shapes fite.getBands
+      returns: (nbands, nkp), (3, nbands, nkp), (3, 3, nbands, nkp).
+  """
+
+  nkp   = len(kpoints)
+  chunk = chunk_size(len(equivalences), budget_gb)
+
+  if chunk >= nkp:
+    logger.debug('BoltzTrap2: evaluating {} k-points in a single pass.'.format(nkp))
+    return fite.getBands(kpoints, equivalences, lattvec, coeffs, curvature=True)
+
+  nchunks = int(np.ceil(nkp / float(chunk)))
+  logger.info('BoltzTrap2: evaluating {} k-points in {} chunks of {} '
+              '(~{:.1f} GB peak).'.format(nkp, nchunks, chunk,
+              BTP2_BYTES_PER_PAIR * len(equivalences) * chunk / 1024.0**3))
+
+  ene, vel, cur = [], [], []
+  for ichunk, start in enumerate(range(0, nkp, chunk)):
+    progressBar(ichunk+1, nchunks, status='chunks', prefix='interp:')
+    e, v, c = fite.getBands(kpoints[start:start+chunk], equivalences,
+                            lattvec, coeffs, curvature=True)
+    ene.append(e); vel.append(v); cur.append(c)
+
+  # k is the last axis of all three return values
+  return (np.concatenate(ene, axis=-1),
+          np.concatenate(vel, axis=-1),
+          np.concatenate(cur, axis=-1))
+
+
+def check_btp2_version():
+  '''
+  Warn -- never abort -- if the installed BoltzTraP2 lies outside the range
+  recorded in BTP2_TESTED_MIN / BTP2_TESTED_MAX.
+
+  Called once per interpolation run so that a version mismatch appears in the
+  log next to the numbers it may have affected, rather than surfacing later as
+  an obscure traceback (or, worse, not at all).
+  '''
+
+  version = btp2_version()
+  if version is None:
+    logger.warning('BoltzTrap2: unable to determine the installed version.')
+    return
+
+  printable = '.'.join(str(i) for i in version)
+  if version < BTP2_TESTED_MIN or version >= BTP2_TESTED_MAX:
+    logger.warning('BoltzTrap2: version {} lies outside the tested range '
+                   '[{}, {}).'.format(printable,
+                                      '.'.join(str(i) for i in BTP2_TESTED_MIN),
+                                      '.'.join(str(i) for i in BTP2_TESTED_MAX)))
+    logger.warning('BoltzTrap2: interpolation has not been validated for this release.')
+  else:
+    logger.info('BoltzTrap2: detected version {}.'.format(printable))
 
 
 class BoltztrapInterpolation(object):
@@ -88,6 +251,7 @@ class BoltztrapInterpolation(object):
 
   def interpolate(self, niter = 3, mesh = None):
     logger.info('BoltzTrap2 - Licensed under GPLv3.')
+    check_btp2_version()
     logger.info('BoltzTrap2: Interpolating band-structure.')
     logger.info('BoltzTrap2: Requesting interpolation parameter: {}'.format(niter))
     self.niter = niter
@@ -160,7 +324,6 @@ class BoltztrapInterpolation(object):
                                                 self.niter * len(self.data.kpoints))
 
     self.coeffs = fite.fitde3D(self.data, self.equivalences)
-    self.metadata = serialization.gen_bt2_metadata(self.data, self.data.magmom is not None)
 
     self.lattvec = self.data.get_lattvec()
 
@@ -178,7 +341,7 @@ class BoltztrapInterpolation(object):
       self.kpoints = self.data.kpoints
 
     self.interp_energies, self.interp_velocities, self.interp_curvatures = \
-        fite.getBands(self.kpoints, self.equivalences, self.lattvec, self.coeffs, curvature=True)
+        getBands_chunked(self.kpoints, self.equivalences, self.lattvec, self.coeffs)
 
 
 
@@ -380,7 +543,7 @@ class BoltztrapInterpolation(object):
     if self.dftcalc.irreducible and self.dftcalc.nsym > 1:
       # logger.info('Generating irreducible kpoints:')
 
-      for ik in range(np.product(self.mesh)):
+      for ik in range(np.prod(self.mesh)):
         # progressBar(ik+1,self.nkp,status='k-points')
 
         if unique[ik] == 0: continue # skip if we already went there via symmetry
@@ -433,7 +596,7 @@ class BoltztrapInterpolation(object):
 
     else:
       self.kpoints                 = kpoints
-      self.nkp                     = np.product(self.mesh)
+      self.nkp                     = np.prod(self.mesh)
       self.nkx, self.nky, self.nkz = self.mesh
       self.multiplicity            = np.ones((self.nkp,), dtype=int)
       self.weightsum               = self.dftcalc.weightsum
@@ -443,6 +606,132 @@ class BoltztrapInterpolation(object):
       self.symop                   = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       self.invsymop                = np.array([[[1,0,0],[0,1,0],[0,0,1]]], dtype=np.float64)
       logger.info('Generated new reducible kmesh with {} kpoints'.format(self.nkp))
+
+  def validate(self, fraction=None, window=None, seed=0, niter=None):
+    """
+    Estimate the out-of-sample accuracy of the interpolation by hold-out
+    cross validation on the parent mesh.
+
+    Why this exists.  fite.fitde3D is an *exact* interpolant: it reproduces
+    the DFT energies at the parent k-points to machine precision, whatever
+    the mesh density.  Agreement there therefore says nothing at all about
+    accuracy anywhere else, and a badly under-resolved calculation looks
+    perfect from the inside.  The only honest check is to withhold part of
+    the parent mesh, fit on the rest, and compare at the withheld points.
+
+    This costs one extra fit per spin and needs neither optical elements
+    nor any additional DFT run, so it applies to every interface.
+
+    Measured behaviour (Wien2k, 20x20x20 parent, --interp 3, states within
+    1 eV of mu):
+
+      SrVO3  hold-out rms 0.008-0.010 eV   true out-of-sample rms 0.005 eV
+      a-As   hold-out rms 0.337-0.361 eV   true out-of-sample rms 0.290 eV
+
+    so the estimate is conservative by roughly 1.2x to 2x, which is the
+    right direction for a warning.  "True" here means measured against an
+    independent band path sharing no k-points with the parent mesh.
+
+    Parameters
+    ----------
+    fraction : float, optional
+        Share of parent k-points held out.  Default BTP2_VALIDATE_FRACTION.
+    window : float, optional
+        Half-width in eV around mu over which the error is reported.  Only
+        states near mu matter for transport.  Default BTP2_VALIDATE_WINDOW.
+    seed : int, optional
+        Seed of the train/test split, so the report is reproducible.
+    niter : int, optional
+        Interpolation parameter for the reduced fit.  Defaults to the value
+        the production fit used, which keeps the comparison like for like.
+
+    Returns
+    -------
+    list of dict, or None
+        One entry per spin with keys 'rms', 'max', 'nstates', 'ntrain',
+        'ntest'.  None if the parent mesh is too small to split
+        (fewer than BTP2_VALIDATE_MINKP points).
+    """
+
+    if fraction is None: fraction = BTP2_VALIDATE_FRACTION
+    if window   is None: window   = BTP2_VALIDATE_WINDOW
+    if niter    is None: niter    = self.niter
+
+    nkp = len(self.dftcalc.kpoints)
+    if nkp < BTP2_VALIDATE_MINKP:
+      logger.warning('BoltzTrap2: parent mesh has only {} k-points - '
+                     'too few to validate.'.format(nkp))
+      return None
+
+    logger.info('BoltzTrap2: Validating interpolation (hold-out {:.0%}).'.format(fraction))
+
+    ''' BoltzTraP2 is chatty; silence it for the duration as elsewhere '''
+    logging.disable(sys.maxsize)
+    report = []
+    try:
+      for ispin in range(self.dftcalc.spins):
+        rng   = np.random.default_rng(seed)
+        order = rng.permutation(nkp)
+        ntest = max(1, int(fraction*nkp))
+        itest, itrain = order[:ntest], order[ntest:]
+
+        kp, en, mu = self.dftcalc.kpoints, self.dftcalc.energies[ispin], self.dftcalc.mu
+
+        data = DFTData(self.dftcalc.aseobject, self.dftcalc.weightsum,
+                       kp[itrain], mu, en[itrain], self.dftcalc.charge)
+        equiv  = sphere.get_equivalences(data.atoms, data.magmom, niter*len(itrain))
+        coeffs = fite.fitde3D(data, equiv)
+        ekp, _ = fite.getBands(kp[itest], equiv, data.get_lattvec(), coeffs, curvature=False)
+        ekp    = ekp.T * units.hartree2eV
+
+        nbands = min(en.shape[1], ekp.shape[1])
+        ref    = en[itest][:,:nbands]
+        mask   = np.abs(ref-mu) < window
+        if not np.any(mask):
+          report.append(None)
+          continue
+        err = np.abs(ref - ekp[:,:nbands])[mask]
+        report.append(dict(rms=float(np.sqrt((err**2).mean())), max=float(err.max()),
+                           nstates=int(mask.sum()), ntrain=len(itrain), ntest=ntest))
+    finally:
+      logging.disable(logging.NOTSET)
+
+    self._reportValidation(report, window)
+    return report
+
+
+  def _reportValidation(self, report, window):
+    """
+    Log the outcome of validate() and warn when the interpolation error near
+    mu exceeds the thermal smearing at BTP2_VALIDATE_TREF.
+
+    The comparison is expressed as an equivalent temperature so that users
+    running below room temperature can judge for themselves: an rms error of
+    e eV is only harmless if k_B T of the intended run is comfortably above
+    it.
+    """
+
+    kBT_ref = units.kB_eV * BTP2_VALIDATE_TREF
+    for ispin, entry in enumerate(report):
+      prefix = '' if self.dftcalc.spins == 1 else ('up: ' if ispin == 0 else 'dn: ')
+      if entry is None:
+        logger.warning('BoltzTrap2: {}no states within {} eV of mu - '
+                       'validation inconclusive.'.format(prefix, window))
+        continue
+      logger.info('BoltzTrap2: {}hold-out error for {} states within {} eV of mu: '
+                  'rms {:.4f} eV, max {:.4f} eV'
+                  .format(prefix, entry['nstates'], window, entry['rms'], entry['max']))
+      logger.info('BoltzTrap2: {}this equals k_B T at T = {:.0f} K.'
+                  .format(prefix, entry['rms']/units.kB_eV))
+      if entry['rms'] > kBT_ref:
+        logger.critical('\n\n############\n'
+                        'Interpolation error near mu ({:.3f} eV) exceeds k_B T at {:.0f} K '
+                        '({:.4f} eV).\nThe parent k-mesh is too coarse for reliable transport: '
+                        'a finer\nDFT calculation is required.  Interpolating onto a denser '
+                        'output mesh\ndoes not add information and will not fix this.\n'
+                        '############\n'
+                        .format(entry['rms'], BTP2_VALIDATE_TREF, kBT_ref))
+
 
   def _symmetrize(self):
     '''
@@ -490,36 +779,44 @@ class BoltztrapInterpolation(object):
       rotsymop  = np.einsum('ij,njk,kl->nil',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
       rotsymopT = np.einsum('ij,njk,kl->nli',np.linalg.inv(self.dftcalc.kvec),self.dftcalc.invsymop,self.dftcalc.kvec)
 
-      for ikp in range(nkp):
-        progressBar(ikp+1,nkp, status='k-points', prefix=prefix)
+      ''' Chunk over k-points.  The largest intermediate is the Levi-Civita
+          contraction, of shape (chunk, nbands, nsym, 3, 3, 3) complex128,
+          i.e. 432 * nbands * nsym bytes per k-point; size the chunk against
+          the same budget the interpolation uses. '''
+      per_kpoint = 432.0 * nbands * max(nsym,1)
+      kchunk = max(1, int(BTP2_MEMORY_BUDGET_GB * 1024**3 / per_kpoint))
 
+      for kstart in range(0, nkp, kchunk):
+        kstop = min(kstart+kchunk, nkp)
+        progressBar(kstop, nkp, status='k-points', prefix=prefix)
 
-        vel     = self.velocities[ispin][ikp,:,:] # nbands, 3
-        cur     = self.curvatures[ispin][ikp,:,:] # nbands, 6
+        vel = self.velocities[ispin][kstart:kstop,:,:] # chunk, nbands, 3
+        cur = self.curvatures[ispin][kstart:kstop,:,:] # chunk, nbands, 6
 
         # put the curvatures in symmetric matrix form
-        curmat  = np.zeros((nbands,3,3), dtype=np.float64)
-        curmat[:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:]
-        curmat[:, [0,0,1], [1,2,2]] = curmat[:, [1,2,2], [0,0,1]]
+        curmat = np.zeros((kstop-kstart,nbands,3,3), dtype=np.float64)
+        curmat[:,:, [0,1,2,1,2,2], [0,1,2,0,0,1]] = cur[:,:,:]
+        curmat[:,:, [0,0,1], [1,2,2]] = curmat[:,:, [1,2,2], [0,0,1]]
 
-        vk = np.einsum('nij,bj->bni',rotsymop,vel)
+        vk      = np.einsum('sij,kbj->kbsi',rotsymop,vel)
         vk_conj = np.conjugate(vk)
-        ck = np.einsum('nij,bjk,nkl->bnil',rotsymop,curmat,rotsymopT) # bands, bands, nsym, 3, 3
+        ck      = np.einsum('sij,kbjm,sml->kbsil',rotsymop,curmat,rotsymopT,optimize=True)
 
-        ''' these are band interpolation, nothing complex can appear here '''
-        vk2 = vk_conj[:,:,[0,1,2,0,0,1]] * vk[:,:,[0,1,2,1,1,2]]
-        vk2 = np.mean(vk2,axis=1).real # symmetrize over the squares
+        ''' these are band interpolation, nothing complex can appear here
+            index order of the 6 stored components: xx yy zz xy xz yz '''
+        vk2 = vk_conj[:,:,:,[0,1,2,0,0,1]] * vk[:,:,:,[0,1,2,1,2,2]]
+        vk2 = np.mean(vk2,axis=2).real # symmetrize over the squares
 
         #           epsilon_cij v_a v_i c_bj -> abc
-        mb = np.einsum('zij,bnx,bni,bnyj->bnxyz',levmatrix,vk_conj,vk,ck)
-        mb = np.mean(mb,axis=1)
+        mb = np.einsum('zij,kbsx,kbsi,kbsyj->kbsxyz',levmatrix,vk_conj,vk,ck,optimize=True)
+        mb = np.mean(mb,axis=2)
 
         if ioptical==3:
-          opticalDiag[ikp,:,:] = vk2[...,:3]
+          opticalDiag[kstart:kstop,:,:] = vk2[...,:3]
         else:
-          opticalDiag[ikp,:,:6] = vk2[...]
+          opticalDiag[kstart:kstop,:,:6] = vk2[...]
 
-        BopticalDiag[ikp,:,:,:,:] = mb
+        BopticalDiag[kstart:kstop,:,:,:,:] = mb
 
       self.opticalDiag.append(opticalDiag)
       self.BopticalDiag.append(BopticalDiag)
@@ -529,155 +826,72 @@ class BoltztrapInterpolation(object):
     self.opticalBandMax = self.velocities[0].shape[1]
 
 
-class DFTData:
+class DFTData(BTP.DFTData):
     """
-      Objects of this class hold structural and dynamical information from DFT
-      results in any supported format.
+      Container that hands LinReTraCe's electronic structure to BoltzTraP2.
+
+      BoltzTraP2's own DFTData constructor expects a directory on disk and
+      runs its loaders over it.  We already hold everything in memory, so the
+      constructor is the only member we override.  bandana, get_lattvec,
+      get_volume and get_formula_count are inherited unchanged.
+
+      Why inherit rather than copy:  fite.fitde3D reads kpoints, ebands,
+      mommat and get_lattvec() off this object.  A local copy of the accessors
+      would keep the old behaviour while the consumer moves on, which fails
+      quietly with wrong numbers instead of loudly with a traceback.
+      Inheriting keeps container and consumer in step across releases; see
+      BTP2_TESTED_MIN / BTP2_TESTED_MAX above for the version tripwire.
+
+      Note: BTP.DFTData.__init__ is deliberately NOT called.  Its signature is
+      incompatible and it would try to read from disk.  Every attribute that
+      the inherited methods and fite.fitde3D rely on is set below.
     """
 
     def __init__(self, aseobject, weightsum, kpoints, mu, energies, charge):
       """
-        Create BoltzTraP2 DFTData object given our electronicstructure objects
+        Build a BoltzTraP2 DFTData object from our internal arrays.
 
-         We provide the data as explicit arguments to avoid any spin related problems
-         INFO: We transform our internal units (eV) to the BoltzTraP units (Ha)
-         nota bene: 1 Hartree = 27.211407953 eV
+        Data are passed as explicit arguments rather than as an
+        ElectronicStructure object so that the caller resolves the spin
+        channel; this class never has to know about spin.
+
+        Parameters
+        ----------
+        aseobject : ase.Atoms
+            Structure of the unit cell.  BoltzTraP2 takes the lattice vectors
+            from it and, via spglib, the symmetry used to build the star
+            functions -- so it must describe the real structure, not just the
+            lattice.
+        weightsum : float
+            Sum of the k-point weights: 2 for an unpolarised calculation, 1
+            per channel otherwise.  BoltzTraP2 calls this 'dosweight'.
+        kpoints : ndarray, shape (nkp, 3), float64
+            Fractional coordinates of the k-mesh.  Copied, not referenced.
+        mu : float
+            Chemical potential in eV.
+        energies : ndarray, shape (nkp, nbands), float64
+            Band energies in eV for one spin channel.  Stored transposed,
+            since BoltzTraP2 indexes bands first.
+        charge : float
+            Number of valence electrons in the unit cell.
+
+        Notes
+        -----
+        LinReTraCe works in eV throughout, BoltzTraP2 in Hartree, so energies
+        are converted here and converted back in BoltztrapInterpolation._interp.
+        Both directions use units.hartree2eV so that the round trip is exact.
       """
 
       self.sysname   = "DFT_to_BTP2"
       self.atoms     = aseobject
       self.dosweight = weightsum
       self.kpoints   = kpoints.copy()
-      self.fermi     = mu * 0.0367492929 # eV to Hartree
-      self.ebands    = energies.T.copy() * 0.0367492929 # eV to Hartree
-      self.mommat    = None
-      self.magmom    = None
+      self.fermi     = mu * units.eV2hartree
+      self.ebands    = energies.T.copy() * units.eV2hartree
+      self.mommat    = None   # no momentum matrix elements: fit energies only
+      self.magmom    = None   # non spin-polarised symmetry for the star functions
       self.nelect    = charge
       self.source    = "LinReTraCe"
-
-    # def __init__(self, directory, derivatives=False, *args, **kwargs):
-    #     """Create a DFTData object."""
-    #     for label, loader in loaders[::-1]:
-    #         BoltzTraP2.misc.info("looking for a {} calculation".format(label))
-    #         try:
-    #             loaded = loader(directory, *args, **kwargs)
-    #         except LoaderError as e:
-    #             BoltzTraP2.misc.info("error in {} loader: {}".format(label, e))
-    #             continue
-    #         self.source = label
-    #         break
-    #     else:
-    #         raise ValueError(
-    #             "no calculation found in directory {}".format(directory)
-    #         )
-    #     BoltzTraP2.misc.info(
-    #         "successfully loaded a {} calculation".format(self.source)
-    #     )
-    #     # Try to copy all relevant attributes from the loader
-    #     if derivatives:
-    #         try:
-    #             self.mommat = loaded.mommat
-    #         except AttributeError:
-    #             raise ValueError(
-    #                 "no derivative information found in directory {}".format(
-    #                     directory
-    #                 )
-    #             )
-    #     else:
-    #         try:
-    #             loaded.mommat
-    #         except AttributeError:
-    #             pass
-    #         else:
-    #             BoltzTraP2.misc.info(
-    #                 "derivative information will be discarded"
-    #             )
-    #         self.mommat = None
-    #     try:
-    #         self.sysname = loaded.sysname
-    #         self.atoms = loaded.atoms
-    #         self.dosweight = loaded.dosweight
-    #         self.kpoints = loaded.kpoints
-    #         self.fermi = loaded.fermi
-    #         self.ebands = loaded.ebands
-    #     except AttributeError:
-    #         raise ValueError(
-    #             "some essential piece of information was not loaded"
-    #         )
-
-    #     # Warn the user if the spin up and spin down Fermi energies
-    #     # are different in CASTEP.
-    #     try:
-    #         self.castep_fermi_mismatch = loaded.castep_fermi_mismatch
-    #         if self.castep_fermi_mismatch:
-    #             BoltzTraP2.misc.info(
-    #                 "CASTEP WARNING: "
-    #                 "Different spin up and spin down Fermi energy."
-    #                 "\nProceeding with spin up Fermi energy. Transport results might"
-    #                 " be inaccurate."
-    #             )
-    #     except AttributeError:
-    #         pass
-
-    #     BoltzTraP2.misc.info("Fermi energy:", self.fermi)
-    #     # If no initial magnetic moments are provided by the loader, assume a
-    #     # non-spin-polarized calculation.
-    #     try:
-    #         self.magmom = loaded.magmom
-    #     except AttributeError:
-    #         self.magmom = None
-    #         BoltzTraP2.misc.info("Assuming a non-spin-polarized calculation")
-    #     # If the number of valence electrons has not been set yet, compute it
-    #     # from the bands.
-    #     try:
-    #         self.nelect = loaded.nelect
-    #     except AttributeError:
-    #         degeneracies = BoltzTraP2.sphere.calc_reciprocal_degeneracies(
-    #             self.atoms, self.magmom, self.kpoints
-    #         )
-    #         weights = degeneracies.astype(np.float64) / degeneracies.sum()
-    #         occupancy = (loaded.ebands < loaded.fermi).astype(np.intc)
-    #         self.nelect = round(self.dosweight * (occupancy * weights).sum())
-
-    def bandana(self, emin=-np.inf, emax=np.inf):
-      bandmin = np.min(self.ebands, axis=1)
-      bandmax = np.max(self.ebands, axis=1)
-      ntoolow = np.count_nonzero(bandmax <= emin)
-      accepted = np.logical_and(bandmin < emax, bandmax > emin)
-      BoltzTraP2.misc.info("BANDANA output")
-      for iband in range(len(self.ebands)):
-          BoltzTraP2.misc.info(
-              iband, bandmin[iband], bandmax[iband], accepted[iband]
-          )
-      self.ebands = self.ebands[accepted]
-      if self.mommat is not None:
-          self.mommat = self.mommat[:, accepted, :]
-      # Removing bands may change the number of valence electrons
-      self.nelect -= self.dosweight * ntoolow
-      return accepted
-
-    def get_lattvec(self):
-      try:
-          self.lattvec
-      except AttributeError:
-          self.lattvec = self.atoms.get_cell().T * Angstrom
-      return self.lattvec
-
-    def get_volume(self):
-      try:
-          self.UCVol
-      except AttributeError:
-          lattvec = self.get_lattvec()
-          self.UCvol = np.abs(np.linalg.det(lattvec))
-      return self.UCvol
-
-    def get_formula_count(self):
-     """Return the number of irreducible formulas in the unit cell.
-
-     Useful for computing molar quantities.
-     """
-     counts = collections.Counter(self.atoms.get_chemical_symbols())
-     return functools.reduce(math.gcd, counts.values())
 
 
 

@@ -23,7 +23,7 @@ def main():
   args = parse_args()
   logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
-  dims = np.array(['x' in args.dimensions,'y' in args.dimensions, 'z' in args.dimensions], dtype=np.bool)
+  dims = np.array(['x' in args.dimensions,'y' in args.dimensions, 'z' in args.dimensions], dtype=bool)
 
   atoms = []
   with open(str(args.tb_file),'r') as data:
