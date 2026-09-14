@@ -42,11 +42,26 @@ import sys
 import logging
 logger = logging.getLogger(__name__)
 
+import io
+import contextlib
 import numpy as np
 
-import BoltzTraP2.dft as BTP
-from BoltzTraP2 import sphere
-from BoltzTraP2 import fite
+''' BoltzTraP2 emits a bare notice on import when pyfftw is absent ("you can
+    install pyfftw to get better FFT performance"), via BoltzTraP2.misc.warning
+    which writes to stderr.  It arrives before any LinReTraCe output and is
+    misleading here: the FFT path lives in fite.FFTev / fite.FFTc, reached only
+    through fite.getBTPbands, whereas we call fite.getBands, a direct phase sum
+    that never performs an FFT.  Both streams are captured (the notice moves
+    between them across releases) and relegated to the debug log; nothing is
+    discarded, and exceptions still propagate normally. '''
+_btp2_import_notes = io.StringIO()
+with contextlib.redirect_stdout(_btp2_import_notes), contextlib.redirect_stderr(_btp2_import_notes):
+  import BoltzTraP2.dft as BTP
+  from BoltzTraP2 import sphere
+  from BoltzTraP2 import fite
+if _btp2_import_notes.getvalue().strip():
+  logger.debug('BoltzTrap2 import notice: {}'.format(_btp2_import_notes.getvalue().strip()))
+
 import ase.spacegroup
 
 from structure.auxiliary import progressBar

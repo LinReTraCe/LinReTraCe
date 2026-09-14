@@ -16,6 +16,7 @@ else:
 
 import numpy as np
 import ase.spacegroup
+import spglib
 
 from structure.auxiliary import progressBar
 from structure.es        import ElectronicStructure
@@ -61,8 +62,22 @@ class DftCalculation(ElectronicStructure, ABC):
     logger.debug('  reciprocal lattice [Ang^-1] (rows) :\n{}'.format(self.kvec))
     logger.debug('  recip.T @ real / (2pi)=\n{}'.format(self.kvec.T @ self.rvec / 2. / np.pi))
 
+    ''' ase.spacegroup.get_spacegroup is deprecated from ASE 3.29 (it returns
+        operations for a standard setting regardless of the Atoms object) and
+        emits a FutureWarning.  spglib is already a dependency and reports the
+        space group of the cell as given.  Note this only removes the warning:
+        symop_ase below is still built from the space-group *number* via
+        ase.spacegroup.Spacegroup, so it remains a standard-setting object.
+        See KNOWN_ISSUES KI-18. '''
     try:
-      self.spacegroup = int(ase.spacegroup.get_spacegroup(self.aseobject).no)
+      cell = (self.aseobject.get_cell()[:],
+              self.aseobject.get_scaled_positions(),
+              self.aseobject.get_atomic_numbers())
+      dataset = spglib.get_symmetry_dataset(cell, symprec=1e-5)
+      try:
+        self.spacegroup = int(dataset.number)        # spglib >= 2.5 object
+      except AttributeError:
+        self.spacegroup = int(dataset['number'])     # older dict interface
       logger.info('  Space group: {}'.format(self.spacegroup))
     except:
       logger.critical('\n\nCould not determine spacegroup via ASE.\nPlease provide it:')

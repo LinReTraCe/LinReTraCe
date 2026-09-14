@@ -22,21 +22,80 @@ except ImportError:
 ldft: Pre-processing of DFT codes for the LRTC code
 '''
 
+''' Explanation appended to `ldft --help`.  --optic, --interp and --mesh are
+    routinely confused with one another, so the combinations are spelled out
+    rather than left to be inferred from the individual help strings. '''
+OPTICAL_ELEMENT_GUIDE = """
+Where the optical elements come from
+------------------------------------
+  (neither flag)              no elements are written; the output file cannot
+                              be used by lrtc
+  --optic                     DFT dipole matrix elements, zero field only
+  --interp                    Peierls elements (velocity squared) plus the
+                              magnetic-field elements from the curvatures
+  --optic --interp            DFT dipoles at zero field, interpolated
+                              curvatures for the magnetic field.  This is the
+                              most complete combination available, and the
+                              only way to get both true matrix elements and
+                              B-field quantities.  lrtc warns that the two
+                              sources are being mixed.
+  --optic --interp --peierls  interpolated elements only; --optic is read and
+                              then discarded
+  --interp --mesh NKX NKY NKZ everything re-evaluated on the requested mesh
+  --optic --mesh ...          rejected: the DFT elements exist only on the
+                              k-mesh they were computed on
+
+--interp and --mesh are independent
+-----------------------------------
+--interp NSTARS sets the quality of the fit; --mesh sets the k-points it is
+evaluated on.  Neither one changes the DFT calculation underneath.  If the
+DFT mesh is too coarse, a finer --mesh only samples a poor fit more densely;
+the hold-out validation that runs after --interp is there to tell you when
+that is happening.
+"""
+
+
 def parse_args(args=None):
   parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawTextHelpFormatter,
     description='Argument parser for the DFT pre-processing of LRTC',
-    epilog="That's the end of the help")
+    epilog=OPTICAL_ELEMENT_GUIDE)
   parser.add_argument('system',     help='Path to DFT calculation (Wien2K Folder or Vasp Folder / vasprun.xml directly')
   parser.add_argument('-o', '--output',   help='Outputname of hdf5 (default="lrtc-dft.hdf5")', default='lrtc-dft.hdf5')
-  parser.add_argument('--optic',    help='Read optical elements (Wien2K)\nx optic must be executed with either 3/6/9 directional dependencies: Rexx Reyy Rezz [Rexy Rexz Reyz] [Imxy Imxz Imyz]', default=False, action='store_true')
+  parser.add_argument('--optic',    help='Read the optical (dipole) matrix elements produced by the DFT code\n'
+                                         '(Wien2k: case.symmat). "x optic" must have been run with 3, 6 or 9\n'
+                                         'directional components: Rexx Reyy Rezz [Rexy Rexz Reyz] [Imxy Imxz Imyz].\n'
+                                         'These are true transition matrix elements and exist only on the k-mesh\n'
+                                         'of the DFT calculation, so they cannot be moved to another mesh.',
+                                    default=False, action='store_true')
 
   parser.add_argument('--trunc', nargs=2, help='Relative energy levels to include in the truncation. (relative to DFT chem. potential in [eV], e.g. -5 5)')
   parser.add_argument('--abs',   help='Absolute energy levels in trunc option. Must include Fermi level.', default=False, action='store_true')
 
-  parser.add_argument('--interp',   nargs='?', help='Interpolate band structure and calculate derivatives.Automatically creates optical elements if no others present.', const=3, default=False, type=int)
-  parser.add_argument('--mesh',     nargs=3, help='If --interp activated, allows for the generation of a finer mesh: nkx nky nkz', default=None)
-  parser.add_argument('--peierls',  help='Enforce Peierls approximation (overwrites existing optical elements).', default=False, action='store_true')
-  parser.add_argument('--novalidate', help='Skip the hold-out validation of the interpolation (--interp). The validation costs one extra fit and reports the out-of-sample error near the chemical potential.', default=False, action='store_true')
+  parser.add_argument('--interp',   nargs='?', metavar='NSTARS',
+                                    help='Enable Fourier (star-function) interpolation of the band structure\n'
+                                         'via BoltzTraP2.  NSTARS (default 3) is the number of star functions\n'
+                                         'used per k-point of the DFT mesh.  It controls how flexible the fit\n'
+                                         'is -- it does NOT change the density of any k-mesh, and --interp 3\n'
+                                         'does not make the mesh three times finer.  Larger NSTARS costs time\n'
+                                         'and memory; it cannot add accuracy beyond what the DFT mesh supports.\n'
+                                         'Yields band velocities (Peierls optical elements, used when no DFT\n'
+                                         'elements are present) and band curvatures, which are the only source\n'
+                                         'of magnetic-field elements.',
+                                    const=3, default=False, type=int)
+  parser.add_argument('--mesh',     nargs=3, metavar=('NKX','NKY','NKZ'),
+                                    help='Target k-mesh of the output file.  Requires --interp, because the new\n'
+                                         'mesh is produced by evaluating the interpolation on it.  Re-samples\n'
+                                         'the existing fit and therefore adds no information beyond what the\n'
+                                         'DFT mesh already contains.  Cannot be combined with --optic.',
+                                    default=None)
+  parser.add_argument('--peierls',  help='Use the interpolated velocities as the optical elements even when DFT\n'
+                                         'elements were read with --optic (i.e. discard the DFT elements).',
+                                    default=False, action='store_true')
+  parser.add_argument('--novalidate', help='Skip the hold-out validation of the interpolation (--interp).\n'
+                                         'The validation costs one extra fit and reports the out-of-sample\n'
+                                         'error of the interpolated energies near the chemical potential.',
+                                    default=False, action='store_true')
 
   parser.add_argument('--debug',    help=argparse.SUPPRESS, default=False, action='store_true')
   return parser.parse_args(args)
@@ -102,6 +161,16 @@ class Program(object):
         on the original mesh with no indication that anything was skipped. '''
     if self.args.mesh and not self.args.interp:
       self.log.error('--mesh requires --interp (the new mesh is generated by the interpolation).')
+      return
+
+    ''' checked here rather than after the interpolation: the combination is
+        rejected either way, and the user should not have to wait for a fit
+        that is about to be thrown away. '''
+    if self.args.mesh and self.args.optic and not self.args.peierls:
+      self.log.error('--mesh cannot be combined with --optic: the DFT optical elements exist\n'
+                     'only on the k-mesh they were computed on. Drop --optic to use the\n'
+                     'interpolated (Peierls) elements on the new mesh, or add --peierls to\n'
+                     'read the DFT elements and then discard them.')
       return
 
     # DFT detection + read-in
