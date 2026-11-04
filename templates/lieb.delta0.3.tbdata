@@ -19,6 +19,13 @@ begin atoms
   2 0.4 0   0
 end atoms
 
+begin orbitals # orbital section required for generalized Peierls substitution matrix elements.
+  # orbital rx, ry, rz   (orbital 2 couples along x, orbital 3 along y)
+  1 0   0   0   # A
+  2 0.4 0   0   # B: short bond (t + delta) inside the cell
+  3 0   0.4 0   # C: short bond (t + delta) inside the cell
+end orbitals
+
 begin real_lattice
   1 0 0
   0 1 0
