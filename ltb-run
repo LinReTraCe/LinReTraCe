@@ -24,6 +24,8 @@ def parse_args(args=None):
 tb_file:
   begin hopping:      hopping parameter [eV]
                       sign convention e(k) ~ -t * (1-2.delta_(R,0).delta(l,l')) e^{ikR}
+                      every hopping must have its hermitian partner:
+                      line (R, l, l', t) requires (-R, l', l, conj(t)); ltb stops otherwise
   begin atoms:        fractional atomic positions inside unit cell
                       # used to determine the unit cell symmetries only
   begin real_lattice: lattice vectors [Angstrom]
@@ -31,7 +33,8 @@ tb_file:
   optional:
   begin orbitals:     fractional atomic positions of the orbitals
                       referenced in 'begin hopping'.
-                      # used for the multi-cell peierls correction
+                      # used for the multi-cell peierls correction (velocities);
+                      # needed when orbitals sit on different atoms, ltb warns if missing
 
 begin hopping
 # x  y  z  orbital1 orbital2 hopping.real [hopping.imag]

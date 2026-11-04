@@ -330,6 +330,16 @@ class TightBinding(Model):
 
     if self.orbitals is not None:
       logger.info('   Detected orbital positions.')
+    elif self.energyBandMax > 1:
+      ''' without orbital positions all orbitals sit at the cell origin;
+          this is only correct if they all belong to one atomic position '''
+      positions = np.unique(np.around(self.atoms[:,1:] % 1, decimals=6) % 1, axis=0)
+      if positions.shape[0] > 1:
+        logger.warning('No "begin orbitals" block, but {} orbitals and {} distinct atomic positions.'.format(
+                       self.energyBandMax, positions.shape[0]) +
+                       '\n    All orbitals are placed at the cell origin. Band energies and DOS are correct,' +
+                       '\n    but inter-band velocities (generalised Peierls correction) will be wrong.' +
+                       '\n    Add a "begin orbitals" block with the fractional position of every orbital.')
     logger.debug('orbital list: \n{}'.format(self.orbitals))
 
     hrset = set()
