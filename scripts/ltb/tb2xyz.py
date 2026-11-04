@@ -64,8 +64,8 @@ def parse_tbdata(filename: str):
 
     with open(filename) as f:
         for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
+            line = line.split("#")[0].strip()
+            if not line:
                 continue
             if line.startswith("begin"):
                 section = line.split()[1]

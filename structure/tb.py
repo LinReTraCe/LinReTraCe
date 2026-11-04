@@ -342,6 +342,8 @@ class TightBinding(Model):
     if len(hrset) != len(self.tbdata):
       raise IOError('Detected duplicate entries in the hopping parameters')
 
+    self._checkHermiticity()
+
     self.nrp = len(rset)
     logger.info('   Number of unique r-points: {}'.format(self.nrp))
     self.rpoints = np.array(list(rset), dtype=int)
@@ -378,6 +380,60 @@ class TightBinding(Model):
 
     logger.debug('Sparsity of H(R) matrix: {0:.2f} %'.format(self.sparse * 100))
     logger.debug('Tight binding parameter set:\n{}'.format(self.hr))
+
+  def _checkHermiticity(self, tol=1e-6, maxreport=10):
+    '''
+      Verify that every hopping line (R, a, b, h) has its hermitian partner
+      (-R, b, a, conj(h)). The sign convention of _readTb is symmetric under
+      this exchange, so checking the file values is equivalent to checking
+      H(R) = H(-R)^dagger. Raises IOError listing the offending lines.
+    '''
+    hops = {}
+    for line in self.tbdata:
+      key = tuple(int(x) for x in line[:5])
+      hops[key] = line[5] + (1j*line[6] if len(line) > 6 else 0.)
+
+    def fmtval(val):
+      s = '{:.10g}'.format(val.real)
+      if val.imag != 0.:
+        s += ' {:.10g}'.format(val.imag)
+      return s
+
+    def fmt(key, val):
+      return '{:3d} {:3d} {:3d}   {:3d} {:3d}   '.format(*key) + fmtval(val)
+
+    missing, mismatch = [], []
+    for key, val in hops.items():
+      rx, ry, rz, a, b = key
+      partner = (-rx, -ry, -rz, b, a)
+      if partner not in hops:
+        if abs(val) > tol:
+          missing.append((key, val, partner))
+      elif abs(hops[partner] - np.conj(val)) > tol:
+        if key < partner or key == partner:   # report each pair once
+          mismatch.append((key, val, partner))
+
+    if not missing and not mismatch:
+      logger.info('Hermiticity check: True')
+      return
+
+    msg = ['Hermiticity check: False',
+           '    The hopping block does not describe a hermitian Hamiltonian.',
+           '    Every line  Rx Ry Rz a b t  needs the partner  -Rx -Ry -Rz b a conj(t).']
+    if missing:
+      msg.append('    Missing partners ({}); add these lines:'.format(len(missing)))
+      for key, val, partner in missing[:maxreport]:
+        msg.append('      ' + fmt(partner, np.conj(val)) + '    # partner of: ' + fmt(key, val).strip())
+      if len(missing) > maxreport:
+        msg.append('      ... and {} more'.format(len(missing)-maxreport))
+    if mismatch:
+      msg.append('    Inconsistent partners ({}):'.format(len(mismatch)))
+      for key, val, partner in mismatch[:maxreport]:
+        msg.append('      ' + fmt(partner, hops[partner]) + '    # should be ' +
+                   fmtval(np.conj(val)) + ' (partner of: ' + fmt(key, val).strip() + ')')
+      if len(mismatch) > maxreport:
+        msg.append('      ... and {} more'.format(len(mismatch)-maxreport))
+    raise IOError('\n'.join(msg))
 
   def _setupKmesh(self):
     '''
