@@ -29,12 +29,12 @@ FFLAGS = -O3
 all: cern_digamma.a
 
 wpsipg.o: wpsipg.F77
-	${CPP} ${CPPFLAGS} -D kmax=${kmax_double} $< wpsipg.f
+	${CPP} ${CPPFLAGS} -D kmax=${kmax_double} $< -o wpsipg.f
 	${FCDG} -c wpsipg.f -o $@ ${FFLAGS}
 	rm -f wpsipg.f
 
 wpsipg_hp.o: wpsipg_hp.F77
-	${CPP} ${CPPFLAGS} -D kmax=${kmax_quad} $< wpsipg_hp.f
+	${CPP} ${CPPFLAGS} -D kmax=${kmax_quad} $< -o wpsipg_hp.f
 	${FCDG} -c wpsipg_hp.f -o $@ ${FFLAGS} -lquadmath
 	rm -f wpsipg_hp.f
 
